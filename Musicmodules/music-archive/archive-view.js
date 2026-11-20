@@ -88,6 +88,7 @@
             activity: { animated: true, idle: false },
             destroyed: false,
             coverCache: new Map(),
+            dirCovers: new Map(),
             coverTimer: 0,
             playingKey: '',
             dataRefs: { playlist: null, length: -1, playlists: null, plSig: '' }
@@ -342,8 +343,52 @@
             return 'TRK-' + Model.fileCode(index);
         };
 
-        // 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首
-        const coverOf = (t) => (t && t.albumArt ? fileUrl(t.albumArt) : '');
+        /*
+         * 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首。
+         * 曲库里带了封面（内嵌封面扫描时已存成文件）就用它；没有的话试同目录下常见的封面图（cover / folder / front），
+         * 每个目录只试一次。图片缓存最多 64 张、目录结果最多 256 条；读不出来的就不显示（露出后面的阵列），不留破图。
+         */
+        const COVER_NAMES = ['cover.jpg', 'folder.jpg', 'cover.png', 'front.jpg', 'folder.png', 'Cover.jpg', 'Folder.jpg'];
+        const dirOf = (t) => {
+            const p = String((t && t.path) || '');
+            if (!p || /^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p)) return ''; // 远程曲目没有本地目录
+            const cut = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+            return cut > 0 ? p.slice(0, cut) : '';
+        };
+        const capped = (map, key, value, max) => {
+            map.set(key, value);
+            if (map.size > max) map.delete(map.keys().next().value);
+            return value;
+        };
+        const probeDir = (dir) => {
+            const entry = capped(state.dirCovers, dir, { url: null }, 256);
+            let k = 0;
+            const next = () => {
+                if (k >= COVER_NAMES.length) { entry.url = ''; return; }
+                const url = fileUrl(dir + '/' + COVER_NAMES[k++]);
+                const img = new Image();
+                img.decoding = 'async';
+                img.onload = () => {
+                    entry.url = url;
+                    capped(state.coverCache, url, { img, ok: true }, 64);
+                    const t = selectedTrack();
+                    if (t && !t.albumArt && dirOf(t) === dir) scheduleCover(t, true);
+                };
+                img.onerror = next;
+                img.src = url;
+            };
+            next();
+        };
+        const coverOf = (t, probe = false) => {
+            if (!t) return '';
+            if (t.albumArt) return fileUrl(t.albumArt);
+            const dir = dirOf(t);
+            if (!dir) return '';
+            const known = state.dirCovers.get(dir);
+            if (known) return known.url || '';
+            if (probe) probeDir(dir);
+            return '';
+        };
         const preload = (url) => {
             if (!url || state.coverCache.has(url)) return;
             const img = new Image();
@@ -352,24 +397,32 @@
             img.onload = () => { entry.ok = true; };
             img.onerror = () => { entry.ok = false; };
             img.src = url;
-            state.coverCache.set(url, entry);
-            if (state.coverCache.size > 64) state.coverCache.delete(state.coverCache.keys().next().value);
+            capped(state.coverCache, url, entry, 64);
         };
         const scheduleCover = (t, immediate) => {
             clearTimeout(state.coverTimer);
             const url = coverOf(t);
             refs.cover.classList.remove('on');
-            if (!url) { refs.cover.style.backgroundImage = ''; return; }
+            refs.cover.dataset.state = url ? 'loading' : 'none';
+            if (!url) refs.cover.style.backgroundImage = '';
             state.coverTimer = setTimeout(() => {
+                if (!url) { coverOf(t, true); return; } // 没有自带封面：停稳后才去试同目录的图
                 preload(url);
                 const entry = state.coverCache.get(url);
                 const show = () => {
                     if (coverOf(selectedTrack()) !== url) return;
                     refs.cover.style.backgroundImage = `url("${url}")`;
                     refs.cover.classList.add('on');
+                    refs.cover.dataset.state = 'ready';
+                };
+                const fail = () => {
+                    if (coverOf(selectedTrack()) !== url) return;
+                    refs.cover.style.backgroundImage = '';
+                    refs.cover.dataset.state = 'failed';
                 };
                 if (entry.ok) show();
-                else if (entry.ok === null) entry.img.addEventListener('load', show, { once: true });
+                else if (entry.ok === false) fail();
+                else { entry.img.addEventListener('load', show, { once: true }); entry.img.addEventListener('error', fail, { once: true }); }
                 const col = column();
                 if (col && col.items.length > 1) {
                     for (const d of [-2, -1, 1, 2]) preload(coverOf(tracks()[Model.cellTrack(state.columns, state.lane, state.row + d)]));

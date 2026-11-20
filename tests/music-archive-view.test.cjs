@@ -758,3 +758,48 @@ test('没有流体标记模块时照旧用竖线游标', () => {
     assert.ok(!ticks.querySelector('svg'));
     f.close();
 });
+
+test('封面：自带封面直接用，读不出来不留破图；没有封面时试同目录的图，每个目录只试一次', async () => {
+    const asked = [];
+    const f = fixture({
+        tracks: [
+            { path: '/a/0.flac', title: 'A0', albumArt: '/c/ok.jpg' },
+            { path: '/a/1.flac', title: 'A1', albumArt: '/c/bad.jpg' },
+            { path: '/b/2.flac', title: 'A2' },
+            { path: '/b/3.flac', title: 'A3' },
+            { path: 'https://x.test/dav/4.flac', title: 'A4' }
+        ],
+        playlists: [],
+        setup: (w) => {
+            w.Image = class {
+                constructor() { this.l = {}; }
+                addEventListener(type, fn) { (this.l[type] = this.l[type] || []).push(fn); }
+                set src(v) {
+                    asked.push(v);
+                    const ok = /ok\.jpg$|\/b\/folder\.jpg$/.test(v);
+                    w.setTimeout(() => { const t = ok ? 'load' : 'error'; this['on' + t]?.(); (this.l[t] || []).forEach((fn) => fn()); }, 0);
+                }
+            };
+        }
+    });
+    const cover = f.w.document.querySelector('[data-ref="cover"]');
+    const wait = (ms = 200) => new Promise((r) => f.w.setTimeout(r, ms));
+    await wait();
+    assert.equal(cover.dataset.state, 'ready');
+    assert.match(cover.style.backgroundImage, /ok\.jpg/);
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'failed');
+    assert.equal(cover.style.backgroundImage, '');
+    assert.equal(cover.classList.contains('on'), false);
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'ready');
+    assert.match(cover.style.backgroundImage, /\/b\/folder\.jpg/);
+    const probes = asked.filter((u) => /\/b\//.test(u)).length;
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'ready', '同目录第二首直接用上次找到的图');
+    assert.equal(asked.filter((u) => /\/b\//.test(u)).length, probes, '不再重新试');
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'none', '远程曲目不去试本地目录');
+    assert.equal(asked.some((u) => /x\.test/.test(u)), false);
+    f.close();
+});
