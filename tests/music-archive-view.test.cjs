@@ -9,14 +9,14 @@ const SCRIPTS = ['model', 'scene', 'index', 'list', 'view'].map((n) => read(`Mus
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });
-function fixture({ n = 30, playlists } = {}) {
+function fixture({ n = 30, playlists, tracks: given, setup } = {}) {
     const dom = new JSDOM('<!doctype html><body><div id="music-archive-view" hidden></div><button id="music-archive-return"></button></body>',
         { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const w = dom.window;
     w.matchMedia = () => ({ matches: false, addEventListener() {} });
     w.console.warn = () => {};
     for (const s of SCRIPTS) w.eval(s);
-    const tracks = Array.from({ length: n }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: i % 2 ? 'Aki' : 'Ren', album: 'A' + (i % 3) }));
+    const tracks = given || Array.from({ length: n }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: i % 2 ? 'Aki' : 'Ren', album: 'A' + (i % 3) }));
     const calls = [];
     const app = {
         playlist: tracks,
@@ -27,6 +27,7 @@ function fixture({ n = 30, playlists } = {}) {
         renderPlaylist() {}, showContextMenu() { calls.push(['ctx', this.contextMenuTrackIndex]); },
         stageHost: { active: false, enter() { calls.push(['stage']); this.active = true; } }
     };
+    if (setup) setup(w, app);
     const view = w.MusicArchive.init(app);
     const key = (k, extra = {}) => w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
     const text = (ref) => w.document.querySelector(`[data-ref="${ref}"]`).textContent;
@@ -231,5 +232,51 @@ test('过场期间继续画、开场动画期间不画；选中卡抬高的接�
     body.remove('music-stage-entering');
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(allowed(), false);
+    f.close();
+});
+
+const LIB = (() => {
+    const words = ['Apple', 'Amber', 'Arc', 'Atlas', 'Blue', 'Bird', 'Bell', 'Bloom', 'Cloud', 'Coral', 'Delta', 'Echo',
+        'Xeno', 'Yarn', 'Zest', 'あおぞら', 'あめ', 'いと', 'うみ', 'かぜ', '1999', '2046', '★Star'];
+    return Array.from({ length: 46 }, (_, i) => ({ path: '/l/' + i, title: words[i % words.length] + ' ' + i, artist: 'A', album: 'X' + i }));
+})();
+
+test('曲库够大时全部曲目按首字母拆列，歌少的相邻字母合并', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    const ids = f.view.debug().columns.map((c) => c.id);
+    assert.deepEqual([...ids], ['letter:A', 'letter:B', 'letter:C', 'letter:D-E', 'letter:S-X', 'letter:Y-Z', 'letter:あ-か', 'letter:0-9']);
+    assert.equal(f.text('cat'), 'A');
+    // 每首歌只出现在一个字母列里
+    const lettered = f.view.debug().columns.filter((c) => c.id.startsWith('letter:')).reduce((n, c) => n + c.n, 0);
+    assert.equal(lettered, LIB.length);
+    f.close();
+});
+
+test('字母列里回车播放，队列是整个曲库；目录里的行落到对应字母列', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    f.key('ArrowRight'); // B 列
+    assert.equal(f.text('cat'), 'B');
+    f.key('Enter');
+    assert.equal(f.calls[0][0], 'load');
+    assert.equal(f.calls[0][2], LIB.length);
+    f.view.setListOpen(true);
+    f.view.list.focusSearch();
+    const input = listEl(f, 'input');
+    input.value = 'zest';
+    listKey(f, input, 'Shift');
+    assert.equal(f.text('cat'), 'Y–Z');
+    f.close();
+});
+
+test('有最近播放和收藏时排在最前面', () => {
+    const f = fixture({
+        tracks: LIB, playlists: [],
+        setup: (w, app) => {
+            w.localStorage.setItem('musicArchiveRecent', JSON.stringify(['/l/3', '/l/9']));
+            app.favoriteTracks = ['/l/5'];
+        }
+    });
+    const cols = f.view.debug().columns;
+    assert.deepEqual(JSON.parse(JSON.stringify(cols.slice(0, 2).map((c) => [c.id, c.n]))), [['recent', 2], ['favorite', 1]]);
     f.close();
 });

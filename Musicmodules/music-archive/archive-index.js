@@ -146,27 +146,56 @@
         };
     };
 
-    /* 按首字母分好的组，组内按排序键排；只返回有歌的组 */
-    const groupColumns = (index, indices) => {
+    const familyOf = (g) => (/^[A-Z]$/.test(g) ? 'latin' : KANA_ROW_OF.has(g) ? 'kana' : g);
+    const mergedName = (a, b) => {
+        if (a === b) return groupName(a);
+        if (familyOf(a) === 'kana') return a + '–' + b + '行';
+        return a + '–' + b;
+    };
+
+    /*
+     * 按首字母分好的组，组内按排序键排；只返回有歌的组。
+     * minSize > 1 时，同一类（拉丁字母、假名行）里歌太少的相邻组合并成「X–Z」这样的一列，免得一列只有一两张卡。
+     * 返回的每列带 groups（包含的首字母），方便从首字母找到所在列。
+     */
+    const groupColumns = (index, indices, { minSize = 1 } = {}) => {
         const groups = new Map();
         for (const i of indices) {
             const g = index.group(i);
             if (!groups.has(g)) groups.set(g, []);
             groups.get(g).push(i);
         }
-        return [...groups.entries()]
-            .sort((a, b) => (GROUP_RANK.get(a[0]) ?? 999) - (GROUP_RANK.get(b[0]) ?? 999))
-            .map(([g, items]) => ({
-                id: 'letter:' + g,
+        const ordered = [...groups.entries()].sort((a, b) => (GROUP_RANK.get(a[0]) ?? 999) - (GROUP_RANK.get(b[0]) ?? 999));
+        const runs = [];
+        for (const [g, items] of ordered) {
+            const last = runs[runs.length - 1];
+            if (last && familyOf(last.groups[0]) === familyOf(g) && last.items.length < minSize) {
+                last.groups.push(g); last.items.push(...items);
+            } else {
+                runs.push({ groups: [g], items: [...items] });
+            }
+        }
+        // 每一类最后一段还是太少，就并到同一类的前一段
+        for (let k = runs.length - 1; k > 0; k--) {
+            const cur = runs[k], prev = runs[k - 1];
+            if (cur.items.length < minSize && familyOf(prev.groups[0]) === familyOf(cur.groups[0])) {
+                prev.groups.push(...cur.groups); prev.items.push(...cur.items); runs.splice(k, 1);
+            }
+        }
+        const byTitle = (a, b) => { const ka = index.sortKey(a), kb = index.sortKey(b); return ka < kb ? -1 : ka > kb ? 1 : a - b; };
+        return runs.map(({ groups: gs, items }) => {
+            const first = gs[0], lastG = gs[gs.length - 1];
+            const single = gs.length === 1;
+            return {
+                id: 'letter:' + (single ? first : first + '-' + lastG),
                 kind: 'letter',
-                group: g,
-                name: groupName(g),
-                ref: groupRef(g),
-                items: items.sort((a, b) => {
-                    const ka = index.sortKey(a), kb = index.sortKey(b);
-                    return ka < kb ? -1 : ka > kb ? 1 : a - b;
-                })
-            }));
+                group: first,
+                groups: gs,
+                name: single ? groupName(first) : mergedName(first, lastG),
+                ref: single ? groupRef(first) : 'INDEX ' + first + '–' + lastG,
+                items: items.sort(byTitle)
+            };
+        });
     };
 
     /*

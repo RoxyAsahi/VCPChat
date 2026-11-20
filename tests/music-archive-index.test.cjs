@@ -101,3 +101,14 @@ test('几千首也能即时检索', () => {
     const ms = Number(process.hrtime.bigint() - t0) / 1e6 / 20;
     assert.ok(ms < 30, `一次检索 ${ms.toFixed(1)} ms`);
 });
+
+test('groupColumns 合并歌少的相邻字母，只在同一类里合并', () => {
+    const titles = ['Apple', 'Avocado', 'Banana', 'Xylo', 'Zeta', 'Yak', 'あい', 'かき', '1999', '★'];
+    const t = titles.map((title) => ({ title }));
+    const idx = Index.createIndex(t);
+    const cols = Index.groupColumns(idx, t.map((_, i) => i), { minSize: 2 });
+    assert.deepEqual(cols.map((c) => [c.id, c.name]), [
+        ['letter:A', 'A'], ['letter:B-X', 'B–X'], ['letter:Y-Z', 'Y–Z'], ['letter:あ-か', 'あ–か行'], ['letter:0-9', '0–9'], ['letter:#', '其他']
+    ]);
+    assert.deepEqual(cols[1].groups, ['B', 'X']);
+});

@@ -97,7 +97,8 @@
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : -1;
-            const columns = Model.buildColumns(tracks(), app.customPlaylists);
+            rebuildIndex();
+            const columns = buildColumns();
             state.columns = columns;
             state.sig = Model.signature(columns);
             state.dataRefs = { playlist: app.playlist, length: tracks().length, playlists: app.customPlaylists, plSig: playlistsSig() };
@@ -118,12 +119,41 @@
             root.classList.toggle('is-empty', tracks().length === 0);
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
-            rebuildIndex();
             renderHud(true);
             updatePlaying(true);
             list?.rebuild();
             syncList();
         };
+
+        /*
+         * 阵列的列：曲库够大时「全部曲目」按首字母拆成 A、B…あ行…0–9、其他几列（歌少的相邻字母合并），
+         * 前面有数据时加「最近播放」「收藏」；后面是歌单和专辑。
+         */
+        const LETTER_SPLIT_MIN = 40;
+        const LETTER_MIN_SIZE = 4;
+        let letterOf = null;          // 首字母 → 列 id
+        const favoritePaths = () => (Array.isArray(app.favoriteTracks) ? app.favoriteTracks : []).map((t) => (typeof t === 'string' ? t : t && t.path)).filter(Boolean);
+        const buildColumns = () => {
+            const base = Model.buildColumns(tracks(), app.customPlaylists);
+            letterOf = null;
+            const n = tracks().length;
+            if (n < LETTER_SPLIT_MIN || !IndexLib || !searchIndex) return base;
+            const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE });
+            letterOf = new Map();
+            for (const c of letters) for (const g of c.groups) letterOf.set(g, c.id);
+            const front = [];
+            const recent = recentIndices();
+            if (recent.length) front.push({ id: 'recent', kind: 'recent', name: '最近播放', ref: 'RECENT FILES', items: recent });
+            const fav = favoritePaths();
+            if (fav.length) {
+                const byPath = new Map();
+                tracks().forEach((t, i) => { const k = Model.normalizePath(t && t.path); if (k && !byPath.has(k)) byPath.set(k, i); });
+                const items = fav.map((p) => byPath.get(Model.normalizePath(p))).filter((i) => i !== undefined);
+                if (items.length) front.push({ id: 'favorite', kind: 'favorite', name: '收藏', ref: 'SAVED FILES', items });
+            }
+            return [...front, ...letters, ...base.slice(1)];
+        };
+        const columnOfGroup = (g) => (letterOf && letterOf.get(g)) || 'all';
 
         const dataChanged = () => {
             const d = state.dataRefs;
@@ -245,7 +275,9 @@
             const already = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
             if (!already) {
                 // 播放队列跟着所在的列走：全部曲目列用整个曲库，其他列用这一列的曲目
-                const list = col.kind === 'all' ? null : col.items.map((i) => tracks()[i]).filter(Boolean);
+                // 按首字母拆开的列：队列是整个曲库（按首字母顺序接着放），不只这一个字母
+                const queue = col.kind === 'letter' ? state.columns.filter((c) => c.kind === 'letter').flatMap((c) => c.items) : col.items;
+                const list = col.kind === 'all' ? null : queue.map((i) => tracks()[i]).filter(Boolean);
                 app.currentFilteredTracks = list;
                 app.filteredPlaylistSource = col.kind === 'playlist' ? { type: 'playlist', name: col.name, id: col.playlistId }
                     : col.kind === 'album' ? { type: 'album', name: col.name } : null;
@@ -279,7 +311,10 @@
             }
             state.scene?.setPlaying(cell, app.isPlaying);
             list?.setPlaying(app.currentTrackIndex);
-            if (recordRecent() && list && list.kind === 'recent') list.rebuild();
+            if (recordRecent()) {
+                if (letterOf) queueMicrotask(() => { if (!state.destroyed) rebuild(); });
+                else if (list && list.kind === 'recent') list.rebuild();
+            }
             refs.access.classList.toggle('is-playing', selectedIndex() === app.currentTrackIndex && app.isPlaying);
             kick();
         };
@@ -310,7 +345,7 @@
             const tag = document.createElement('script');
             tag.src = src;
             tag.async = true;
-            tag.onload = () => { if (state.destroyed) return; rebuildIndex(); list?.rebuild(); syncList(); };
+            tag.onload = () => { if (!state.destroyed) rebuild(); }; // 汉字有了拼音，分组和检索都要重算
             tag.onerror = () => { /* 没有拼音表就只按原文检索 */ };
             document.head.appendChild(tag);
         };
@@ -709,7 +744,7 @@
                 Index: IndexLib,
                 getIndex: () => searchIndex,
                 getRecent: recentIndices, durationOf,
-                columnOfGroup: null,
+                columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
