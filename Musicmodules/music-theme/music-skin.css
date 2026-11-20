@@ -164,7 +164,7 @@ body.music-stage-active #custom-title-bar {
 }
 
 #semantic-search-btn.active {
-    color: var(--ar-accent);
+    color: var(--ar-accent-text);
 }
 
 /* 导入：一行小字，「IMPORT 本地 ／ 云端导入」，不再是两个实心按钮 */
@@ -213,7 +213,7 @@ body.music-stage-active #custom-title-bar {
 .sidebar-action-btns #add-folder-btn:hover,
 .sidebar-action-btns #add-webdav-btn:hover {
     background: transparent;
-    color: var(--ar-accent);
+    color: var(--ar-accent-text);
     filter: none;
 }
 
@@ -350,53 +350,121 @@ body.music-playing .sidebar-playlist li.active::before {
     color: var(--ar-ink);
 }
 
-.category-item {
-    border-radius: 0;
-    border-bottom: 1px solid var(--ar-hairline);
-    background: transparent;
+/* 专辑 / 歌手 / 歌单分页：和目录一样，左边一格细体序号，名字和首数直接排在纸面上，
+   不画分隔线、不铺色块；有封面的在行尾放一张小图 */
+.sidebar-category-view {
+    counter-reset: category;
+    padding: 4px 0 16px;
 }
 
-.category-item:hover {
+.category-item {
+    counter-increment: category;
+    position: relative;
+    gap: 12px;
+    padding: 9px 16px 9px 52px;
+    border-radius: 0;
+    border: 0;
     background: transparent;
+    transition: none;
+}
+
+.category-item::before {
+    content: counter(category, decimal-leading-zero);
+    position: absolute;
+    left: 16px;
+    top: 9px;
+    font-family: var(--mt-font-mono);
+    font-size: 11px;
+    line-height: 20px;
+    color: var(--ar-muted);
+}
+
+/* 悬停：和选中行同一种记号 */
+.category-item:hover,
+.category-item.active {
+    background:
+        linear-gradient(var(--ar-square), var(--ar-square)) 4px 16px / 6px 6px no-repeat,
+        linear-gradient(var(--ar-rule), var(--ar-rule)) 16px 100% / calc(100% - 32px) 1px no-repeat;
+}
+
+.category-item .name {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    color: var(--ar-ink);
 }
 
 .category-item:hover .name {
-    font-weight: 700;
-}
-
-.category-item .cover {
-    border-radius: 2px;
-}
-
-.category-item .cover.artist-avatar {
-    border-radius: 50%;
+    font-weight: 600;
 }
 
 .category-item .count {
+    margin-top: 2px;
     color: var(--ar-muted);
     font-size: 11px;
-    letter-spacing: 1px;
+    letter-spacing: 1.3px;
 }
 
-.category-item.active {
-    background: linear-gradient(var(--ar-square), var(--ar-square)) 2px 50% / 6px 6px no-repeat;
+.category-item .cover,
+.category-item .cover.artist-avatar {
+    order: 3;
+    width: 32px;
+    height: 32px;
+    border-radius: 0;
+    background-color: transparent;
 }
 
-.sidebar-footer {
-    border-top: 1px solid var(--ar-hairline);
-    padding: 12px 16px;
+/* 没有封面的不留空格子 */
+.category-item .cover:not([style*="background-image"]) {
+    display: none;
 }
 
-.create-playlist-btn {
-    border-radius: 2px;
-    border: 1px dashed var(--ar-line);
+.category-item .edit-btn,
+.category-item .delete-btn {
+    display: inline-flex;
+    padding: 5px;
+    border-radius: 0;
+    color: var(--ar-muted);
+    transition: none;
+}
+
+.category-item .edit-btn:hover,
+.category-item .delete-btn:hover {
     background: transparent;
     color: var(--ar-ink);
 }
 
+.category-item .delete-btn:hover {
+    color: var(--ar-danger);
+}
+
+.category-item:focus-within .edit-btn,
+.category-item:focus-within .delete-btn {
+    opacity: 1;
+}
+
+.sidebar-footer {
+    border-top: 0;
+    padding: 4px 16px 12px;
+}
+
+/* 新建歌单：一行小字，不画虚线框 */
+.create-playlist-btn {
+    justify-content: flex-start;
+    width: auto;
+    padding: 8px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ar-muted);
+    font-size: 12px;
+    letter-spacing: 1.3px;
+}
+
 .create-playlist-btn:hover {
-    border-color: var(--ar-ink);
-    background: var(--ar-field);
+    border: 0;
+    background: transparent;
+    color: var(--ar-ink);
 }
 
 /* ---------- 曲目档案卡（替换原播放卡的信息区） ---------- */
@@ -1421,8 +1489,8 @@ body.light-theme .dialog-btn.cancel {
 }
 
 .dialog-btn.confirm:hover {
-    background: var(--ar-accent);
-    border-color: var(--ar-accent);
+    background: var(--ar-accent-text);
+    border-color: var(--ar-accent-text);
 }
 
 .dialog-btn:disabled,

@@ -74,9 +74,9 @@ function setupSidebar(app) {
             app.customPlaylists.forEach(pl => {
                 const div = document.createElement('div'); div.className = 'category-item';
                 div.innerHTML = `
-                    <div class="cover" style="display:flex;align-items:center;justify-content:center;font-size:1.2em;">📁</div>
+                    <div class="cover playlist-cover" style="display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M16 17.5V9l4-1v7.5"/><circle cx="14.2" cy="17.5" r="1.8"/><circle cx="18.2" cy="15.5" r="1.8"/></svg></div>
                     <div class="info"><div class="name">${pl.name}</div><div class="count">${pl.tracks.length} 首</div></div>
-                    <button class="edit-btn" title="编辑歌单">✎</button><button class="delete-btn" title="删除歌单">✕</button>`;
+                    <button class="edit-btn" title="编辑歌单" aria-label="编辑歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="delete-btn" title="删除歌单" aria-label="删除歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
                 div.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); app.openPlaylistEditModal(pl.id); });
                 div.querySelector('.delete-btn').addEventListener('click', (e) => {
                     e.stopPropagation(); if (confirm(`确认删除 "${pl.name}"?`)) {
