@@ -95,6 +95,7 @@
             const x = Math.cos(a) * r * 1.3, z = Math.sin(a) * r;
             // 北面是山，留出一块空。
             if (z < -150 && Math.abs(x) < 260) continue;
+            if ((global.MusicStageKowloonSkyline?.TOWERS || []).some(t => Math.hypot(t.x - x, t.z - z) < t.r + 40)) continue;
             const w = 14 + rand() * 26, d = 12 + rand() * 20;
             const h = (12 + Math.floor(rand() * 26)) * FLOOR;
             far.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, height: h });
@@ -155,12 +156,13 @@
                 // 楼的底色：脏混凝土、米黄批荡、褪色的马赛克瓷砖、灰绿油漆。
                 vec3 wallTone(float s){
                     float k = fract(s * 7.13);
-                    if (k < 0.34) return vec3(0.30, 0.29, 0.27);
-                    if (k < 0.55) return vec3(0.36, 0.32, 0.26);
-                    if (k < 0.70) return vec3(0.24, 0.31, 0.29);
-                    if (k < 0.82) return vec3(0.35, 0.27, 0.27);
-                    if (k < 0.92) return vec3(0.22, 0.22, 0.23);
-                    return vec3(0.33, 0.33, 0.30);
+                    // 混凝土和旧批荡：中性灰褐为主，少数发青、发黄，不要红砖色。
+                    if (k < 0.34) return vec3(0.26, 0.26, 0.25);
+                    if (k < 0.55) return vec3(0.30, 0.28, 0.24);
+                    if (k < 0.70) return vec3(0.20, 0.26, 0.26);
+                    if (k < 0.82) return vec3(0.28, 0.25, 0.24);
+                    if (k < 0.92) return vec3(0.18, 0.19, 0.21);
+                    return vec3(0.29, 0.29, 0.27);
                 }
                 // 屋里的灯色：钨丝暖光、日光灯冷白、偏绿的旧灯管、红窗帘、电视蓝。
                 vec3 roomTone(float h){
@@ -853,6 +855,9 @@
         bulbs.layers.set(3);
         group.add(bulbs);
 
+        // 城寨背后的巨构、烟囱和飞行器（kowloon-skyline.js，没加载就不画）。
+        const skyline = global.MusicStageKowloonSkyline?.create(T, ctx) || null;
+
         // 给巷道线程滴水用：空调机的位置。
         const acPositions = acs.map(a => a.p);
 
@@ -866,6 +871,7 @@
                 const g = shellUniforms.uWindowGain;
                 g.value += (target - g.value) * Math.min(1, (state.dt || 0.016) * 2 + (g.init ? 0 : 1));
                 g.init = true;
+                skyline?.update(state);
                 const t = (state.time || 0) % PLANE_PERIOD;
                 plane.visible = t < PLANE_SPAN;
                 planeState.light = null;
@@ -885,14 +891,16 @@
                 shellUniforms.uDetail.value = tier?.name === 'energy-saving' ? 0.6 : 1;
             },
             setOptions() {},
-            lights() { return planeState.light ? [planeState.light, ...roofBulbs] : roofBulbs; },
+            lights() { return [...(planeState.light ? [planeState.light] : []), ...(skyline ? skyline.lights() : []), ...roofBulbs]; },
             stats() {
                 return {
                     cityMeshes: meshes.length,
-                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length, dishes: dishes.length, crates: crates.length, beacons: beaconPhase.length, roofBulbs: roofBulbs.length }
+                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length, dishes: dishes.length, crates: crates.length, beacons: beaconPhase.length, roofBulbs: roofBulbs.length },
+                    skyline: skyline?.stats() || null
                 };
             },
             dispose() {
+                skyline?.dispose();
                 scene.remove(group);
                 disposables.forEach(d => d.dispose());
             }
