@@ -102,9 +102,20 @@
     ];
     // Neon colours of a wet night: cyan, magenta, amber, green, red, violet, cold white.
     const NEON = ['#2ef2ff', '#ff3fae', '#ffb02e', '#3dff8a', '#ff3b3b', '#a77bff', '#e8f4ff', '#ff6a1f'];
+    // The night leans cold: cyan, magenta, violet and ice white come up most.
+    const NEON_COLD = ['#2ef2ff', '#30e0ff', '#ff3fae', '#ff2fd0', '#a77bff', '#e8f4ff', '#5a8cff'];
+    const neonPick = random => random() < 0.68 ? pick(random, NEON_COLD) : pick(random, NEON);
+    // Copy for the hologram banners: made-up firms and slogans, read top to bottom.
+    const HOLO_COPY = [
+        ['義體診所', 'CYBER LIMBS', '24H'], ['電腦接駁', 'NEURAL LINK', 'v9.2'], ['記憶備份', 'MEMORY BACKUP', '99.9%'],
+        ['萬象網絡', 'OMNINET', '7G'], ['極光汽水', 'AURORA SODA', 'ICE'], ['鳳凰義體', 'PHOENIX', 'NEW'],
+        ['量子銀行', 'QUANTUM BANK', '0.0%'], ['不夜城', 'NIGHT NEVER ENDS', '∞'], ['新紀元', 'NEO ERA', '2099'],
+        ['夢工場', 'DREAM WORKS LTD', 'VR'], ['龍城藥房', 'DRAGON PHARMA', 'Rx'], ['電子神社', 'E-SHRINE', '祈']
+    ];
     const BOXES = [
         ['#f2ead8', '#c41f25'], ['#ffd21f', '#161616'], ['#d61f26', '#fff1d0'], ['#1b62c9', '#ffffff'],
-        ['#119a55', '#ffffff'], ['#f7f7f2', '#1a3fa0'], ['#1a1a1a', '#ffcf3a'], ['#7a1fd6', '#ffffff']
+        ['#119a55', '#ffffff'], ['#f7f7f2', '#1a3fa0'], ['#1a1a1a', '#ffcf3a'], ['#7a1fd6', '#ffffff'],
+        ['#0d2a4a', '#5ff0ff'], ['#1a1030', '#ff5ad0'], ['#e8f6ff', '#0b4fa8'], ['#0a1a22', '#9fe8ff']
     ];
     const FONTS = {
         heavy: '"Microsoft JhengHei","Microsoft YaHei","PingFang TC","Noto Sans CJK TC","WenQuanYi Zen Hei",sans-serif',
@@ -151,7 +162,7 @@
             const mega = slot._street && random() < 0.45 || !slot._street && random() < 0.12;
             const span = mega ? 17 + random() * 7 : Math.max(6, Math.min(14, (Number(slot.width) || 8) * 1.4));
             const neon = mega || random() < 0.6;
-            const color = pick(random, NEON), box = pick(random, BOXES);
+            const color = neonPick(random), box = pick(random, BOXES);
             const chars = graphemes(cn).length;
             const dead = [];
             if (neon && random() < (mega ? 0.7 : 0.25)) dead.push(Math.floor(random() * chars));
@@ -160,7 +171,7 @@
                 mega,
                 index, kind, text: cn, caption: en, vertical: false,
                 style: neon ? 'neon' : 'box', font: random() < 0.5 ? 'heavy' : 'brush',
-                color, border: pick(random, NEON), box,
+                color, border: neonPick(random), box,
                 width: span, height: span * (mega ? 0.3 + random() * 0.08 : 0.26 + random() * 0.12), depth: mega ? 0.8 : 0.5,
                 lift: mega ? 2.6 + random() * 2.2 : 1.2 + random() * 1.4, bulbs: !neon && random() < 0.5, dead, tubes: true, tilt: 0,
                 gain: neon ? 1.6 / (0.55 + lum(hexRgb(color)) * 0.9) : 0.95 / (0.6 + lum(hexRgb(box[0])) * 0.6),
@@ -183,6 +194,11 @@
             width = Math.min(blade ? 5.5 : shop ? Math.max(2, (Number(slot.width) || 2.05) * (1.6 + random() * 1.2)) : 9, chars * height * (0.82 + random() * 0.3) + (caption ? 0 : 0.5));
             if (caption && !blade) height += 0.35;
         }
+        // Out on the street the boards run bigger, to be read across the way.
+        if (slot._street && !slot._alleyW && !shop) {
+            const k = 1.15 + random() * 0.15;
+            width *= k; height *= k;
+        }
         if (slot._alleyW) {
             // Leave the alley passable: a blade reaches at most two fifths across.
             if (blade) {
@@ -194,11 +210,11 @@
         }
         const dead = [];
         if (style === 'neon' && random() < 0.35) dead.push(Math.floor(random() * chars));
-        const color = pick(random, NEON), box = pick(random, BOXES);
+        const color = neonPick(random), box = pick(random, BOXES);
         return {
             index, kind, text, caption, vertical, style,
             font: style === 'box' ? pick(random, ['heavy', 'heavy', 'ming', 'brush']) : pick(random, ['heavy', 'brush', 'brush', 'ming']),
-            color, border: random() < 0.55 ? null : pick(random, NEON), box,
+            color, border: random() < 0.55 ? null : neonPick(random), box,
             width, height, depth: blade ? 0.32 : 0.22, lift: 0,
             bulbs: style === 'box' && random() < 0.22, dead, tubes: true, tilt,
             // Pale tubes and white boxes would read as blots; they burn a little lower.
@@ -947,7 +963,7 @@
         // Round the main screen the street signs keep further apart, so each reads.
         const screens = layout.SCREENS || [];
         const nearScreen = s => screens.some(sc => sc.primary && Math.hypot(vec(s.pos)[0] - sc.center[0], (vec(s.pos)[1] - sc.center[1]) * 0.7) < 26 && Math.abs(vec(s.pos)[2] - sc.center[2]) < 3);
-        const minGap = s => s.kind === 'roof' ? 11 : s._street ? (nearScreen(s) ? 5.2 : 3.0) : 2.6;
+        const minGap = s => s.kind === 'roof' ? 11 : s._street ? (nearScreen(s) ? 5.2 : 2.7) : 2.6;
         const taken = [0, 0, 0, 0, 0, 0];
         const tryTake = (slot, b) => {
             const p = vec(slot.pos);
@@ -959,6 +975,46 @@
         // Fill what a share could not use with the best of the rest.
         for (const x of all) { if (picked.length >= max) break; if (!picked.includes(x.slot)) tryTake(x.slot, bucket(x)); }
         return picked;
+    };
+
+    // Hologram banners hang in the air off the street faces and stand on masts
+    // above the roofs. Kept apart, clear of the main screen, high enough that
+    // the street keeps its own light.
+    const chooseHoloAds = (layout, count, random) => {
+        const screens = (layout.SCREENS || []).filter(sc => sc.primary);
+        const face = [], roof = [];
+        (layout.facades || []).forEach(facade => (facade.slots || []).forEach(slot => {
+            const fk = String(facade.kind || slot.facadeKind || '');
+            if (fk !== 'street' && fk !== '') return;
+            const n = vec(slot.normal || facade.normal);
+            if (!(n[2] > 0.5 || n[0] > 0.5)) return;
+            const floor = Number(slot.floor) || 0;
+            const p = vec(slot.pos);
+            if (screens.some(sc => Math.hypot(p[0] - sc.center[0], p[1] - sc.center[1], p[2] - sc.center[2]) < 24)) return;
+            if (slot.kind === 'roof' && slot.use === 'sign') roof.push({ slot, n, p, score: random() * (n[2] > 0.5 ? 1.3 : 1) });
+            else if (floor >= 4 && floor <= 12 && (slot.use === 'sign' || slot.use === 'free')) face.push({ slot, n, p, score: random() * (n[2] > 0.5 ? 1.25 : 1) });
+        }));
+        const picked = [];
+        const far = (p, gap) => picked.every(q => Math.hypot(q.p[0] - p[0], (q.p[1] - p[1]) * 0.5, q.p[2] - p[2]) > gap);
+        const nRoof = Math.round(count * 0.35);
+        roof.sort((a, b) => b.score - a.score).forEach(x => { if (picked.length < nRoof && far(x.p, 34)) picked.push({ ...x, roof: true }); });
+        face.sort((a, b) => b.score - a.score).forEach(x => { if (picked.length < count && far(x.p, 20)) picked.push({ ...x, roof: false }); });
+        return picked.map((x, i) => {
+            const r0 = norm(cross([0, 1, 0], x.n));
+            if (x.roof) {
+                const width = 7 + random() * 5, height = width * (3.4 + random() * 1.1);
+                const bottom = x.p[1] + 5 + random() * 6;
+                return { roof: true, foot: x.p, normal: x.n, right: r0, centre: [x.p[0], bottom + height / 2, x.p[2]], width, height, bottom, copy: i, seed: random() };
+            }
+            const width = 4 + random() * 2.6, height = width * (3.6 + random() * 1.0);
+            const bottom = Math.max(7, x.p[1] - height * (0.25 + random() * 0.2));
+            // Half stand out square from the wall like blades, half float flat in front of it.
+            const blade = random() < 0.5;
+            const normal = blade ? r0 : x.n;
+            const out = blade ? width / 2 + 1.6 : 4.5 + random() * 1.5;
+            const base = add(x.p, x.n, out);
+            return { roof: false, blade, foot: x.p, wall: x.n, normal, right: norm(cross([0, 1, 0], normal)), centre: [base[0], bottom + height / 2, base[2]], width, height, bottom, copy: i, seed: random() };
+        });
     };
 
     // ---------- the module ---------------------------------------------------
@@ -977,7 +1033,7 @@
 
         // --- slots → specs
         const pools = { vertical: VERTICAL_SHOPS.slice(), horizontal: HORIZONTAL_SHOPS.slice(), roof: ROOF_BRANDS.slice() };
-        const MAX_SIGNS = (tier.name === 'energy-saving' ? 140 : 248);
+        const MAX_SIGNS = (tier.name === 'energy-saving' ? 140 : 256);
         const rigs = (ctx.alley?.cameraRigs?.() || ctx.cameraRigs || []);
         const hot = rigs.filter(r => /^alley|^street-enter/.test(r.id) && r.id !== 'alley-rise').flatMap(r => r.points || []);
         const chosen = chooseSlots(layout, MAX_SIGNS + 8, random, hot);
@@ -1295,6 +1351,36 @@
             hw.box(add(foot, UP, big ? 0.5 : 0.35), r, UP, n, big ? 0.6 : 0.22, big ? 0.5 : 0.35, big ? 0.6 : 0.22, darkUv, metalUv, [0, 0, 0, 0]);
             hw.box(add(foot, UP, big ? 1.1 : 0.78), r, UP, n, big ? 0.35 : 0.14, 0.08, big ? 0.35 : 0.14, metalUv, metalUv, [0, 0, 0, 0]);
         });
+        // Hologram banners: tall translucent sheets of light in the air, each
+        // thrown up by a projector on an arm off the wall or a mast on the roof.
+        const holoAds = chooseHoloAds(layout, tier.name === 'energy-saving' ? 8 : tier.name === 'ultimate' ? 20 : 16, random);
+        const ab = createBuilder();
+        holoAds.forEach((a, i) => {
+            const n = a.normal, r = a.right;
+            const P = (sx, sy) => add(add(a.centre, r, sx * a.width / 2), UP, sy * a.height / 2);
+            const inf = [i % 4, a.seed, a.width, a.height];
+            ab.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), n, [0, 0, 1, 1], inf);
+            // The light fans up from the lens to the sheet's foot.
+            const lens = add(a.centre, UP, -a.height / 2 - (a.roof ? 4 : 2.6));
+            const fan = (sx, dir) => add(add(a.centre, dir, sx * a.width / 2), UP, -a.height / 2);
+            const beamInf = [10 + (i % 4), a.seed, a.width, a.height];
+            [r, n].forEach(dir => {
+                const e = 0.12;
+                ab.quad(add(lens, dir, -e), add(lens, dir, e), fan(1, dir), fan(-1, dir), cross(dir, UP), [0, 0, 1, 1], beamInf);
+            });
+            // Hardware: the projector, and what holds it up.
+            hw.box(add(lens, UP, -0.25), r, UP, n, 0.35, 0.25, 0.35, darkUv, metalUv, [0, 0, 0, 0]);
+            if (a.roof) {
+                const top = add(lens, UP, -0.5);
+                hw.bar(a.foot, top, 0.22, metalUv, [0, 0, 0, 0]);
+                hw.bar(add(a.foot, r, -1.6), add(top, r, -0.2), 0.08, metalUv, [0, 0, 0, 0]);
+                hw.bar(add(a.foot, r, 1.6), add(top, r, 0.2), 0.08, metalUv, [0, 0, 0, 0]);
+            } else {
+                const wallAt = [a.foot[0], lens[1] - 0.4, a.foot[2]];
+                hw.bar(wallAt, add(lens, UP, -0.4), 0.12, metalUv, [0, 0, 0, 0]);
+                hw.bar(add(wallAt, UP, -1.8), add(lens, UP, -0.5), 0.07, metalUv, [0, 0, 0, 0]);
+            }
+        });
         // Rebuild the hardware mesh now that screen housings are in it.
         meshes.forEach(m => { if (m.name === 'Signs/hardware') { group.remove(m); m.geometry.dispose(); } });
         meshes.splice(meshes.findIndex(m => m.name === 'Signs/hardware'), 1);
@@ -1376,6 +1462,149 @@
             disposables.push(geometry);
             const mesh = new T.Mesh(geometry, holoMat);
             mesh.name = 'Signs/holo'; mesh.renderOrder = 3; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
+            group.add(mesh); meshes.push(mesh);
+        }
+        // Banner art: four columns, two slides each (top row, bottom row).
+        // Masks only: R = the big copy, G = linework, B = the faint panel.
+        const HA_W = energy ? 512 : 1024, HA_H = HA_W * 2, HC = HA_W / 4, HR = HA_H / 2;
+        const haCanvas = makeCanvas(HA_W, HA_H);
+        const paintHoloAds = () => {
+            const g = haCanvas.getContext('2d');
+            const k = HC / 256;
+            g.fillStyle = '#000'; g.fillRect(0, 0, HA_W, HA_H);
+            g.globalCompositeOperation = 'lighter';
+            const used = holoAds.length ? holoAds.slice(0, 4).map(a => HOLO_COPY[Math.floor(a.seed * HOLO_COPY.length) % HOLO_COPY.length]) : [];
+            while (used.length < 4) used.push(HOLO_COPY[used.length]);
+            used.forEach(([cn, en, tag], c) => {
+                for (let row = 0; row < 2; row += 1) {
+                    g.save();
+                    g.translate(c * HC, row * HR); g.scale(k, k);
+                    // Panel: a faint fill, brighter at the foot where the light comes in.
+                    const pg = g.createLinearGradient(0, 0, 0, 1024);
+                    pg.addColorStop(0, 'rgba(0,0,90,1)'); pg.addColorStop(1, 'rgba(0,0,200,1)');
+                    g.fillStyle = pg; g.fillRect(4, 4, 248, 1016);
+                    // Frame with corner brackets.
+                    g.strokeStyle = '#00ff00'; g.lineWidth = 3; g.strokeRect(10, 10, 236, 1004);
+                    g.lineWidth = 8;
+                    [[10, 10, 1, 1], [246, 10, -1, 1], [10, 1014, 1, -1], [246, 1014, -1, -1]].forEach(([x, y, sx, sy]) => {
+                        g.beginPath(); g.moveTo(x, y + sy * 46); g.lineTo(x, y); g.lineTo(x + sx * 46, y); g.stroke();
+                    });
+                    g.fillStyle = '#ff0000'; g.textAlign = 'center'; g.textBaseline = 'middle';
+                    const chars = graphemes(cn);
+                    if (row === 0) {
+                        // Copy stacked down the sheet, a barcode on top, a ring emblem under.
+                        for (let b = 0; b < 18; b += 1) g.fillRect(36 + b * 10, 34, (b * 7) % 3 + 2, 44);
+                        const px = Math.min(196, 640 / chars.length);
+                        g.font = `900 ${px}px ${FONTS.heavy}`;
+                        chars.forEach((ch, j) => g.fillText(ch, 128, 110 + px * (j + 0.5), 230));
+                        g.strokeStyle = '#00ff00'; g.lineWidth = 5;
+                        g.beginPath(); g.arc(128, 880, 70, 0, Math.PI * 2); g.stroke();
+                        for (let a = 0; a < 12; a += 1) { g.beginPath(); g.arc(128, 880, 88, a * Math.PI / 6, a * Math.PI / 6 + 0.32); g.stroke(); }
+                        g.font = `700 54px ${FONTS.latin}`; g.fillStyle = '#ff0000'; g.fillText(tag, 128, 882, 120);
+                        g.save(); g.translate(232, 520); g.rotate(Math.PI / 2);
+                        g.font = `600 22px ${FONTS.latin}`; g.fillStyle = '#00ff00'; g.fillText(en.toUpperCase(), 0, 0, 900); g.restore();
+                    } else {
+                        // One huge character in rings, the tag, the name in small type.
+                        g.strokeStyle = '#00ff00'; g.lineWidth = 4;
+                        [118, 100].forEach(rad => { g.beginPath(); g.arc(128, 300, rad, 0, Math.PI * 2); g.stroke(); });
+                        for (let a = 0; a < 24; a += 1) { const t = a * Math.PI / 12; g.beginPath(); g.moveTo(128 + Math.cos(t) * 104, 300 + Math.sin(t) * 104); g.lineTo(128 + Math.cos(t) * 116, 300 + Math.sin(t) * 116); g.stroke(); }
+                        g.font = `900 170px ${FONTS.brush}`; g.fillText(chars[0], 128, 306, 200);
+                        g.font = `800 86px ${FONTS.latin}`; g.fillText(tag, 128, 520, 220);
+                        g.font = `700 30px ${FONTS.latin}`;
+                        en.toUpperCase().split(' ').forEach((w, j) => g.fillText(w, 128, 620 + j * 38, 220));
+                        // Hex grid band and chevrons rising.
+                        g.strokeStyle = '#00ff00'; g.lineWidth = 2;
+                        for (let y = 0; y < 4; y += 1) for (let x = 0; x < 7; x += 1) {
+                            const cx = 30 + x * 33 + (y % 2) * 16, cy = 780 + y * 28;
+                            g.beginPath();
+                            for (let v = 0; v <= 6; v += 1) { const t = v * Math.PI / 3 + Math.PI / 6; g[v ? 'lineTo' : 'moveTo'](cx + Math.cos(t) * 14, cy + Math.sin(t) * 14); }
+                            g.stroke();
+                        }
+                        g.lineWidth = 7;
+                        for (let v = 0; v < 3; v += 1) { const y = 960 - v * 26; g.beginPath(); g.moveTo(96, y); g.lineTo(128, y - 18); g.lineTo(160, y); g.stroke(); }
+                    }
+                    g.restore();
+                }
+            });
+            g.globalCompositeOperation = 'source-over';
+        };
+        paintHoloAds();
+        const haTex = texture(haCanvas);
+        haTex.minFilter = T.LinearMipmapLinearFilter; haTex.generateMipmaps = true;
+        const holoAdMat = new T.ShaderMaterial({
+            name: 'kowloon:signs:holo-ads', fog: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+            uniforms: { ...fogUniforms(), map: { value: haTex }, time: { value: 0 }, level: { value: 1 },
+                cyan: { value: new T.Color(0.2, 0.95, 1.15) }, magenta: { value: new T.Color(1.15, 0.22, 0.85) } },
+            vertexShader: `attribute vec4 info;varying vec2 vUv;varying vec4 vInfo;
+                ${FOG_V}
+                void main(){vUv=uv;vInfo=info;vec4 w=modelMatrix*vec4(position,1.0);
+                    vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
+                    #include <fog_vertex>
+                }`,
+            fragmentShader: `uniform sampler2D map;uniform float time,level;uniform vec3 cyan,magenta;
+                varying vec2 vUv;varying vec4 vInfo;
+                #include <fog_pars_fragment>
+                float h(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+                void main(){
+                    float role=floor(vInfo.x/10.0);float column=mod(vInfo.x,10.0);float seed=vInfo.y;vec2 size=vInfo.zw;
+                    float pinkish=step(0.55,fract(seed*7.31));
+                    vec3 main=mix(cyan,magenta,pinkish),other=mix(magenta,cyan,pinkish);
+                    float win=floor(time*12.0);
+                    // Now and then the feed drops a frame: the sheet blinks out or slips.
+                    float drop=step(h(vec2(win,seed*13.0)),0.02);
+                    vec3 col;
+                    if(role>0.5){
+                        float a=1.0-abs(vUv.x*2.0-1.0);a=a*a*a;
+                        a*=smoothstep(0.0,0.2,vUv.y)*(0.3+0.7*vUv.y);
+                        col=main*a*0.07*(0.85+0.15*sin(time*17.0+seed*40.0))*(1.0-drop*0.8);
+                    }else{
+                        float period=7.0+5.0*fract(seed*3.7);
+                        float tt=time/period+seed*5.0;float slide=mod(floor(tt),2.0);float into=fract(tt)*period;
+                        float sw=1.0-smoothstep(0.0,0.4,into);
+                        float glitch=max(sw,drop);
+                        vec2 uv=vUv;
+                        float row=floor(uv.y*56.0);
+                        uv.x+=sin(time*2.1+uv.y*13.0+seed*9.0)*0.004
+                            +(h(vec2(row,win+seed))-0.5)*0.16*glitch*step(0.55,h(vec2(row*3.1,win)));
+                        uv.y=fract(uv.y+drop*0.08*(h(vec2(win,seed+1.0))-0.5));
+                        uv=clamp(uv,vec2(0.002),vec2(0.998));
+                        vec2 auv=vec2((column+uv.x)*0.25,(1.0-slide)*0.5+uv.y*0.5);
+                        vec4 t=texture2D(map,auv);
+                        float ca=0.0015+glitch*0.006;
+                        float tl=texture2D(map,auv-vec2(ca,0.0)).r,tr=texture2D(map,auv+vec2(ca,0.0)).r;
+                        col=main*t.r*1.1+other*t.g*0.75+main*t.b*0.07;
+                        col+=magenta*max(tl-t.r,0.0)*0.6+cyan*max(tr-t.r,0.0)*0.6;
+                        // Scanlines, faded out where they would be finer than a pixel.
+                        float lines=size.y*4.0;
+                        float sl=0.62+0.38*sin((vUv.y*lines-time*1.3)*6.2832);
+                        sl=mix(sl,0.81,smoothstep(0.2,0.55,fwidth(vUv.y*lines)));
+                        col*=sl;
+                        // A brighter band climbs the sheet.
+                        col*=1.0+0.7*smoothstep(0.05,0.0,abs(fract(vUv.y*0.5-time*0.12+seed)-0.5)-0.44);
+                        col+=main*h(floor(vUv*size*6.0)+floor(time*30.0))*glitch*0.3;
+                        float ed=smoothstep(0.0,0.03,min(vUv.x,1.0-vUv.x))*smoothstep(0.0,0.015,min(vUv.y,1.0-vUv.y));
+                        col*=ed*(0.8+0.35*(1.0-vUv.y));
+                        col*=1.0-drop*step(0.5,h(vec2(win,seed+5.0)))*0.9;
+                        col*=0.92+0.08*sin(time*53.0+seed*30.0);
+                    }
+                    gl_FragColor=vec4(col*level,1.0);
+                    #ifdef USE_FOG
+                    #ifdef FOG_EXP2
+                    float fogFactor=1.0-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth);
+                    #else
+                    float fogFactor=smoothstep(fogNear,fogFar,vFogDepth);
+                    #endif
+                    gl_FragColor.rgb*=1.0-fogFactor*0.7;
+                    #endif
+                }`,
+            extensions: { derivatives: true }
+        });
+        disposables.push(holoAdMat);
+        if (ab.triangles) {
+            const geometry = ab.geometry(T);
+            disposables.push(geometry);
+            const mesh = new T.Mesh(geometry, holoAdMat);
+            mesh.name = 'Signs/holo-ads'; mesh.renderOrder = 3; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
             group.add(mesh); meshes.push(mesh);
         }
         let holoKey = null, holoAt = 0;
@@ -1555,6 +1784,8 @@
             const nextText = String(lyric?.next?.text || '').trim() || (lyric?.line ? '' : String(song?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg)$/i, ''));
             if (nextText !== holoKey) { holoKey = nextText; paintHolo(nextText); holoTex.needsUpdate = true; holoAt = wall; }
             holoMat.uniforms.time.value = local % 1000;
+            holoAdMat.uniforms.time.value = still ? 3.3 : local % 1000;
+            holoAdMat.uniforms.level.value = night * (palette.light ? 0.5 : 1);
             holoMat.uniforms.age.value = still || state.isPlaying === false ? 9 : wall - holoAt;
             holoMat.uniforms.level.value = night * (nextText ? 1 : 0.25);
             if (glyphs < 0) u.progress.value = 0;
@@ -1573,9 +1804,15 @@
                     // A wash from the board, not a lamp: nothing to draw a haze halo around.
                     halo: false });
             });
+            // The nearer banners wash the walls round them in their cold light.
+            holoAds.forEach(a => {
+                const c = (a.seed * 7.31) % 1 >= 0.55 ? [1, 0.3, 0.8] : [0.25, 0.85, 1];
+                out.push({ position: add(a.centre, UP, -a.height * 0.25), color: c, intensity: holoAdMat.uniforms.level.value * (a.roof ? 2.2 : 1.5),
+                    radius: a.height * 0.9, flicker: 1, flickerValue: 1, halo: false });
+            });
             const ranked = lightSources.map(l => ({ l, v: l.base * (levels[l.spec.index] || 0) })).sort((a, b) => b.v - a.v);
             for (const { l } of ranked) {
-                if (out.length >= 24) break;
+                if (out.length >= 32) break;
                 const k = levels[l.spec.index] || 0;
                 out.push({ position: l.position, color: l.color, intensity: k * Math.min(6, Math.sqrt(l.spec.width * l.spec.height)) * (l.spec.style === 'box' ? 0.6 : 1),
                     radius: Math.max(l.spec.width, l.spec.height) * 1.8 + 2, flicker: k / Math.max(0.01, night), flickerValue: 1 });
@@ -1597,7 +1834,7 @@
             setTier,
             setOptions(o) { options = { ...options, ...(o || {}) }; },
             lights,
-            materials: [hardwareMat, glowMat, screenMat, holoMat],
+            materials: [hardwareMat, glowMat, screenMat, holoMat, holoAdMat],
             dispose() {
                 scene?.remove(group);
                 disposables.forEach(d => d.dispose?.());
@@ -1608,7 +1845,7 @@
                     signDrawCalls: meshes.length,
                     signTriangles: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0),
                     signs: specs.length, screens: screenList.length, atlas: ATLAS, density: Math.round(density),
-                    textureBytes: Math.round(ATLAS * ATLAS_H * 4 * 4 / 3 + ATLAS * ATLAS_H / 16 * 4 * 2 + LYRIC_W * LYRIC_H * LYRIC_SCALE ** 2 * 4)
+                    textureBytes: Math.round(ATLAS * ATLAS_H * 4 * 4 / 3 + ATLAS * ATLAS_H / 16 * 4 * 2 + LYRIC_W * LYRIC_H * LYRIC_SCALE ** 2 * 4 + HA_W * HA_H * 4 * 4 / 3)
                 };
             },
             // For tests and the look-dev page.
@@ -1616,7 +1853,7 @@
         };
     };
 
-    const api = { create, _test: { chooseSlots, designSign, hashString, mulberry, layoutRows, wordsOf, graphemes, REGIONS, VERTICAL_SHOPS, HORIZONTAL_SHOPS, ROOF_BRANDS } };
+    const api = { create, _test: { chooseSlots, chooseHoloAds, designSign, hashString, mulberry, layoutRows, wordsOf, graphemes, REGIONS, VERTICAL_SHOPS, HORIZONTAL_SHOPS, ROOF_BRANDS } };
     global.MusicStageKowloonSigns = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

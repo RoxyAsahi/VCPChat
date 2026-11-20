@@ -58,3 +58,15 @@ test('lyric rows break between words, never inside one', () => {
     assert.ok(rows.length >= 2 && rows.length <= 3);
     assert.ok(rows.every(r => r.width <= 120 || r.length === 1));
 });
+
+test('hologram banners hang high, apart, and clear of the main screen', () => {
+    const { chooseHoloAds } = Signs._test;
+    const ads = chooseHoloAds(layout, 16, mulberry(3));
+    assert.ok(ads.length >= 10, `only ${ads.length} banners`);
+    const screen = layout.SCREENS.find(s => s.primary);
+    ads.forEach(a => {
+        assert.ok(a.bottom >= 6.9, 'banner hangs into the street');
+        assert.ok(a.height > a.width * 3, 'banners stand tall');
+        assert.ok(Math.hypot(a.foot[0] - screen.center[0], a.foot[1] - screen.center[1], a.foot[2] - screen.center[2]) >= 24, 'banner on the main screen');
+    });
+});
