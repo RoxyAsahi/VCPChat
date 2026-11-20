@@ -2,7 +2,9 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 4;
+    const VERSION = 5;
+    // 后来加的模式：旧版本存下的启用列表里没有它们，读到旧版本时补上。
+    const ADDED_IN = Object.freeze({ kowloon: 5 });
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -20,7 +22,8 @@
         { id: 'partita', label: '云阶', description: '分块排版与引导线' },
         { id: 'cadenza', label: '心象', description: '空间排版与镜头漂移' },
         { id: 'starborn', label: '星诞', description: '按歌词段落自动导演' },
-        { id: 'tunnel', label: '隧图', description: '点阵星际穿行、实体化歌词与深空物体演出' }
+        { id: 'tunnel', label: '隧图', description: '点阵星际穿行、实体化歌词与深空物体演出' },
+        { id: 'kowloon', label: '町景', description: '雨夜叠楼城寨：霓虹招牌、窄巷与广告屏上的歌词' }
     ]);
 
     const PIXI_DEFAULTS = Object.freeze({
@@ -35,7 +38,7 @@
         rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
     });
     const DEFAULTS = Object.freeze({
-        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel'],
+        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon'],
         quality: 'standard',
         animationIntensity: 1,
         edgeSpectrum: true,
@@ -146,6 +149,15 @@
                 textHoldRatio: 0.32,
                 fontScale: 1,
                 glow: 1,
+                audioReactivity: 1
+            },
+            kowloon: {
+                rain: 'light',
+                postProcess: true,
+                glow: 1,
+                grain: 0.06,
+                vignette: 0.28,
+                showTranslation: true,
                 audioReactivity: 1
             }
         }
@@ -262,7 +274,10 @@
 
     const normalize = (candidate) => {
         const source = candidate && typeof candidate === 'object' ? candidate : {};
-        const requestedModes = Array.isArray(source.enabledModes) ? source.enabledModes : DEFAULTS.enabledModes;
+        const savedVersion = Number(source.version) || 0;
+        const requestedModes = Array.isArray(source.enabledModes)
+            ? source.enabledModes.concat(Object.keys(ADDED_IN).filter((id) => savedVersion < ADDED_IN[id]))
+            : DEFAULTS.enabledModes;
         const enabledModes = MODE_META
             .map((entry) => entry.id)
             .filter((id) => requestedModes.includes(id));
