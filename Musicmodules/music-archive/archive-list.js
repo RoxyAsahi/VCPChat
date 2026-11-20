@@ -45,6 +45,7 @@
             <div class="archive-list-spacer" data-l="spacer"></div>
             <div class="archive-list-empty" data-l="empty" role="status"></div>
         </div>
+        <div class="archive-list-thumb" data-l="thumb" aria-hidden="true" hidden></div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
             <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em>
@@ -331,6 +332,7 @@
             if (!el.isConnected || el.hidden) return;
             const top = r.viewport.scrollTop;
             const h = r.viewport.clientHeight || 600;
+            syncThumb(top, h);
             if (!state.rows.length) { r.sticky.textContent = ''; return; }
             const first = Math.max(0, rowAt(top) - OVERSCAN);
             const last = Math.min(state.rows.length - 1, rowAt(top + h) + OVERSCAN);
@@ -350,7 +352,7 @@
                     node = document.createElement('div');
                     node.className = row.type === 'track' ? 'archive-list-row' : isLetter(row) ? 'archive-list-letter' : 'archive-list-group';
                     node.dataset.k = k;
-                    if (row.type === 'track') { node.setAttribute('role', 'option'); node.draggable = true; }
+                    if (row.type === 'track') { node.setAttribute('role', 'option'); }
                     else if (playlistOfHead(row)) node.classList.add('is-playlist');
                     node.style.transform = `translateY(${state.offsets[k]}px)`;
                     node.innerHTML = rowHtml(row, k);
@@ -381,6 +383,52 @@
             r.tot.textContent = pad(state.count, 3);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
+
+        /* 右边的细滚动条：看得出目录有多长、现在在哪，也可以直接拖 */
+        const THUMB_PAD = [56, 30]; // 目录上下两头是渐隐的，滚动条不伸进去
+        const thumbGeo = (h) => {
+            const total = state.rows.length ? state.offsets[state.rows.length - 1] + ROW_H : 0;
+            const track = h - THUMB_PAD[0] - THUMB_PAD[1];
+            if (total <= h + 4 || track < 60) return null;
+            const size = Math.max(32, track * h / total);
+            return { total, track, size, range: total - h };
+        };
+        let thumbKey = '';
+        const syncThumb = (top, h) => {
+            const g = thumbGeo(h);
+            const y = g ? Math.round((r.viewport.offsetTop || 0) + THUMB_PAD[0] + (g.track - g.size) * Math.min(1, top / g.range)) : -1;
+            const key = g ? Math.round(g.size) + ':' + y : '';
+            if (key === thumbKey) return;
+            thumbKey = key;
+            r.thumb.hidden = !g;
+            if (g) { r.thumb.style.height = Math.round(g.size) + 'px'; r.thumb.style.transform = `translateY(${y}px)`; }
+        };
+        let thumbDrag = null;
+        const onThumbMove = (e) => {
+            if (!thumbDrag) return;
+            const g = thumbGeo(r.viewport.clientHeight || 600);
+            if (!g) return;
+            r.viewport.scrollTop = thumbDrag.top + ((e.clientY - thumbDrag.y) / thumbDrag.scale) * g.range / Math.max(1, g.track - g.size);
+            schedule();
+        };
+        const onThumbEnd = () => {
+            thumbDrag = null;
+            el.classList.remove('thumbing');
+            document.removeEventListener('pointermove', onThumbMove);
+            document.removeEventListener('pointerup', onThumbEnd);
+            document.removeEventListener('pointercancel', onThumbEnd);
+        };
+        r.thumb.addEventListener('pointerdown', (e) => {
+            if ((e.button || 0) !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const hgt = r.viewport.offsetHeight;
+            thumbDrag = { y: e.clientY, top: r.viewport.scrollTop, scale: hgt ? (r.viewport.getBoundingClientRect().height / hgt) || 1 : 1 };
+            el.classList.add('thumbing');
+            document.addEventListener('pointermove', onThumbMove);
+            document.addEventListener('pointerup', onThumbEnd);
+            document.addEventListener('pointercancel', onThumbEnd);
+        });
 
         /*
          * 字母轴上的流体小滴（有底栏的流体标记模块时）：停在当前组的首字母旁边，
@@ -937,39 +985,108 @@
             const pl = head && playlistOfHead(state.rows[Number(head.dataset.k)]);
             return pl ? { node: head, pl } : null;
         };
-        el.addEventListener('dragstart', (e) => {
-            const node = e.target.closest?.('.archive-list-row');
-            const row = node && state.rows[Number(node.dataset.k)];
-            if (!row || row.type !== 'track') return;
-            manage.drag = dragIndices(row);
-            try {
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setData('text/plain', manage.drag.map((i) => (tracks()[i] || {}).title || '').join('\n'));
-            } catch (err) { /* 没有 dataTransfer（测试环境）也能拖 */ }
-            openShelf();
-        });
-        el.addEventListener('dragover', (e) => {
-            if (!manage.drag) return;
-            const hit = dropTarget(e.target);
+        /*
+         * 鼠标按住目录拖动：上下拖是滚动（松手后顺着惯性再滑一小段），横着拖起一行是把歌拎到歌单上
+         * （拎的是多选里的几首或这一首；歌单架和歌单标题是落点）。触摸屏本来就能滑，不接管。
+         */
+        const DRAG_SLOP = 6;
+        let press = null;
+        let glide = 0;
+        let ghost = null;
+        const stopGlide = () => { if (glide) cancelAnimationFrame(glide); glide = 0; };
+        const pxScale = () => { const h = r.viewport.offsetHeight; return h ? (r.viewport.getBoundingClientRect().height / h) || 1 : 1; };
+        const hitOf = (e) => {
+            const under = typeof document.elementFromPoint === 'function' && Number.isFinite(e.clientX) ? document.elementFromPoint(e.clientX, e.clientY) : null;
+            return dropTarget(under || e.target);
+        };
+        const paintOver = (hit) => {
             el.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
-            if (!hit) return;
-            e.preventDefault();
-            try { e.dataTransfer.dropEffect = 'copy'; } catch (err) { /* 同上 */ }
-            hit.node.classList.add('drop-over');
-        });
-        el.addEventListener('drop', (e) => {
-            if (!manage.drag) return;
-            const hit = dropTarget(e.target);
+            if (hit) hit.node.classList.add('drop-over');
+        };
+        const moveGhost = (e) => { if (ghost) ghost.style.transform = `translate(${(e.clientX || 0) + 14}px, ${(e.clientY || 0) + 12}px)`; };
+        const startCarry = (row, e) => {
+            manage.drag = dragIndices(row);
+            openShelf();
+            ghost = document.createElement('div');
+            ghost.className = 'archive-drag-ghost';
+            const first = tracks()[manage.drag[0]] || {};
+            ghost.textContent = manage.drag.length > 1 ? `${manage.drag.length} 首` : String(first.title || '1 首').replace(/\.[a-z0-9]{2,5}$/i, '');
+            document.body.appendChild(ghost);
+            moveGhost(e);
+        };
+        const endCarry = (hit) => {
             const indices = manage.drag;
+            ghost?.remove();
+            ghost = null;
             closeShelf();
-            if (!hit) return;
-            e.preventDefault();
+            if (!hit || !indices) return;
             if (hit.pl === 'new') {
                 const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
                 if (pl) toast(`已新建歌单「${pl.name}」：${pl.tracks.length} 首`);
             } else addToPlaylist(hit.pl, indices);
+        };
+        const swallowClick = () => {
+            // 拖完松手不算一次点击
+            const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+            r.viewport.addEventListener('click', eat, true);
+            setTimeout(() => r.viewport.removeEventListener('click', eat, true), 0);
+        };
+        const onPressMove = (e) => {
+            if (!press) return;
+            const dx = e.clientX - press.x, dy = e.clientY - press.y;
+            if (!press.mode) {
+                if (Math.hypot(dx, dy) < DRAG_SLOP) return;
+                const row = press.k >= 0 ? state.rows[press.k] : null;
+                if (row && row.type === 'track' && Math.abs(dx) > Math.abs(dy) * 1.2) { press.mode = 'carry'; startCarry(row, e); }
+                else { press.mode = 'scroll'; el.classList.add('grabbing'); }
+            }
+            if (press.mode === 'carry') { moveGhost(e); paintOver(hitOf(e)); return; }
+            const before = r.viewport.scrollTop;
+            r.viewport.scrollTop = press.top - dy / press.scale;
+            const now = performance.now();
+            if (now > press.t) press.v = press.v * 0.6 + ((r.viewport.scrollTop - before) / (now - press.t)) * 0.4;
+            press.t = now;
+            schedule();
+        };
+        const onPressEnd = (e) => {
+            document.removeEventListener('pointermove', onPressMove);
+            document.removeEventListener('pointerup', onPressEnd);
+            document.removeEventListener('pointercancel', onPressEnd);
+            const p = press;
+            press = null;
+            if (!p || !p.mode) return;
+            el.classList.remove('grabbing');
+            swallowClick();
+            if (p.mode === 'carry') { endCarry(e.type === 'pointerup' ? hitOf(e) : null); return; }
+            // 松手后的惯性：停了一下再松手、或者系统要求减少动效时不滑
+            let v = performance.now() - p.t > 80 ? 0 : p.v;
+            if (Math.abs(v) < 0.15 || (opts.reducedMotion && opts.reducedMotion())) return;
+            let last = performance.now();
+            const step = () => {
+                const now = performance.now();
+                const dt = Math.min(48, now - last);
+                last = now;
+                const before = r.viewport.scrollTop;
+                r.viewport.scrollTop = before + v * dt;
+                v *= Math.pow(0.995, dt);
+                glide = Math.abs(v) > 0.03 && r.viewport.scrollTop !== before ? requestAnimationFrame(step) : 0;
+                schedule();
+            };
+            glide = requestAnimationFrame(step);
+        };
+        r.viewport.addEventListener('pointerdown', (e) => {
+            stopGlide();
+            if ((e.button || 0) !== 0 || e.pointerType === 'touch' || e.target.closest('button, input')) return;
+            const node = e.target.closest('.archive-list-row');
+            press = { x: e.clientX, y: e.clientY, top: r.viewport.scrollTop, scale: pxScale(), k: node ? Number(node.dataset.k) : -1, mode: '', v: 0, t: performance.now() };
+            document.addEventListener('pointermove', onPressMove);
+            document.addEventListener('pointerup', onPressEnd);
+            document.addEventListener('pointercancel', onPressEnd);
         });
-        el.addEventListener('dragend', closeShelf);
+        r.viewport.addEventListener('wheel', stopGlide, { passive: true });
+        // 行不再用系统的拖放（它一动就开始拖，没法上下拖着滚）
+        r.viewport.addEventListener('dragstart', (e) => e.preventDefault());
+        const endPress = () => { stopGlide(); onThumbEnd(); if (press && press.mode === 'carry') endCarry(null); press = null; ghost?.remove(); ghost = null; document.removeEventListener('pointermove', onPressMove); document.removeEventListener('pointerup', onPressEnd); document.removeEventListener('pointercancel', onPressEnd); };
 
         el.querySelector('[data-l="kinds"]').addEventListener('click', (e) => {
             const b = e.target.closest('[data-kind]');
@@ -1058,6 +1175,7 @@
             focusSearch: () => { r.input.focus(); r.input.select(); },
             clearMulti, closeBatchMenu,
             get picked() { return pickedIndices(null); },
+            endPress,
             destroyDrop: () => { drop?.destroy(); drop = null; dropAt = null; },
             /* 在档案页直接打字：聚焦检索框并带入这个字（替换掉原来的检索词） */
             typeInto: (text) => {

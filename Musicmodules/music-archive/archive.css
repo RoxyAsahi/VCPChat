@@ -70,7 +70,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-brand p b { font-weight: 750; letter-spacing: 3px; }
 
 /* 右上：检索、加入歌单、回到正在播放 */
-.archive-nav { position: absolute; right: 59px; top: 124px; display: flex; align-items: center; gap: 43px; }
+.archive-nav { position: absolute; right: 59px; top: 124px; display: flex; align-items: center; gap: 34px; }
 .archive-nav > button { font-size: 14px; line-height: 1; min-height: 28px; letter-spacing: .7px; display: flex; align-items: center; gap: 12px; }
 .archive-nav > button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-glyph-search { width: 23px; height: 23px; position: relative; flex-shrink: 0; display: block; }
@@ -288,6 +288,15 @@ body.light-theme .archive-list { --glow: .85; }
 }
 .archive-list-viewport::-webkit-scrollbar { display: none; }
 .archive-list-spacer { position: relative; width: 100%; }
+.archive-list-viewport { cursor: grab; }
+.archive-list.grabbing .archive-list-viewport { cursor: grabbing; }
+.archive-list.grabbing .archive-list-row { pointer-events: none; }
+.archive-list-thumb { position: absolute; top: 0; right: -18px; width: 13px; cursor: pointer; touch-action: none; opacity: 0; transition: opacity .2s; }
+.archive-list-thumb[hidden] { display: none; }
+.archive-list-thumb::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 3px; background: var(--ar-ink); opacity: .38; transition: opacity .15s, left .15s, width .15s; }
+.archive-list:hover .archive-list-thumb, .archive-list.grabbing .archive-list-thumb, .archive-list.thumbing .archive-list-thumb { opacity: 1; }
+.archive-list-thumb:hover::after, .archive-list.thumbing .archive-list-thumb::after { opacity: .8; left: 4px; width: 5px; }
+.archive-drag-ghost { position: fixed; left: 0; top: 0; z-index: 901; max-width: 240px; padding: 5px 10px; font-family: var(--mt-font-archive, inherit); font-size: 12px; letter-spacing: .4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); background: rgba(var(--ar-paper-rgb), .96); border: 1px solid var(--ar-ink); pointer-events: none; }
 
 /* 首字母：左侧外边距里的大号细体字，当前分组吸附在顶上 */
 .archive-list-letter, .archive-list-sticky { position: absolute; left: 0; top: 0; width: calc(var(--gutter) - 14px); height: 0; overflow: visible; text-align: right; pointer-events: none; }
@@ -401,6 +410,9 @@ body.music-reduce-motion .archive-list-row.on::after, body.music-reduce-motion .
 }
 body.light-theme .archive-lyrics { --glow: .85; }
 .archive-lyrics[hidden] { display: none; }
+.archive-lyrics { animation: archive-lyrics-in .5s var(--mt-ease, cubic-bezier(.32, .72, 0, 1)) both; }
+@keyframes archive-lyrics-in { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+body.music-reduce-motion .archive-lyrics { animation: none; }
 .archive-lyrics::before {
     content: "";
     position: absolute;
