@@ -204,6 +204,23 @@
                     float wet = uWet;
 
                     // ---------- 屋顶 ----------
+                    if (kind > 3.5 && kind < 4.5 && n.y < -0.5) {
+                        // 跨巷加建的底面：黑乎乎的混凝土，挂着水渍，只被巷里的灯照。
+                        vec2 p = vFace.xy;
+                        vec3 alb = vec3(0.09, 0.09, 0.1) * (0.6 + 0.8 * kwFbm(p * 0.8 + seed * 20.0));
+                        vec3 col = alb * mix(uGround, uSky, 0.2) * 0.8;
+                        for (int i = 0; i < KW_MAX_LIGHTS; i++) {
+                            if (i >= uLightCount) break;
+                            vec3 d = uLightPos[i] - vWorld;
+                            float fall = max(0.0, 1.0 - length(d) / uLightRad[i]);
+                            col += alb * uLightCol[i] * fall * fall * max(0.0, -normalize(d).y);
+                        }
+                        gl_FragColor = vec4(col, 1.0);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                        #include <fog_fragment>
+                        return;
+                    }
                     if (kind > 3.5 && kind < 4.5) {
                         vec2 p = vFace.xy;
                         vec3 alb = vec3(0.17, 0.17, 0.18) * (0.7 + 0.6 * kwFbm(p * 0.35 + seed * 40.0));
@@ -264,6 +281,8 @@
                     float rust = step(0.86, kwHash(vec2(col_ * 5.0 + seed, floor(v / uFloor / 2.0)))) * smoothstep(0.55, 0.0, cell.y) * step(abs(cell.x - 0.5), 0.12);
                     alb = mix(alb, vec3(0.30, 0.17, 0.09), rust * 0.6 * uDetail);
                     alb *= 1.0 - wet * 0.35;
+                    // 墙脚一米多是溅水和人手蹭出来的深色。
+                    alb *= mix(0.55, 1.0, smoothstep(0.2, 1.6, v + kwNoise(vec2(u * 1.3, 0.0)) * 0.6));
 
                     // 窗。山墙（高出邻楼的部分）大多是实墙，只有零星小窗。
                     float hasWindow = 1.0;
@@ -524,8 +543,10 @@
                 poles.push(s);
             }
             if (s.kind === 'shop' && rand() < 0.65) {
-                // 店铺雨棚。
-                const depth = 1.0 + rand() * 0.9;
+                // 店铺雨棚。巷子里窄，只伸出巷宽的三分之一。
+                const fac = layout.facades[s.facade];
+                const alley = fac.kind.startsWith('alley') ? layout.ALLEYS.find(a => `alley:${a.id}` === fac.kind) : null;
+                const depth = alley ? Math.min(0.9, alley.w * 0.33) : 1.0 + rand() * 0.9;
                 const p = out(s, depth / 2);
                 p[1] = FLOOR - 0.35 + rand() * 0.2;
                 const tint = rand();
