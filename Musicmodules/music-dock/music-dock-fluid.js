@@ -60,12 +60,14 @@
         // 音量水滴整个是实心的：用一块边缘羽化的椭圆，不要硬边。
         const volSolid = make('ellipse', { fill: `url(#${id('rs')})`, opacity: 0 }, solidMask);
 
-        const vGrad = make('linearGradient', { id: id('v'), x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-        make('stop', { offset: '0', 'stop-color': '#fff' }, vGrad);
-        make('stop', { offset: '.7', 'stop-color': '#fff' }, vGrad);
-        make('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '.3' }, vGrad);
+        // 雾和光晕只许溢出播放条外沿 16px：用一块羽化的圆角矩形（加上音量水滴升起的那一列）把它们框住。
         const vapMask = make('mask', { id: id('vap'), maskUnits: 'userSpaceOnUse' }, defs);
-        const vapR = make('rect', { x: 0, fill: `url(#${id('v')})` }, vapMask);
+        const feather = make('filter', { id: id('feather'), filterUnits: 'userSpaceOnUse', x: 0, y: 0 }, defs);
+        make('feGaussianBlur', { stdDeviation: 4 }, feather);
+        const vapG0 = make('g', { filter: `url(#${id('feather')})`, fill: '#fff' }, vapMask);
+        const vapR = make('rect', {}, vapG0);
+        const vapCol = make('rect', {}, vapG0);
+        const vapSplit = make('rect', { width: 0 }, vapG0); // 切歌分裂的水滴往右飞时临时放开
 
         const filterAttrs = { filterUnits: 'userSpaceOnUse', x: 0, y: 0, 'color-interpolation-filters': 'sRGB' };
         const goo = make('filter', { id: id('goo'), ...filterAttrs }, defs);
@@ -86,8 +88,8 @@
         const volB = make('rect', {}, body);
         const splitC = make('circle', { r: 0 }, body);
 
-        const bloomUse = make('use', { href: `#${id('body')}`, filter: `url(#${id('bloom')})`, class: 'md-fl-bloom' }, svg);
         const vapG = make('g', { mask: `url(#${id('vap')})` }, svg);
+        make('use', { href: `#${id('body')}`, filter: `url(#${id('bloom')})`, class: 'md-fl-bloom' }, vapG);
         const vaporG = make('g', { class: 'md-fl-vapor' }, vapG);
         make('use', { href: `#${id('body')}`, filter: `url(#${id('vapor')})`, fill: `url(#${id('inner')})` }, vaporG);
         const solidG = make('g', { mask: `url(#${id('solid')})` }, vapG);
@@ -146,12 +148,15 @@
             for (const f of filters) { setAttr(f, 'width', geo.layerW); setAttr(f, 'height', LAYER_H); }
             setAttr(holeBg, 'width', geo.layerW); setAttr(holeBg, 'height', LAYER_H);
             setAttr(solidR, 'width', geo.layerW); setAttr(solidR, 'height', LAYER_H);
-            setAttr(vapR, 'y', geo.y - VOL_RISE - 40); setAttr(vapR, 'width', geo.layerW); setAttr(vapR, 'height', LAYER_H);
+            setAttr(feather, 'width', geo.layerW); setAttr(feather, 'height', LAYER_H);
+            const spill = 12; // 加上 4px 羽化 ≈ 外沿 16px
+            setAttr(vapR, 'x', geo.x - spill); setAttr(vapR, 'y', geo.y - spill); setAttr(vapR, 'width', geo.w + spill * 2); setAttr(vapR, 'height', geo.h + spill * 2); setAttr(vapR, 'rx', geo.h / 2 + spill);
             setAttr(hGrad, 'x1', geo.x); setAttr(hGrad, 'x2', geo.x + geo.w);
             setAttr(inner, 'cx', geo.x + geo.w * 0.78); setAttr(inner, 'cy', geo.y + geo.h + 12); setAttr(inner, 'r', Math.max(220, geo.w * 0.72));
             const r = geo.h / 2;
             setAttr(barR, 'x', geo.x); setAttr(barR, 'y', geo.y); setAttr(barR, 'width', geo.w); setAttr(barR, 'height', geo.h); setAttr(barR, 'rx', r);
             setAttr(playC, 'cx', geo.playX); setAttr(playC, 'cy', geo.y + r); setAttr(playC, 'r', r + 7);
+            setAttr(vapCol, 'x', geo.volX - 24 - 12); setAttr(vapCol, 'y', geo.y - VOL_RISE - 12); setAttr(vapCol, 'width', 48 + 24); setAttr(vapCol, 'height', VOL_RISE + 24); setAttr(vapCol, 'rx', 36);
             setAttr(volSolid, 'cx', geo.volX); setAttr(volSolid, 'cy', geo.y - VOL_RISE / 2 + 6); setAttr(volSolid, 'rx', 70); setAttr(volSolid, 'ry', VOL_RISE);
             if (!s.ring.placed) placeRing(true);
             else retargetRing();
@@ -209,7 +214,8 @@
             if (s.split.p < 1) {
                 const e = s.split.p;
                 setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
-            } else setAttr(splitC, 'r', 0);
+                setAttr(vapSplit, 'x', geo.x + geo.w - geo.h); setAttr(vapSplit, 'y', geo.y - 12); setAttr(vapSplit, 'height', geo.h + 24); setAttr(vapSplit, 'width', geo.h + 200); setAttr(vapSplit, 'rx', geo.h / 2);
+            } else { setAttr(splitC, 'r', 0); setAttr(vapSplit, 'width', 0); }
             const rx = s.ring.x;
             const ry = s.ring.y;
             const near = Math.hypot(rx - geo.ringX, ry - (geo.y - 2)) < 120;

@@ -317,9 +317,9 @@ body.light-theme #music-dock-root {
 .md-vopen #music-dock-root .md-vslot,
 #music-dock-root.md-vopen .md-vslot { opacity: 1; }
 
-/* 暂停：整条化成雾，文字也跟着糊一点；鼠标移上来（关注）又凝固 */
-#music-dock-root.md-vapor .md-ttl { filter: blur(1.2px); opacity: .72; }
-#music-dock-root.md-vapor .md-nxb { opacity: .4; }
+/* 暂停：条身和下一首化成雾；曲名、时间和按钮保持清楚，只淡到 70%；鼠标移上来（关注）又凝固 */
+#music-dock-root.md-vapor .md-ttl { opacity: .7; }
+#music-dock-root.md-vapor .md-nxb:not(.md-nx2) { opacity: .4; }
 
 /* 音量水滴里的竖条 */
 .md-vrail {
