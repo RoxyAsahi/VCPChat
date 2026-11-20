@@ -131,8 +131,18 @@
         };
 
         // 播放条在窗口里的位置变了（窗口缩放、紧凑档）就重新量。
+        // 右侧抽屉打开时播放条整体往左让位（CSS 的 translate 属性，流体层同步平移）。
+        // 这里量位置时扣掉当前的平移量，层自己的 left 记的是没平移时的位置。
+        const dockEl = bar.closest('.md-dock');
+        const shiftX = () => {
+            const t = dockEl ? win.getComputedStyle(dockEl).translate : '';
+            const n = parseFloat(t);
+            return Number.isFinite(n) ? n : 0;
+        };
         const layout = () => {
-            const rect = bar.getBoundingClientRect();
+            const sx = shiftX();
+            const raw = bar.getBoundingClientRect();
+            const rect = { left: raw.left - sx, right: raw.right - sx, top: raw.top, bottom: raw.bottom, width: raw.width, height: raw.height };
             const vh = win.innerHeight || doc.documentElement.clientHeight || 0;
             if (!(rect.width > 0 && rect.height > 0)) return false;
             geo.layerW = Math.round(rect.width + PAD_X * 2);
@@ -148,8 +158,8 @@
             const volBtn = bar.querySelector('[data-md="vol"]');
             const pr = playBtn?.getBoundingClientRect();
             const vr = volBtn?.getBoundingClientRect();
-            geo.playX = pr && pr.width ? pr.left + pr.width / 2 - geo.left : geo.x + geo.h / 2;
-            geo.volX = vr && vr.width ? vr.left + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
+            geo.playX = pr && pr.width ? pr.left - sx + pr.width / 2 - geo.left : geo.x + geo.h / 2;
+            geo.volX = vr && vr.width ? vr.left - sx + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
             geo.ringX = geo.x + geo.w * 0.63;
             svg.setAttribute('width', geo.layerW);
             svg.setAttribute('height', LAYER_H);
@@ -308,7 +318,7 @@
             setSolid(target) { s.solidity.t = target ? 1 : 0; kick(); },
             pointer(clientX) {
                 if (clientX == null) { s.bump.tr = 0; kick(); return; }
-                s.bump.tx = clientX - geo.left;
+                s.bump.tx = clientX - shiftX() - geo.left;
                 if (s.bump.r < 1) s.bump.x = s.bump.tx;
                 s.bump.tr = 20;
                 kick();
@@ -319,7 +329,7 @@
                 if (open && rect && rect.width > 0) {
                     const vh = win.innerHeight || 0;
                     const layerTop = vh - geo.bottom - LAYER_H;
-                    s.quick.x = rect.left - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
+                    s.quick.x = rect.left - shiftX() - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
                 }
                 s.quick.t = open ? 1 : 0;
                 kick();

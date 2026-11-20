@@ -1248,6 +1248,17 @@
             setVolume(readVolume() + delta);
         });
 
+        // 右侧抽屉打开时播放条往左让位，右边缘停在抽屉内容左边 24px；放得下就不动。窄窗口抽屉铺满，不让位。
+        const DRAWER_W = 400;
+        const syncShift = () => {
+            const vw = global.innerWidth || 0;
+            const barW = el.cap.offsetWidth || 0;
+            const room = vw - DRAWER_W - 24;
+            const right = vw / 2 + barW / 2;
+            const shift = state.panelOpen && vw >= COMPACT_BELOW && barW ? Math.min(0, room - right) : 0;
+            host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
+            host.classList.toggle('md-shifted', shift < 0);
+        };
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
             if (!state.panelOpen) {
@@ -1258,6 +1269,7 @@
                 el.handle.setAttribute('aria-expanded', 'true');
                 el.handle.setAttribute('aria-label', '关闭面板');
                 fluid?.setRingDocked(false);
+                syncShift();
             }
             renderTabs();
             renderBody();
@@ -1272,6 +1284,7 @@
             el.handle.setAttribute('aria-expanded', 'false');
             el.handle.setAttribute('aria-label', '打开面板');
             fluid?.setRingDocked(true);
+            syncShift();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
         listen(el.handle, 'click', togglePanel);
@@ -1442,6 +1455,7 @@
         });
         listen(document, 'visibilitychange', () => { if (!document.hidden) kickProgress(); });
         listen(global, 'resize', () => {
+            syncShift();
             animateCapsule();
             if (state.volOpen) placeRail();
             if (state.panelOpen) placeMarks(el.pnl);

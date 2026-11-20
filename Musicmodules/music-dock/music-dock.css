@@ -1425,3 +1425,51 @@ body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .3); }
 .md-cmd-in { font-size: 14px; }
 .md-cmd-kbd { border-radius: 0; background: none; box-shadow: inset 0 0 0 1px var(--md-line2); }
 .md-cmd-foot kbd { border-radius: 0; }
+
+/* ───────── 抽屉打开时播放条往左让位 ─────────
+ * --md-shift 由 music-dock.js 算；播放条、流体层和雾床用同一个 translate 一起滑，流体层量位置时会扣掉它。 */
+#music-dock-root .md-dock,
+#music-dock-root .md-fluid,
+#music-dock-root .md-mist,
+.md-fluid, .md-mist {
+  translate: var(--md-shift, 0px) 0;
+  transition: translate .52s cubic-bezier(.32, .72, 0, 1);
+}
+body.music-reduce-motion #music-dock-root .md-dock,
+body.music-reduce-motion .md-fluid,
+body.music-reduce-motion .md-mist { transition: none; }
+
+/* ───────── 抽屉一直到窗口底，右下角给小环让出一个凹口 ─────────
+ * 小环打开面板时停在右下角（中心距右、下各 56px）；底色在那里挖一个边缘柔和的圆，像液体被顶开。 */
+.md-pnl { bottom: 20px; }
+.md-pnl .md-dockrow { padding-right: 60px; }
+.md-drbg {
+  -webkit-mask-image:
+    linear-gradient(to left, #000 50%, transparent 100%),
+    radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, #000 47px);
+  mask-image:
+    linear-gradient(to left, #000 50%, transparent 100%),
+    radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, #000 47px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+@media (max-width: 639.98px) {
+  .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
+  .md-pnl .md-dockrow { padding-right: 0; }
+  .md-drbg {
+    -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
+    mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
+  }
+}
+/* 凹口边上一圈很淡的亮边，让「被顶开」的形状看得出来 */
+.md-drbg::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 112px;
+  height: 112px;
+  background: radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, rgba(var(--md-tp-rgb), .14) 35px, transparent 47px);
+  pointer-events: none;
+}
+@media (max-width: 639.98px) { .md-drbg::after { display: none; } }
