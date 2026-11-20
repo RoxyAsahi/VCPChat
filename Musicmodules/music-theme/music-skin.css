@@ -905,11 +905,6 @@ body.music-dock-on .music-player .controls {
     color: var(--ar-ink);
 }
 
-/* 抽屉被搬走时，列表视图里中栏下半部分不留空 */
-body.music-dock-sheet-open .main-content #visualizer {
-    display: block;
-}
-
 /* ---------- 歌词栏：和目录同一套排版，靠左排，不居中 ---------- */
 .lyrics-container {
     min-height: 0;
