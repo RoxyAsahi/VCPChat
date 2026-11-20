@@ -1,0 +1,312 @@
+// Musicmodules/music-dock/music-dock-fluid.js
+// 底栏播放条的流体层：一组 SVG 形状（播放条、播放键鼓包、跟手的鼓包、音量水滴、切歌分裂的水滴），
+// 先模糊再按透明度阈值收边，形状之间就像液体一样相连、让位、分裂。
+// 同一组形状画两份：清晰的一份是「实心」，再模糊一次的一份是「雾」。实心那份用横向渐变遮住，
+// 遮罩的边界就是播放进度；暂停时实心那份整体淡掉，整条化成雾。
+// 只有形状在动的时候才逐帧更新；静止时不跑循环，进度遮罩由底栏每 250ms 推一次。
+(function (global) {
+    'use strict';
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const PAD_X = 140;      // 播放条左右各留出的余量（分裂的水滴往右飞、光晕外扩）
+    const LAYER_H = 320;    // 流体层高度：播放条之上要容纳音量水滴和小环
+    const RING_R = 20;      // 小环半径（外径 40）
+    const HOLE_R = 34;      // 小环在播放条上挖出的凹口
+    const VOL_RISE = 112;   // 音量水滴升起的高度
+
+    function createMusicDockFluid(options) {
+        const { host, bar, ring, reduced = () => false, onRingMove = null } = options || {};
+        if (!host || !bar) return null;
+        const doc = host.ownerDocument;
+        const win = doc.defaultView || global;
+        const uid = `mdf${Math.random().toString(36).slice(2, 8)}`;
+        const id = (name) => `${uid}-${name}`;
+        const make = (tag, attrs = {}, parent = null) => {
+            const node = doc.createElementNS(NS, tag);
+            for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+            if (parent) parent.appendChild(node);
+            return node;
+        };
+
+        // ── 雾床：播放条后面一块羽化的背景模糊 ──
+        const mist = doc.createElement('div');
+        mist.className = 'md-mist';
+        mist.setAttribute('aria-hidden', 'true');
+        host.insertBefore(mist, host.firstChild);
+
+        // ── SVG ──
+        const svg = make('svg', { class: 'md-fluid', 'aria-hidden': 'true', focusable: 'false' });
+        const defs = make('defs', {}, svg);
+        const inner = make('radialGradient', { id: id('inner'), gradientUnits: 'userSpaceOnUse' }, defs);
+        const in0 = make('stop', { offset: '0' }, inner);
+        const in1 = make('stop', { offset: '.45' }, inner);
+        const in2 = make('stop', { offset: '.9' }, inner);
+
+        const holeMask = make('mask', { id: id('hole'), maskUnits: 'userSpaceOnUse' }, defs);
+        const holeBg = make('rect', { x: 0, y: 0, fill: '#fff' }, holeMask);
+        const holeC = make('circle', { r: 0, fill: '#000' }, holeMask);
+
+        const hGrad = make('linearGradient', { id: id('h'), gradientUnits: 'userSpaceOnUse', y1: 0, y2: 0 }, defs);
+        make('stop', { offset: '0', 'stop-color': '#fff' }, hGrad);
+        const h1 = make('stop', { offset: '.4', 'stop-color': '#fff' }, hGrad);
+        const h2 = make('stop', { offset: '.58', 'stop-color': '#fff', 'stop-opacity': '.12' }, hGrad);
+        make('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '.05' }, hGrad);
+        const rgS = make('radialGradient', { id: id('rs') }, defs);
+        make('stop', { offset: '.35', 'stop-color': '#fff' }, rgS);
+        make('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '0' }, rgS);
+        const solidMask = make('mask', { id: id('solid'), maskUnits: 'userSpaceOnUse' }, defs);
+        const solidR = make('rect', { x: 0, y: 0, fill: `url(#${id('h')})` }, solidMask);
+        const ringSolid = make('circle', { r: 0, fill: `url(#${id('rs')})` }, solidMask);
+        // 音量水滴整个是实心的：用一块边缘羽化的椭圆，不要硬边。
+        const volSolid = make('ellipse', { fill: `url(#${id('rs')})`, opacity: 0 }, solidMask);
+
+        const vGrad = make('linearGradient', { id: id('v'), x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+        make('stop', { offset: '0', 'stop-color': '#fff' }, vGrad);
+        make('stop', { offset: '.7', 'stop-color': '#fff' }, vGrad);
+        make('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '.3' }, vGrad);
+        const vapMask = make('mask', { id: id('vap'), maskUnits: 'userSpaceOnUse' }, defs);
+        const vapR = make('rect', { x: 0, fill: `url(#${id('v')})` }, vapMask);
+
+        const filterAttrs = { filterUnits: 'userSpaceOnUse', x: 0, y: 0, 'color-interpolation-filters': 'sRGB' };
+        const goo = make('filter', { id: id('goo'), ...filterAttrs }, defs);
+        make('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: 8, result: 'b' }, goo);
+        make('feColorMatrix', { in: 'b', values: '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11' }, goo);
+        const vapor = make('filter', { id: id('vapor'), ...filterAttrs }, defs);
+        make('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: 8, result: 'b' }, vapor);
+        make('feColorMatrix', { in: 'b', values: '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11', result: 'g' }, vapor);
+        make('feGaussianBlur', { in: 'g', stdDeviation: 11 }, vapor);
+        const bloom = make('filter', { id: id('bloom'), ...filterAttrs }, defs);
+        make('feGaussianBlur', { stdDeviation: 18 }, bloom);
+        const filters = [goo, vapor, bloom];
+
+        const body = make('g', { id: id('body'), mask: `url(#${id('hole')})` }, defs);
+        const barR = make('rect', {}, body);
+        const playC = make('circle', {}, body);
+        const bumpC = make('circle', { r: 0 }, body);
+        const volB = make('rect', {}, body);
+        const splitC = make('circle', { r: 0 }, body);
+
+        const bloomUse = make('use', { href: `#${id('body')}`, filter: `url(#${id('bloom')})`, class: 'md-fl-bloom' }, svg);
+        const vapG = make('g', { mask: `url(#${id('vap')})` }, svg);
+        const vaporG = make('g', { class: 'md-fl-vapor' }, vapG);
+        make('use', { href: `#${id('body')}`, filter: `url(#${id('vapor')})`, fill: `url(#${id('inner')})` }, vaporG);
+        const solidG = make('g', { mask: `url(#${id('solid')})` }, vapG);
+        make('use', { href: `#${id('body')}`, filter: `url(#${id('goo')})`, fill: `url(#${id('inner')})` }, solidG);
+        host.insertBefore(svg, mist.nextSibling);
+
+        // ── 状态 ──
+        // 每个量都有「当前」和「目标」，循环里按指数逼近；没有在动的量时循环停下。
+        const geo = { x: 0, y: 0, w: 0, h: 0, left: 0, bottom: 0, layerW: 0, playX: 0, volX: 0, ringX: 0 };
+        const s = {
+            progress: 0,
+            solidity: { v: 1, t: 1 },
+            bump: { x: 0, r: 0, tx: 0, tr: 0 },
+            vol: { v: 0, t: 0 },
+            split: { p: 1 },
+            ring: { x: 0, y: 0, tx: 0, ty: 0, docked: true, placed: false },
+            enabled: true
+        };
+        let frame = 0;
+        let last = 0;
+
+        const setAttr = (node, name, value) => {
+            const text = typeof value === 'number' ? value.toFixed(2) : String(value);
+            if (node.getAttribute(name) !== text) node.setAttribute(name, text);
+        };
+
+        // 播放条在窗口里的位置变了（窗口缩放、紧凑档）就重新量。
+        const layout = () => {
+            const rect = bar.getBoundingClientRect();
+            const vh = win.innerHeight || doc.documentElement.clientHeight || 0;
+            if (!(rect.width > 0 && rect.height > 0)) return false;
+            geo.layerW = Math.round(rect.width + PAD_X * 2);
+            geo.left = Math.round(rect.left - PAD_X);
+            // 层的底边比播放条再低一点（最多 24px），光晕和雾在播放条下沿不被裁掉。
+            const below = Math.min(24, Math.max(0, Math.round(vh - rect.bottom)));
+            geo.bottom = Math.max(0, Math.round(vh - rect.bottom) - below);
+            geo.w = rect.width;
+            geo.h = rect.height;
+            geo.x = PAD_X;
+            geo.y = LAYER_H - geo.h - below;
+            const playBtn = bar.querySelector('[data-md="play"]');
+            const volBtn = bar.querySelector('[data-md="vol"]');
+            const pr = playBtn?.getBoundingClientRect();
+            const vr = volBtn?.getBoundingClientRect();
+            geo.playX = pr && pr.width ? pr.left + pr.width / 2 - geo.left : geo.x + geo.h / 2;
+            geo.volX = vr && vr.width ? vr.left + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
+            geo.ringX = geo.x + geo.w * 0.63;
+            svg.setAttribute('width', geo.layerW);
+            svg.setAttribute('height', LAYER_H);
+            svg.setAttribute('viewBox', `0 0 ${geo.layerW} ${LAYER_H}`);
+            svg.style.left = `${geo.left}px`;
+            svg.style.bottom = `${geo.bottom}px`;
+            mist.style.left = `${Math.round(rect.left + rect.width / 2 - (rect.width + 360) / 2)}px`;
+            mist.style.width = `${Math.round(rect.width + 360)}px`;
+            mist.style.bottom = `${Math.max(0, geo.bottom - 16)}px`;
+            for (const f of filters) { setAttr(f, 'width', geo.layerW); setAttr(f, 'height', LAYER_H); }
+            setAttr(holeBg, 'width', geo.layerW); setAttr(holeBg, 'height', LAYER_H);
+            setAttr(solidR, 'width', geo.layerW); setAttr(solidR, 'height', LAYER_H);
+            setAttr(vapR, 'y', geo.y - VOL_RISE - 40); setAttr(vapR, 'width', geo.layerW); setAttr(vapR, 'height', LAYER_H);
+            setAttr(hGrad, 'x1', geo.x); setAttr(hGrad, 'x2', geo.x + geo.w);
+            setAttr(inner, 'cx', geo.x + geo.w * 0.78); setAttr(inner, 'cy', geo.y + geo.h + 12); setAttr(inner, 'r', Math.max(220, geo.w * 0.72));
+            const r = geo.h / 2;
+            setAttr(barR, 'x', geo.x); setAttr(barR, 'y', geo.y); setAttr(barR, 'width', geo.w); setAttr(barR, 'height', geo.h); setAttr(barR, 'rx', r);
+            setAttr(playC, 'cx', geo.playX); setAttr(playC, 'cy', geo.y + r); setAttr(playC, 'r', r + 7);
+            setAttr(volSolid, 'cx', geo.volX); setAttr(volSolid, 'cy', geo.y - VOL_RISE / 2 + 6); setAttr(volSolid, 'rx', 70); setAttr(volSolid, 'ry', VOL_RISE);
+            if (!s.ring.placed) placeRing(true);
+            else retargetRing();
+            writeProgress();
+            draw(true);
+            return true;
+        };
+
+        // ── 小环：停在播放条顶边（播放条凹进去让它），或者飞回右下角 ──
+        // 角落点换算到层坐标：层的底边在窗口 y = vh - bottom。
+        const cornerLocal = () => {
+            const vw = win.innerWidth || 0;
+            // 紧凑档播放条贴满宽度，右下角被它占着：小环改停在播放条右端上方。
+            if (vw < 640) return { x: geo.x + geo.w - 26, y: geo.y - 34 };
+            const vh = win.innerHeight || 0;
+            const cx = vw - 32 - 24;
+            const cy = vh - 32 - 24;
+            const layerTop = vh - geo.bottom - LAYER_H;
+            return { x: cx - geo.left, y: cy - layerTop };
+        };
+        const dockPoint = () => ({ x: geo.ringX, y: geo.y - 2 });
+        const retargetRing = () => {
+            const p = s.ring.docked ? dockPoint() : cornerLocal();
+            s.ring.tx = p.x; s.ring.ty = p.y;
+        };
+        const placeRing = (instant) => {
+            retargetRing();
+            if (instant || !s.ring.placed) { s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; s.ring.placed = true; }
+        };
+
+        const writeProgress = () => {
+            const x = 0.06 + Math.min(1, Math.max(0, s.progress)) * 0.88;
+            setAttr(h1, 'offset', Math.max(0, x - 0.03).toFixed(3));
+            setAttr(h2, 'offset', Math.min(1, x + 0.13).toFixed(3));
+        };
+
+        const moving = () => {
+            const eps = 0.01;
+            return Math.abs(s.solidity.v - s.solidity.t) > eps
+                || Math.abs(s.bump.x - s.bump.tx) > 0.5 || Math.abs(s.bump.r - s.bump.tr) > 0.3
+                || Math.abs(s.vol.v - s.vol.t) > eps
+                || s.split.p < 1
+                || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
+        };
+
+        const draw = (force = false) => {
+            const sol = s.solidity.v;
+            setAttr(solidR, 'opacity', 0.15 + 0.85 * sol);
+            setAttr(vaporG, 'opacity', 0.62 + 0.25 * (1 - sol));
+            setAttr(bumpC, 'cx', s.bump.x); setAttr(bumpC, 'cy', geo.y + 6); setAttr(bumpC, 'r', Math.max(0, s.bump.r));
+            const vy = geo.y + 6 - s.vol.v * VOL_RISE;
+            setAttr(volB, 'x', geo.volX - 24); setAttr(volB, 'width', 48); setAttr(volB, 'rx', 24);
+            setAttr(volB, 'y', vy); setAttr(volB, 'height', Math.max(0, geo.h - 12 + s.vol.v * VOL_RISE));
+            setAttr(volSolid, 'opacity', s.vol.v);
+            if (s.split.p < 1) {
+                const e = s.split.p;
+                setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
+            } else setAttr(splitC, 'r', 0);
+            const rx = s.ring.x;
+            const ry = s.ring.y;
+            const near = Math.hypot(rx - geo.ringX, ry - (geo.y - 2)) < 120;
+            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R : 0);
+            setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 : 0);
+            if (ring) {
+                const vh = win.innerHeight || 0;
+                const layerTop = vh - geo.bottom - LAYER_H;
+                const left = geo.left + rx - RING_R;
+                const top = layerTop + ry - RING_R;
+                if (force || ring.__mdfLeft !== left || ring.__mdfTop !== top) {
+                    ring.__mdfLeft = left; ring.__mdfTop = top;
+                    ring.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
+                    onRingMove?.({ left, top, docked: s.ring.docked, near });
+                }
+            }
+        };
+
+        const step = (now) => {
+            frame = 0;
+            const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+            last = now;
+            const instant = reduced();
+            const k = instant ? 1 : 1 - Math.pow(0.0015, dt);
+            s.solidity.v += (s.solidity.t - s.solidity.v) * (instant ? 1 : 1 - Math.pow(0.25, dt));
+            s.bump.x += (s.bump.tx - s.bump.x) * k;
+            s.bump.r += (s.bump.tr - s.bump.r) * k;
+            s.vol.v += (s.vol.t - s.vol.v) * (instant ? 1 : 1 - Math.pow(0.004, dt));
+            if (s.split.p < 1) s.split.p = instant ? 1 : Math.min(1, s.split.p + dt / 0.9);
+            s.ring.x += (s.ring.tx - s.ring.x) * k * 0.8;
+            s.ring.y += (s.ring.ty - s.ring.y) * k * 0.8;
+            if (instant || !moving()) {
+                s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t;
+                s.ring.x = s.ring.tx; s.ring.y = s.ring.ty;
+            }
+            draw();
+            if (s.enabled && moving()) frame = win.requestAnimationFrame(step);
+        };
+        const kick = () => {
+            if (!s.enabled || frame) return;
+            last = (win.performance || Date).now();
+            frame = win.requestAnimationFrame(step);
+        };
+
+        const api = {
+            svg,
+            mist,
+            layout,
+            setProgress(p) {
+                const next = Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
+                if (Math.abs(next - s.progress) < 0.0005) return;
+                s.progress = next;
+                writeProgress();
+            },
+            // 实心程度：1 = 播放中或正被关注，0 = 暂停化雾
+            setSolid(target) { s.solidity.t = target ? 1 : 0; kick(); },
+            pointer(clientX) {
+                if (clientX == null) { s.bump.tr = 0; kick(); return; }
+                s.bump.tx = clientX - geo.left;
+                if (s.bump.r < 1) s.bump.x = s.bump.tx;
+                s.bump.tr = 20;
+                kick();
+            },
+            setVolumeOpen(open) { s.vol.t = open ? 1 : 0; kick(); },
+            split() { s.split.p = 0; kick(); },
+            setRingDocked(docked) {
+                if (s.ring.docked === Boolean(docked)) return;
+                s.ring.docked = Boolean(docked);
+                retargetRing();
+                kick();
+            },
+            setGlow(colors) {
+                const [a, b, c] = colors || [];
+                if (a) setAttr(in0, 'stop-color', a);
+                if (b) setAttr(in1, 'stop-color', b);
+                if (c) setAttr(in2, 'stop-color', c);
+            },
+            setEnabled(on) {
+                s.enabled = Boolean(on);
+                svg.style.display = on ? '' : 'none';
+                mist.style.display = on ? '' : 'none';
+                if (!on && frame) { win.cancelAnimationFrame(frame); frame = 0; }
+                if (on) { layout(); kick(); }
+            },
+            get enabled() { return s.enabled; },
+            get volumeOpen() { return s.vol.t === 1; },
+            get ringDocked() { return s.ring.docked; },
+            debug: () => ({ progress: s.progress, solidity: s.solidity.v, vol: s.vol.v, ring: { ...s.ring }, geo: { ...geo }, animating: Boolean(frame) }),
+            destroy() {
+                if (frame) win.cancelAnimationFrame(frame);
+                frame = 0;
+                svg.remove();
+                mist.remove();
+            }
+        };
+        return api;
+    }
+
+    global.createMusicDockFluid = createMusicDockFluid;
+})(typeof window !== 'undefined' ? window : globalThis);

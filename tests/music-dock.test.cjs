@@ -20,6 +20,7 @@ function setup() {
     window.MusicStageConfig = { modes: [{ id: 'luminous', label: '流光' }, { id: 'partita', label: '云阶' }] };
     window.eval(read('Musicmodules/music-dock/music-dock-icons.js'));
     window.eval(read('Musicmodules/music-dock/music-dock-palette.js'));
+    window.eval(read('Musicmodules/music-dock/music-dock-fluid.js'));
     window.eval(read('Musicmodules/music-dock/music-dock.js'));
     const doc = window.document;
     const calls = [];
@@ -461,5 +462,53 @@ test('lyrics tab: translation toggle and ±0.5 s offset buttons drive the player
         app.currentLyrics = [{ time: 1, text: '没有翻译' }];
         dock.openPanel('歌词');
         assert.ok(doc.querySelector('[data-act="lyr-tr"]').disabled, 'no translation in this song: the toggle is greyed out');
+    } finally { dock.destroy(); }
+});
+
+test('fluid bar: up-next titles on the bar, volume drop rail, ring docking and the energy-saving fallback', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const root = doc.getElementById('music-dock-root');
+        assert.ok(root.classList.contains('md-fl-on'), 'fluid layer is on by default');
+        assert.ok(doc.querySelector('.md-fluid'), 'svg layer mounted');
+        assert.equal(doc.querySelector('[data-md="nx1"]').textContent, 'Beta', 'next title comes from the list when there is no queue api');
+
+        // 有队列接口时：手动层优先，点「再下一首」把它从队列里拿掉再播放
+        const [a, b] = app.playlist;
+        app.getUpNext = () => ({ manual: [b, a], context: [] });
+        app.queueRemove = (i) => calls.push(['qremove', i]);
+        doc.dispatchEvent(new window.Event('music-queue-change'));
+        assert.equal(doc.querySelector('[data-md="nx2"]').textContent, 'Alpha');
+        doc.querySelector('[data-md="nx2"]').click();
+        assert.deepEqual(calls.pop(), ['load', 0]);
+        assert.deepEqual(calls.pop(), ['qremove', 1]);
+        doc.querySelector('[data-md="nx1"]').click();
+        assert.equal(calls.pop(), 'next');
+
+        // 音量：滚轮直接分裂出水滴和竖条；单击仍然是静音
+        const slot = doc.querySelector('[data-md="vol"]');
+        slot.dispatchEvent(new window.WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));
+        assert.ok(root.classList.contains('md-vopen'));
+        assert.equal(doc.querySelector('.md-vrail').getAttribute('aria-hidden'), 'false');
+        assert.equal(doc.querySelector('.md-vrail').getAttribute('aria-valuenow'), '55');
+        doc.querySelector('.md-vrail').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        assert.equal(app.volumeSlider.value, '0.5');
+
+        // 节能档：不跑流体层，退成不透明的实色
+        let notify = null;
+        window.MusicStageConfig.get = () => ({ quality: 'energy-saving' });
+        window.MusicStageConfig.subscribe = (fn) => { notify = fn; return () => {}; };
+        dock.destroy();
+        const again = window.initMusicDock(app);
+        assert.ok(root.classList.contains('md-fl-low'));
+        assert.equal(doc.querySelector('.md-fluid'), null);
+        window.MusicStageConfig.get = () => ({ quality: 'standard' });
+        notify();
+        assert.ok(root.classList.contains('md-fl-on'));
+        assert.ok(doc.querySelector('.md-fluid'));
+        again.openPanel('控制');
+        assert.equal(app.musicDock.panelOpen, true);
+        again.destroy();
+        assert.equal(doc.querySelector('.md-fluid'), null, 'destroy removes the svg layer');
     } finally { dock.destroy(); }
 });
