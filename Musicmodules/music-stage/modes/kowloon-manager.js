@@ -12,13 +12,79 @@
     const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
     /*
-     * 镜头：每段歌词选一个机位，机位内是慢速运动（绕、推、移），机位之间用
-     * 1.4 秒缓动过渡，不硬切。唱着的时候只选能看清主屏的机位；间奏和
-     * 句与句之间留白长的时候才去巷子和屋顶。
+     * 镜头：按歌曲段落排（前奏、主歌、预副歌、副歌、间奏、尾奏），每段有自己的一组机位。
+     * 一个镜头 8–12 秒，只在乐句开头换；两个机位离得近就缓动过去，离得远（比如从
+     * 半空到巷子里）就直接切，不让镜头穿楼。机位内都是慢速的升、移、推、绕。
      */
+    const PHASES = ['intro', 'verse', 'prechorus', 'chorus', 'interlude', 'outro'];
+    // 把歌词行排成段落：[{ start, end, phase }]。没有副歌标记时，把重复出现的句子当副歌。
+    const planPhases = (lines, duration) => {
+        const list = (lines || []).filter(l => l && Number.isFinite(l.startTime)).map(l => ({
+            start: l.startTime, end: Number.isFinite(l.endTime) ? l.endTime : l.startTime + 3,
+            text: String(l.fullText || '').trim(), chorus: Boolean(l.isChorus)
+        }));
+        if (!list.length) return [{ start: 0, end: Math.max(30, duration || 0) || 1e9, phase: 'interlude' }];
+        if (!list.some(l => l.chorus)) {
+            const seen = new Map();
+            list.forEach((l, i) => { if (l.text.length >= 4) seen.set(l.text, (seen.get(l.text) || []).concat(i)); });
+            seen.forEach(idx => { if (idx.length >= 2 && idx[idx.length - 1] - idx[0] > 3) idx.forEach(i => { list[i].chorus = true; }); });
+        }
+        const out = [];
+        const push = (start, end, phase) => {
+            if (end - start < 0.05) return;
+            const last = out[out.length - 1];
+            if (last && last.phase === phase) last.end = end;
+            else out.push({ start, end, phase });
+        };
+        if (list[0].start > 3) push(0, list[0].start, 'intro');
+        list.forEach((l, i) => {
+            const next = list[i + 1];
+            let phase = l.chorus ? 'chorus' : 'verse';
+            // 副歌前的一两句（不超过 12 秒）算预副歌。
+            if (!l.chorus) {
+                for (let k = 1; k <= 2 && list[i + k]; k += 1) {
+                    if (list[i + k].chorus && list[i + k].start - l.start <= 12) { phase = 'prechorus'; break; }
+                    if (list[i + k].start - list[i + k - 1].end > 8) break;
+                }
+            }
+            const until = next ? Math.min(next.start, l.end + 8) : l.end + 2;
+            push(Math.min(l.start, out.length ? out[out.length - 1].end : l.start), until, phase);
+            if (next && next.start - until > 0.05) push(until, next.start, 'interlude');
+        });
+        const tail = out[out.length - 1].end;
+        push(tail, Math.max(tail + 12, duration || 0), 'outro');
+        return out;
+    };
+    // 把段落切成镜头：每个 8–12 秒，切点吸附到最近的乐句开头。
+    const planShots = (phases, lines) => {
+        const starts = (lines || []).map(l => l?.startTime).filter(Number.isFinite);
+        const snap = (t) => {
+            let best = t, gap = 2.6;
+            starts.forEach(s => { const d = Math.abs(s - t); if (d < gap) { gap = d; best = s; } });
+            return best;
+        };
+        const shots = [];
+        phases.forEach((p, pi) => {
+            const len = p.end - p.start;
+            // 前奏和尾奏各是一个长镜头，不切。
+            const n = p.phase === 'intro' || p.phase === 'outro' ? 1 : Math.max(1, Math.round(len / 10));
+            let from = p.start;
+            for (let i = 1; i <= n; i += 1) {
+                const to = i === n ? p.end : Math.max(from + 5, snap(p.start + len * i / n));
+                if (to - from >= 3 || !shots.length) shots.push({ start: from, end: to, phase: p.phase, index: shots.length, block: pi, first: i === 1 });
+                else shots[shots.length - 1].end = to;
+                from = to;
+                if (from >= p.end - 0.01) break;
+            }
+        });
+        return shots;
+    };
+
     const createDirector = (layout) => {
         const C = layout.CAMERA;
         const screen = layout.SCREENS.find(s => s.primary);
+        const sc = screen.center;
+        const orbitAt = (target, radius, height, az) => [target[0] + Math.sin(az) * radius, height, target[2] + Math.cos(az) * radius];
         const rigs = {
             iso: (t, seed) => {
                 const a = (seed - 0.5) * 0.5 + (t - 0.5) * (C.iso.orbit * Math.PI / 180) * 0.6;
@@ -32,7 +98,7 @@
                 const dir = seed < 0.5 ? 1 : -1;
                 const k = dir > 0 ? t : 1 - t;
                 const p = lerp3(C.street.from, C.street.to, 0.15 + k * 0.7);
-                const look = [screen.center[0] + (p[0] - screen.center[0]) * 0.45, C.street.target[1], screen.center[2]];
+                const look = [sc[0] + (p[0] - sc[0]) * 0.45, C.street.target[1], sc[2]];
                 return { position: p, look, fov: C.street.fov };
             },
             screen: (t) => {
@@ -59,20 +125,70 @@
                 const p = lerp3(from, to, 0.1 + t * 0.35);
                 const ahead = lerp3(from, to, 0.6 + t * 0.35);
                 return { position: p, look: [ahead[0], ahead[1] - 20, ahead[2]], fov: C.roof.fov };
+            },
+            // 前奏：从南面街上低处升起来，先是楼脚和招牌，升过屋顶后背后的巨构露出来。
+            rise: (t) => {
+                const k = ease(t);
+                return { position: [sc[0] - 14 + k * 10, 5 + k * 62, 138 - k * 6], look: [sc[0] - 4, 16 + k * 52, 40 - k * 120], fov: 42 };
+            },
+            // 主歌：半空贴着正立面横移，主屏从画面一侧滑到另一侧，前景掠过全息幅和电线。
+            facade: (t, seed) => {
+                const dir = seed < 0.5 ? 1 : -1;
+                const x = sc[0] + dir * (-26 + t * 52);
+                return { position: [x, 25 + Math.sin(t * Math.PI) * 2.5, 85], look: [sc[0] + (x - sc[0]) * 0.4, sc[1] - 1.5, sc[2]], fov: 50 };
+            },
+            // 主歌：从高处降到主屏跟前。
+            crane: (t, seed) => {
+                const side = seed < 0.5 ? 1 : -1;
+                const k = ease(t);
+                return { position: [sc[0] + side * (30 - k * 16), 52 - k * 27, 108 - k * 24], look: [sc[0], sc[1] + 2 - k * 2, sc[2]], fov: 46 };
+            },
+            // 副歌：从牌楼前的人群平视起，镜头一边横移一边抬头，摇到主屏和它上面的天。
+            hero: (t, seed) => {
+                const G = layout.GATE || { x: sc[0] - 24, z: 61 };
+                const k = ease(Math.min(1, t * 1.25));
+                const from = [G.x, 3.2, G.z - 4], to = [sc[0], sc[1] + 3, sc[2] - 4];
+                return { position: [G.x + 5 + ease(t) * (sc[0] - 1 - G.x - 5), 1.75 + k * 0.5, 67.4 + k * 1.2], look: lerp3(from, to, k), fov: 66 };
+            },
+            // 副歌：大全景环绕，城寨、全息幅、巨构、烟囱都在画面里。
+            sweep: (t, seed) => {
+                const dir = seed < 0.5 ? 1 : -1;
+                const az = dir * (-0.55 + ease(t) * 0.8);
+                const target = [4, 36, 6];
+                return { position: orbitAt(target, 150 - t * 22, 50 + t * 24, az), look: target, fov: 50 };
+            },
+            // 间奏：掠过屋顶的天线林，朝着远处的巨构飞。
+            skim: (t, seed) => {
+                const side = seed < 0.5 ? 1 : -1;
+                const p = [side * (-70 + t * 60), 54 - t * 4, 66 - t * 70];
+                return { position: p, look: [p[0] + side * 60, 62, p[2] - 160], fov: 58 };
+            },
+            // 尾奏：从斜俯视慢慢拉远升高。
+            pullback: (t) => {
+                const k = ease(t);
+                const base = C.iso.position, target = C.iso.target;
+                return { position: [base[0] + k * 46, base[1] + k * 52, base[2] + k * 84], look: [target[0], target[1] + k * 22, target[2] - k * 30], fov: C.iso.fov };
             }
         };
-        let extra = [];
-        let current = null, previous = null;
-        const pick = (frame, key, segStart, segEnd) => {
-            const seed = (L().hash(key) % 1000) / 1000;
-            const singing = Boolean(frame.activeLine);
-            const pool = singing ? ['iso', 'street', 'screen', 'iso'] : ['roof', 'iso', ...extra.map(r => r.id)];
-            const last = current?.id;
-            let id = pool[Math.floor(seed * pool.length)];
-            if (id === last && pool.length > 1) id = pool[(pool.indexOf(id) + 1) % pool.length];
-            return { id, seed, start: segStart, end: Math.max(segStart + 4, segEnd), key };
+        // 各段落能用的机位。巷道模块给的机位按它自己标的 phase 归进来。
+        const POOLS = {
+            intro: ['rise'],
+            verse: ['facade', 'crane', 'street', 'screen', 'iso'],
+            prechorus: ['street', 'screen'],
+            chorus: ['sweep', 'hero', 'iso', 'sweep'],
+            interlude: ['skim', 'roof'],
+            outro: ['pullback']
         };
+        // 贴近地面或在巷子里的机位：和半空机位之间不做缓动，直接切。
+        let extra = [];
         const L = () => global.MusicStageKowloonLayout;
+        const poolFor = (phase) => {
+            const mine = POOLS[phase] || POOLS.verse;
+            const theirs = extra.filter(r => (r.phase || 'interlude') === phase || (phase === 'prechorus' && !r.phase)).map(r => r.id);
+            // 预副歌优先进巷子；间奏巷子和屋顶各半。
+            if (phase === 'prechorus' && theirs.length) return theirs.concat(mine[0]);
+            return mine.concat(theirs);
+        };
         const evalRig = (shot, time) => {
             const t = Math.min(1, Math.max(0, (time - shot.start) / Math.max(0.1, shot.end - shot.start)));
             if (rigs[shot.id]) return rigs[shot.id](t, shot.seed, time);
@@ -85,34 +201,77 @@
             }
             return rigs.iso(t, shot.seed);
         };
+        let plan = null, planKey = null, current = null, previous = null;
+        const ensurePlan = (frame) => {
+            const lines = frame.lines || [];
+            const key = `${lines.length}:${lines[0]?.startTime}:${lines[lines.length - 1]?.startTime}:${extra.length}`;
+            if (plan && planKey === key) return plan;
+            const phases = planPhases(lines, frame.duration || frame.track?.duration || 0);
+            const shots = planShots(phases, lines);
+            let last = null, before = null;
+            const seenPhase = {};
+            shots.forEach(shot => {
+                const pool = poolFor(shot.phase);
+                const seed = (L().hash(`shot:${shot.index}:${Math.round(shot.start)}`) % 1000) / 1000;
+                // 段落的第一个镜头固定用这一段的主机位，后面的轮着来，不和上一个重复。
+                // 每段的第一个镜头按这一段第几次出现轮着换，同一段歌再来时不重样。
+                seenPhase[shot.phase] = (seenPhase[shot.phase] || 0) + (shot.first ? 1 : 0);
+                let id = pool[(seenPhase[shot.phase] - 1) % pool.length];
+                if (shot.first && shot.phase === 'chorus') id = seenPhase.chorus % 2 ? 'sweep' : 'hero';
+                else if (!shot.first) {
+                    const fresh = pool.filter((r, i) => r !== last && r !== before && pool.indexOf(r) === i);
+                    const rest = fresh.length ? fresh : pool.filter(r => r !== last);
+                    id = rest.length ? rest[Math.floor(seed * rest.length)] : pool[0];
+                }
+                shot.id = id; shot.seed = seed;
+                before = last; last = id;
+            });
+            plan = { phases, shots }; planKey = key;
+            return plan;
+        };
+        const shotAt = (shots, time) => {
+            for (let i = shots.length - 1; i >= 0; i -= 1) if (time >= shots[i].start) return shots[i];
+            return shots[0];
+        };
         const director = {
             force: null,
-            setExtraRigs(list) { extra = Array.isArray(list) ? list.filter(r => r?.points?.length >= 2) : []; },
+            setExtraRigs(list) { extra = Array.isArray(list) ? list.filter(r => r?.points?.length >= 2) : []; plan = null; },
             mode: 'auto',
+            plan: (frame) => ensurePlan(frame),
+            phaseAt(frame, time) { return shotAt(ensurePlan(frame).shots, time).phase; },
             pose(frame, time) {
-                if (director.mode === 'diorama' && !director.force) return { id: 'diorama', ...rigs.diorama(0, 0, time) };
-                if (director.force?.position) return { id: 'custom', fov: 60, ...director.force };
+                const phase = director.phaseAt(frame, time);
+                if (director.mode === 'diorama' && !director.force) return { id: 'diorama', phase, ...rigs.diorama(0, 0, time) };
+                if (director.force?.position) return { id: 'custom', phase, fov: 60, ...director.force };
                 if (director.force) {
                     const { id, t } = director.force;
-                    return { id, ...evalRig({ id, seed: 0.3, start: 0, end: 1 }, t) };
+                    return { id, phase, ...evalRig({ id, seed: 0.3, start: 0, end: 1 }, t) };
                 }
-                const line = frame.activeLine;
-                const key = line ? `l:${line.startTime}` : `gap:${Math.floor(time / 9)}`;
-                if (!current || !director.hold && current.key !== key && time - current.start > 5.5 || time < current.start - 0.5) {
-                    const start = line ? line.startTime : Math.floor(time / 9) * 9;
-                    const end = line ? (frame.nextLines?.[0]?.startTime ?? line.endTime + 2) : start + 9;
-                    previous = current && time >= current.start ? { shot: current, at: time } : null;
-                    current = pick(frame, key, Math.min(start, time), end);
+                const next = shotAt(ensurePlan(frame).shots, time);
+                if (!current || (!director.hold && next !== current)) {
+                    // 往回拖进度条或换歌：不过渡。
+                    previous = current && Math.abs(time - current.end) < 1.5 ? { shot: current, at: time } : null;
+                    current = next;
+                    if (previous) {
+                        const a = evalRig(previous.shot, time), b = evalRig(current, time);
+                        const far = Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2]) > 70;
+                        // 离得远就切；副歌第一拍也切，要的就是那一下。
+                        if (far || (current.first && current.phase === 'chorus')) previous = null;
+                    }
                 }
                 const now = evalRig(current, time);
-                if (previous && time - previous.at < 1.4) {
+                // 一点点呼吸感：位置上几厘米到几十厘米的慢漂。
+                const breathe = Math.min(0.5, Math.hypot(now.position[0] - now.look[0], now.position[2] - now.look[2]) * 0.004);
+                now.position = [now.position[0] + Math.sin(time * 0.37) * breathe, now.position[1] + Math.sin(time * 0.29 + 1.3) * breathe * 0.6, now.position[2]];
+                const BLEND = 2.2;
+                if (previous && time - previous.at < BLEND) {
                     const before = evalRig(previous.shot, time);
-                    const k = ease((time - previous.at) / 1.4);
-                    return { id: current.id, position: lerp3(before.position, now.position, k), look: lerp3(before.look, now.look, k), fov: before.fov + (now.fov - before.fov) * k };
+                    const k = ease((time - previous.at) / BLEND);
+                    return { id: current.id, phase, position: lerp3(before.position, now.position, k), look: lerp3(before.look, now.look, k), fov: before.fov + (now.fov - before.fov) * k };
                 }
-                return { id: current.id, ...now };
+                return { id: current.id, phase, ...now };
             },
-            reset() { current = previous = null; }
+            reset() { current = previous = null; plan = null; }
         };
         return director;
     };
@@ -281,7 +440,7 @@
 
             const state = {
                 time: settings.reducedMotion ? 0 : time, dt, playbackTime: time, isPlaying: frame.isPlaying,
-                audio, lyric: lyricState(frame, time), camera, shot: pose.id, options: settings,
+                audio, lyric: lyricState(frame, time), camera, shot: pose.id, phase: pose.phase || 'verse', options: settings,
                 lines: frame.lines || [],
                 track: { title: services?.app?.stripAudioExtension?.(frame.track?.title) || frame.track?.title || '', artist: frame.track?.artist || '' }
             };
@@ -409,6 +568,7 @@
         });
         // harness 用：固定机位截图。
         mode.debugScene = () => ({ scene, camera, renderer, T });
+        mode.debugPlan = () => (director && latest ? director.plan(latest) : null);
         mode.debugTime = (t) => { if (latest) { latest = { ...latest, playbackTime: t }; dirty = true; update(latest, true); } };
         mode.debugSetShot = (id, t = 0.5) => { if (director) director.force = id && typeof id === 'object' ? id : id ? { id, t } : null; dirty = true; if (latest) update(latest, true); };
         mode.scope.add(() => { disposeGraphics(); latest = null; });
@@ -418,5 +578,5 @@
         return mode;
     };
 
-    global.MusicStageKowloonManager = Object.freeze({ create, createDirector, debugInstance: () => lastInstance });
+    global.MusicStageKowloonManager = Object.freeze({ create, createDirector, planPhases, planShots, PHASES, debugInstance: () => lastInstance });
 })(window);
