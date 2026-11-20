@@ -609,7 +609,13 @@
             });
             const intensityRow = createElement('label', 'music-stage-tuning-row');
             intensityRow.append(createElement('span', 'music-stage-tuning-label', '动画总强度'), intensityValue, intensity);
-            commonFragment.append(qualityRow, intensityRow);
+            // Says when the 3D stage has had to draw below the chosen tier.
+            const degradeNote = createElement('p', 'music-stage-degrade-note');
+            degradeNote.hidden = true;
+            degradeNote.setAttribute('aria-live', 'polite');
+            elements.degradeNote = degradeNote;
+            state.lastDegradeNote = null;
+            commonFragment.append(qualityRow, degradeNote, intensityRow);
 
             const themeSelect = createElement('select', 'music-stage-common-select', {
                 'aria-label': '舞台主题'
@@ -1123,6 +1129,26 @@
             return true;
         };
 
+        const TIER_LABELS = { 'energy-saving': '节能', standard: '标准', ultimate: '极致' };
+        // Once a second (a cheap read): how far the 3D stage
+        // has stepped down below the chosen tier to keep its frame rate.
+        const updateDegradeNote = (now) => {
+            const note = elements.degradeNote;
+            if (!note || !note.isConnected || now - (state.degradeCheckedAt || 0) < 1000) return;
+            state.degradeCheckedAt = now;
+            const degrade = state.modeInstance?.getDegrade?.();
+            const steps = degrade?.steps || 0;
+            const drawn = degrade?.quality;
+            const chosen = state.config.quality;
+            const text = steps
+                ? `画面跟不上，已自动降低 ${steps} 格${drawn && drawn !== chosen ? `（实际按「${TIER_LABELS[drawn] || drawn}」画）` : '（降低分辨率）'}`
+                : '';
+            if (text === state.lastDegradeNote) return;
+            state.lastDegradeNote = text;
+            note.textContent = text;
+            note.hidden = !text;
+        };
+
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
             applySeekHold();
@@ -1151,6 +1177,7 @@
             }
             drawEdgeSpectrum(frame);
             if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
+            updateDegradeNote(timestamp);
             if (state.leaving || state.arriving) {
                 state.leaving?.instance.updateFrame?.(frame);
                 advanceSoftSwitch(performance.now());

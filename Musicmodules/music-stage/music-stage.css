@@ -3321,3 +3321,16 @@ body.music-stage-active #custom-title-bar,
 .stage-handover-veil.is-showing {
     display: block;
 }
+
+/* Under the tier picker: the 3D stage drew below it to keep its frame rate. */
+.music-stage-degrade-note {
+    margin: -4px 0 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--stage-muted, currentColor);
+    opacity: 0.78;
+}
+
+.music-stage-mode-tunnel > .stage-handover-veil {
+    z-index: 1;
+}

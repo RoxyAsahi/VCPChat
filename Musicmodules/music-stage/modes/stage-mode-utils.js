@@ -147,45 +147,91 @@
      */
     const PIXEL_BUDGET = Object.freeze({ 'energy-saving': 1.0e6, standard: 2.4e6, ultimate: 4.2e6 });
     const RATIO_CAP = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
+    /*
+     * When the frame rate is not being held, a 3D mode steps down a rung at a
+     * time: first fewer pixels, then the next lower tier (ultimate drops its
+     * multisampling; standard drops the lens and caps at 30 frames), then
+     * fewer pixels again. The lyrics are in the scene, so the picture is not
+     * shrunk all the way before the effects go. Pixels come back, one rung at
+     * a time, after a long steady stretch, waiting twice as long each time.
+     */
+    const TIER_ORDER = ['ultimate', 'standard', 'energy-saving'];
+    const LADDER = ['scale', 'scale', 'tier', 'scale', 'scale', 'tier'];
+    const SCALE_STEP = 0.84;
     const createRenderScale = () => {
-        let factor = 1;
+        let rung = 0;
         let last = 0;
         let average = 0;
         let frames = 0;
         let steady = 0;
         let patience = 900;
+        let longRun = 0;
+        let derivedFrom = null, derived = null, derivedDrop = 0;
+        const taken = () => LADDER.slice(0, rung);
+        const scaleSteps = () => taken().filter(step => step === 'scale').length;
+        const tierDrops = () => taken().filter(step => step === 'tier').length;
         return {
-            get factor() { return factor; },
+            get factor() { return Math.max(0.55, SCALE_STEP ** scaleSteps()); },
+            // How many rungs down the ladder this mode has gone, for the settings.
+            get steps() { return rung; },
+            // The tier this mode draws at: the chosen one, less what it had to drop.
+            quality(quality) {
+                const drops = tierDrops();
+                if (!drops) return quality;
+                const from = Math.max(0, TIER_ORDER.indexOf(quality));
+                return TIER_ORDER[Math.min(TIER_ORDER.length - 1, from + drops)];
+            },
+            // The configuration with that tier, the same object while nothing changes.
+            config(config) {
+                const drops = tierDrops();
+                if (!drops || !config) return config;
+                if (derivedFrom !== config || derivedDrop !== drops) {
+                    derivedFrom = config; derivedDrop = drops;
+                    derived = { ...config, quality: this.quality(config.quality) };
+                }
+                return derived;
+            },
             ratio(quality, width, height) {
                 const budget = PIXEL_BUDGET[quality] || PIXEL_BUDGET.standard;
                 const cap = RATIO_CAP[quality] || RATIO_CAP.standard;
                 const fit = Math.sqrt(budget / Math.max(1, width * height));
-                return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * factor);
+                return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * this.factor);
             },
+            // Start again from the top, e.g. after the listener chose a tier.
+            reset() { rung = 0; frames = 0; steady = 0; patience = 900; },
             // Feed the time of every drawn frame, and the interval the frame
-            // cap aims for. Returns true when the ratio changed.
+            // cap aims for. Returns true when the drawing changed.
             tick(now, aim = 0) {
-                const interval = now - last;
+                let interval = now - last;
                 last = now;
-                // A hidden window, a seek or a rebuild is not a slow renderer.
-                if (!(interval > 0) || interval > 250) { frames = 0; return false; }
+                if (!(interval > 0) || interval > 2000) { frames = 0; longRun = 0; return false; }
+                // One long frame is a seek or a rebuild, not a slow renderer;
+                // several in a row (a machine managing a few frames a second) are.
+                if (interval > 250) {
+                    longRun += 1;
+                    if (longRun < 3) { frames = 0; return false; }
+                    interval = 250;
+                } else longRun = 0;
                 average = frames ? average * 0.92 + interval * 0.08 : interval;
                 frames += 1;
-                if (frames < 45) return false;
+                // Enough frames to judge: 45, or one and a half seconds at a few a second.
+                if (frames < 45 && frames * average < 1500) return false;
                 // Slow means well behind the cap, or under about 43 frames a second without one.
                 const slow = Math.max(23, aim * 1.3);
                 const fast = Math.max(17.6, aim * 1.08);
-                if (average > slow && factor > 0.56) {
-                    // Shade fewer pixels.
-                    factor = Math.max(0.55, factor * 0.84);
+                if (average > slow && rung < LADDER.length) {
+                    rung += 1;
                     frames = 0; steady = 0;
                     return true;
                 }
-                if (factor < 1 && average < fast) {
+                // A dropped tier caps the frame rate lower, so the frame times can no
+                // longer show whether it would cope: it stays down until the
+                // listener picks a tier again (reset).
+                if (rung > 0 && LADDER[rung - 1] === 'scale' && average < fast) {
                     steady += 1;
                     if (steady > patience) {
-                        // Try the larger size again, and wait longer before the next try.
-                        factor = Math.min(1, factor / 0.84);
+                        // Try the rung above again, and wait longer before the next try.
+                        rung -= 1;
                         patience *= 2; frames = 0; steady = 0;
                         return true;
                     }
