@@ -72,7 +72,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 /* 右上：检索、加入歌单、回到正在播放 */
 .archive-nav { position: absolute; right: 59px; top: 124px; display: flex; align-items: center; gap: 43px; }
 .archive-nav > button { font-size: 14px; line-height: 1; min-height: 28px; letter-spacing: .7px; display: flex; align-items: center; gap: 12px; }
-.archive-nav > button:hover { color: var(--ar-accent); }
+.archive-nav > button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-glyph-search { width: 23px; height: 23px; position: relative; flex-shrink: 0; display: block; }
 .archive-glyph-search::before { content: ""; position: absolute; width: 60%; height: 60%; left: 30%; top: 8%; border: 2px solid currentColor; border-radius: 50%; box-sizing: border-box; }
 .archive-glyph-search::after { content: ""; position: absolute; width: 42%; height: 2px; left: 9%; top: 82%; background: currentColor; transform: rotate(-45deg); transform-origin: left center; }
@@ -98,7 +98,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-access > span { font-size: 24px; transition: transform .3s; }
 .archive-access:hover > span { transform: translateX(9px); }
 /* 再点中间那张卡：展开，ACCESS FILE 亮起来等着回车 */
-#music-archive-view.is-expanded .archive-access { color: var(--ar-accent); }
+#music-archive-view.is-expanded .archive-access { color: var(--ar-accent-text, var(--ar-accent)); }
 #music-archive-view.is-expanded .archive-access > span { transform: translateX(9px); }
 .archive-access.is-playing::before { content: ""; width: 6px; height: 6px; background: var(--ar-accent); margin-right: -58px; }
 /* 选中曲目的封面：按需加载，没有封面就不显示 */
@@ -152,7 +152,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-empty h2 { font-size: 28px; font-weight: 750; margin: 0 0 30px; }
 .archive-empty p { font-size: 14px; letter-spacing: .6px; color: var(--ar-muted); margin: 0 0 40px; }
 .archive-empty button { font-size: 14px; letter-spacing: 1px; margin-right: 56px; }
-.archive-empty button:hover { color: var(--ar-accent); }
+.archive-empty button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 #music-archive-view.is-empty .archive-empty { display: block; }
 /* 空状态直接压在阵列上：垫一层纸色柔光，说明文字才够对比（两套主题小字都过 AA） */
 .archive-empty::before { content: ""; position: absolute; left: -110px; right: -60px; top: -80px; bottom: -80px; z-index: -1; pointer-events: none; background: radial-gradient(closest-side, rgba(var(--ar-paper-rgb), .94) 0, rgba(var(--ar-paper-rgb), .86) 55%, rgba(var(--ar-paper-rgb), 0) 100%); }
@@ -223,7 +223,7 @@ body.music-reduce-motion .archive-cover { transform: none; }
 
 /* ═════════ 左侧档案目录：字浮在场景上，不做面板 ═════════ */
 .archive-glyph-list { width: 18px; height: 14px; display: block; flex-shrink: 0; background: linear-gradient(currentColor, currentColor) 0 0 / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) 0 6px / 70% 2px no-repeat, linear-gradient(currentColor, currentColor) 0 12px / 100% 2px no-repeat; }
-.archive-nav > button[aria-pressed="true"] { color: var(--ar-accent); }
+.archive-nav > button[aria-pressed="true"] { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-list {
     --gutter: 59px;
     --glow: .92;   /* 深色下卡片纹理偏亮，柔光实一些 */
@@ -314,15 +314,15 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-batch-menu button { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 8px 14px; background: none; border: 0; text-align: left; font: inherit; font-size: 13px; letter-spacing: .5px; color: var(--ar-ink); cursor: pointer; outline: none; }
 .archive-batch-menu button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-batch-menu button:hover, .archive-batch-menu button:focus-visible { background: rgba(128, 128, 128, .14); }
-.archive-batch-menu button[data-sure] span { color: var(--ar-accent); font-weight: 600; }
+.archive-batch-menu button[data-sure] span { color: var(--ar-accent-text, var(--ar-accent)); font-weight: 600; }
 
 /* 歌单管理：标题右边的重命名、删除（移上去或聚焦时才显出来），就地输入名字，拖歌时目录下方的歌单架 */
 .archive-list-group .acts { margin-left: auto; padding-right: 2px; display: flex; gap: 14px; opacity: 0; transition: opacity .15s; overflow: visible; }
 .archive-list-group:hover .acts, .archive-list-group:focus-within .acts { opacity: 1; }
 .archive-list-group button { font-size: 12px; color: var(--ar-muted); letter-spacing: .6px; }
 .archive-list-group button:hover, .archive-list-group button:focus-visible { color: var(--ar-ink); }
-.archive-list-group button[data-pl="delete-yes"] { color: var(--ar-accent); font-weight: 600; }
-.archive-list-group.drop-over span:first-child { color: var(--ar-accent); }
+.archive-list-group button[data-pl="delete-yes"] { color: var(--ar-accent-text, var(--ar-accent)); font-weight: 600; }
+.archive-list-group.drop-over span:first-child { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-list-group.drop-over::after { content: ""; position: absolute; left: 0; right: 0; bottom: 2px; height: 1px; background: var(--ar-accent); }
 .archive-list-name { width: 100%; min-width: 0; height: 24px; padding: 0 0 2px; font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .3px; color: var(--ar-ink); background: none; border: 0; border-bottom: 1px solid var(--ar-ink); outline: none; }
 .archive-list-name::placeholder { color: var(--ar-muted); font-weight: 400; }
@@ -336,7 +336,7 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-shelf b { flex: 0 0 100%; font-size: 12px; font-weight: 600; color: var(--ar-ink); letter-spacing: .4px; }
 .archive-list-shelf b i { margin-left: 8px; font-style: normal; font-weight: 400; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
 .archive-list-shelf button { max-width: 180px; padding: 5px 10px; border: 1px solid var(--ar-rule); font-size: 12px; color: var(--ar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.archive-list-shelf button.drop-over { border-color: var(--ar-accent); color: var(--ar-accent); }
+.archive-list-shelf button.drop-over { border-color: var(--ar-accent); color: var(--ar-accent-text, var(--ar-accent)); }
 
 .archive-list-row { position: absolute; left: var(--gutter); right: 0; top: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding-left: 20px; cursor: pointer; color: var(--ar-summary, var(--ar-muted)); }
 .archive-list-row .tx { min-width: 0; display: grid; gap: 4px; }
@@ -435,7 +435,7 @@ body.light-theme .archive-lyrics { --glow: .85; }
 .archive-lyrics-none span { display: block; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); }
 .archive-lyrics-none button { margin-top: 12px; font-size: 13px; letter-spacing: .6px; color: var(--ar-ink); }
 .archive-lyrics-none button i { margin-left: 10px; font-style: normal; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
-.archive-lyrics-none button:hover, .archive-lyrics-none button:hover i { color: var(--ar-accent); }
+.archive-lyrics-none button:hover, .archive-lyrics-none button:hover i { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-lyrics.none { bottom: auto; }
 .archive-lyrics.none .archive-lyrics-viewport { display: none; }
 .archive-lyrics.none .archive-lyrics-none { display: block; }
