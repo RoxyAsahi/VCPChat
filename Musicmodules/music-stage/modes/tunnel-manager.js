@@ -4298,6 +4298,7 @@
         };
 
         const renderScale = U.createRenderScale();
+        let lenslessWarm = false;
         const resize = () => {
             width = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             height = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
@@ -4311,6 +4312,7 @@
         };
 
         const disposeGraphics = () => {
+            lenslessWarm = false;
             world?.destroy?.();
             world = null;
             optics?.destroy();
@@ -4412,6 +4414,7 @@
 
             fallback.hidden = true;
             if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(drawn().quality))) { resize(); applyQuality(); }
+            if (!lenslessWarm) lenslessWarm = U.warmLensless(T, renderer, scene, camera, renderScale, drawn().quality);
             renderer.info.reset();
             // The same lens as the diorama: the sun, the lamps and the lyric glow through it.
             if (optics) {
@@ -4468,6 +4471,8 @@
                 resize();
                 world.setPalette(services?.app?.stagePalette || {});
                 await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: !canvasSmoothing });
+                if (mode.destroyed || !renderer) return;
+                if (!canvasSmoothing) await optics?.precompile?.(renderer);
                 if (mode.destroyed || !renderer) return;
                 initialized = true;
                 dirty = true;
