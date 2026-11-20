@@ -814,6 +814,29 @@
         return { glyphCount: n };
     };
 
+    // Where a sign will stand, as a world box (with its bracket), for clash tests.
+    const bladeSide = slot => ((Number(slot.col) || 0) + (Number(slot.floor) || 0)) % 2 ? 1 : -1;
+    const boxOf = spec => {
+        const slot = spec.slot;
+        const n = norm(vec(slot.normal || [0, 0, 1])), t = norm(vec(slot.tangent || cross([0, 1, 0], n)));
+        let p = vec(slot.pos);
+        let ht, hn, hu = spec.height / 2;
+        if (spec.kind === 'blade') {
+            p = add(add(p, t, (Number(slot.width) || 2.05) / 2 * bladeSide(slot)), n, (0.35 + spec.width) / 2);
+            p[1] += spec.rise || 0;
+            ht = 0.25; hn = (0.35 + spec.width) / 2;
+        } else if (spec.kind === 'roof') {
+            p = add(p, n, -1.2); p[1] += spec.lift + spec.height / 2;
+            ht = spec.width / 2; hn = 1.4; hu = spec.height / 2 + spec.lift / 2;
+        } else {
+            if (slot.kind === 'shop') p[1] = Math.max(p[1], 2.35 + spec.height / 2);
+            p = add(p, n, 0.3); ht = spec.width / 2; hn = 0.35;
+        }
+        const ext = k => Math.abs(t[k]) * ht + Math.abs(n[k]) * hn + (k === 1 ? hu : 0);
+        return { min: [p[0] - ext(0), p[1] - ext(1), p[2] - ext(2)], max: [p[0] + ext(0), p[1] + ext(1), p[2] + ext(2)] };
+    };
+    const overlaps = (a, b, pad = 0.12) => [0, 1, 2].every(k => a.min[k] < b.max[k] + pad && b.min[k] < a.max[k] + pad);
+
     // ---------- choosing slots ------------------------------------------------
     // The layout offers thousands of places a sign could hang. Take the ones the
     // cameras see: the street faces first (low floors densest, a few up high),
@@ -907,14 +930,11 @@
             }
             return { ...spec, slot };
         }).filter((spec, i, all) => {
-            // A tall sign owns its strip of wall: drop smaller ones it would run through.
-            const p = vec(spec.slot.pos);
-            return !all.some((o, j) => {
-                if (j === i || !o.rise) return false;
-                const q = vec(o.slot.pos);
-                const yc = q[1] + o.rise;
-                return Math.hypot(q[0] - p[0], q[2] - p[2]) < 2.6 && Math.abs(p[1] - yc) < o.height / 2 + spec.height / 2 + 0.3;
-            });
+            // Signs must not run through one another: keep the earlier (better
+            // placed) of any two whose boxes meet.
+            const box = boxOf(spec);
+            spec._box = box;
+            return !all.slice(0, i).some(o => o._kept !== false && o._box && overlaps(o._box, box)) || (spec._kept = false);
         }).map((spec, i) => ({ ...spec, index: i }));
 
         // --- atlas
@@ -993,7 +1013,7 @@
             const bay = Number(slot.width) || 2.05;
             // Blades hang at the joint between bays, clear of the air-conditioners
             // and cages that sit mid-bay.
-            if (spec.kind === 'blade') p = add(p, tangent, bay / 2 * (spec.index % 2 ? 1 : -1));
+            if (spec.kind === 'blade') p = add(p, tangent, bay / 2 * bladeSide(slot));
             if (spec.rise) p = add(p, UP, spec.rise);
             // Shop fascias sit over the door, not across it.
             if (slot.kind === 'shop') p = [p[0], Math.max(p[1], 2.35 + spec.height / 2), p[2]];
@@ -1158,6 +1178,28 @@
             for (let k = 0; k < 4; k += 1) regionAttr.push(...regionUv(REGIONS.ticker));
             hw.box(add(add(s.centre, s.normal, -0.15), UP, -s.height / 2 - 0.55), norm(cross(UP, s.normal)), UP, s.normal, s.width / 2 + 0.1, 0.4, 0.2, darkUv, darkUv, [0, 0, 0, 0]);
         });
+        // Holograms: a projector on the ground throws the next line up into the
+        // air, turned toward where people walk. One over the street, one in each
+        // main alley.
+        const holoSpots = [
+            { pos: [-26, 0, 64.5], normal: norm([0.25, 0, 1]), width: 9, height: 2.6, lift: 6.5 },
+            { pos: [-34, 0, 0], normal: [1, 0, 0], width: 2.0, height: 0.75, lift: 2.5 },
+            { pos: [-14, 0, 22], normal: [0, 0, 1], width: 1.8, height: 0.7, lift: 2.4 }
+        ];
+        const hb = createBuilder();
+        holoSpots.forEach((h, k) => {
+            const n = norm(h.normal), r = norm(cross(UP, n));
+            const c = add(h.pos, UP, h.lift + h.height / 2);
+            const P = (sx, sy) => add(add(c, r, sx * h.width / 2), UP, sy * h.height / 2);
+            hb.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), n, [0, 0, 1, 1], [k, h.width, h.height, 0]);
+            // Back side too: the light shows from both ways, mirrored.
+            hb.quad(P(1, -1), P(-1, -1), P(-1, 1), P(1, 1), scale(n, -1), [0, 0, 1, 1], [k, h.width, h.height, 1]);
+            // The projector: a squat box on a stand, its lens towards the panel.
+            const foot = vec(h.pos);
+            const big = h.width > 4;
+            hw.box(add(foot, UP, big ? 0.5 : 0.35), r, UP, n, big ? 0.6 : 0.22, big ? 0.5 : 0.35, big ? 0.6 : 0.22, darkUv, metalUv, [0, 0, 0, 0]);
+            hw.box(add(foot, UP, big ? 1.1 : 0.78), r, UP, n, big ? 0.35 : 0.14, 0.08, big ? 0.35 : 0.14, metalUv, metalUv, [0, 0, 0, 0]);
+        });
         // Rebuild the hardware mesh now that screen housings are in it.
         meshes.forEach(m => { if (m.name === 'Signs/hardware') { group.remove(m); m.geometry.dispose(); } });
         meshes.splice(meshes.findIndex(m => m.name === 'Signs/hardware'), 1);
@@ -1183,6 +1225,75 @@
             group.add(mesh); meshes.push(mesh);
         }
 
+
+        const holoCanvas = makeCanvas(1024, 320);
+        const holoCtx = holoCanvas.getContext('2d');
+        const holoTex = texture(holoCanvas);
+        holoTex.generateMipmaps = false; holoTex.minFilter = T.LinearFilter;
+        const holoMat = new T.ShaderMaterial({
+            name: 'kowloon:signs:holo', fog: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.FrontSide,
+            uniforms: { ...fogUniforms(), map: { value: holoTex }, time: { value: 0 }, age: { value: 9 }, level: { value: 1 },
+                tint: { value: new T.Color(0.25, 0.85, 1.0) }, edge: { value: new T.Color(1.0, 0.3, 0.75) } },
+            vertexShader: `attribute vec4 info;varying vec2 vUv;varying vec4 vInfo;varying vec3 vW;
+                ${FOG_V}
+                void main(){vUv=uv;vInfo=info;vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;
+                    vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
+                    #include <fog_vertex>
+                }`,
+            fragmentShader: `uniform sampler2D map;uniform float time,age,level;uniform vec3 tint,edge;
+                varying vec2 vUv;varying vec4 vInfo;varying vec3 vW;
+                #include <fog_pars_fragment>
+                float h(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+                void main(){
+                    vec2 uv=vUv;if(vInfo.w>0.5)uv.x=1.0-uv.x;
+                    float id=vInfo.x;
+                    // Forming: rows arrive with jitter, then settle; the beam wobbles a little always.
+                    float form=smoothstep(0.0,0.6,age);
+                    float row=floor(uv.y*60.0);
+                    float jit=(h(vec2(row,floor(time*20.0)+id))-0.5)*(1.0-form)*0.25+sin(time*1.7+uv.y*9.0+id)*0.002;
+                    float wipe=step(uv.y,form*1.2);
+                    vec2 s=uv+vec2(jit,0.0);
+                    float txt=texture2D(map,s).r;
+                    float ab=texture2D(map,s+vec2(0.004,0.0)).r;
+                    float scan=0.6+0.4*sin(uv.y*vInfo.z*90.0-time*6.0);
+                    float frame=max(smoothstep(0.03,0.0,min(uv.x,1.0-uv.x)),smoothstep(0.05,0.0,min(uv.y,1.0-uv.y)));
+                    float fill=0.05+0.04*sin(time*0.9+id);
+                    float flick=0.85+0.15*step(0.08,h(vec2(floor(time*14.0),id)));
+                    vec3 col=tint*(txt*1.3*scan+fill)+edge*(ab-txt)*0.6*max(0.0,ab-txt)+tint*frame*0.35;
+                    col*=wipe*flick*level;
+                    gl_FragColor=vec4(col,1.0);
+                    #ifdef USE_FOG
+                    #ifdef FOG_EXP2
+                    float fogFactor=1.0-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth);
+                    #else
+                    float fogFactor=smoothstep(fogNear,fogFar,vFogDepth);
+                    #endif
+                    gl_FragColor.rgb*=1.0-fogFactor*0.85;
+                    #endif
+                }`
+        });
+        disposables.push(holoMat);
+        if (hb.triangles) {
+            const geometry = hb.geometry(T);
+            disposables.push(geometry);
+            const mesh = new T.Mesh(geometry, holoMat);
+            mesh.name = 'Signs/holo'; mesh.renderOrder = 3; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
+            group.add(mesh); meshes.push(mesh);
+        }
+        let holoKey = null, holoAt = 0;
+        const paintHolo = text => {
+            const g = holoCtx;
+            g.setTransform(1, 0, 0, 1, 0, 0);
+            g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 320);
+            if (!text) return;
+            let px = 150;
+            g.font = `800 ${px}px ${FONTS.lyric}`;
+            const w = g.measureText(text).width;
+            if (w > 940) { px = Math.max(48, px * 940 / w); g.font = `800 ${px}px ${FONTS.lyric}`; }
+            g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ff0000';
+            g.fillText(text, 512, 170, 980);
+            g.font = `700 34px ${FONTS.latin}`; g.fillText('NEXT ▸', 512, 48);
+        };
         // --- per-frame state
         const levels = new Float32Array(192).fill(0);
         const tubes = new Float32Array(16).fill(1);
@@ -1204,6 +1315,8 @@
             screenMat.uniforms.trans.value.setRGB(...scale(mixRgb(secondary, [1, 1, 1], 0.25), 0.8 / tpeak));
             screenMat.uniforms.deep.value.setRGB(...scale(mixRgb(accent, [0.1, 0.12, 0.3], 0.6), 0.35));
             night = palette.light ? 0.6 : 1;
+            holoMat.uniforms.tint.value.setRGB(...scale(mixRgb(secondary, [0.3, 0.9, 1], 0.5), 0.9));
+            holoMat.uniforms.edge.value.setRGB(...accent);
             hardwareMat.uniforms.skyColor.value.setRGB(...scale(mixRgb(accent, [0.3, 0.25, 0.4], 0.6), 0.5));
             lyricKey = null;
         };
@@ -1299,6 +1412,12 @@
             u.tickerSpan.value = 1;
             u.energy.value += ((audio.energy || 0) - u.energy.value) * 0.2;
             u.level.value = night * (0.85 + 0.15 * smooth(0, 1.2, local));
+            // Hologram: the line after this one; in breaks, the song.
+            const nextText = String(lyric?.next?.text || '').trim() || (lyric?.line ? '' : String(song?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg)$/i, ''));
+            if (nextText !== holoKey) { holoKey = nextText; paintHolo(nextText); holoTex.needsUpdate = true; holoAt = wall; }
+            holoMat.uniforms.time.value = local % 1000;
+            holoMat.uniforms.age.value = still || state.isPlaying === false ? 9 : wall - holoAt;
+            holoMat.uniforms.level.value = night * (nextText ? 1 : 0.25);
             if (glyphs < 0) u.progress.value = 0;
         };
 
@@ -1335,7 +1454,7 @@
             setTier,
             setOptions(o) { options = { ...options, ...(o || {}) }; },
             lights,
-            materials: [hardwareMat, glowMat, screenMat],
+            materials: [hardwareMat, glowMat, screenMat, holoMat],
             dispose() {
                 scene?.remove(group);
                 disposables.forEach(d => d.dispose?.());
