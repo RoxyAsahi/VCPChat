@@ -759,7 +759,7 @@
                 }
             }
             for (const [k, v] of hoverLifts) {
-                const goal = hovered === k ? 0.12 : 0;
+                const goal = hovered === k ? 0.24 : 0;   // 悬停的卡稍微探出来一点，能看出鼠标指着哪张
                 const nv = v + (goal - v) * Math.min(1, dt * 10);
                 if (Math.abs(nv) < 0.001 && goal === 0) hoverLifts.delete(k); else hoverLifts.set(k, nv);
             }

@@ -24,6 +24,7 @@
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
+        <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
         <div class="archive-hud" data-ref="hud">
             <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button></header>
             <nav class="archive-nav">
@@ -40,7 +41,7 @@
                 <div class="archive-rule"><i></i></div>
                 <div class="archive-summary"><span data-ref="fmeta"></span><span data-ref="fspec"></span></div>
                 <div class="archive-callout-acts"><button type="button" class="archive-access" data-act="access" data-ref="access" title="播放并进入歌词舞台（回车）">播放 <span aria-hidden="true">→</span></button><button type="button" class="archive-more" data-act="open-detail">详情 <span aria-hidden="true">↗</span></button></div>
-                <div class="archive-cover" data-ref="cover" aria-hidden="true"></div>
+                <div class="archive-cover" data-ref="cover" data-act="open-detail" title="查看曲目详情" aria-hidden="true"></div>
             </div>
             <section class="archive-detail" data-ref="detail" role="dialog" aria-label="曲目详情" aria-hidden="true" inert>
                 <button type="button" class="archive-detail-back" data-act="detail-close">← 返回曲库 <span class="archive-key">Esc</span></button>
@@ -598,6 +599,7 @@
             state.lane = lane;
             state.row = row;
             emitMotion(dLane, dRow);
+            refs.tip.classList.remove('on');
             collapse();
             const col = column();
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
@@ -1285,6 +1287,17 @@
         let pendingPick = null;
         let pickRaf = 0;
         let turning = null;
+        /* 鼠标指着的卡（不是选中那张）：在指针旁边写出曲名和歌手，远处的卡也能认出是哪首 */
+        const showTip = (c, at) => {
+            const index = c && !detailOpen && !(c.lane === state.lane && c.row === state.row) ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
+            const t = index >= 0 ? tracks()[index] : null;
+            if (!t || !at) { refs.tip.classList.remove('on'); return; }
+            refs.tip.firstChild.textContent = Model.stripExtension(t.title) || '未知标题';
+            refs.tip.lastChild.textContent = [t.artist, fmtDur(trackDuration(t))].filter(Boolean).join(' · ');
+            const base = root.getBoundingClientRect();
+            refs.tip.style.transform = `translate(${Math.round(at.x - base.left + 16)}px, ${Math.round(at.y - base.top + 18)}px)`;
+            refs.tip.classList.add('on');
+        };
         let detailMiss = false;
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
@@ -1312,12 +1325,13 @@
                         if (!pendingPick || !state.scene) return;
                         const c = state.scene.pick(pendingPick.x, pendingPick.y, pendingPick.rect);
                         state.scene.setHover(c);
+                        showTip(c, pendingPick);
                         canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : '';
                     });
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
