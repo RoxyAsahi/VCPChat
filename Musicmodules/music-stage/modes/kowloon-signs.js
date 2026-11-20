@@ -193,7 +193,7 @@
             width, height, depth: blade ? 0.32 : 0.22, lift: 0,
             bulbs: style === 'box' && random() < 0.22, dead, tubes: true, tilt,
             // Pale tubes and white boxes would read as blots; they burn a little lower.
-            gain: style === 'neon' ? 1.45 / (0.55 + lum(hexRgb(color)) * 0.9) : style === 'box' ? 0.8 / (0.6 + lum(hexRgb(box[0])) * 0.6) : 0,
+            gain: style === 'neon' ? 1.45 / (0.55 + lum(hexRgb(color)) * 0.9) : style === 'box' ? 0.6 / (0.6 + lum(hexRgb(box[0])) * 0.6) : 0,
             broken: style === 'neon' ? (random() < 0.3 ? 0.35 + random() * 0.5 : 0) : (random() < 0.08 ? 0.3 : 0),
             beat: Math.floor(random() * 3), phone: style === 'box' && !vertical && random() < 0.5
         };
@@ -596,7 +596,7 @@
                 float p=role<0.5?progress:vprogress;
                 float done=step(t.g,p-0.0001)*step(0.002,t.g+t.r*0.0);
                 float near=smoothstep(0.06,0.0,abs(t.g-p))*step(0.001,p);
-                vec3 ink=mix(rest,sung,done)+sung*near*0.25;
+                vec3 ink=mix(rest,sung,max(done,idle))+sung*near*0.25;
                 col=ink*t.r+trans*t.b;
                 col.r+=(tr-t.r)*g*1.5;col.b+=(tb-t.r)*g*1.5;
                 // Signal switch: a band of snow rolls through with the tear.
@@ -607,12 +607,12 @@
                 // Behind the words: a dim drifting wash; in breaks, a slow scan graphic.
                 vec2 q=luv-0.5;
                 float sweep=0.5+0.5*sin(q.x*5.0+q.y*2.0-time*0.6+seed);
-                vec3 bg=deep*(0.05+0.08*sweep)*(1.0+energy*0.8);
+                vec3 bg=deep*(0.05+0.08*sweep)*(1.0+energy*0.8)*(0.15+0.85*idle);
                 float rr=length(q*vec2(1.8,1.0));
                 float rings=smoothstep(0.08,0.0,abs(fract(rr*4.0-time*0.18)-0.5)-0.4);
                 float bars=step(0.5,fract(q.y*cells.y/8.0))*smoothstep(0.35,0.0,abs(fract(q.x*0.5+time*0.05)-0.5));
                 bg+=sung*(rings*0.04+bars*0.025)*idle*step(0.001,idle-0.02);
-                col+=bg*(1.0-t.r*0.8);
+                col+=bg*(1.0-t.r);
             }else if(role<2.5){
                 vec2 ruv=vRegion.xy+vec2(fract(suv.x*tickerSpan+ticker),suv.y)*vRegion.zw;
                 col=amber*texture2D(lyricMap,ruv).r*1.6+amber*0.03;
@@ -655,8 +655,7 @@
     const REGIONS = {
         main: { x: 0, y: 0, w: 1536, h: 854 },
         tall: { x: 1536, y: 0, w: 512, h: 896 },
-        ticker: { x: 0, y: 870, w: 2048, h: 72 },
-        card: { x: 0, y: 950, w: 2048, h: 74 }
+        ticker: { x: 0, y: 900, w: 2048, h: 112 }
     };
     const regionUv = r => [r.x / LYRIC_W, 1 - (r.y + r.h) / LYRIC_H, r.w / LYRIC_W, r.h / LYRIC_H];
 
@@ -693,8 +692,11 @@
         return String(line.text ?? line.fullText ?? line.original ?? wordsOf(lyric).map(w => w.text).join(''));
     };
 
+    // The canvas is half the layout's size: the boards have fewer lamps than that.
+    const LYRIC_SCALE = 0.5;
     const paintLyric = (g, lyric, song) => {
         g.save();
+        g.setTransform(LYRIC_SCALE, 0, 0, LYRIC_SCALE, 0, 0);
         g.globalCompositeOperation = 'source-over';
         g.fillStyle = '#000'; g.fillRect(0, 0, LYRIC_W, LYRIC_H);
         g.globalCompositeOperation = 'lighter';
@@ -803,7 +805,7 @@
         const tk = REGIONS.ticker;
         const next = String(lyric?.next?.text || '').trim();
         const tickerText = words.length && (next || translation) ? [next && `NEXT ▸ ${next}`, translation && `◆ ${translation}`].filter(Boolean).join('   ') : `♪ ${String(song?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg)$/i, '')}${song?.artist ? ' — ' + song.artist : ''}   ◆   九龍城寨   ◆   通宵營業`;
-        g.font = `700 ${tk.h * 0.78}px ${FONTS.lyric}`;
+        g.font = `700 ${tk.h * 0.8}px ${FONTS.lyric}`;
         g.fillStyle = '#ff0000';
         const tw = g.measureText(tickerText + '      ').width;
         const span = Math.max(1, Math.ceil(tk.w / tw));
@@ -918,6 +920,8 @@
         // --- atlas
         const energy = tier.name === 'energy-saving';
         const ATLAS = energy ? 1024 : 2048;
+        // A little short of square keeps the light layer and its mips under ~20 MB.
+        const ATLAS_H = energy ? 1024 : 1792;
         const adSlides = 4;
                 // Pixels per metre: as many as fit. Huge signs are seen from far off and
         // get fewer; alley signs, seen up close, get more.
@@ -930,14 +934,14 @@
         let lo = 4, hi = energy ? 90 : 180, packed = pack(sizes(lo), ATLAS, 4);
         for (let k = 0; k < 14; k += 1) {
             const mid = (lo + hi) / 2, tryPack = pack(sizes(mid), ATLAS, 4);
-            if (tryPack.height <= ATLAS) { lo = mid; packed = tryPack; } else hi = mid;
+            if (tryPack.height <= ATLAS_H) { lo = mid; packed = tryPack; } else hi = mid;
         }
         let density = lo;
-        const base = makeCanvas(ATLAS, ATLAS), emit = makeCanvas(ATLAS, ATLAS), maskC = makeCanvas(ATLAS / 2, ATLAS / 2);
+        const base = makeCanvas(ATLAS, ATLAS_H), emit = makeCanvas(ATLAS, ATLAS_H), maskC = makeCanvas(ATLAS / 2, ATLAS_H / 2);
         const L = { base: base.getContext('2d'), emit: emit.getContext('2d'), mask: maskC.getContext('2d') };
-        L.base.fillStyle = '#101010'; L.base.fillRect(0, 0, ATLAS, ATLAS);
-        L.emit.fillStyle = '#000'; L.emit.fillRect(0, 0, ATLAS, ATLAS);
-        L.mask.fillStyle = '#000'; L.mask.fillRect(0, 0, ATLAS / 2, ATLAS / 2);
+        L.base.fillStyle = '#101010'; L.base.fillRect(0, 0, ATLAS, ATLAS_H);
+        L.emit.fillStyle = '#000'; L.emit.fillRect(0, 0, ATLAS, ATLAS_H);
+        L.mask.fillStyle = '#000'; L.mask.fillRect(0, 0, ATLAS / 2, ATLAS_H / 2);
         const paintRandom = rngFor(ctx, `kowloon:paint:${seed}`);
         specs.forEach((spec, i) => {
             const r = packed.rects[i];
@@ -954,7 +958,7 @@
         const metalRect = packed.rects[specs.length + 1], darkRect = packed.rects[specs.length + 2];
         paintMetal(L, metalRect, paintRandom, '#3b3836');
         paintMetal(L, darkRect, paintRandom, '#1c1b1a');
-        const uvOf = (r, inset = 0.5) => [(r.x + inset) / ATLAS, 1 - (r.y + r.h - inset) / ATLAS, (r.x + r.w - inset) / ATLAS, 1 - (r.y + inset) / ATLAS];
+        const uvOf = (r, inset = 0.5) => [(r.x + inset) / ATLAS, 1 - (r.y + r.h - inset) / ATLAS_H, (r.x + r.w - inset) / ATLAS, 1 - (r.y + inset) / ATLAS_H];
         const metalUv = uvOf(metalRect, 4), darkUv = uvOf(darkRect, 4);
 
         const texture = (canvas, nearest) => {
@@ -965,7 +969,17 @@
             disposables.push(t);
             return t;
         };
-        const baseTex = texture(base), emitTex = texture(emit), maskTex = texture(maskC, true);
+        // Only the light layer needs full resolution; the unlit surface and the
+        // tube channels are kept at a quarter.
+        const shrink = (src, w, h, smooth) => {
+            const c = makeCanvas(w, h), g = c.getContext('2d');
+            g.imageSmoothingEnabled = smooth; if (smooth) g.imageSmoothingQuality = 'high';
+            g.drawImage(src, 0, 0, w, h);
+            return c;
+        };
+        const baseSmall = shrink(base, ATLAS / 4, ATLAS_H / 4, true), maskSmall = shrink(maskC, ATLAS / 4, ATLAS_H / 4, false);
+        const baseTex = texture(baseSmall), emitTex = texture(emit), maskTex = texture(maskSmall, true);
+        baseTex.generateMipmaps = false; baseTex.minFilter = T.LinearFilter;
 
         // --- geometry
         const hw = createBuilder(), glow = createBuilder();
@@ -1093,10 +1107,12 @@
         addMesh(glow, glowMat, 'Signs/glow', 2);
 
         // --- screens
-        const lyricCanvas = makeCanvas(LYRIC_W, LYRIC_H);
+        const lyricCanvas = makeCanvas(LYRIC_W * LYRIC_SCALE, LYRIC_H * LYRIC_SCALE);
         const lyricCtx = lyricCanvas.getContext('2d');
         const lyricTex = texture(lyricCanvas);
-        lyricTex.anisotropy = energy ? 2 : 4;
+        // Sampled once per lamp: no mip chain needed.
+        lyricTex.generateMipmaps = false; lyricTex.minFilter = T.LinearFilter;
+        lyricTex.anisotropy = 1;
         const sb = createBuilder();
         const regionAttr = [];
         const screenList = [];
@@ -1107,9 +1123,9 @@
             const w = Number(s.width ?? s.size?.[0]) || 8, h = Number(s.height ?? s.size?.[1]) || 5;
             const reg = role === 0 ? REGIONS.main : role === 1 ? REGIONS.tall : role === 2 ? REGIONS.ticker : null;
             const regionVec = reg ? regionUv(reg)
-                : [adRect.x / ATLAS, 1 - (adRect.y + adRect.h) / ATLAS, slideW / ATLAS, slideH / ATLAS];
+                : [adRect.x / ATLAS, 1 - (adRect.y + adRect.h) / ATLAS_H, slideW / ATLAS, slideH / ATLAS_H];
             // One LED per ~5 cm on the big boards, coarser on small ones.
-            const pitch = role === 2 ? 0.05 : role === 3 ? 0.035 : 0.055;
+            const pitch = role === 2 ? 0.022 : role === 3 ? 0.035 : 0.055;
             const cols = Math.max(24, Math.round(w / pitch)), rows = Math.max(12, Math.round(h / pitch));
             const info = [role, cols, rows, screenList.length * 1.37 + 0.2];
             const c = add(centre, n, 0.02);
@@ -1138,7 +1154,7 @@
             if (screens.some(x => /ticker/.test(String(x.role || x.kind || x.id || '')))) return;
             const r = norm(cross(UP, s.normal));
             sb.quad(...[[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => add(add(add(s.centre, s.normal, 0.05), r, sx * s.width / 2), UP, -s.height / 2 - 0.55 + sy * 0.32)),
-                s.normal, [0, 0, 1, 1], [2, Math.round(s.width / 0.05), 13, 9.1]);
+                s.normal, [0, 0, 1, 1], [2, Math.round(s.width / 0.022), 29, 9.1]);
             for (let k = 0; k < 4; k += 1) regionAttr.push(...regionUv(REGIONS.ticker));
             hw.box(add(add(s.centre, s.normal, -0.15), UP, -s.height / 2 - 0.55), norm(cross(UP, s.normal)), UP, s.normal, s.width / 2 + 0.1, 0.4, 0.2, darkUv, darkUv, [0, 0, 0, 0]);
         });
@@ -1149,7 +1165,7 @@
         const screenMat = new T.ShaderMaterial({
             name: 'kowloon:signs:screens', fog: true,
             uniforms: { ...fogUniforms(), lyricMap: { value: lyricTex }, adMap: { value: emitTex },
-                sung: { value: new T.Color(2.4, 1.1, 2.0) }, rest: { value: new T.Color(0.42, 0.45, 0.52) },
+                sung: { value: new T.Color(2.4, 1.1, 2.0) }, rest: { value: new T.Color(0.6, 0.62, 0.68) },
                 trans: { value: new T.Color(0.2, 0.9, 1.1) }, amber: { value: new T.Color(1.4, 0.55, 0.08) },
                 deep: { value: new T.Color(0.05, 0.08, 0.2) },
                 time: { value: 0 }, level: { value: 1 }, progress: { value: 0 }, vprogress: { value: 0 }, age: { value: 9 },
@@ -1174,7 +1190,7 @@
         const tubeSeed = Array.from({ length: 16 }, () => random() * 100);
         let palette = ctx.palette || {};
         let started = null, lyricKey = null, changedAt = -9, song = {}, glyphs = 1, tickerPos = 0;
-        let night = 1, chorusGlow = 0, awake = 0, lastWall = 0, held = null;
+        let night = 1, chorusGlow = 0, awake = 0, lastWall = 0, held = null, firstFrame = true;
         const setPalette = p => {
             palette = p || {};
             const accent = hexRgb(palette.accent || '#ff3fae');
@@ -1182,10 +1198,11 @@
             // Sung text runs hot so the bloom catches it; rest is a cool grey.
             // The brightest channel sits at the bloom threshold: lit, not smeared.
             const peak = Math.max(0.05, ...accent);
-            screenMat.uniforms.sung.value.setRGB(...scale(accent, 1.08 / peak));
+            const hot = mixRgb(accent, [1, 1, 1], 0.18);
+            screenMat.uniforms.sung.value.setRGB(...scale(hot, 1.25 / Math.max(0.05, ...hot)));
             const tpeak = Math.max(0.05, ...secondary);
             screenMat.uniforms.trans.value.setRGB(...scale(mixRgb(secondary, [1, 1, 1], 0.25), 0.8 / tpeak));
-            screenMat.uniforms.deep.value.setRGB(...scale(mixRgb(accent, [0.05, 0.08, 0.2], 0.75), 0.6));
+            screenMat.uniforms.deep.value.setRGB(...scale(mixRgb(accent, [0.1, 0.12, 0.3], 0.6), 0.35));
             night = palette.light ? 0.6 : 1;
             hardwareMat.uniforms.skyColor.value.setRGB(...scale(mixRgb(accent, [0.3, 0.25, 0.4], 0.6), 0.5));
             lyricKey = null;
@@ -1254,10 +1271,12 @@
                 lyricKey = key;
                 glyphs = paintLyric(lyricCtx, lyric, song).glyphCount;
                 lyricTex.needsUpdate = true;
-                changedAt = lyric?.changedAt != null && Number.isFinite(lyric.changedAt) ? Math.min(t, lyric.changedAt) : t;
+                // The switch plays out on the wall clock, so a paused song still shows its line.
+                changedAt = wall;
                 tickerPos = 0;
             }
             const u = screenMat.uniforms;
+            if (firstFrame) { u.idle.value = lyric?.line ? 0 : 1; firstFrame = false; }
             let p = 0;
             if (lyric?.line) {
                 const words = Array.isArray(lyric.words) ? lyric.words : [];
@@ -1271,7 +1290,8 @@
                 } else p = clamp(Number(lyric.progress) || 0);
             }
             u.progress.value = p; u.vprogress.value = p;
-            u.age.value = Math.max(0, t - changedAt);
+            // Paused, the stage may not draw again: show the line whole, not mid-switch.
+            u.age.value = still || state.isPlaying === false ? 9 : Math.max(0, wall - changedAt);
             u.idle.value += ((lyric?.line ? 0 : 1) - u.idle.value) * Math.min(1, realDt * 1.5);
             u.time.value = local % 1000;
             tickerPos = (tickerPos + realDt * 0.045 * (1 + chorusGlow * 0.5)) % 1;
@@ -1326,11 +1346,11 @@
                     signDrawCalls: meshes.length,
                     signTriangles: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0),
                     signs: specs.length, screens: screenList.length, atlas: ATLAS, density: Math.round(density),
-                    textureBytes: ATLAS * ATLAS * 4 * 2 * 1.33 + (ATLAS / 2) ** 2 * 4 + LYRIC_W * LYRIC_H * 4 * 1.33
+                    textureBytes: Math.round(ATLAS * ATLAS_H * 4 * 4 / 3 + ATLAS * ATLAS_H / 16 * 4 * 2 + LYRIC_W * LYRIC_H * LYRIC_SCALE ** 2 * 4)
                 };
             },
             // For tests and the look-dev page.
-            _levels: levels, _specs: specs, _canvases: { base, emit, mask: maskC, lyric: lyricCanvas }
+            _levels: levels, _specs: specs, _canvases: { base: baseSmall, emit, mask: maskSmall, lyric: lyricCanvas }
         };
     };
 
