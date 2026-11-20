@@ -521,8 +521,10 @@
             stepTheme(T);
             const tinting = waves.length > 0;
             const tmpC = tinting ? (stepTheme.c || (stepTheme.c = new THREE.Color())) : null;
-            const idleTarget = !reduced && now - lastInput > 2500 ? 1 : 0;
-            idleGain += (idleTarget - idleGain) * Math.min(1, dt * 1.2);
+            // 静止后的缓慢起伏只在播放时才有：暂停时没有东西在动，画面停住，外面的帧循环也就不再排下一帧
+            const idleTarget = !reduced && isPlaying && now - lastInput > 2500 ? 1 : 0;
+            idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 1.2 : 3));
+            if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
             const baseLane = Math.round(camLane.v);
