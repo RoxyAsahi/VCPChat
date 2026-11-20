@@ -395,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!app.animationFrameId) app.startVisualizerAnimation();
         app.updateModeButton();
         await initializeTheme();
+        window.MusicIntroLib?.init(app);
 
         app.updateSidebarToggleState(localStorage.getItem('musicSidebarCollapsed') === 'true');
         if (typeof initMusicDock === 'function') initMusicDock(app);
