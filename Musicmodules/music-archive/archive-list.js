@@ -1,13 +1,16 @@
 /*
  * 档案页左侧常驻的「档案目录」列表：顶部检索框，筛选（全部/歌手/专辑/歌单/最近），
- * 按分组带吸顶标题的长列表。只画看得见的那几十行（虚拟滚动），几千首也一样快。
+ * 按分组的长列表，字直接浮在场景上（不做面板），首字母大字放在左侧外边距并随滚动吸附。
+ * 只画看得见的那几十行（虚拟滚动），几千首也一样快。
  * 选中状态和阵列共用：列表里选哪首，阵列相机就跟到那张卡；阵列里换卡，列表滚到那一行。
  */
 (function (global) {
     'use strict';
 
-    const HEAD_H = 34;    // 分组标题行高（设计像素）
-    const ROW_H = 54;     // 曲目行高
+    const LETTER_H = 20;  // 首字母分组前的留白（字母本身在左侧外边距里）
+    const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
+    const ROW_H = 58;     // 曲目行高
+    const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const KINDS = [['all', '全部', 'ALL'], ['artist', '歌手', 'ARTIST'], ['album', '专辑', 'ALBUM'], ['playlist', '歌单', 'LIST'], ['recent', '最近', 'RECENT']];
 
@@ -21,36 +24,39 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const TEMPLATE = `
-        <div class="archive-list-head">
-            <span class="archive-tiny">ARCHIVE DIRECTORY</span>
-            <span class="archive-list-total" data-l="total"></span>
-        </div>
         <label class="archive-list-search">
             <span class="archive-glyph-search" aria-hidden="true"></span>
             <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目">
             <span class="archive-key" aria-hidden="true">/</span>
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
-            ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="${zh}"><b>${zh}</b><i>${en}</i></button>`).join('')}
+            ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="${zh}（${en}）">${zh}</button>`).join('')}
         </div>
-        <div class="archive-list-cols" aria-hidden="true"><span>FILE</span><span>TITLE / ARTIST · ALBUM</span><span>TIME</span></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
             <div class="archive-list-spacer" data-l="spacer"></div>
             <div class="archive-list-empty" data-l="empty">没有匹配的曲目</div>
         </div>
-        <div class="archive-list-foot">
-            <span class="archive-tiny">SELECT</span>
-            <span class="archive-list-pos" data-l="pos"></span>
-            <span class="archive-list-hint">↑↓ 选择 ／ ENTER 播放 ／ → 进入播放页</span>
+        <div class="archive-list-foot" aria-live="polite">
+            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span>
         </div>`;
 
     /*
      * opts: {
      *   host, app, Index, getIndex(), getRecent(), columnOfGroup(g),
-     *   onPick(i, ctx), onPlay(i, ctx, { stage }), fileNumber(track, i), isNarrow()
+     *   onPick(i, ctx), onPlay(i, ctx, { stage, group }), fileNumber(track, i), isNarrow()
+     *   group = { name, items } 是这一行所在的那组（歌手、专辑、最近、检索结果），点播时用它当队列；
+     *   全部曲目且没有检索词时不给（按首字母分的组只是索引，队列仍是整个曲库）
      * }
      */
+    /* 首字母分组（全部曲目、无检索词）：字母放到左侧外边距里，大号细体 */
+    const isLetter = (row) => row.type === 'head' && String(row.key || '').startsWith('letter:');
+    const letterHtml = (row) => {
+        const g = String(row.key).slice(7);
+        const text = g === '0-9' ? '0–9' : g === '#' ? '#' : g;
+        return `<span class="${text.length > 1 ? 'wide' : ''}">${esc(text)}</span>`;
+    };
+
     const create = (opts) => {
         const { host, app, Index } = opts;
         const el = document.createElement('section');
@@ -79,7 +85,7 @@
         if (!KINDS.some(([k]) => k === state.kind)) state.kind = 'all';
 
         const tracks = () => (Array.isArray(app.playlist) ? app.playlist : []);
-        // 时长：扫描器给的 duration，没有就用播放过后记下的；整页都没有时长时不显示这一列
+        // 时长：扫描器给的 duration，没有就用播放过后记下的；都没有就不显示
         const durationOf = (t, i) => (Number(t && t.duration) > 0 ? Number(t.duration) : Number(opts.durationOf?.(t, i)) || 0);
 
         const rebuild = () => {
@@ -97,13 +103,11 @@
             out.rows.forEach((row, k) => {
                 state.offsets[k] = y;
                 if (row.type === 'head') state.heads.push(k);
-                y += row.type === 'head' ? HEAD_H : ROW_H;
+                y += row.type === 'head' ? (isLetter(row) ? LETTER_H : LABEL_H) : ROW_H;
             });
             state.offsets[out.rows.length] = y;
-            el.classList.toggle('no-time', !out.rows.some((row) => row.type === 'track' && durationOf(tracks()[row.i], row.i) > 0));
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
-            r.total.textContent = pad(out.count, 4) + ' / ' + pad(tracks().length, 4);
             el.querySelectorAll('[data-kind]').forEach((b) => {
                 const on = b.dataset.kind === state.kind;
                 b.classList.toggle('on', on);
@@ -112,6 +116,8 @@
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
             state.selectedRow = findRow(state.selected, state.preferCtx);
+            // 重排后（比如拼音表加载好、分组变了）选中行可能跑到视野外，拉回来
+            if (state.selectedRow >= 0 && !inView(state.selectedRow)) scrollToRow(state.selectedRow, { center: true });
             render();
         };
 
@@ -126,19 +132,26 @@
         };
 
         const rowHtml = (row, k) => {
-            if (row.type === 'head') return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`;
+            if (row.type === 'head') {
+                if (isLetter(row)) return letterHtml(row);
+                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`;
+            }
             const t = tracks()[row.i] || {};
             const meta = [t.artist, t.album].filter(Boolean).join(' · ') || 'UNKNOWN ARTIST';
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
-            return `<span class="no">${esc(opts.fileNumber(t, row.i))}</span>`
+            const time = durationOf(t, row.i);
+            return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
                 + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
-                + `<span class="tm">${fmtTime(durationOf(t, row.i))}</span>`;
+                + `<span class="rt"><i>${esc(opts.fileNumber(t, row.i))}</i>${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
 
         const paintRow = (node, row, k) => {
             const on = k === state.selectedRow;
             node.classList.toggle('on', on);
-            node.classList.toggle('playing', row.type === 'track' && row.i === state.playing && Boolean(app.isPlaying));
+            const current = row.type === 'track' && row.i === state.playing;
+            node.classList.toggle('current', current);
+            node.classList.toggle('playing', current && Boolean(app.isPlaying));
+            if (row.type === 'head') node.classList.toggle('stuck', k === state.stuck);
             if (row.type === 'track') node.setAttribute('aria-selected', String(on));
         };
 
@@ -153,12 +166,18 @@
             for (const [k, node] of state.rendered) {
                 if (k < first || k > last) { node.remove(); state.rendered.delete(k); }
             }
+            // 吸附的首字母：当前可见第一行所属的分组（只有首字母分组才吸附）
+            let headK = -1;
+            for (const hk of state.heads) { if (state.offsets[hk] <= top + 1) headK = hk; else break; }
+            if (headK === -1 && state.heads.length) headK = state.heads[0];
+            const stuckRow = state.rows[headK];
+            state.stuck = stuckRow && isLetter(stuckRow) ? headK : -1;
             for (let k = first; k <= last; k++) {
                 const row = state.rows[k];
                 let node = state.rendered.get(k);
                 if (!node) {
                     node = document.createElement('div');
-                    node.className = row.type === 'head' ? 'archive-list-group' : 'archive-list-row';
+                    node.className = row.type === 'track' ? 'archive-list-row' : isLetter(row) ? 'archive-list-letter' : 'archive-list-group';
                     node.dataset.k = k;
                     if (row.type === 'track') node.setAttribute('role', 'option');
                     node.style.transform = `translateY(${state.offsets[k]}px)`;
@@ -168,23 +187,23 @@
                 }
                 paintRow(node, row, k);
             }
-            // 吸顶分组标题：当前可见第一行所属的分组；下一组顶上来时把它推上去
-            let headK = -1;
-            for (const hk of state.heads) { if (state.offsets[hk] <= top) headK = hk; else break; }
-            if (headK === -1 || state.offsets[headK] === top) {
+            // 吸附字母停在顶上，下一组的字母顶上来时把它推上去
+            if (state.stuck === -1) {
                 r.sticky.style.visibility = 'hidden';
             } else {
-                const row = state.rows[headK];
                 r.sticky.style.visibility = '';
-                r.sticky.innerHTML = `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`;
+                const html = letterHtml(stuckRow);
+                if (r.sticky.innerHTML !== html) r.sticky.innerHTML = html;
                 const nextHead = state.heads.find((hk) => hk > headK);
-                const push = nextHead !== undefined ? Math.min(0, state.offsets[nextHead] - top - HEAD_H) : 0;
-                r.sticky.style.transform = `translateY(${top + push}px)`;
+                const y = Math.max(top, state.offsets[headK]);
+                const push = nextHead !== undefined ? Math.min(0, state.offsets[nextHead] - y - LETTER_PUSH) : 0;
+                r.sticky.style.transform = `translateY(${y + push}px)`;
             }
             const sel = state.selectedRow;
             let nth = 0;
             if (sel >= 0) for (let k = 0; k <= sel; k++) if (state.rows[k].type === 'track') nth++;
-            r.pos.textContent = sel >= 0 ? pad(nth, 3) + ' / ' + pad(state.count, 3) : '--- / ' + pad(state.count, 3);
+            r.pos.textContent = sel >= 0 ? pad(nth, 3) : '---';
+            r.tot.textContent = pad(state.count, 3);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
 
@@ -205,7 +224,7 @@
             const vp = r.viewport;
             const y = state.offsets[k];
             const h = vp.clientHeight || 600;
-            const pad2 = HEAD_H + 4;
+            const pad2 = LABEL_H;
             if (center) vp.scrollTop = Math.max(0, y - h / 2 + ROW_H / 2);
             else if (y < vp.scrollTop + pad2) vp.scrollTop = Math.max(0, y - pad2);
             else if (y + ROW_H > vp.scrollTop + h) vp.scrollTop = y + ROW_H - h;
@@ -213,13 +232,13 @@
         };
 
         /* 阵列那边换了选中：列表跟着高亮并滚到那一行 */
-        const reveal = (i, ctx) => {
+        const reveal = (i, ctx, { center = false } = {}) => {
             state.selected = i;
             state.preferCtx = ctx;
             const k = findRow(i, ctx);
             const moved = k !== state.selectedRow;
             state.selectedRow = k;
-            if (moved && k >= 0) scrollToRow(k, { center: !inView(k) });
+            if ((moved || center) && k >= 0) scrollToRow(k, { center: center || !inView(k) });
             render(); // 当场画，避免阵列和目录高亮差一帧
         };
         const inView = (k) => {
@@ -256,6 +275,20 @@
             }
         };
         const selectedRowData = () => state.rows[state.selectedRow] || null;
+        /* 第 k 行所在的那一组：组名和组里的曲目（按显示顺序） */
+        const groupOf = (k) => {
+            if (state.kind === 'all' && !state.query.trim()) return null;
+            let h = -1;
+            for (const hk of state.heads) { if (hk <= k) h = hk; else break; }
+            const head = state.rows[h];
+            const items = [];
+            for (let j = h + 1; j < state.rows.length && state.rows[j].type === 'track'; j++) items.push(state.rows[j].i);
+            if (!items.length) return null;
+            const kindName = (KINDS.find(([kk]) => kk === state.kind) || [])[1] || '';
+            const label = head ? head.label : kindName;
+            const name = state.kind === 'all' || state.kind === 'recent' || !kindName || label === kindName ? label : kindName + '：' + label;
+            return { name, items };
+        };
 
         // ---------- 输入 ----------
         let typeTimer = 0;
@@ -290,13 +323,13 @@
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
-                    if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: e.shiftKey });
+                    if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
                     break;
                 }
                 case 'ArrowRight': {
                     if (inInput && r.input.selectionStart < r.input.value.length) return;
                     const row = selectedRowData();
-                    if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true }); }
+                    if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
                 case 'Escape':
@@ -324,7 +357,7 @@
         r.viewport.addEventListener('dblclick', (e) => {
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
-            if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false });
+            if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
         });
         r.viewport.addEventListener('contextmenu', (e) => {
             const node = e.target.closest('.archive-list-row');

@@ -9,14 +9,14 @@ const SCRIPTS = ['model', 'scene', 'index', 'list', 'view'].map((n) => read(`Mus
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });
-function fixture({ n = 30, playlists } = {}) {
+function fixture({ n = 30, playlists, tracks: given, setup } = {}) {
     const dom = new JSDOM('<!doctype html><body><div id="music-archive-view" hidden></div><button id="music-archive-return"></button></body>',
         { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const w = dom.window;
     w.matchMedia = () => ({ matches: false, addEventListener() {} });
     w.console.warn = () => {};
     for (const s of SCRIPTS) w.eval(s);
-    const tracks = Array.from({ length: n }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: i % 2 ? 'Aki' : 'Ren', album: 'A' + (i % 3) }));
+    const tracks = given || Array.from({ length: n }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: i % 2 ? 'Aki' : 'Ren', album: 'A' + (i % 3) }));
     const calls = [];
     const app = {
         playlist: tracks,
@@ -27,6 +27,7 @@ function fixture({ n = 30, playlists } = {}) {
         renderPlaylist() {}, showContextMenu() { calls.push(['ctx', this.contextMenuTrackIndex]); },
         stageHost: { active: false, enter() { calls.push(['stage']); this.active = true; } }
     };
+    if (setup) setup(w, app);
     const view = w.MusicArchive.init(app);
     const key = (k, extra = {}) => w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
     const text = (ref) => w.document.querySelector(`[data-ref="${ref}"]`).textContent;
@@ -104,7 +105,9 @@ test('目录里回车只播放不进播放页；→ 进播放页；Esc 先清空
     const input = listEl(f, 'input');
     input.value = 'Song 7';
     listKey(f, input, 'Enter');
-    assert.deepEqual(f.calls, [['load', 7, null]]); // 全部曲目列：队列就是整个曲库
+    assert.deepEqual(f.calls, [['load', 7, 3]]); // 从检索结果点播：队列就是这 3 条结果
+    assert.equal(f.app.filteredPlaylistSource.name, '检索结果');
+    assert.equal(f.text('queue'), '检索结果');
     f.calls.length = 0;
     f.app.isPlaying = true;
     input.setSelectionRange(input.value.length, input.value.length);
@@ -149,26 +152,27 @@ test('目录单击只选中，双击播放；歌单分类里的歌在阵列里�
     f.close();
 });
 
-test('歌手分类按名字分组；切换分类会记住', () => {
+test('歌手分类按名字分组；切换分类会记住', async () => {
     const f = fixture();
     f.view.setListOpen(true);
     f.view.list.setKind('artist');
+    listEl(f, 'viewport').scrollTop = 0;
+    f.view.list.render();
+    await new Promise((r) => setTimeout(r, 60));
     const heads = [...f.view.list.el.querySelectorAll('.archive-list-group')].map((n) => n.querySelector('span').textContent);
-    assert.deepEqual(heads, ['Aki', 'Ren']);
+    assert.deepEqual(heads.sort(), ['Aki', 'Ren']);
     assert.equal(f.w.localStorage.getItem('musicArchiveListKind'), 'artist');
     f.close();
 });
 
-test('没有时长时不显示时长列；播放过的歌记下时长后显示', async () => {
+test('没有时长就不显示时长；播放过的歌记下时长后显示', async () => {
     const f = fixture();
     f.view.setListOpen(true);
-    assert.ok(f.view.list.el.classList.contains('no-time'));
+    const times = () => [...f.view.list.el.querySelectorAll('.archive-list-row .rt i')].map((n) => n.textContent).filter((t) => /:/.test(t));
+    assert.deepEqual(times(), []);
     f.app.lastKnownDuration = 245.4;
     await new Promise((r) => setTimeout(r, 1100));
-    assert.ok(!f.view.list.el.classList.contains('no-time'));
-    const first = f.view.list.el.querySelector('.archive-list-row .tm');
-    assert.ok([...f.view.list.el.querySelectorAll('.archive-list-row .tm')].some((n) => n.textContent === '04:05'));
-    assert.ok(first);
+    assert.deepEqual(times(), ['04:05']);
     assert.deepEqual(JSON.parse(f.w.localStorage.getItem('musicArchiveDurations')), { '/m/0': 245 });
     f.close();
 });
@@ -184,13 +188,17 @@ test('输入框里打字不触发档案页快捷键', () => {
     f.close();
 });
 
-test('空格切换播放暂停；Home 回到正在播放', () => {
+test('空格切换播放暂停；Home/End 到这一列第一首和最后一首，PageDown 走 10 首', () => {
     const f = fixture();
     f.key(' ', { code: 'Space' });
     assert.deepEqual(f.calls, [['play']]);
     f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown');
     f.key('Home');
     assert.equal(f.view.debug().selected, 0);
+    f.key('End');
+    assert.equal(f.view.debug().selected, 29);
+    f.key('Home'); f.key('PageDown');
+    assert.equal(f.view.debug().selected, 10);
     f.close();
 });
 
@@ -231,5 +239,131 @@ test('过场期间继续画、开场动画期间不画；选中卡抬高的接�
     body.remove('music-stage-entering');
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(allowed(), false);
+    f.close();
+});
+
+const LIB = (() => {
+    const words = ['Apple', 'Amber', 'Arc', 'Atlas', 'Blue', 'Bird', 'Bell', 'Bloom', 'Cloud', 'Coral', 'Delta', 'Echo',
+        'Xeno', 'Yarn', 'Zest', 'あおぞら', 'あめ', 'いと', 'うみ', 'かぜ', '1999', '2046', '★Star'];
+    return Array.from({ length: 46 }, (_, i) => ({ path: '/l/' + i, title: words[i % words.length] + ' ' + i, artist: 'A', album: 'X' + i }));
+})();
+
+test('曲库够大时全部曲目按首字母拆列，歌少的相邻字母合并', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    const ids = f.view.debug().columns.map((c) => c.id);
+    assert.deepEqual([...ids], ['letter:A', 'letter:B', 'letter:C', 'letter:D-E', 'letter:S-X', 'letter:Y-Z', 'letter:あ-か', 'letter:0-9']);
+    assert.equal(f.text('cat'), 'A');
+    // 每首歌只出现在一个字母列里
+    const lettered = f.view.debug().columns.filter((c) => c.id.startsWith('letter:')).reduce((n, c) => n + c.n, 0);
+    assert.equal(lettered, LIB.length);
+    f.close();
+});
+
+test('字母列里回车播放，队列是整个曲库；目录里的行落到对应字母列', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    f.key('ArrowRight'); // B 列
+    assert.equal(f.text('cat'), 'B');
+    f.key('Enter');
+    assert.equal(f.calls[0][0], 'load');
+    assert.equal(f.calls[0][2], LIB.length);
+    f.view.setListOpen(true);
+    f.view.list.focusSearch();
+    const input = listEl(f, 'input');
+    input.value = 'zest';
+    listKey(f, input, 'Shift');
+    assert.equal(f.text('cat'), 'Y–Z');
+    f.close();
+});
+
+test('有最近播放和收藏时排在最前面', () => {
+    const f = fixture({
+        tracks: LIB, playlists: [],
+        setup: (w, app) => {
+            w.localStorage.setItem('musicArchiveRecent', JSON.stringify(['/l/3', '/l/9']));
+            app.favoriteTracks = ['/l/5'];
+        }
+    });
+    const cols = f.view.debug().columns;
+    assert.deepEqual(JSON.parse(JSON.stringify(cols.slice(0, 2).map((c) => [c.id, c.n]))), [['recent', 2], ['favorite', 1]]);
+    f.close();
+});
+
+test('位置条：按下跳到对应位置，拖着走，提示首字母和第几首', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    const bar = f.w.document.querySelector('[data-ref="ticks"]');
+    bar.getBoundingClientRect = () => ({ left: 100, top: 0, width: 314, height: 40, right: 414, bottom: 40 });
+    bar.setPointerCapture = () => {};
+    const ev = (type, x) => {
+        const e = new f.w.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, button: 0 });
+        Object.defineProperty(e, 'pointerId', { value: 1 });
+        bar.dispatchEvent(e);
+    };
+    const n = f.view.debug().columns[0].n; // A 列
+    ev('pointerdown', 107 + 300);           // 最右边
+    assert.equal(f.text('selN').length >= 2, true);
+    assert.equal(bar.getAttribute('aria-valuenow'), String(n));
+    assert.ok(bar.classList.contains('is-scrubbing'));
+    ev('pointermove', 107);                 // 拖回最左
+    assert.equal(bar.getAttribute('aria-valuenow'), '1');
+    assert.match(bar.querySelector('.archive-ticks-tip').textContent, /^A · 001$/);
+    ev('pointerup', 107);
+    assert.ok(!bar.classList.contains('is-scrubbing'));
+    f.close();
+});
+
+test('滚轮快速滚动松手后会再滑几格', async () => {
+    const f = fixture({ n: 200 });
+    const root = f.w.document.getElementById('music-archive-view');
+    for (let k = 0; k < 6; k++) {
+        root.dispatchEvent(new f.w.WheelEvent('wheel', { deltaY: 60, bubbles: true, cancelable: true }));
+        await new Promise((r) => setTimeout(r, 15));
+    }
+    const start = 0;
+    const afterWheel = f.view.debug().row;
+    assert.equal(afterWheel - start, 6);
+    await new Promise((r) => setTimeout(r, 900));
+    assert.ok(f.view.debug().row > afterWheel, `停在第 ${f.view.debug().row} 行`);
+    f.close();
+});
+
+test('目录里按歌手点播，队列是这位歌手的歌；全部曲目里点播，队列是整个曲库', () => {
+    const f = fixture();
+    f.view.setListOpen(true);
+    f.view.list.setKind('artist');
+    const rows = [...f.view.list.el.querySelectorAll('.archive-list-row')];
+    rows[0].dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
+    assert.equal(f.calls[0][2], 15);
+    assert.equal(f.text('queue'), '歌手：Aki');
+    f.calls.length = 0;
+    f.view.list.setKind('all');
+    const row = [...f.view.list.el.querySelectorAll('.archive-list-row')][4];
+    row.dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
+    assert.equal(f.calls[0][2], null);
+    assert.equal(f.text('queue'), '全部曲目');
+    f.close();
+});
+
+test('全部曲目按全局顺序（首字母、数值自然序）排，和目录一致', () => {
+    const f = fixture({ n: 12 });
+    const order = [];
+    for (let k = 0; k < 12; k++) { order.push(f.view.debug().selected); f.key('ArrowDown'); }
+    assert.deepEqual(order, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    f.view.setListOpen(true);
+    const shown = [...f.view.list.el.querySelectorAll('.archive-list-row b')].map((n) => n.textContent);
+    assert.deepEqual(shown.slice(0, 3), ['Song 0', 'Song 1', 'Song 2']);
+    f.close();
+});
+
+test('Ctrl+L 定位当前播放，目录切回全部并滚到那一行', () => {
+    const f = fixture();
+    f.app.currentTrackIndex = 20;
+    f.view.setListOpen(true);
+    f.view.list.setKind('artist');
+    f.key('ArrowDown');
+    f.key('l', { ctrlKey: true });
+    assert.equal(f.view.debug().selected, 20);
+    assert.equal(f.view.list.kind, 'all');
+    const on = f.view.list.el.querySelector('.archive-list-row.on');
+    assert.match(on.textContent, /Song 20/);
     f.close();
 });

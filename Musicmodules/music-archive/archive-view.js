@@ -28,7 +28,7 @@
                 <button type="button" data-act="list" data-ref="listBtn" title="档案目录（L）" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST <span class="archive-key">L</span></button>
                 <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
-                <button type="button" data-act="now" title="回到正在播放（Home）" aria-label="回到正在播放"><span class="archive-glyph-now">◷</span></button>
+                <button type="button" data-act="now" title="定位当前播放（Ctrl+L）" aria-label="定位当前播放"><span class="archive-glyph-now">◷</span></button>
             </nav>
             <div class="archive-callout">
                 <div class="archive-eyebrow">TRACK DATABASE <span>／</span> <span data-ref="cat"></span></div>
@@ -46,11 +46,11 @@
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
-                <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
+                <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks" role="slider" aria-label="在这一列里的位置（可拖动）"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
                 <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索 <span>／</span> L 目录</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
-                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
+                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
         </div>`;
 
@@ -97,7 +97,8 @@
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : -1;
-            const columns = Model.buildColumns(tracks(), app.customPlaylists);
+            rebuildIndex();
+            const columns = buildColumns();
             state.columns = columns;
             state.sig = Model.signature(columns);
             state.dataRefs = { playlist: app.playlist, length: tracks().length, playlists: app.customPlaylists, plSig: playlistsSig() };
@@ -118,12 +119,43 @@
             root.classList.toggle('is-empty', tracks().length === 0);
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
-            rebuildIndex();
             renderHud(true);
             updatePlaying(true);
             list?.rebuild();
             syncList();
         };
+
+        /*
+         * 阵列的列：曲库够大时「全部曲目」按首字母拆成 A、B…あ行…0–9、其他几列（歌少的相邻字母合并），
+         * 前面有数据时加「最近播放」「收藏」；后面是歌单和专辑。
+         */
+        const LETTER_SPLIT_MIN = 40;
+        const LETTER_MIN_SIZE = 4;
+        let letterOf = null;          // 首字母 → 列 id
+        const favoritePaths = () => (Array.isArray(app.favoriteTracks) ? app.favoriteTracks : []).map((t) => (typeof t === 'string' ? t : t && t.path)).filter(Boolean);
+        const buildColumns = () => {
+            const base = Model.buildColumns(tracks(), app.customPlaylists);
+            letterOf = null;
+            // 「全部曲目」用全局顺序（和目录一致），不用扫描顺序
+            if (IndexLib && searchIndex) base[0].items = IndexLib.sortedIndices(searchIndex, base[0].items);
+            const n = tracks().length;
+            if (n < LETTER_SPLIT_MIN || !IndexLib || !searchIndex) return base;
+            const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE });
+            letterOf = new Map();
+            for (const c of letters) for (const g of c.groups) letterOf.set(g, c.id);
+            const front = [];
+            const recent = recentIndices();
+            if (recent.length) front.push({ id: 'recent', kind: 'recent', name: '最近播放', ref: 'RECENT FILES', items: recent });
+            const fav = favoritePaths();
+            if (fav.length) {
+                const byPath = new Map();
+                tracks().forEach((t, i) => { const k = Model.normalizePath(t && t.path); if (k && !byPath.has(k)) byPath.set(k, i); });
+                const items = fav.map((p) => byPath.get(Model.normalizePath(p))).filter((i) => i !== undefined);
+                if (items.length) front.push({ id: 'favorite', kind: 'favorite', name: '收藏', ref: 'SAVED FILES', items });
+            }
+            return [...front, ...letters, ...base.slice(1)];
+        };
+        const columnOfGroup = (g) => (letterOf && letterOf.get(g)) || 'all';
 
         const dataChanged = () => {
             const d = state.dataRefs;
@@ -142,19 +174,41 @@
             });
         };
 
+        /*
+         * 位置条：刻度均匀铺满整列（歌多于 12 首时每格代表一段），竖线游标停在当前位置；
+         * 可以点、可以拖，拖的时候游标上方显示首字母和第几首。
+         */
+        const ticksReady = () => {
+            if (refs.ticks.dataset.ready) return;
+            refs.ticks.dataset.ready = '1';
+            refs.ticks.innerHTML = Array.from({ length: TICKS }, () => '<span></span>').join('')
+                + '<i class="archive-ticks-cursor"></i><b class="archive-ticks-tip" aria-hidden="true"></b>';
+        };
+        const tickTip = (r) => {
+            const col = column();
+            const index = col ? col.items[r] : -1;
+            const g = index >= 0 && searchIndex ? searchIndex.group(index) : '';
+            const letter = g ? (IndexLib.groupName(g) || g) : '';
+            return (letter ? letter + ' · ' : '') + pad(r + 1, 3);
+        };
         const renderTicks = (count, current) => {
+            ticksReady();
             const n = Math.min(count, TICKS);
-            // 歌曲多于 12 首时，刻度是当前位置附近的一段窗口
-            const start = count <= TICKS ? 0 : Math.max(0, Math.min(count - TICKS, current - Math.floor(TICKS / 2)));
-            if (refs.ticks.childElementCount !== n) {
-                refs.ticks.innerHTML = Array.from({ length: n }, () => '<button type="button"></button>').join('');
-            }
-            [...refs.ticks.children].forEach((b, i) => {
-                const r = start + i;
-                b.dataset.row = r;
-                b.classList.toggle('on', r === current);
-                b.setAttribute('aria-label', `第 ${r + 1} 首`);
+            const frac = count > 1 ? current / (count - 1) : 0;
+            const nearest = n > 1 ? Math.round(frac * (n - 1)) : 0;
+            const marks = refs.ticks.querySelectorAll('span');
+            marks.forEach((m, i) => {
+                const shown = i < n;
+                m.hidden = !shown;
+                if (!shown) return;
+                m.style.left = `calc(${n > 1 ? i / (n - 1) : 0} * (100% - 14px))`;
+                m.classList.toggle('on', i === nearest);
             });
+            refs.ticks.style.setProperty('--pos', String(frac));
+            refs.ticks.setAttribute('aria-valuemin', '1');
+            refs.ticks.setAttribute('aria-valuemax', String(Math.max(1, count)));
+            refs.ticks.setAttribute('aria-valuenow', String(count ? current + 1 : 0));
+            refs.ticks.querySelector('.archive-ticks-tip').textContent = count ? tickTip(current) : '';
         };
 
         const renderHud = (force = false) => {
@@ -238,19 +292,31 @@
             kick();
         };
 
-        const playSelected = ({ stage = true } = {}) => {
+        const playSelected = ({ stage = true, group = null } = {}) => {
             const col = column();
             const index = selectedIndex();
             if (!col || index < 0) return;
             const already = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
-            if (!already) {
+            if (!already && group && group.items.includes(index)) {
+                // 从目录的某一组点播（歌手、专辑、最近、检索结果）：队列就是看到的这一组
+                const list = group.items.map((i) => tracks()[i]).filter(Boolean);
+                app.currentFilteredTracks = list;
+                app.filteredPlaylistSource = { type: 'archive-group', name: group.name };
+                try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示 */ }
+                state.playedLane = state.lane;
+                setQueueName(group.name);
+                app.loadTrack(index, true);
+            } else if (!already) {
                 // 播放队列跟着所在的列走：全部曲目列用整个曲库，其他列用这一列的曲目
-                const list = col.kind === 'all' ? null : col.items.map((i) => tracks()[i]).filter(Boolean);
+                // 按首字母拆开的列：队列是整个曲库（按首字母顺序接着放），不只这一个字母
+                const queue = col.kind === 'letter' ? state.columns.filter((c) => c.kind === 'letter').flatMap((c) => c.items) : col.items;
+                const list = col.kind === 'all' ? null : queue.map((i) => tracks()[i]).filter(Boolean);
                 app.currentFilteredTracks = list;
                 app.filteredPlaylistSource = col.kind === 'playlist' ? { type: 'playlist', name: col.name, id: col.playlistId }
                     : col.kind === 'album' ? { type: 'album', name: col.name } : null;
                 try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示，失败不影响播放 */ }
                 state.playedLane = state.lane;
+                setQueueName(col.kind === 'letter' || col.kind === 'all' ? '全部曲目' : col.name);
                 app.loadTrack(index, true);
             }
             if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
@@ -279,7 +345,10 @@
             }
             state.scene?.setPlaying(cell, app.isPlaying);
             list?.setPlaying(app.currentTrackIndex);
-            if (recordRecent() && list && list.kind === 'recent') list.rebuild();
+            if (recordRecent()) {
+                if (letterOf) queueMicrotask(() => { if (!state.destroyed) rebuild(); });
+                else if (list && list.kind === 'recent') list.rebuild();
+            }
             refs.access.classList.toggle('is-playing', selectedIndex() === app.currentTrackIndex && app.isPlaying);
             kick();
         };
@@ -310,7 +379,7 @@
             const tag = document.createElement('script');
             tag.src = src;
             tag.async = true;
-            tag.onload = () => { if (state.destroyed) return; rebuildIndex(); list?.rebuild(); syncList(); };
+            tag.onload = () => { if (!state.destroyed) rebuild(); }; // 汉字有了拼音，分组和检索都要重算
             tag.onerror = () => { /* 没有拼音表就只按原文检索 */ };
             document.head.appendChild(tag);
         };
@@ -395,10 +464,21 @@
             list.reveal(selectedIndex(), col ? col.id : null);
         };
 
-        const playIndex = (i, ctx, { stage }) => {
+        const playIndex = (i, ctx, { stage, group = null }) => {
             goToTrack(i, ctx, { pulse: false });
             if (selectedIndex() !== i) return;
-            playSelected({ stage });
+            playSelected({ stage, group });
+        };
+        /* 底部显示正在放的这一组（队列）叫什么 */
+        const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
+        /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
+        const locatePlaying = () => {
+            goToPlaying();
+            if (list && listOpen()) {
+                if (list.kind !== 'all' && !list.query) list.setKind('all');
+                const col = column();
+                list.reveal(app.currentTrackIndex, col ? col.id : null, { center: true });
+            }
         };
 
         const openSearch = () => {
@@ -572,6 +652,57 @@
 
         const wheelRows = Model.createWheel(60);
         const wheelLanes = Model.createWheel(90);
+        // 列里跳到第几首（0 起），保持在当前视野附近那一圈
+        const goRow = (target, opts) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (!count) return;
+            const current = Model.wrap(state.row, count);
+            if (target !== current) select(state.lane, state.row + (target - current), opts);
+        };
+        // 滚轮惯性：松手后按衰减的速度再走几格
+        const inertia = Model.createInertia();
+        let inertiaTimer = 0, inertiaRaf = 0;
+        const stopInertia = () => { inertia.stop(); clearTimeout(inertiaTimer); if (inertiaRaf) cancelAnimationFrame(inertiaRaf); inertiaRaf = 0; };
+        const glide = (now) => {
+            inertiaRaf = 0;
+            if (state.destroyed || !isShown()) { inertia.stop(); return; }
+            const n = inertia.tick(now / 1000);
+            if (n) { state.scene?.touch(); select(state.lane, state.row + n, { pulse: false }); }
+            if (inertia.active) inertiaRaf = requestAnimationFrame(glide);
+        };
+        const releaseWheel = () => {
+            if (inertia.release(performance.now() / 1000) && !inertiaRaf) inertiaRaf = requestAnimationFrame(glide);
+        };
+
+        // 位置条：按下就跳，拖着走，松开停
+        let scrubbing = null;
+        const scrubTo = (clientX) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (!count) return;
+            const rect = refs.ticks.getBoundingClientRect();
+            const usable = Math.max(1, rect.width - 14);
+            goRow(Model.rowAtFraction((clientX - rect.left - 7) / usable, count), { pulse: false });
+        };
+        refs.ticks.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            stopInertia();
+            state.scene?.touch();
+            scrubbing = e.pointerId;
+            refs.ticks.setPointerCapture?.(e.pointerId);
+            refs.ticks.classList.add('is-scrubbing');
+            scrubTo(e.clientX);
+        });
+        refs.ticks.addEventListener('pointermove', (e) => { if (scrubbing === e.pointerId) scrubTo(e.clientX); });
+        const endScrub = (e) => {
+            if (scrubbing !== e.pointerId) return;
+            scrubbing = null;
+            refs.ticks.classList.remove('is-scrubbing');
+        };
+        refs.ticks.addEventListener('pointerup', endScrub);
+        refs.ticks.addEventListener('pointercancel', endScrub);
         root.addEventListener('wheel', (e) => {
             if (e.target.closest && e.target.closest('input')) return;
             e.preventDefault();
@@ -583,7 +714,14 @@
                 if (n) select(state.lane + n, state.row);
             } else {
                 const n = wheelRows(e.deltaY * unit, e.timeStamp);
-                if (n) select(state.lane, state.row + n);
+                if (n) {
+                    select(state.lane, state.row + n);
+                    if (!reducedMotion()) {
+                        inertia.push(n, performance.now() / 1000);
+                        clearTimeout(inertiaTimer);
+                        inertiaTimer = setTimeout(releaseWheel, 90);
+                    }
+                }
             }
         }, { passive: false });
 
@@ -598,7 +736,7 @@
                     case 'right': select(state.lane + 1, state.row); break;
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
-                    case 'now': goToPlaying(); break;
+                    case 'now': locatePlaying(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
                     case 'add-cloud': document.getElementById('add-webdav-btn')?.click(); break;
@@ -615,24 +753,20 @@
                 e.stopPropagation();
                 return;
             }
-            const tick = e.target.closest('.archive-ticks button');
-            if (tick) {
-                const col = column();
-                const count = col ? col.items.length : 0;
-                const current = count ? Model.wrap(state.row, count) : 0;
-                select(state.lane, state.row + (Number(tick.dataset.row) - current));
-            }
         });
         // 别让档案页的点击把右键菜单立刻关掉
-        root.addEventListener('mousedown', () => state.scene?.touch());
+        root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
 
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
+            // Ctrl+L 定位当前播放（输入框里也能用）
+            if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
+            stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) { e.preventDefault(); state.scene?.touch(); select(next.lane, next.row); return; }
             if (e.key === 'Enter') {
@@ -641,7 +775,12 @@
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
             if (e.key === 'l' || e.key === 'L') { e.preventDefault(); setListOpen(!listOpen()); return; }
-            if (e.key === 'Home') { e.preventDefault(); goToPlaying(); return; }
+            if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault();
+                const col = column();
+                if (col && col.items.length) goRow(e.key === 'Home' ? 0 : col.items.length - 1);
+                return;
+            }
             if (e.code === 'Space' && tag !== 'BUTTON') {
                 e.preventDefault();
                 app.isPlaying ? app.pauseTrack?.() : app.playTrack?.();
@@ -690,6 +829,7 @@
             state.destroyed = true;
             clearInterval(clockTimer);
             clearTimeout(state.coverTimer);
+            stopInertia();
             if (state.raf) cancelAnimationFrame(state.raf);
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);
@@ -709,7 +849,7 @@
                 Index: IndexLib,
                 getIndex: () => searchIndex,
                 getRecent: recentIndices, durationOf,
-                columnOfGroup: null,
+                columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
