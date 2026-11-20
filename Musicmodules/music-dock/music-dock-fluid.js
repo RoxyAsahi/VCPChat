@@ -59,6 +59,7 @@
         const ringSolid = make('circle', { r: 0, fill: `url(#${id('rs')})` }, solidMask);
         // 音量水滴整个是实心的：用一块边缘羽化的椭圆，不要硬边。
         const volSolid = make('ellipse', { fill: `url(#${id('rs')})`, opacity: 0 }, solidMask);
+        const quickSolid = make('ellipse', { fill: `url(#${id('rs')})`, opacity: 0 }, solidMask);
 
         // 雾和光晕只许溢出播放条外沿 16px：用一块羽化的圆角矩形（加上音量水滴升起的那一列）把它们框住。
         const vapMask = make('mask', { id: id('vap'), maskUnits: 'userSpaceOnUse' }, defs);
@@ -67,7 +68,8 @@
         const vapG0 = make('g', { filter: `url(#${id('feather')})`, fill: '#fff' }, vapMask);
         const vapR = make('rect', {}, vapG0);
         const vapCol = make('rect', {}, vapG0);
-        const vapSplit = make('rect', { width: 0 }, vapG0); // 切歌分裂的水滴往右飞时临时放开
+        const vapSplit = make('rect', { width: 0 }, vapG0);
+        const vapQuick = make('rect', { width: 0 }, vapG0); // 快捷操作胶囊分裂上去时放开那一块 // 切歌分裂的水滴往右飞时临时放开
 
         const filterAttrs = { filterUnits: 'userSpaceOnUse', x: 0, y: 0, 'color-interpolation-filters': 'sRGB' };
         const goo = make('filter', { id: id('goo'), ...filterAttrs }, defs);
@@ -87,6 +89,8 @@
         const bumpC = make('circle', { r: 0 }, body);
         const volB = make('rect', {}, body);
         const splitC = make('circle', { r: 0 }, body);
+        const quickNeck = make('rect', { width: 0 }, body);
+        const quickB = make('rect', { height: 0 }, body);
 
         const vapG = make('g', { mask: `url(#${id('vap')})` }, svg);
         make('use', { href: `#${id('body')}`, filter: `url(#${id('bloom')})`, class: 'md-fl-bloom' }, vapG);
@@ -104,6 +108,7 @@
             solidity: { v: 1, t: 1 },
             bump: { x: 0, r: 0, tx: 0, tr: 0 },
             vol: { v: 0, t: 0 },
+            quick: { v: 0, t: 0, x: 0, y: 0, w: 0, h: 0 },
             split: { p: 1 },
             ring: { x: 0, y: 0, tx: 0, ty: 0, docked: true, placed: false },
             enabled: true
@@ -198,6 +203,7 @@
             return Math.abs(s.solidity.v - s.solidity.t) > eps
                 || Math.abs(s.bump.x - s.bump.tx) > 0.5 || Math.abs(s.bump.r - s.bump.tr) > 0.3
                 || Math.abs(s.vol.v - s.vol.t) > eps
+                || Math.abs(s.quick.v - s.quick.t) > eps
                 || s.split.p < 1
                 || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
         };
@@ -216,6 +222,19 @@
                 setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
                 setAttr(vapSplit, 'x', geo.x + geo.w - geo.h); setAttr(vapSplit, 'y', geo.y - 12); setAttr(vapSplit, 'height', geo.h + 24); setAttr(vapSplit, 'width', geo.h + 200); setAttr(vapSplit, 'rx', geo.h / 2);
             } else { setAttr(splitC, 'r', 0); setAttr(vapSplit, 'width', 0); }
+            // 快捷操作胶囊：从播放条顶边升起，和条之间拉出一道细颈。
+            const q = s.quick;
+            if (q.v > 0.01 && q.w > 0) {
+                const top = geo.y + 4 + (q.y - geo.y - 4) * q.v;
+                setAttr(quickB, 'x', q.x); setAttr(quickB, 'width', q.w); setAttr(quickB, 'y', top); setAttr(quickB, 'height', q.h); setAttr(quickB, 'rx', q.h / 2);
+                const neckW = 26 * Math.min(1, q.v * 1.4) * (1 - 0.35 * q.v);
+                setAttr(quickNeck, 'x', q.x + q.w / 2 - neckW / 2); setAttr(quickNeck, 'width', neckW);
+                setAttr(quickNeck, 'y', top + q.h - 8); setAttr(quickNeck, 'height', Math.max(0, geo.y + 12 - (top + q.h - 8)));
+                setAttr(quickSolid, 'cx', q.x + q.w / 2); setAttr(quickSolid, 'cy', q.y + q.h / 2); setAttr(quickSolid, 'rx', q.w / 2 + 50); setAttr(quickSolid, 'ry', q.h + 18); setAttr(quickSolid, 'opacity', q.v);
+                setAttr(vapQuick, 'x', q.x - 12); setAttr(vapQuick, 'y', q.y - 12); setAttr(vapQuick, 'width', q.w + 24); setAttr(vapQuick, 'height', geo.y - q.y + 24); setAttr(vapQuick, 'rx', q.h / 2 + 12);
+            } else {
+                setAttr(quickB, 'height', 0); setAttr(quickNeck, 'width', 0); setAttr(quickSolid, 'opacity', 0); setAttr(vapQuick, 'width', 0);
+            }
             const rx = s.ring.x;
             const ry = s.ring.y;
             const near = Math.hypot(rx - geo.ringX, ry - (geo.y - 2)) < 120;
@@ -244,11 +263,12 @@
             s.bump.x += (s.bump.tx - s.bump.x) * k;
             s.bump.r += (s.bump.tr - s.bump.r) * k;
             s.vol.v += (s.vol.t - s.vol.v) * (instant ? 1 : 1 - Math.pow(0.004, dt));
+            s.quick.v += (s.quick.t - s.quick.v) * (instant ? 1 : 1 - Math.pow(0.002, dt));
             if (s.split.p < 1) s.split.p = instant ? 1 : Math.min(1, s.split.p + dt / 0.9);
             s.ring.x += (s.ring.tx - s.ring.x) * k * 0.8;
             s.ring.y += (s.ring.ty - s.ring.y) * k * 0.8;
             if (instant || !moving()) {
-                s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t;
+                s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t; s.quick.v = s.quick.t;
                 s.ring.x = s.ring.tx; s.ring.y = s.ring.ty;
             }
             draw();
@@ -280,6 +300,16 @@
                 kick();
             },
             setVolumeOpen(open) { s.vol.t = open ? 1 : 0; kick(); },
+            // rect：快捷操作胶囊在窗口里的位置（getBoundingClientRect）
+            setQuick(open, rect) {
+                if (open && rect && rect.width > 0) {
+                    const vh = win.innerHeight || 0;
+                    const layerTop = vh - geo.bottom - LAYER_H;
+                    s.quick.x = rect.left - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
+                }
+                s.quick.t = open ? 1 : 0;
+                kick();
+            },
             split() { s.split.p = 0; kick(); },
             setRingDocked(docked) {
                 if (s.ring.docked === Boolean(docked)) return;
