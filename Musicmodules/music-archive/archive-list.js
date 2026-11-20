@@ -265,6 +265,7 @@
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             const time = durationOf(t, row.i);
             return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
+                + '<button type="button" class="go" data-go tabindex="-1" aria-label="播放"><svg viewBox="0 0 12 12" aria-hidden="true"><path class="go-play" d="M3 1.6v8.8L10.2 6z"/><path class="go-pause" d="M2.6 1.8h2.4v8.4H2.6zM7 1.8h2.4v8.4H7z"/></svg></button>'
                 + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
                 + `<span class="rt">${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
@@ -646,9 +647,23 @@
         r.viewport.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
         r.viewport.addEventListener('click', (e) => {
             const node = e.target.closest('.archive-list-row');
-            if (node) clickRow(Number(node.dataset.k), e);
+            if (!node) return;
+            // 行首悬停出现的播放键：点它直接播这首；已经是正在放的这首就暂停 / 继续
+            if (e.target.closest('[data-go]') && !(e.shiftKey || e.ctrlKey || e.metaKey)) {
+                const k = Number(node.dataset.k);
+                const row = state.rows[k];
+                if (!row || row.type !== 'track') return;
+                e.stopPropagation();
+                clearMulti();
+                pickRow(k);
+                if (row.i === state.playing) { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
+                else opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(k) });
+                return;
+            }
+            clickRow(Number(node.dataset.k), e);
         });
         r.viewport.addEventListener('dblclick', (e) => {
+            if (e.target.closest('[data-go]')) return; // 播放键连点两下不算双击（不然会重播）
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
             if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
@@ -1152,14 +1167,25 @@
             e.stopPropagation();
         });
 
+        /*
+         * 每个分类记住自己翻到哪里：切走再切回来，回到刚才的位置。
+         * 只有离开之后选中的歌变了（在阵列里换了卡、播了别的歌），才改为跟到选中那一行。
+         */
+        const kindScroll = new Map();
         const setKind = (kind) => {
             if (kind === state.kind) return;
+            kindScroll.set(state.kind, { top: r.viewport.scrollTop, selected: state.selected, query: state.query });
             state.kind = kind;
             try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ }
             r.viewport.scrollTop = 0;
             rebuild();
             const k = findRow(state.selected, null);
-            if (k >= 0) { state.selectedRow = k; scrollToRow(k, { center: true }); }
+            if (k >= 0) state.selectedRow = k;
+            const back = kindScroll.get(kind);
+            if (back && back.selected === state.selected && back.query === state.query) {
+                r.viewport.scrollTop = Math.min(back.top, Math.max(0, r.viewport.scrollHeight - r.viewport.clientHeight));
+                render();
+            } else if (k >= 0) scrollToRow(k, { center: true });
         };
 
         const setPlaying = (i) => {
