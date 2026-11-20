@@ -394,6 +394,8 @@
                 if (item.section && (!next || next.section !== item.section)) parts.push(`<div class="md-cmd-sec" role="presentation">${escapeHtml(item.section)}</div>`);
             });
             list.innerHTML = parts.join('');
+            // 第一条（贴着输入框）最清楚，往上越远越淡；选中的那条和悬停的那条总是清楚。
+            list.querySelectorAll('.md-cmd-row').forEach((row, i) => { row.dataset.mdDist = String(Math.min(4, i)); });
             syncActive(false);
         };
 
@@ -451,8 +453,10 @@
         const place = () => {
             const cap = host.querySelector('.md-cap');
             const rect = cap?.getBoundingClientRect();
-            const gap = rect && rect.height ? Math.max(12, global.innerHeight - rect.bottom) : 32;
+            // 搜索框从播放条上方鼓出来：底边贴着播放条上沿再留 14px，播放条本身留在原处、不被遮。
+            const gap = rect && rect.height ? Math.max(12, global.innerHeight - rect.top + 14) : 110;
             root.style.setProperty('--md-cmd-bottom', `${Math.round(gap)}px`);
+            if (rect && rect.width) root.style.setProperty('--md-cmd-origin-x', `${Math.round(rect.left + rect.width / 2)}px`);
         };
         function open(initial = '') {
             if (state.open) { input.focus(); input.select(); return; }

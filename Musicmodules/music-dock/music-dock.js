@@ -86,7 +86,8 @@
 </div></div>
 <div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="设置">
   <span class="md-sw md-g">${icon('settings-2', 20)}</span><span class="md-sw md-x">${icon('x', 20)}</span>
-</button></div>
+</button><span class="md-hdl-tip" data-md="hdl-tip" aria-hidden="true"></span></div>
+<svg class="md-notch" aria-hidden="true" focusable="false"></svg>
 <section class="md-pnl" id="music-dock-panel" role="dialog" aria-label="播放面板" aria-hidden="true">
   <div class="md-hd">
     <div class="md-hd-cv"></div>
@@ -135,6 +136,8 @@
             t1: $$('[data-md="t1"]'),
             t2: $$('[data-md="t2"]'),
             hdl: $('.md-hdl'),
+            hdlTip: $('[data-md="hdl-tip"]'),
+            notch: $('.md-notch'),
             handle: $('[data-md="handle"]'),
             pnl: $('.md-pnl'),
             pCover: $('.md-hd-cv'),
@@ -332,6 +335,8 @@
             const a = readRgb(colors[0]) || FALLBACK_ACCENT;
             host.style.setProperty('--md-fl-low-fill', hex(mix(a, light ? [247, 242, 238] : [43, 41, 39], light ? 0.62 : 0.55)));
             host.style.setProperty('--md-fl-tint', colors[0]);
+            // 提示层挂在 body 上，也要拿到同一个颜色。
+            document.body.style.setProperty('--md-fl-tint', colors[0]);
             if (fluid && (key !== lastGlowKey || !fluid.glowSet)) { fluid.setGlow(colors); fluid.glowSet = true; }
             lastGlowKey = key;
         };
@@ -340,6 +345,9 @@
             const solid = app.isPlaying === true || state.hover || state.dragging !== null;
             host.classList.toggle('md-vapor', !solid);
             fluid?.setSolid(solid);
+            fluid?.setPlaying?.(app.isPlaying === true);
+            fluid?.setRingFocus?.(state.ringHover === true || state.dragging?.fromRing === true, state.dragging?.fromRing === true);
+            el.hdl.classList.toggle('md-tip', ringMode === 'playhead' && !state.panelOpen && (state.ringHover === true || state.dragging?.fromRing === true));
         };
         const animateCapsule = () => { fluid?.layout(); };
 
@@ -385,6 +393,8 @@
                 state.lastTimeText = timeText;
                 for (const node of el.t1) node.textContent = timeText;
             }
+            const tipText = `${timeText} / ${durText}`;
+            if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             if (durText !== state.lastDurText) {
                 state.lastDurText = durText;
                 for (const node of el.t2) node.textContent = durText;
@@ -1263,6 +1273,47 @@
 
         // 右侧抽屉打开时播放条往左让位，右边缘停在抽屉内容左边 24px；放得下就不动。窄窗口抽屉铺满，不让位。
         const DRAWER_W = 400;
+        // 抽屉右下角的凹口：底色用 clip-path 切出一个 L 形缺口，内角是和小环同心的圆弧，两处外角倒圆；
+        // 小环停在圆心上，环和抽屉之间留一道缝，再用一截细颈连着（细颈和弧边的亮线画在 .md-notch 里）。
+        const NOTCH_D = 40;  // 圆心距窗口右、下边（流体层 cornerLocal 用同一个数）
+        const NOTCH_R = 36;  // 凹口圆弧半径：小环外径 20 + 16 的缝（细颈要有地方拉开）
+        const NOTCH_F = 14;  // 外角倒圆
+        const notchPath = (w, h) => {
+            const cx = w - NOTCH_D; const cy = h - NOTCH_D; const R = NOTCH_R; const F = NOTCH_F;
+            return `M0 0H${w}V${cy - R - F}Q${w} ${cy - R} ${w - F} ${cy - R}H${cx}A${R} ${R} 0 0 0 ${cx - R} ${cy}V${h - F}Q${cx - R} ${h} ${cx - R - F} ${h}H0Z`;
+        };
+        let notchKey = '';
+        const syncNotch = () => {
+            const drbg = host.querySelector('.md-drbg');
+            const vw = global.innerWidth || 0;
+            if (!drbg) return;
+            const on = vw >= COMPACT_BELOW;
+            const w = drbg.offsetWidth; const h = drbg.offsetHeight;
+            const key = on ? `${w}x${h}` : 'off';
+            if (key === notchKey) return;
+            notchKey = key;
+            drbg.style.clipPath = on && w && h ? `path('${notchPath(w, h)}')` : '';
+            if (el.notch && !el.notch.firstChild) {
+                const box = NOTCH_D * 3;
+                const c = box - NOTCH_D;
+                const R = NOTCH_R; const F = NOTCH_F;
+                const rim = `M${box} ${c - R - F}Q${box} ${c - R} ${box - F} ${c - R}H${c}A${R} ${R} 0 0 0 ${c - R} ${c}V${box - F}Q${c - R} ${box} ${c - R - F} ${box}`;
+                // 细颈：从弧边朝圆心收到环外沿，两侧向内凹，像两滴液体之间拉出的颈。
+                const pt = (r, deg) => { const a = deg * Math.PI / 180; return `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`; };
+                // 两端宽、中间收成约 6px 的腰；靠抽屉那端张开一点，像从弧边被拉出来。
+                const neck = `M${pt(R + 1, 207)}C${pt(R - 4, 221)} ${pt(24, 220)} ${pt(19.5, 208)}A19.5 19.5 0 0 1 ${pt(19.5, 242)}C${pt(24, 230)} ${pt(R - 4, 229)} ${pt(R + 1, 243)}A${R + 1} ${R + 1} 0 0 0 ${pt(R + 1, 207)}Z`;
+                el.notch.setAttribute('viewBox', `0 0 ${box} ${box}`);
+                el.notch.setAttribute('width', box);
+                el.notch.setAttribute('height', box);
+                el.notch.innerHTML = '<defs>'
+                    + '<filter id="md-notch-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter>'
+                    + `<linearGradient id="md-notch-neck" gradientUnits="userSpaceOnUse" x1="${pt(R + 1, 225).split(' ')[0]}" y1="${pt(R + 1, 225).split(' ')[1]}" x2="${pt(18, 225).split(' ')[0]}" y2="${pt(18, 225).split(' ')[1]}">`
+                    + '<stop offset="0" class="md-notch-s0"/><stop offset=".55" class="md-notch-s1" style="stop-opacity:.7"/><stop offset="1" class="md-notch-s1"/></linearGradient></defs>'
+                    + `<path class="md-notch-glow" d="${rim}" filter="url(#md-notch-glow)"/>`
+                    + `<path class="md-notch-rim" d="${rim}"/>`
+                    + `<path class="md-notch-neck" d="${neck}" fill="url(#md-notch-neck)"/>`;
+            }
+        };
         const syncShift = () => {
             const vw = global.innerWidth || 0;
             const barW = el.cap.offsetWidth || 0;
@@ -1271,6 +1322,8 @@
             const shift = state.panelOpen && vw >= COMPACT_BELOW && barW ? Math.min(0, room - right) : 0;
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
+            syncNotch();
+            el.notch?.classList.toggle('md-open', state.panelOpen);
         };
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
@@ -1315,7 +1368,7 @@
                 if (!state.dragging && Math.abs(event.clientX - pending.x) > 4) {
                     const time = seekFromPointer(trk, event.clientX);
                     if (time === null) { pending = null; return; }
-                    state.dragging = { time, trk, pointerId: pending.pointerId };
+                    state.dragging = { time, trk, pointerId: pending.pointerId, fromRing: true };
                     syncExpanded();
                 }
                 if (!state.dragging || state.dragging.trk !== trk) return;
@@ -1331,11 +1384,15 @@
                 if (!was || !state.dragging || state.dragging.trk !== trk) return;
                 const { time } = state.dragging;
                 state.dragging = null;
+                syncExpanded();
                 swallow = true;
                 if (commit) app.seekTo?.(time);
                 kickProgress();
             };
             listen(el.handle, 'pointerup', (event) => finish(event, true));
+            // 指针移到播放头上：放大成完整的环，上方显示当前时间，看得出它是播放头、可以拖。
+            listen(el.handle, 'pointerenter', () => { state.ringHover = true; syncSolid(); });
+            listen(el.handle, 'pointerleave', () => { state.ringHover = false; syncSolid(); });
             listen(el.handle, 'pointercancel', (event) => finish(event, false));
             listen(el.handle, 'click', (event) => {
                 if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
@@ -1472,13 +1529,32 @@
         listen(document, 'load', (event) => { if (event.target?.tagName === 'LINK') queueGlow(); }, true);
         const stageRootEl = document.getElementById('music-stage');
         if (stageRootEl) observe(stageRootEl, { attributes: true, attributeFilter: ['class'] }, queueGlow);
+        // 舞台页签：选中项下面一滴实心玻璃，切换时拉长流过去；离选中越远的页签越淡、越糊（悬停、焦点时清楚）。
+        const switcher = stageRootEl?.querySelector('.music-stage-mode-switcher');
+        let tabMarker = null;
+        const syncTabMarker = () => {
+            if (!switcher || typeof global.createMusicFluidMarker !== 'function') return;
+            if (!tabMarker) {
+                tabMarker = global.createMusicFluidMarker(switcher, { axis: 'x', thickness: 5, inset: 2, align: 'end' });
+                document.body.classList.add('music-dock-fluid-tabs');
+            }
+            const buttons = switcher.querySelectorAll('[data-stage-mode]');
+            const active = switcher.querySelector('[data-stage-mode].is-active, [data-stage-mode][aria-pressed="true"]');
+            tabMarker?.setDistances(buttons, active);
+            if (stageActive()) tabMarker?.moveTo(active);
+        };
+        if (switcher) {
+            observe(switcher, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] }, () => requestAnimationFrame(syncTabMarker));
+            cleanups.push(() => { tabMarker?.destroy(); tabMarker = null; document.body.classList.remove('music-dock-fluid-tabs'); });
+            requestAnimationFrame(syncTabMarker);
+        }
         // 舞台顶部的模式切换（不经过底栏）也要换色：跟着选中按钮的 aria-pressed 走。
         observe(stageRootEl?.querySelector('.music-stage-mode-switcher'), { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] }, queueGlow);
         observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => {
             const playing = app.isPlaying === true;
             if (playing !== lastPlaying) { lastPlaying = playing; renderPlay(); kickProgress(); }
             const inStage = stageActive();
-            if (inStage !== lastStage) { lastStage = inStage; renderStage(); }
+            if (inStage !== lastStage) { lastStage = inStage; renderStage(); if (inStage) later(syncTabMarker, 420); }
             const light = document.body.classList.contains('light-theme');
             if (light !== lastTheme) { lastTheme = light; syncGlow(); if (state.panelOpen && state.tab === '控制') renderBody(); }
         });

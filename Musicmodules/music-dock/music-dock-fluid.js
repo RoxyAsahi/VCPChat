@@ -116,6 +116,10 @@
             // hover 平时藏起来，指针在条上时才浮出；drop 平时藏起来，切歌时从上方落进条里再化开。
             ringMode: 'fixed',
             show: { v: 1, t: 1 },
+            // 播放头平时缩成一颗小珠子贴在进度线上；指针移到它身上或拖动时才放大成完整的环。
+            size: { v: 0.55, t: 0.55 },
+            playing: true,
+            ringFocus: false,
             drop: { p: 1 },
             enabled: true
         };
@@ -202,14 +206,16 @@
             // 紧凑档播放条贴满宽度，右下角被它占着：小环改停在播放条右端上方。
             if (vw < 640) return { x: geo.x + geo.w - 26, y: geo.y - 34 };
             const vh = win.innerHeight || 0;
-            const cx = vw - 32 - 24;
-            const cy = vh - 32 - 24;
+            // 和抽屉右下角凹口的圆心对齐（music-dock.js 的 NOTCH_D）。
+            const cx = vw - 40;
+            const cy = vh - 40;
             const layerTop = vh - geo.bottom - LAYER_H;
             return { x: cx - geo.left, y: cy - layerTop };
         };
         const progressX = () => geo.x + geo.w * (0.06 + Math.min(1, Math.max(0, s.progress)) * 0.88);
         const dockPoint = () => {
-            if (s.ringMode === 'playhead') return { x: progressX(), y: geo.y - 2 + (1 - s.solidity.t) * 16 };
+            // 暂停或让位时沉进条里（配合 showTarget 一起淡掉），播放时骑在条的上沿。
+            if (s.ringMode === 'playhead') return { x: progressX(), y: geo.y + 2 + (playheadUp() ? 0 : 14) };
             if (s.ringMode === 'drop') {
                 const p = s.drop.p;
                 const fall = p < 0.5 ? 1 - Math.pow(p / 0.5, 2) : 0;
@@ -217,10 +223,13 @@
             }
             return { x: geo.ringX, y: geo.y - 2 };
         };
+        // 播放头只在真正播放（或正被拖动）时露出；快捷按钮升起时让开，不和它抢条上方那块位置。
+        const playheadUp = () => s.ring.focusDrag || (s.playing && s.quick.t < 0.5);
+        const sizeTarget = () => (!s.ring.docked || s.ringMode !== 'playhead' || s.ringFocus || s.ring.focusDrag ? 1 : 0.55);
         // 小环该不该露出来：面板开着时它是关闭按钮，一直露着。
         const showTarget = () => {
             if (!s.ring.docked) return 1;
-            if (s.ringMode === 'playhead') return s.solidity.t > 0.5 ? 1 : 0;
+            if (s.ringMode === 'playhead') return playheadUp() ? 1 : 0;
             if (s.ringMode === 'hover') return s.ringHover ? 1 : 0;
             if (s.ringMode === 'drop') return s.drop.p < 1 ? (s.drop.p < 0.62 ? 1 : 0) : 0;
             return 1;
@@ -249,6 +258,7 @@
                 || s.split.p < 1
                 || s.drop.p < 1
                 || Math.abs(s.show.v - s.show.t) > 0.01
+                || Math.abs(s.size.v - sizeTarget()) > 0.01
                 || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
         };
 
@@ -288,20 +298,22 @@
             const ry = s.ring.y;
             const near = Math.hypot(rx - s.ring.tx, ry - s.ring.ty) < 120 && s.ring.docked;
             const sh = s.show.v;
+            const sz = s.size.v;
             // 凹口跟着小环：环藏起来时凹口愈合；环落在条上方很远时也不开口。
             const touch = Math.max(0, Math.min(1, 1 - (geo.y - 2 - ry - 20) / 40));
-            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R * sh * touch : 0);
+            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R * sh * touch * (0.45 + 0.55 * sz) : 0);
             setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 * sh : 0);
             if (ring) {
                 const vh = win.innerHeight || 0;
                 const layerTop = vh - geo.bottom - LAYER_H;
                 const left = geo.left + rx - RING_R;
                 const top = layerTop + ry - RING_R;
-                const shText = sh.toFixed(3);
+                const shText = `${sh.toFixed(3)}:${sz.toFixed(3)}`;
                 if (force || ring.__mdfLeft !== left || ring.__mdfTop !== top || ring.__mdfShow !== shText) {
                     ring.__mdfLeft = left; ring.__mdfTop = top; ring.__mdfShow = shText;
-                    ring.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0) scale(${(0.4 + 0.6 * sh).toFixed(3)})`;
-                    ring.style.opacity = shText;
+                    ring.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0) scale(${((0.4 + 0.6 * sh) * sz).toFixed(3)})`;
+                    ring.style.opacity = sh.toFixed(3);
+                    ring.classList.toggle('md-hdl-bead', sz < 0.8);
                     ring.style.pointerEvents = sh > 0.5 ? '' : 'none';
                     onRingMove?.({ left, top, docked: s.ring.docked, near });
                 }
@@ -323,11 +335,13 @@
             if (s.drop.p < 1) { s.drop.p = instant ? 1 : Math.min(1, s.drop.p + dt / 1.1); retargetRing(); }
             s.show.t = showTarget();
             s.show.v += (s.show.t - s.show.v) * (instant ? 1 : 1 - Math.pow(0.004, dt));
+            s.size.t = sizeTarget();
+            s.size.v += (s.size.t - s.size.v) * (instant ? 1 : 1 - Math.pow(0.002, dt));
             s.ring.x += (s.ring.tx - s.ring.x) * k * 0.8;
             s.ring.y += (s.ring.ty - s.ring.y) * k * 0.8;
             if (instant || !moving()) {
                 s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t; s.quick.v = s.quick.t;
-                s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; s.show.v = s.show.t;
+                s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; s.show.v = s.show.t; s.size.v = s.size.t;
             }
             draw();
             if (s.enabled && moving()) frame = win.requestAnimationFrame(step);
@@ -367,6 +381,7 @@
                     s.quick.x = rect.left - shiftX() - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
                 }
                 s.quick.t = open ? 1 : 0;
+                if (s.ringMode === 'playhead') retargetRing();
                 kick();
             },
             split() { s.split.p = 0; kick(); },
@@ -408,6 +423,14 @@
                 retargetRing(); kick();
             },
             get ringMode() { return s.ringMode; },
+            // 播放状态：暂停时播放头沉进条里。
+            setPlaying(on) { if (s.playing === Boolean(on)) return; s.playing = Boolean(on); retargetRing(); kick(); },
+            // 指针在小环上 / 正拖着它：放大成完整的环（播放头模式下平时是小珠子）。
+            setRingFocus(on, dragging = false) {
+                const f = Boolean(on); const d = Boolean(dragging);
+                if (s.ringFocus === f && s.ring.focusDrag === d) return;
+                s.ringFocus = f; s.ring.focusDrag = d; retargetRing(); kick();
+            },
             setRingHover(on) { if (s.ringHover === Boolean(on)) return; s.ringHover = Boolean(on); kick(); },
             dropRing() { if (s.ringMode !== 'drop' || !s.ring.docked) return; s.drop.p = 0; retargetRing(); s.ring.y = s.ring.ty; kick(); },
             debug: () => ({ progress: s.progress, solidity: s.solidity.v, vol: s.vol.v, ring: { ...s.ring }, geo: { ...geo }, animating: Boolean(frame) }),

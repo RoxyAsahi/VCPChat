@@ -1439,19 +1439,14 @@ body.music-reduce-motion #music-dock-root .md-dock,
 body.music-reduce-motion .md-fluid,
 body.music-reduce-motion .md-mist { transition: none; }
 
-/* ───────── 抽屉一直到窗口底，右下角给小环让出一个凹口 ─────────
- * 小环打开面板时停在右下角（中心距右、下各 56px）；底色在那里挖一个边缘柔和的圆，像液体被顶开。 */
+/* ───────── 抽屉一直到窗口底，右下角切出凹口给小环 ─────────
+ * 凹口的形状由 music-dock.js 用 clip-path 切（L 形缺口，内角是和小环同心的圆弧，外角倒圆），
+ * 边是清楚的，不是模糊挖洞。弧边一道细亮线 + 很淡的色光代替投影；小环和抽屉之间一截细颈。 */
 .md-pnl { bottom: 20px; }
-.md-pnl .md-dockrow { padding-right: 60px; }
+.md-pnl .md-dockrow { padding-right: 76px; }
 .md-drbg {
-  -webkit-mask-image:
-    linear-gradient(to left, #000 50%, transparent 100%),
-    radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, #000 47px);
-  mask-image:
-    linear-gradient(to left, #000 50%, transparent 100%),
-    radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, #000 47px);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
+  -webkit-mask-image: linear-gradient(to left, #000 50%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 50%, transparent 100%);
 }
 @media (max-width: 639.98px) {
   .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
@@ -1461,15 +1456,167 @@ body.music-reduce-motion .md-mist { transition: none; }
     mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
   }
 }
-/* 凹口边上一圈很淡的亮边，让「被顶开」的形状看得出来 */
-.md-drbg::after {
-  content: "";
-  position: absolute;
+.md-notch {
+  position: fixed;
   right: 0;
   bottom: 0;
-  width: 112px;
-  height: 112px;
-  background: radial-gradient(circle at calc(100% - 56px) calc(100% - 56px), transparent 0 31px, rgba(var(--md-tp-rgb), .14) 35px, transparent 47px);
+  z-index: calc(var(--mt-z-dock, 60) + 1);
+  pointer-events: none;
+  overflow: visible;
+  opacity: 0;
+  transition: opacity .2s var(--mt-ease, ease);
+}
+.md-notch.md-open { opacity: 1; transition: opacity .36s var(--mt-ease, ease) .18s; }
+.md-notch-rim { fill: none; stroke: rgba(var(--md-tp-rgb), .28); stroke-width: 1; }
+.md-notch-glow { fill: none; stroke: var(--md-fl-tint, var(--md-accent)); stroke-width: 3; opacity: .45; }
+.md-notch-s0 { stop-color: var(--md-glass); stop-opacity: .9; }
+.md-notch-s1 { stop-color: var(--md-fl-ring, #fff); stop-opacity: .95; }
+/* 细颈在小环落定后才从环上拉出来 */
+.md-notch-neck { transform-box: view-box; transform-origin: 66.67% 66.67%; transform: scale(.5); opacity: 0; transition: transform .2s var(--mt-ease, ease), opacity .15s; }
+.md-notch.md-open .md-notch-neck { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.3, 1.4, .5, 1) .32s, opacity .25s .32s; }
+body.music-reduce-motion .md-notch-neck { transition: none; }
+@media (max-width: 639.98px) { .md-notch { display: none; } }
+/* 节能档（没有流体层）的把手也停在凹口圆心上 */
+#music-dock-root.md-fl-low .md-hdl { right: 16px; bottom: 16px; }
+
+/* ───────── 播放头：平时是贴在进度线上的小珠子，指针移上去放大并显示时间 ───────── */
+#music-dock-root.md-fl-on .md-hdl.md-hdl-bead:not(.md-open) button { box-shadow: 0 0 10px 2px rgba(255, 255, 255, .55), inset 0 0 6px rgba(255, 255, 255, .7); }
+.md-hdl-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font: 600 12px/16px var(--md-font-num, inherit);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--md-t1);
+  background: var(--md-glass);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 0 0 1px rgba(var(--md-tp-rgb), .1), 0 0 18px color-mix(in srgb, var(--md-fl-tint, var(--md-accent)) 35%, transparent);
+  transform: translate(-50%, 4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s, transform .2s var(--mt-ease, ease);
+}
+.md-hdl.md-tip .md-hdl-tip { opacity: 1; transform: translate(-50%, 0); }
+.md-hdl.md-open .md-hdl-tip { display: none; }
+
+/* ───────── 提示：从播放条分出来的一滴 ─────────
+ * 出现：从播放条的位置鼓出一滴，拉着一截细颈升上来再收圆；
+ * 停留：实心底色慢慢化成雾（--mtst-ms 是剩下的停留时间），只剩毛玻璃，文字始终清楚；悬停时重新凝固；
+ * 消失：化开、轻微放大后散掉。降低动态时只做透明度。 */
+.mtst {
+  background: transparent;
+  transform-origin: 50% 140%;
+  transform: translateY(40px) scale(.22, .5);
+  filter: blur(6px);
+  transition: opacity 220ms var(--mt-ease, ease-out), transform 420ms cubic-bezier(.32, .72, 0, 1), filter 420ms ease-out;
+}
+.mtst.mtst-in { transform: none; filter: none; animation: mtst-bud 560ms cubic-bezier(.32, .72, 0, 1); }
+@keyframes mtst-bud {
+  0% { transform: translateY(40px) scale(.22, .5); filter: blur(6px); }
+  55% { transform: translateY(-3px) scale(1.03, .96); filter: blur(0); }
+  100% { transform: none; }
+}
+/* 实心底色单独一层，蒸发就是这一层慢慢变淡 */
+.mtst::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--md-fl-tint, #d9773f) 26%, transparent), transparent 62%),
+    var(--md-capsule-bg-open, var(--md-capsule-bg));
+  pointer-events: none;
+  transition: opacity 260ms ease-out;
+}
+.mtst.mtst-evap::after { animation: mtst-mist var(--mtst-ms, 4000ms) linear forwards; }
+@keyframes mtst-mist { 0% { opacity: 1; } 100% { opacity: .28; } }
+/* 细颈：出现的那一下从下沿往播放条方向拉出一截，随即收回 */
+.mtst::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  width: 22px;
+  height: 30px;
+  margin-left: -11px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--md-fl-tint, #d9773f) 40%, var(--md-capsule-bg-open, var(--md-capsule-bg)));
+  opacity: 0;
   pointer-events: none;
 }
-@media (max-width: 639.98px) { .md-drbg::after { display: none; } }
+.mtst.mtst-in::before { animation: mtst-neck 520ms ease-out; }
+@keyframes mtst-neck { 0% { opacity: .9; transform: scaleY(1.4); } 100% { opacity: 0; transform: scaleY(.2); } }
+.mtst > *:not(.mtst-bar) { position: relative; z-index: 1; }
+.mtst > .mtst-bar { z-index: 1; }
+.mtst.mtst-out { opacity: 0; transform: translateY(-6px) scale(1.06); filter: blur(10px); transition-duration: 300ms; }
+body.music-reduce-motion .mtst,
+body.music-reduce-motion .mtst.mtst-in,
+body.music-reduce-motion .mtst.mtst-out { animation: none; transform: none; filter: none; }
+body.music-reduce-motion .mtst::before { display: none; }
+
+/* ───────── 通用流体选中标记（music-fluid-marker.js） ───────── */
+.mfm { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 0; transition: opacity .2s; }
+.mfm-body { fill: var(--mfm-color, var(--md-fl-tint, currentColor)); opacity: .92; }
+
+/* 舞台页签用流体标记代替原来的墨色下划线；离选中越远越淡越糊，悬停、键盘焦点时清楚。
+ * 只在底栏接管时（body.music-dock-fluid-tabs）生效；减少动态时不糊，只淡。 */
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button.is-active::after { transform: scaleX(0); }
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button { z-index: 1; transition: color .2s, opacity .3s, filter .3s; }
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="2"] { opacity: .86; }
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="3"] { opacity: .74; filter: blur(.2px); }
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="4"] { opacity: .64; filter: blur(.35px); }
+body.music-dock-fluid-tabs .music-stage-mode-switcher:hover .music-stage-mode-button,
+body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button:focus-visible { opacity: 1; filter: none; }
+body.music-reduce-motion.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button { filter: none; }
+
+/* ───────── 搜索框从播放条鼓出来，关掉时并回去 ─────────
+ * 播放条留在原处（不再隐藏），遮罩只盖播放条以上；框从播放条上沿的中间鼓出一滴、拉一截细颈再展开。 */
+body.music-dock-cmd-open .md-dock,
+body.music-dock-cmd-open .md-fluid,
+body.music-dock-cmd-open .md-mist { opacity: 1; pointer-events: auto; }
+body.music-dock-cmd-open .md-fluid, body.music-dock-cmd-open .md-mist { pointer-events: none; }
+.md-cmd-scrim { bottom: calc(var(--md-cmd-bottom, 110px) - 14px); -webkit-mask-image: linear-gradient(to top, transparent 0, #000 60px); mask-image: linear-gradient(to top, transparent 0, #000 60px); }
+.md-cmd-box {
+  clip-path: none;
+  transform-origin: 50% calc(100% + 30px);
+  transform: translateY(34px) scale(.18, .3);
+  filter: blur(8px);
+  opacity: 0;
+  border-radius: 22px;
+  transition: transform .42s cubic-bezier(.32, .72, 0, 1), filter .32s ease-out, opacity .2s ease-out, border-radius .42s cubic-bezier(.32, .72, 0, 1);
+}
+.md-cmd.md-open .md-cmd-box { clip-path: none; transform: none; filter: none; opacity: 1; border-radius: 2px; }
+.md-cmd-box::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -24px;
+  width: 26px;
+  height: 28px;
+  margin-left: -13px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--md-fl-tint, #d9773f) 45%, var(--md-glass));
+  opacity: 0;
+  pointer-events: none;
+}
+.md-cmd.md-open .md-cmd-box::after { animation: mtst-neck 480ms ease-out; }
+.md-cmd-box { overflow: visible; }
+.md-cmd-body { overflow: hidden; border-radius: inherit; }
+#music-dock-root .md-cmd-row[data-md-dist="2"] { opacity: .86; }
+#music-dock-root .md-cmd-row[data-md-dist="3"] { opacity: .72; }
+#music-dock-root .md-cmd-row[data-md-dist="4"] { opacity: .6; filter: blur(.35px); }
+#music-dock-root .md-cmd-row.md-act,
+#music-dock-root .md-cmd-row:hover { opacity: 1; filter: none; }
+body.music-reduce-motion .md-cmd-box { transform: none; filter: none; transition: opacity .12s; }
+body.music-reduce-motion .md-cmd-box::after { display: none; }
+
+/* 停在凹口里时光收紧，只留一圈贴着环的亮，不在角上铺一团雾 */
+#music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 0 8px 1px rgba(255, 255, 255, .5), inset 0 0 6px rgba(255, 255, 255, .6); }
+#music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .6), inset 0 0 6px rgba(255, 255, 255, .6); }
+body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { color: var(--md-t1); }
+body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open .md-sw .md-i { filter: none; }
