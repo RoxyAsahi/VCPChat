@@ -204,11 +204,12 @@
     };
 
     const setupStageSkin = () => {
-        const card = document.getElementById('music-stage-settings-card');
-        if (card) {
-            const scan = () => card.querySelectorAll('select:not([data-segmented])').forEach(enhanceSelect);
+        // 设置各项所在的正文节点会被底栏整块搬进控制面板，所以盯的是这个节点本身，不是它原来的外壳。
+        const settingsBody = document.querySelector('#music-stage-settings-card .music-stage-settings-body, .music-stage-settings-body');
+        if (settingsBody) {
+            const scan = () => settingsBody.querySelectorAll('select:not([data-segmented])').forEach(enhanceSelect);
             // 舞台切换模式时会重建「模式调制」里的控件，跟着重新替换。
-            new MutationObserver(scan).observe(card, { childList: true, subtree: true });
+            new MutationObserver(scan).observe(settingsBody, { childList: true, subtree: true });
             scan();
         }
 

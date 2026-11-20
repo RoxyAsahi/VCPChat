@@ -779,17 +779,6 @@ body.music-dock-on .music-player .controls {
     color: var(--ar-ink);
 }
 
-/* 底栏的「音效设置」会把整块抽屉搬进它的面板：那里不需要再折叠一层 */
-.md-sheet-body .acoustic-drawer-toggle {
-    display: none;
-}
-
-.md-sheet-body .acoustic-drawer-body {
-    display: block;
-    padding: 0 4px 8px;
-    animation: none;
-}
-
 /* 抽屉被搬走时，列表视图里中栏下半部分不留空 */
 body.music-dock-sheet-open .main-content #visualizer {
     display: block;

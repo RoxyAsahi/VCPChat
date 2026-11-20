@@ -222,279 +222,23 @@ body.music-dock-on .music-stage .music-stage-chrome {
     display: none;
 }
 
-/* ---------- 舞台设置：入口挪到右上，不和右下角的面板把手抢位置 ---------- */
-.music-stage-settings,
-.music-stage-chrome {
-    /* 设置抽屉和旧播放条里原本取主题强调色的地方，统一换成墨色 */
-    --stage-accent: var(--ms-ink);
-    --stage-on-accent: var(--ms-glass-strong);
-}
-
-.music-stage-settings {
-    --stage-control-bg: var(--ms-glass-strong);
-    --stage-control-surface: transparent;
-    --stage-control-surface-raised: var(--ms-glass-edge);
-    --stage-control-text: var(--ms-ink);
-    --stage-control-muted: var(--ms-muted);
-}
-
-.music-stage-settings-toggle,
-.music-stage-settings-toggle:hover,
-.music-stage-settings-toggle:focus-visible {
-    top: 48px;
-    right: 32px;
-    bottom: auto;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-    height: 36px;
-    gap: 8px;
-    padding: 0 12px;
-    border: 1px solid var(--ms-glass-edge);
-    border-radius: 2px;
-    color: var(--ms-ink);
-    background: var(--ms-glass);
-    box-shadow: none;
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    opacity: 1;
-    transform: none;
-}
-
-.music-stage-settings-toggle:hover {
-    border-color: var(--ms-line);
-}
-
-.music-stage-settings-toggle:focus-visible {
-    outline: 2px solid var(--ms-ink);
-    outline-offset: 2px;
-}
-
-.music-stage-settings-toggle .music-stage-settings-glyph,
-.music-stage-settings-toggle:hover .music-stage-settings-glyph,
-.music-stage-settings-toggle:focus-visible .music-stage-settings-glyph {
-    width: auto;
-    height: auto;
-    background: transparent;
-    color: var(--ms-ink);
-    font-size: 11px;
-    transform: none;
-}
-
-.music-stage-settings-toggle .music-stage-settings-toggle-copy,
-.music-stage-settings-toggle:hover .music-stage-settings-toggle-copy,
-.music-stage-settings-toggle:focus-visible .music-stage-settings-toggle-copy {
-    width: auto;
-    flex: 0 0 auto;
-    flex-direction: row;
-    align-items: baseline;
-    gap: 8px;
-    opacity: 1;
-    transform: none;
-}
-
-.music-stage-settings-toggle-kicker {
+/* ---------- 舞台设置的各项（演出阵列、模式调制、全局输出） ----------
+ * 这些节点由底栏搬进控制面板的「舞台调制」子页（见文件末尾 .md-sp-sc 一节），原来的右上角入口和抽屉外壳已经不用，样式也删了。
+ * 写法照首页档案目录：左侧大号细体编号做分区，选项是带方块的文字，不做卡片和格子。 */
+.music-stage-settings-status {
     color: var(--ms-muted);
     font-family: var(--mt-font-label);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: .14em;
-}
-
-.music-stage-settings-toggle-label {
-    color: var(--ms-ink);
-    font-size: 12px;
-}
-
-.music-stage-settings-toggle-pulse {
-    display: none;
-}
-
-/* ---------- 舞台设置：贴右边的抽屉，照首页档案目录的写法 ----------
- * 从标题栏下沿一直到底栏上沿，贴着窗口右边；没有卡片边框和圆角。
- * 底色从右边缘向左渐隐，内容像目录一样浮在画面上，左侧大号细体编号做分区。
- * 标题压成一行，「恢复默认」和关闭都放进这一行，不再有单独的底栏。 */
-.music-stage-settings-card {
-    --sd-gutter: 52px;
-    --sd-fade: 72px;
-    top: 40px;
-    right: 0;
-    bottom: var(--music-dock-safe-bottom, 96px);
-    width: min(calc(400px + var(--sd-fade)), 100vw);
-    padding-left: var(--sd-fade);
-    box-sizing: border-box;
-    border: 0;
-    border-radius: 0;
-    color: var(--ms-ink);
-    color-scheme: inherit;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    animation: music-skin-drawer-in 300ms cubic-bezier(.22, 1, .36, 1);
-}
-
-/* 舞台样式表在 3D 模式和浅色舞台下会用更具体的选择器给卡片补底色、模糊和阴影，这里同等具体地清掉 */
-.music-stage .music-stage-settings .music-stage-settings-card {
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-}
-
-/* 底色单独一层，左边渐隐，没有硬边（模糊和遮罩叠在一起会露出硬边，所以不加模糊） */
-.music-stage-settings-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    top: 0;
-    right: 0;
-    z-index: -1;
-    display: block;
-    width: auto;
-    height: auto;
-    border-radius: 0;
-    background: linear-gradient(to left, var(--ms-glass-strong) 0, var(--ms-glass-strong) calc(100% - var(--sd-fade)), transparent 100%);
-    filter: none;
-}
-
-@keyframes music-skin-drawer-in {
-    from { opacity: 0; transform: translateX(24px); }
-    to { opacity: 1; transform: none; }
-}
-
-/* 打开设置时不给舞台蒙层，画面保持可见，方便边调边看 */
-.music-stage-settings.is-open::before {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-}
-
-.music-stage-settings-card option {
-    color: var(--ms-ink);
-    background-color: var(--ms-glass-strong);
-}
-
-/* 标题：一行，44px 高 */
-.music-stage-settings-header {
-    min-height: 0;
-    height: 44px;
-    padding: 0 12px 0 var(--sd-gutter);
-    border-bottom: 1px solid var(--ms-line);
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-}
-
-.music-stage-settings-heading {
-    gap: 0;
-}
-
-.music-stage-settings-emblem,
-.music-stage-settings-kicker,
-.music-stage-settings-header p {
-    display: none;
-}
-
-.music-stage-settings-header h2 {
-    color: var(--ms-ink);
-    font-family: var(--mt-font-archive);
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: .12em;
-}
-
-.music-stage-settings-close {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 2px;
-    color: var(--ms-muted);
-    background: transparent;
-}
-
-.music-stage-settings-close svg {
-    width: 15px;
-    height: 15px;
-}
-
-.music-stage-settings-close:hover,
-.music-stage-settings-close:focus-visible {
-    color: var(--ms-ink);
-    border-color: transparent;
-    background: var(--ms-glass-edge);
-    transform: none;
-}
-
-.music-stage-settings-close:focus-visible {
-    outline: 2px solid var(--ms-ink);
-    outline-offset: -2px;
-}
-
-/* 原来的底栏挪进标题行，排在关闭按钮左边；「按 Esc 关闭」不再单独占一行 */
-.music-stage-settings-footer {
-    position: absolute;
-    top: 0;
-    right: 44px;
-    height: 44px;
-    min-height: 0;
-    gap: 10px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
 }
 
 .music-stage-settings-footnote {
     display: none;
 }
 
-.music-stage-settings-status {
-    order: -1;
-    color: var(--ms-muted);
-    font-family: var(--mt-font-label);
-    font-size: 11px;
-    letter-spacing: .14em;
-}
-
-.music-stage-settings-reset,
-.music-stage-settings-reset:hover,
-.music-stage-settings-reset:focus-visible {
-    gap: 5px;
-    padding: 4px 6px;
-    border: 0;
-    border-radius: 2px;
-    color: var(--ms-muted);
-    background: transparent;
-    font-size: 12px;
-}
-
-.music-stage-settings-reset:hover,
-.music-stage-settings-reset:focus-visible {
-    color: var(--ms-ink);
-    background: var(--ms-glass-edge);
-}
-
-.music-stage-settings-reset:focus-visible {
-    outline: 2px solid var(--ms-ink);
-    outline-offset: -2px;
-}
-
-/* 正文：分区之间不画线，靠左侧编号和留白分开 */
-.music-stage-settings-body {
-    padding: 4px 24px 24px 0;
-    scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 28px), transparent 100%);
-}
-
-.music-stage-settings-body::-webkit-scrollbar {
-    display: none;
-}
-
 .music-stage-settings-section {
     position: relative;
-    padding: 20px 0 6px var(--sd-gutter);
+    padding: 20px 0 6px var(--sd-gutter, 34px);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -510,7 +254,7 @@ body.music-dock-on .music-stage .music-stage-chrome {
     position: absolute;
     left: 0;
     top: 16px;
-    width: calc(var(--sd-gutter) - 14px);
+    width: calc(var(--sd-gutter, 34px) - 14px);
     padding: 0;
     color: var(--ms-line);
     font: 300 26px/1 var(--mt-font-archive);
@@ -712,8 +456,7 @@ body.music-dock-on .music-stage .music-stage-chrome {
 }
 
 /* 选项多的下拉框（比如舞台主题）放在名字右边，不再单独占一行 */
-.music-stage-tuning-row select,
-.music-stage-settings-card select {
+.music-stage-tuning-row select {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
@@ -789,10 +532,6 @@ body.music-dock-on .music-stage .music-stage-chrome {
 }
 
 /* 降低动态：读 music-motion.js 挂的 body 类 */
-body.music-reduce-motion .music-stage-settings-card {
-    animation: none;
-}
-
 body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button::after {
     transition: none;
 }
@@ -818,21 +557,6 @@ body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button::af
         top: 96px;
         left: 16px;
         max-width: calc(100vw - 32px);
-    }
-
-    .music-stage-settings-toggle,
-    .music-stage-settings-toggle:hover,
-    .music-stage-settings-toggle:focus-visible {
-        right: 16px;
-    }
-
-    .music-stage-settings-toggle .music-stage-settings-toggle-kicker {
-        display: none;
-    }
-
-    .music-stage-settings-card {
-        --sd-fade: 40px;
-        --sd-gutter: 44px;
     }
 }
 
@@ -898,19 +622,19 @@ body.music-stage-active #custom-title-bar button {
 }
 
 #music-dock-root .md-sp-sc .music-stage-settings-section {
-    padding: 16px 0 4px var(--sd-gutter);
+    padding: 16px 0 4px var(--sd-gutter, 34px);
 }
 
 #music-dock-root .md-sp-sc .music-stage-settings-section-index {
     top: 13px;
-    width: calc(var(--sd-gutter) - 10px);
+    width: calc(var(--sd-gutter, 34px) - 10px);
     font-size: 22px;
     color: var(--md-t3);
 }
 
 /* 当前舞台：一行一个名字，选中的前面一个实心小方块，后面一条细线拉到行尾，和首页目录的选中一样 */
 #music-dock-root .md-sp-sc .md-sp-sec {
-    padding: 12px 0 6px var(--sd-gutter);
+    padding: 12px 0 6px var(--sd-gutter, 34px);
     border-bottom: 0;
 }
 
@@ -1004,7 +728,7 @@ body.music-stage-active #custom-title-bar button {
 #music-dock-root .md-sp-sc .music-stage-settings-footer {
     height: auto;
     justify-content: flex-start;
-    padding-left: var(--sd-gutter) !important;
+    padding-left: var(--sd-gutter, 34px) !important;
     border-top: 0;
 }
 
