@@ -311,7 +311,7 @@
         iso: { position: [78, 62, 128], target: [6, 20, 46], fov: 38, orbit: 22 },
         street: { from: [-34, 2.4, 70.5], to: [50, 5.5, 70.5], target: [10, 13, 60], fov: 62 },
         roof: { from: [-90, 56, 40], to: [60, 50, -40], fov: 55 },
-        screen: { position: [10, 22, 80], target: [10, 24, 60], fov: 40 }
+        screen: { position: [10, 22, 80], target: [10, 22.4, 60], fov: 43 }
     });
 
     const build = (seed = 'kowloon') => {
