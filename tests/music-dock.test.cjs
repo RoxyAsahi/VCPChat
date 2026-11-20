@@ -756,3 +756,42 @@ test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, t
         assert.equal(doc.activeElement, app.volumeSlider);
     } finally { dock.destroy(); }
 });
+
+test('the bar keeps one "more" button on the right; the quick row above it holds mode, queue, stage, effects and volume', () => {
+    const { window, doc, dock } = setup();
+    try {
+        const bar = doc.querySelector('.md-cap');
+        const more = doc.querySelector('[data-md="more"]');
+        const quick = doc.querySelector('.md-quick');
+        assert.deepEqual([...bar.querySelectorAll('.md-slots button')].map((b) => b.dataset.md), ['more'], 'no duplicate buttons left on the bar');
+        assert.deepEqual([...quick.querySelectorAll('button')].map((b) => b.dataset.md || b.dataset.q), ['mode', 'queue', 'stage', 'fx', 'vol']);
+        assert.equal(more.getAttribute('aria-expanded'), 'false');
+
+        more.click();
+        assert.ok(quick.classList.contains('md-show'));
+        assert.equal(more.getAttribute('aria-expanded'), 'true');
+        // 点过算钉住：指针离开底栏也不收
+        doc.querySelector('.md-dock-in').dispatchEvent(new window.Event('pointerleave'));
+        assert.ok(quick.classList.contains('md-show'), 'pinned by the click');
+        quick.querySelector('[data-md="mode"]').click();
+        assert.ok(quick.classList.contains('md-show'), 'changing the mode keeps the row open');
+        more.click();
+        assert.ok(!quick.classList.contains('md-show'), 'a second click closes it');
+
+        more.click();
+        quick.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.ok(!quick.classList.contains('md-show'), 'Esc closes it');
+
+        more.click();
+        doc.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+        assert.ok(!quick.classList.contains('md-show'), 'a press elsewhere closes it');
+
+        more.click();
+        quick.querySelector('[data-q="queue"]').click();
+        assert.ok(!quick.classList.contains('md-show'), 'opening the queue puts the row away');
+        assert.ok(doc.querySelector('.md-pnl').classList.contains('md-open'));
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});

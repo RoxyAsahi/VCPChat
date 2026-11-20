@@ -170,7 +170,7 @@
             geo.x = PAD_X;
             geo.y = LAYER_H - geo.h - below;
             const playBtn = bar.querySelector('[data-md="play"]');
-            const volBtn = bar.querySelector('[data-md="vol"]');
+            const volBtn = host.querySelector('[data-md="vol"]');
             const pr = playBtn?.getBoundingClientRect();
             const vr = volBtn?.getBoundingClientRect();
             geo.playX = pr && pr.width ? pr.left - sx + pr.width / 2 - geo.left : geo.x + geo.h / 2;
@@ -283,9 +283,12 @@
             setAttr(solidR, 'opacity', 0.15 + 0.85 * sol);
             setAttr(vaporG, 'opacity', 0.62 + 0.25 * (1 - sol));
             setAttr(bumpC, 'cx', s.bump.x); setAttr(bumpC, 'cy', geo.y + 6); setAttr(bumpC, 'r', Math.max(0, s.bump.r));
-            const vy = geo.y + 6 - s.vol.v * VOL_RISE;
+            // 音量键在快捷行里时，水滴从快捷行的顶上接着往上长（中间穿过快捷行，是同一团液体）。
+            const volBase = s.quick.t > 0.5 && s.quick.w > 0 ? Math.min(geo.y, s.quick.y) : geo.y;
+            const vy = volBase + 6 - s.vol.v * VOL_RISE;
+            setAttr(vapCol, 'y', volBase - VOL_RISE - 12); setAttr(volSolid, 'cy', volBase - VOL_RISE / 2 + 6);
             setAttr(volB, 'x', geo.volX - 24); setAttr(volB, 'width', 48); setAttr(volB, 'rx', 24);
-            setAttr(volB, 'y', vy); setAttr(volB, 'height', Math.max(0, geo.h - 12 + s.vol.v * VOL_RISE));
+            setAttr(volB, 'y', vy); setAttr(volB, 'height', s.vol.v > 0.01 || volBase === geo.y ? Math.max(0, geo.y + geo.h - 6 - vy) : 0);
             setAttr(volSolid, 'opacity', s.vol.v);
             // 水滴里的白色音量条跟着水滴长：水滴升到七成以后才开始出现，收起时它先消失。
             const grow = Math.max(0, Math.min(1, (s.vol.v - 0.7) / 0.28));
