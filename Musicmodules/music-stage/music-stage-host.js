@@ -264,6 +264,19 @@
                 { key: 'transitionLock', label: '转场锁定', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
                 { key: 'avoidRepeat', label: '避免重复', type: 'toggle' }
             ],
+            kowloon: [
+                { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
+                { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
+                { key: 'lightning', label: '副歌闪电', type: 'toggle' },
+                { key: 'reflections', label: '积水倒影（节能档关闭）', type: 'toggle' },
+                { key: 'fog', label: '雾气浓度', type: 'range', min: 0.5, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'postProcess', label: '光学后期（节能档关闭）', type: 'toggle' },
+                { key: 'glow', label: '霓虹辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '胶片颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'vignette', label: '镜头暗角', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
             tunnel: [
                 { key: 'cameraSpeed', label: '穿行速度', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'motionAmount', label: '空间运动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
@@ -348,7 +361,7 @@
             state.stats.modeCreates += 1;
             localStorage.setItem('musicStageMode', state.modeId);
             // The 3D modes paint every pixel themselves; see .stage-scene-3d.
-            const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel';
+            const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
             root.classList.toggle('stage-scene-3d', scene3d);
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 

@@ -6,7 +6,8 @@
         sonnet: global.MusicStageSonnetManager,
         diorama: global.MusicStageDioramaManager,
         fume: global.MusicStageFumeManager,
-        tunnel: global.MusicStageTunnelManager
+        tunnel: global.MusicStageTunnelManager,
+        kowloon: global.MusicStageKowloonManager
     };
 
     const definitions = [
@@ -14,7 +15,8 @@
         { id: 'sonnet', label: '商籁', manager: managers.sonnet },
         { id: 'diorama', label: '镜台', manager: managers.diorama },
         { id: 'fume', label: '浮名', manager: managers.fume },
-        { id: 'tunnel', label: '隧图', manager: managers.tunnel }
+        { id: 'tunnel', label: '隧图', manager: managers.tunnel },
+        { id: 'kowloon', label: '町景', manager: managers.kowloon }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({
