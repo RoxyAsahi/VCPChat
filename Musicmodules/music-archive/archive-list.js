@@ -288,10 +288,11 @@
             const meta = [t.artist, t.album].filter(Boolean).join(' · ') || '未知歌手';
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             const time = durationOf(t, row.i);
+            const liked = typeof app.isLiked === 'function' && app.isLiked(t);
             return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
                 + '<button type="button" class="go" data-go tabindex="-1" aria-label="播放"><svg viewBox="0 0 12 12" aria-hidden="true"><path class="go-play" d="M3 1.6v8.8L10.2 6z"/><path class="go-pause" d="M2.6 1.8h2.4v8.4H2.6zM7 1.8h2.4v8.4H7z"/></svg></button>'
                 + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
-                + `<span class="rt">${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
+                + `<span class="rt">${liked ? '<s class="lk" title="喜欢" aria-label="喜欢">♥</s>' : ''}${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
 
         /*
@@ -963,6 +964,7 @@
                 + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
                 + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
+                + (typeof app.toggleLike === 'function' ? item('like', indices.every((i) => app.isLiked(tracks()[i])) ? '取消喜欢' : '喜欢') : '')
                 + playlists().map((p, order) => item('pl', '加入「' + (p.name || '未命名歌单') + '」', '', ` data-id="${esc(p.id ?? order)}"`)).join('')
                 + item('pl-new', '新建歌单并加入')
                 + '<hr>'
@@ -983,6 +985,7 @@
                 }
                 closeBatchMenu({ focus: true });
                 if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
+                else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
                 else if (act === 'pl-new') {
                     const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
@@ -1257,6 +1260,8 @@
 
         // 放不出来的歌标灰（播放器在加载失败 / 恢复时发这个事件）
         document.addEventListener('music-track-health', () => { for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k); });
+        // 喜欢 / 取消喜欢：行尾的小心形要重画（行内容是按需生成的，扔掉已画的行让它重建）
+        document.addEventListener('music-like-change', () => { for (const node of state.rendered.values()) node.remove(); state.rendered.clear(); render(); });
 
         const setPlaying = (i) => {
             if (i === state.playing) { schedule(); return; }

@@ -378,6 +378,8 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-row .tx em { font-style: normal; font-size: 11px; letter-spacing: 1px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .2s; }
 .archive-list-row .rt { display: grid; justify-items: end; gap: 6px; font-size: 11px; letter-spacing: 1px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; opacity: .8; }
 .archive-list-row .rt i { font-style: normal; }
+.archive-list-row .rt { grid-auto-flow: column; align-items: center; }
+.archive-list-row .rt .lk { text-decoration: none; font-size: 12px; color: var(--ar-accent-text, var(--ar-accent)); opacity: .9; }
 .archive-list-row:hover .tx em, .archive-list-row:hover .rt { color: var(--ar-ink); }
 /* 选中：说明块同款记号，左边实心小方块 + 一条细线延伸到行尾 */
 .archive-list-row.on .tx b { font-weight: 750; }
