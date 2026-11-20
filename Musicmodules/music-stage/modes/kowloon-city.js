@@ -646,7 +646,7 @@
         const clothMesh = instanced('kowloon-clothes', boxGeo(), propMaterial(3), clothes);
 
         // ---------- 屋顶：加建铁皮屋、水箱、天线林、围栏 ----------
-        const shacks = [], tanks = [], antennas = [], rails = [], dishes = [], crates = [];
+        const shacks = [], tanks = [], antennas = [], rails = [], dishes = [], crates = [], roofBulbs = [];
         layout.lots.forEach(lot => {
             if (lot.height <= 0) return;
             const w = lot.x1 - lot.x0, d = lot.z1 - lot.z0;
@@ -660,6 +660,13 @@
                 const cz = lot.z0 + 0.2 + sd / 2 + rand() * (d - 0.4 - sd);
                 const g = 0.3 + rand() * 0.2;
                 shacks.push({ p: [cx, y + sh / 2, cz], s: [sw, sh, sd], yaw: 0, c: rand() < 0.2 ? [0.25, 0.32, 0.36] : [g, g * 0.95, g * 0.88] });
+                // 门口一盏裸灯泡：屋顶上星星点点的暖光，也给旁边的铁皮和水箱打一点光。
+                if (rand() < 0.3) {
+                    const side = rand() < 0.5 ? 1 : -1;
+                    const warm = rand() < 0.75;
+                    roofBulbs.push({ position: [cx + (rand() - 0.5) * sw * 0.6, y + sh - 0.25, cz + side * (sd / 2 + 0.12)],
+                        color: warm ? [1.0, 0.62, 0.3] : [0.7, 0.9, 1.0], intensity: 0.9, radius: 5 });
+                }
                 // 有的加建再叠一层。
                 if (rand() < 0.2) shacks.push({ p: [cx, y + sh + 1.1, cz], s: [sw * 0.7, 2.2, sd * 0.7], yaw: 0, c: [g * 0.9, g * 0.86, g * 0.8] });
             }
@@ -706,10 +713,28 @@
                 g.translate(x, y, z);
                 parts.push(g);
             };
-            quad(0.06, 1, 0, 0.5, 0, 0);
-            quad(0.06, 1, 0, 0.5, 0, Math.PI / 2);
-            for (let i = 0; i < 6; i += 1) quad(0.6 - i * 0.07, 0.03, 0, 0.62 + i * 0.065, 0, 0);
-            quad(0.5, 0.03, 0, 0.94, 0.1, Math.PI / 2);
+            // 平放的细条：从屋顶往下看也看得见。
+            const flat = (w, d, x, y, z) => {
+                const g = new T.PlaneGeometry(w, d);
+                g.rotateX(-Math.PI / 2);
+                g.translate(x, y, z);
+                parts.push(g);
+            };
+            quad(0.05, 1, 0, 0.5, 0, 0);
+            quad(0.05, 1, 0, 0.5, 0, Math.PI / 2);
+            // 八木天线：顶上一根水平的梁，梁上一排横的振子，前短后长；有的下面再挂一副小的。
+            const yagi = (y, len, span) => {
+                quad(len, 0.012, 0, y, 0, Math.PI / 2);
+                flat(0.02, len, 0, y, 0);
+                for (let i = 0; i < 6; i += 1) {
+                    const z = -len / 2 + 0.05 + i * (len - 0.1) / 5;
+                    const w = span * (1 - i * 0.09);
+                    quad(w, 0.008, 0, y, z, 0);
+                    flat(w, 0.015, 0, y, z);
+                }
+            };
+            yagi(0.96, 1.1, 0.7);
+            yagi(0.8, 0.7, 0.45);
             const merged = mergeGeometries(T, parts);
             parts.forEach(p => p.dispose());
             return merged;
@@ -804,6 +829,24 @@
         beacons.frustumCulled = false;
         group.add(beacons);
 
+        const bulbGeo = new T.BufferGeometry();
+        bulbGeo.setAttribute('position', new T.Float32BufferAttribute(roofBulbs.flatMap(b => b.position), 3));
+        bulbGeo.setAttribute('color', new T.Float32BufferAttribute(roofBulbs.flatMap(b => b.color), 3));
+        disposables.push(bulbGeo);
+        const bulbMat = new T.ShaderMaterial({
+            transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+            vertexShader: `attribute vec3 color; varying vec3 vCol;
+                void main(){ vCol = color; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+                gl_PointSize = clamp(420.0 / -mv.z, 2.0, 12.0); gl_Position = projectionMatrix * mv; }`,
+            fragmentShader: `varying vec3 vCol; void main(){ float d = length(gl_PointCoord - 0.5);
+                float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vCol * (a * a * 2.2 + smoothstep(0.18, 0.0, d) * 2.0), 1.0); }`
+        });
+        disposables.push(bulbMat);
+        const bulbs = new T.Points(bulbGeo, bulbMat);
+        bulbs.name = 'kowloon-roof-bulbs';
+        bulbs.frustumCulled = false;
+        group.add(bulbs);
+
         // 给巷道线程滴水用：空调机的位置。
         const acPositions = acs.map(a => a.p);
 
@@ -836,11 +879,11 @@
                 shellUniforms.uDetail.value = tier?.name === 'energy-saving' ? 0.6 : 1;
             },
             setOptions() {},
-            lights() { return planeState.light ? [planeState.light] : []; },
+            lights() { return planeState.light ? [planeState.light, ...roofBulbs] : roofBulbs; },
             stats() {
                 return {
                     cityMeshes: meshes.length,
-                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length, dishes: dishes.length, crates: crates.length, beacons: beaconPhase.length }
+                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length, dishes: dishes.length, crates: crates.length, beacons: beaconPhase.length, roofBulbs: roofBulbs.length }
                 };
             },
             dispose() {
