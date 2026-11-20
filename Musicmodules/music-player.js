@@ -165,8 +165,19 @@ function setupPlayer(app) {
         app.cancelFailureSkip();
         try { globalThis.MusicToast?.dismiss?.(FAILURE_TOAST_ID); } catch (error) {}
     };
+    // 本次打开窗口里放不出来的歌：列表上标灰并写明原因，下次放成功就去掉（文件可能只是暂时读不到）。
+    app.failedTracks = new Map();
+    const markFailed = (track, detail) => {
+        if (!track) return;
+        const had = app.failedTracks.has(track);
+        if (detail) app.failedTracks.set(track, detail); else app.failedTracks.delete(track);
+        if (had === Boolean(detail) && !detail) return;
+        try { globalThis.document?.dispatchEvent?.(new CustomEvent('music-track-health', { detail: { track, failed: Boolean(detail), reason: detail || '' } })); } catch (error) {}
+    };
+    app.markTrackPlayable = (track) => markFailed(track, '');
     const handleLoadFailure = (track, reason, requestId, wanted) => {
         const name = app.stripAudioExtension(track?.title) || '这首歌';
+        markFailed(track, String(reason).replace(/^加载失败：/, '') || '无法播放');
         app.showPlaybackNotice(reason);
         const detail = String(reason).replace(/^加载失败：/, '');
         if (!wanted) {
@@ -352,6 +363,7 @@ function setupPlayer(app) {
             app.isTrackLoading = false;
             if (outcome === 'ready') {
                 app.failureStreak = 0;
+                if (app.failedTracks.has(track)) markFailed(track, '');
                 app.engineTrackPath = track.path;
                 app.publishCapsuleState();
                 if (app.playIntent) app.playTrack();

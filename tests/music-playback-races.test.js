@@ -598,3 +598,15 @@ test('a play echo that arrives very late, after we already paused again, is not 
     assert.deepEqual(loads(app), ['a'], 'the failed track must not be loaded again by a stale event');
     assert.equal(app.failureStreak, 1);
 });
+
+test('a track that failed is remembered with its reason until it plays again', async t => {
+    const failing = new Set(['a']);
+    const app = failingSetup(failing);
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, false);
+    const track = app.playlist[0];
+    assert.match(app.failedTracks.get(track) || '', /文件不存在/);
+    failing.delete('a');
+    await app.loadTrack(0, false);
+    assert.equal(app.failedTracks.has(track), false, 'playing it again clears the mark');
+});
