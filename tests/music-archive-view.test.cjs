@@ -1337,6 +1337,15 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     f.close();
 });
 
+test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检索、歌词这些入口不藏', () => {
+    const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1280 }); Object.defineProperty(w, 'innerHeight', { value: 800 }); } });
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.ok(hud.classList.contains('mid'));
+    assert.ok(!hud.classList.contains('narrow'));
+    assert.ok(hud.classList.contains('list-open'), '目录默认开着');
+    f.close();
+});
+
 test('跟着在听：选中停在正在放的那首时，播放器换到下一首，选中和歌词跟过去；在看别的歌时不动', async () => {
     const f = fixture({
         setup: (w, app) => {
