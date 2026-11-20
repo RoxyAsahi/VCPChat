@@ -58,3 +58,21 @@ test('reduced motion and the low quality tier skip the liquid entirely', async (
         assert.ok(!menu.classList.contains('mf-budding'));
     }
 });
+
+test('a selection marker flows to its new place: the leading edge arrives first, the trailing edge follows', () => {
+    const { window, doc, run } = setup();
+    const mark = doc.createElement('i');
+    doc.body.appendChild(mark);
+    window.MusicFluid.slide(mark, { left: 0, width: 40 }, { key: 'tabs' });
+    assert.equal(parseFloat(mark.style.left), 0, 'first placement is instant');
+    const fresh = doc.createElement('i'); // 那一排重画了，标记是新元素
+    doc.body.appendChild(fresh);
+    window.MusicFluid.slide(fresh, { left: 200, width: 40 }, { key: 'tabs' });
+    run(120);
+    const left = parseFloat(fresh.style.left), width = parseFloat(fresh.style.width);
+    assert.ok(left > 0 && left < 200, 'still on its way');
+    assert.ok(width > 40, `stretched while moving (${width})`);
+    run(400);
+    assert.equal(parseFloat(fresh.style.left), 200);
+    assert.equal(parseFloat(fresh.style.width), 40);
+});
