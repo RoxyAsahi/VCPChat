@@ -404,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.wnpAdapter = new WebNowPlayingAdapter(app);
 
         if (app.api?.getMusicPlaylist) {
+            let restoreQueueAfterSidebar = false;
             const savedPlaylist = await app.api.getMusicPlaylist();
             if (savedPlaylist && savedPlaylist.length > 0) {
                 app.playlist = savedPlaylist;
@@ -424,9 +425,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 app.playRequestedTrack(pendingPlayback)
                     .catch(error => console.error('[Music] Pending playback failed:', error));
             } else if (app.playlist.length > 0) {
-                // 没有待播放曲目：回到上次听的那首（找不到就第一首），不自动播放。
+                // 没有待播放曲目：回到上次听的那首和进度（找不到就第一首），不自动播放。
                 let initialIndex = 0;
-                try {
+                const resume = app.sessionStartPoint?.();
+                if (resume) initialIndex = resume.index;
+                else try {
                     const lastPath = app.normalizePathForCompare(localStorage.getItem('musicLastTrackPath'));
                     const found = lastPath
                         ? app.playlist.findIndex(t => app.normalizePathForCompare(t.path) === lastPath)
@@ -434,11 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (found !== -1) initialIndex = found;
                 } catch (error) {}
                 app.loadTrack(initialIndex, false)
+                    .then(() => {
+                        // 加载期间用户没换歌，才跳回上次的进度
+                        if (resume && resume.time > 1 && app.currentTrackIndex === initialIndex && !app.playIntent) app.seekTo(resume.time);
+                    })
                     .catch(error => console.error('[Music] Initial track load failed:', error));
+                restoreQueueAfterSidebar = !pendingTrack;
             }
 
             await app.loadCustomPlaylists();
             app.renderSidebarContent('all');
+            // 侧栏初始化会清掉当前列表，所以上次的上下文和手动队列放在它之后恢复。
+            if (restoreQueueAfterSidebar) app.applySessionQueue?.();
 
             const initialState = await app.api.getMusicState();
             if (initialState?.state?.volume !== undefined) {

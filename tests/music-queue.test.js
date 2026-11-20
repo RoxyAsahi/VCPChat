@@ -14,7 +14,8 @@ function setup({ mode = 'repeat', count = 5 } = {}) {
         setTimeout, clearTimeout, setInterval, clearInterval,
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
         document: { body: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }, dispatchEvent: (e) => events.push(e.type) },
-        navigator: {}
+        navigator: {},
+        localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })()
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-player.js'), 'utf8'), context);
     const playlist = Array.from({ length: count }, (_, i) => ({ path: `C:/m/${i}.flac`, title: `t${i}` }));
@@ -35,7 +36,7 @@ function setup({ mode = 'repeat', count = 5 } = {}) {
     // 只看选了哪一首，不真的加载。
     app.loadTrack = (i) => { loads.push(i); app.currentTrackIndex = i; };
     const preload = async () => { app.isPreloadingNext = false; await app.handleNeedsPreload(); return preloads[preloads.length - 1]; };
-    return { app, playlist, preloads, loads, preload, events };
+    return { app, playlist, preloads, loads, preload, events, context };
 }
 
 test('repeat: next and preload both pick the following track in the active list and wrap', async () => {
@@ -187,4 +188,42 @@ test('peekPrevious names what prev will play without touching history', () => {
     app.loadTrack = (i) => loads.push(i);
     app.prevTrack();
     assert.deepEqual(loads, [4]);
+});
+
+test('session: saves track, time, context and manual queue, and restores them by path without autoplay', () => {
+    const { app, playlist, context } = setup();
+    app.currentTrackIndex = 2;
+    app.lastKnownCurrentTime = 83.46;
+    app.currentFilteredTracks = [playlist[2], playlist[4], playlist[0]];
+    app.filteredPlaylistSource = { type: 'playlist', id: 'p1', name: '通勤' };
+    app.queueAdd(playlist[3]);
+    app.saveSession();
+    const saved = JSON.parse(context.localStorage.getItem('musicSession'));
+    assert.equal(saved.track, 'C:/m/2.flac');
+    assert.equal(saved.time, 83.5);
+    assert.deepEqual(Array.from(saved.context), ['C:/m/2.flac', 'C:/m/4.flac', 'C:/m/0.flac']);
+    assert.deepEqual(Array.from(saved.manual), ['C:/m/3.flac']);
+
+    // 「重启」：新的播放器，曲库是重新扫描出来的新对象，还少了一首
+    const next = setup();
+    next.context.localStorage.setItem('musicSession', JSON.stringify(saved));
+    next.app.playlist.splice(4, 1);
+    next.app.renderPlaylist = () => {};
+    const start = next.app.sessionStartPoint();
+    assert.deepEqual({ ...start }, { index: 2, time: 83.5 });
+    next.app.applySessionQueue();
+    assert.deepEqual(titles(next.app.currentFilteredTracks), ['t2', 't0'], 'missing tracks are skipped');
+    assert.equal(next.app.filteredPlaylistSource.id, 'p1');
+    assert.deepEqual(titles(next.app.manualQueue), ['t3']);
+    assert.equal(next.loads.length, 0, 'restoring does not start playback');
+});
+
+test('session: a whole-library context is stored as null and a missing track gives no start point', () => {
+    const { app, context } = setup();
+    app.currentTrackIndex = 1;
+    app.saveSession();
+    assert.equal(JSON.parse(context.localStorage.getItem('musicSession')).context, null);
+    const next = setup();
+    next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/gone.flac', time: 9 }));
+    assert.equal(next.app.sessionStartPoint(), null);
 });
