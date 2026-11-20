@@ -2,6 +2,8 @@
 // 侧边栏、上下文菜单、对话框、歌单逻辑
 
 function setupSidebar(app) {
+    // 曲名、歌手、专辑来自文件标签，歌单名、服务器名、WebDAV 文件名来自用户或远端：拼进 HTML 前都要转义。
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     app.loadCustomPlaylists = async () => {
         if (app.api?.getCustomPlaylists) {
             app.customPlaylists = await app.api.getCustomPlaylists() || [];
@@ -56,8 +58,9 @@ function setupSidebar(app) {
                 const div = document.createElement('div');
                 div.className = 'category-item';
                 div.innerHTML = `
-                    <div class="cover ${view==='artists'?'artist-avatar':''}" style="${g.art ? `background-image: url('file://${g.art.replace(/\\/g, '/')}')` : ''}"></div>
-                    <div class="info"><div class="name">${g.name}</div><div class="count">${g.tracks.length} 首</div></div>`;
+                    <div class="cover ${view==='artists'?'artist-avatar':''}"></div>
+                    <div class="info"><div class="name">${esc(g.name)}</div><div class="count">${g.tracks.length} 首</div></div>`;
+                if (g.art) div.querySelector('.cover').style.backgroundImage = `url("file://${encodeURI(g.art.replace(/\\/g, '/'))}")`;
                 div.addEventListener('click', () => {
                     app.filteredPlaylistSource = { type: view==='albums'?'album':'artist', name: g.name };
                     app.currentFilteredTracks = g.tracks;
@@ -75,7 +78,7 @@ function setupSidebar(app) {
                 const div = document.createElement('div'); div.className = 'category-item';
                 div.innerHTML = `
                     <div class="cover playlist-cover" style="display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M16 17.5V9l4-1v7.5"/><circle cx="14.2" cy="17.5" r="1.8"/><circle cx="18.2" cy="15.5" r="1.8"/></svg></div>
-                    <div class="info"><div class="name">${pl.name}</div><div class="count">${pl.tracks.length} 首</div></div>
+                    <div class="info"><div class="name">${esc(pl.name)}</div><div class="count">${pl.tracks.length} 首</div></div>
                     <button class="edit-btn" title="编辑歌单" aria-label="编辑歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="delete-btn" title="删除歌单" aria-label="删除歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
                 div.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); app.openPlaylistEditModal(pl.id); });
                 div.querySelector('.delete-btn').addEventListener('click', (e) => {
@@ -163,7 +166,7 @@ function setupSidebar(app) {
             const div = document.createElement('div'); div.className = `music-modal-song-item${isIn ? ' in-playlist' : ''}`;
             div.dataset.path = t.path; div.dataset.index = i;
             div.innerHTML = `<div class="music-modal-song-checkbox"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg></div>
-                             <div class="music-modal-song-info"><div class="music-modal-song-title">${app.stripAudioExtension(t.title)||'未知标题'}</div><div class="music-modal-song-artist">${t.artist||'未知艺术家'}</div></div>`;
+                             <div class="music-modal-song-info"><div class="music-modal-song-title">${esc(app.stripAudioExtension(t.title)||'未知标题')}</div><div class="music-modal-song-artist">${esc(t.artist||'未知艺术家')}</div></div>`;
             div.addEventListener('click', (e) => {
                 if (e.shiftKey && app.lastModalClickIndex !== -1) {
                     const [s, eIdx] = [Math.min(app.lastModalClickIndex, i), Math.max(app.lastModalClickIndex, i)];
