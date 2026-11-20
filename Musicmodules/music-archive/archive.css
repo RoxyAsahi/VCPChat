@@ -313,6 +313,13 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-thumb::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 3px; background: var(--ar-ink); opacity: .38; transition: opacity .15s, left .15s, width .15s; }
 .archive-list:hover .archive-list-thumb, .archive-list.grabbing .archive-list-thumb, .archive-list.thumbing .archive-list-thumb { opacity: 1; }
 .archive-list-thumb:hover::after, .archive-list.thumbing .archive-list-thumb::after { opacity: .8; left: 4px; width: 5px; }
+/* 拖歌经过底栏胶囊时盖在胶囊上的两格落点：左「下一首播放」，右「加入队列」 */
+.archive-cap-drop { position: fixed; z-index: 902; display: grid; grid-template-columns: 1fr 1fr; border-radius: 999px; overflow: hidden; pointer-events: none; background: rgba(var(--ar-paper-rgb), .9); border: 1px dashed var(--ar-ink); backdrop-filter: blur(6px); animation: archive-cap-drop-in .16s var(--mt-ease, ease) both; }
+.archive-cap-drop span { display: grid; place-items: center; font-size: 13px; letter-spacing: .4px; color: var(--ar-muted); transition: color .12s, background-color .12s; }
+.archive-cap-drop span + span { border-left: 1px dashed var(--ar-rule); }
+.archive-cap-drop span.drop-over { color: var(--ar-paper, #fff); background: var(--ar-ink); }
+@keyframes archive-cap-drop-in { from { opacity: 0; transform: scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .archive-cap-drop { animation: none; } }
 .archive-drag-ghost { position: fixed; left: 0; top: 0; z-index: 901; max-width: 240px; padding: 5px 10px; font-family: var(--mt-font-archive, inherit); font-size: 12px; letter-spacing: .4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); background: rgba(var(--ar-paper-rgb), .96); border: 1px solid var(--ar-ink); pointer-events: none; }
 
 /* 首字母：左侧外边距里的大号细体字，当前分组吸附在顶上 */

@@ -984,19 +984,51 @@
         // 拖到歌单上
         const dragIndices = (row) => pickedIndices(row);
         const openShelf = () => {
-            r.shelf.innerHTML = '<b>拖到歌单上</b>'
+            const canQueue = typeof app.queuePlayNext === 'function' && typeof app.queueAdd === 'function';
+            r.shelf.innerHTML = (canQueue ? '<b>放进队列</b><button type="button" data-drop-q="next">下一首播放</button><button type="button" data-drop-q="last">加入队列</button>' : '')
+                + '<b>拖到歌单上</b>'
                 + playlists().map((p, order) => `<button type="button" data-drop="${esc(p.id ?? order)}">${esc(p.name || '未命名歌单')}</button>`).join('')
                 + '<button type="button" data-drop-new>＋ 新建歌单</button>';
             r.shelf.hidden = false;
             el.classList.add('dragging');
+            openCapDrop();
         };
         const closeShelf = () => {
             manage.drag = null;
             r.shelf.hidden = true;
             el.classList.remove('dragging');
             el.querySelectorAll('.drop-over').forEach((n) => n.classList.remove('drop-over'));
+            closeCapDrop();
+        };
+        /*
+         * 拖着歌经过底栏胶囊：胶囊上盖一层两格的落点，左半「下一首播放」、右半「加入队列」（和 Apple Music
+         * 把歌拖到顶部播放条入队一样）。落点是盖在胶囊上的独立一层，不改胶囊本身；没有底栏时什么都不做。
+         */
+        let capDrop = null;
+        const capsule = () => document.querySelector('.md-dock .md-cap');
+        const openCapDrop = () => {
+            const cap = capsule();
+            if (!cap || typeof app.queueAdd !== 'function' || typeof app.queuePlayNext !== 'function') return;
+            const rect = cap.getBoundingClientRect();
+            if (!(rect.width > 0)) return;
+            capDrop = document.createElement('div');
+            capDrop.className = 'archive-cap-drop';
+            capDrop.setAttribute('aria-hidden', 'true');
+            capDrop.innerHTML = '<span data-cap-q="next">下一首播放</span><span data-cap-q="last">加入队列</span>';
+            Object.assign(capDrop.style, { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px' });
+            document.body.appendChild(capDrop);
+        };
+        const closeCapDrop = () => { capDrop?.remove(); capDrop = null; };
+        const capHit = (x, y) => {
+            if (!capDrop || !Number.isFinite(x)) return null;
+            const rect = capDrop.getBoundingClientRect();
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
+            const q = x < rect.left + rect.width / 2 ? 'next' : 'last';
+            return { node: capDrop.querySelector(`[data-cap-q="${q}"]`), q };
         };
         const dropTarget = (target) => {
+            const qchip = target.closest?.('[data-drop-q]');
+            if (qchip) return { node: qchip, q: qchip.dataset.dropQ === 'next' ? 'next' : 'last' };
             const chip = target.closest?.('[data-drop], [data-drop-new]');
             if (chip) return { node: chip, pl: chip.hasAttribute('data-drop-new') ? 'new' : playlists().find((p, order) => String(p.id ?? order) === chip.dataset.drop) };
             const head = target.closest?.('.archive-list-group.is-playlist');
@@ -1014,11 +1046,14 @@
         const stopGlide = () => { if (glide) cancelAnimationFrame(glide); glide = 0; };
         const pxScale = () => { const h = r.viewport.offsetHeight; return h ? (r.viewport.getBoundingClientRect().height / h) || 1 : 1; };
         const hitOf = (e) => {
+            const cap = capHit(e.clientX, e.clientY);
+            if (cap) return cap;
             const under = typeof document.elementFromPoint === 'function' && Number.isFinite(e.clientX) ? document.elementFromPoint(e.clientX, e.clientY) : null;
             return dropTarget(under || e.target);
         };
         const paintOver = (hit) => {
             el.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
+            capDrop?.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
             if (hit) hit.node.classList.add('drop-over');
         };
         const moveGhost = (e) => { if (ghost) ghost.style.transform = `translate(${(e.clientX || 0) + 14}px, ${(e.clientY || 0) + 12}px)`; };
@@ -1038,6 +1073,7 @@
             ghost = null;
             closeShelf();
             if (!hit || !indices) return;
+            if (hit.q) { queueBatch(indices, hit.q === 'next'); return; }
             if (hit.pl === 'new') {
                 const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
                 if (pl) toast(`已新建歌单「${pl.name}」：${pl.tracks.length} 首`);
