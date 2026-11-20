@@ -14,6 +14,8 @@
         uLightPos: { value: Array.from({ length: MAX_LIGHTS }, () => new T.Vector3(0, -999, 0)) },
         uLightCol: { value: Array.from({ length: MAX_LIGHTS }, () => new T.Vector3()) },
         uLightRad: { value: new Float32Array(MAX_LIGHTS) },
+        // 1 = 雾里画光晕，0 = 不画（light.halo === false，比如贴着屏幕的补光）。
+        uLightHalo: { value: new Float32Array(MAX_LIGHTS).fill(1) },
         uLightCount: { value: 0 },
         uTime: { value: 0 },
         uRain: { value: 0 },
@@ -44,6 +46,7 @@
             const col = uniforms.uLightCol.value[i];
             if (i >= n) { pos.set(0, -999, 0); col.set(0, 0, 0); uniforms.uLightRad.value[i] = 1; continue; }
             const { light } = all[i];
+            if (uniforms.uLightHalo) uniforms.uLightHalo.value[i] = light.halo === false ? 0 : 1;
             const k = (light.intensity ?? 1) * (light.flickerValue ?? 1);
             pos.set(light.position[0], light.position[1], light.position[2]);
             col.set(light.color[0] * k, light.color[1] * k, light.color[2] * k);
