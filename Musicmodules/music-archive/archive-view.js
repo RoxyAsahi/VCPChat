@@ -646,6 +646,19 @@
             }
         };
 
+        /* 键盘打开选中卡的右键菜单（Shift+F10、菜单键）：菜单出现在 ACCESS FILE 旁边，方向键可以在菜单里移动 */
+        const openMenuForSelected = () => {
+            const index = selectedIndex();
+            if (index < 0 || typeof app.showContextMenu !== 'function') return;
+            const anchor = refs.access;
+            const rect = anchor.getBoundingClientRect();
+            const back = document.activeElement && document.activeElement !== document.body ? document.activeElement : anchor;
+            // 先在档案页里发一次 contextmenu，播放器据此知道菜单是从档案页打开的（决定「移除」的范围）
+            anchor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom }));
+            app.contextMenuTrackIndex = index;
+            app.showContextMenu(rect.left, rect.bottom + 8);
+            ListLib?.menuKeyboard?.(app, { restore: back });
+        };
         const composing = (e) => e.isComposing || e.key === 'Process' || e.keyCode === 229;
         const typeIntoSearch = (e) => {
             if (!list || composing(e) || typeof e.key !== 'string') return false;
@@ -989,6 +1002,7 @@
                 e.preventDefault(); playSelected(); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+            if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenuForSelected(); return; }
             // 直接打字：打开目录、聚焦检索框并带入这个字（不用先按 /）。
             // 输入法正在组字（isComposing / Process / 229）时不抢，让输入法把字交给它自己的输入框
             if (typeIntoSearch(e)) return;

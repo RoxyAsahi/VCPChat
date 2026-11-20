@@ -578,3 +578,75 @@ test('有统一点播入口时走 playFromContext（按阵列顺序）；换排�
     assert.deepEqual(got[1], ['reorder', 60, 'archive', '/m/59']); // 新的在前
     f.close();
 });
+
+function withMenu(w, app, calls) {
+    const doc = w.document;
+    const menu = doc.createElement('div');
+    menu.id = 'track-context-menu';
+    menu.className = 'context-menu';
+    menu.innerHTML = '<div class="context-menu-item" data-action="play">播放</div><div class="context-menu-item" data-action="play-next">下一首</div>'
+        + '<div class="context-menu-item has-submenu" data-action="add-to-playlist">加入歌单<div class="context-submenu"><div class="submenu-item">夜间散步</div><div class="submenu-item">雨天</div></div></div>'
+        + '<div class="context-menu-item danger" data-action="remove">移除</div>';
+    doc.body.appendChild(menu);
+    menu.querySelectorAll('.context-menu-item, .submenu-item').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); calls.push(['menu', el.dataset.action || el.textContent, app.contextMenuTrackIndex, app.contextMenuScopeHint === undefined ? 'none' : app.contextMenuScopeHint]); menu.classList.remove('visible'); }));
+    app.contextMenu = menu;
+    app.showContextMenu = (x, y) => { calls.push(['ctx', app.contextMenuTrackIndex]); menu.classList.add('visible'); };
+    return menu;
+}
+
+test('目录行：Shift+F10 / 菜单键打开右键菜单，方向键移动，回车执行，Esc 关闭后焦点回到目录', () => {
+    let menu;
+    const f = fixture({ setup: (w, app) => { menu = withMenu(w, app, []); } });
+    const calls = [];
+    f.app.showContextMenu = (x, y) => { calls.push(['ctx', f.app.contextMenuTrackIndex]); menu.classList.add('visible'); };
+    menu.querySelectorAll('.context-menu-item, .submenu-item').forEach((el) => el.addEventListener('click', () => calls.push(['menu', el.dataset.action || el.textContent, f.app.contextMenuTrackIndex])));
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    const vp = f.view.list.el.querySelector('[data-l="viewport"]');
+    vp.focus();
+    const kd = (k, extra = {}) => doc.activeElement.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+    kd('ArrowDown'); kd('ArrowDown'); kd('ArrowDown');
+    const sel = f.view.debug().selected;
+    kd('F10', { shiftKey: true });
+    assert.ok(menu.classList.contains('visible'));
+    assert.deepEqual(calls[0], ['ctx', sel]);
+    assert.equal(doc.activeElement.dataset.action, 'play');
+    kd('ArrowDown');
+    assert.equal(doc.activeElement.dataset.action, 'play-next');
+    kd('ArrowUp'); kd('ArrowUp'); // 循环到最后一项
+    assert.equal(doc.activeElement.dataset.action, 'remove');
+    kd('ArrowUp');
+    kd('ArrowRight'); // 打开子菜单
+    assert.equal(doc.activeElement.textContent, '夜间散步');
+    kd('ArrowDown');
+    kd('Enter');
+    assert.deepEqual(calls.at(-1), ['menu', '雨天', sel]);
+    assert.ok(!menu.classList.contains('visible'));
+    assert.equal(doc.activeElement, vp);
+    // 菜单键也行；Esc 关闭，焦点回到目录
+    kd('ContextMenu');
+    assert.ok(menu.classList.contains('visible'));
+    kd('Escape');
+    assert.ok(!menu.classList.contains('visible'));
+    assert.equal(doc.activeElement, vp);
+    f.close();
+});
+
+test('阵列上 Shift+F10 打开选中卡的右键菜单；歌单分类里的行右键时只从这个歌单移除', () => {
+    let menu;
+    const calls = [];
+    const f = fixture({ setup: (w, app) => { menu = withMenu(w, app, calls); } });
+    f.key('ArrowDown');
+    f.key('F10', { shiftKey: true });
+    assert.ok(menu.classList.contains('visible'));
+    assert.deepEqual(calls[0], ['ctx', 1]);
+    f.key('Escape');
+    assert.ok(!menu.classList.contains('visible'));
+    // 歌单分类里的行
+    f.view.setListOpen(true);
+    f.view.list.setKind('playlist');
+    const row = f.view.list.el.querySelector('.archive-list-row');
+    row.dispatchEvent(new f.w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    assert.deepEqual(JSON.parse(JSON.stringify(f.app.contextMenuScopeHint)), { type: 'playlist', id: 'p', name: '夜间散步' });
+    f.close();
+});
