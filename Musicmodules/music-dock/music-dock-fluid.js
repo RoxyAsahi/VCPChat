@@ -111,7 +111,7 @@
             quick: { v: 0, t: 0, x: 0, y: 0, w: 0, h: 0 },
             split: { p: 1 },
             ring: { x: 0, y: 0, tx: 0, ty: 0, docked: true, placed: false },
-            // 小环在播放条上的角色（预览中，选定后再定默认）：
+            // 小环在播放条上的角色（默认由 music-dock.js 设成 playhead）：
             // fixed 停在条顶固定位置；playhead 当播放头，跟着进度走，暂停时沉进条里；
             // hover 平时藏起来，指针在条上时才浮出；drop 平时藏起来，切歌时从上方落进条里再化开。
             ringMode: 'fixed',

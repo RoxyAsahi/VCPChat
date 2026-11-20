@@ -482,6 +482,7 @@ test('fluid bar: up-next titles on the bar, volume drop rail, ring docking and t
         const root = doc.getElementById('music-dock-root');
         assert.ok(root.classList.contains('md-fl-on'), 'fluid layer is on by default');
         assert.ok(doc.querySelector('.md-fluid'), 'svg layer mounted');
+        assert.equal(dock.ringMode, 'playhead', 'the ring is the playhead by default');
         assert.equal(doc.querySelector('[data-md="nx1"]').textContent, 'Beta', 'next title comes from the list when there is no queue api');
 
         // 有队列接口时：手动层优先，点「再下一首」把它从队列里拿掉再播放
