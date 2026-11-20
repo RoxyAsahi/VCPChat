@@ -142,7 +142,8 @@
     // from the slot and the seed.
 
     const designSign = (slot, index, random, pools) => {
-        const kind = slot.kind || 'flat';
+        // In the alleys a flat board is seen edge-on; most hang out over the walk instead.
+        const kind = slot._alleyW && slot.kind === 'flat' && random() < 0.75 ? 'blade' : slot.kind || 'flat';
         const tilt = random() < 0.08 ? (random() - 0.5) * 0.09 : 0;
         if (kind === 'roof') {
             const [cn, en] = take(random, pools.roof, ROOF_BRANDS);
@@ -164,7 +165,7 @@
         const pool = vertical ? pools.vertical : pools.horizontal;
         const [text, caption] = take(random, pool, vertical ? VERTICAL_SHOPS : HORIZONTAL_SHOPS);
         const chars = graphemes(text).length;
-        const style = random() < 0.08 ? 'dead' : random() < 0.58 ? 'neon' : 'box';
+        const style = random() < 0.08 ? 'dead' : random() < (slot._alleyW ? 0.75 : 0.58) ? 'neon' : 'box';
         let width, height;
         if (vertical) {
             width = blade ? 1.1 + random() * 0.8 : 1.2 + random() * 0.6;
@@ -531,7 +532,7 @@
             #include <fog_fragment>
         }`;
     const GLOW_VS = `
-        attribute vec4 info;uniform vec4 levels[48];varying vec2 vUv;varying float vLevel,vGain;varying vec2 vSign;
+        attribute vec4 info;uniform vec4 levels[64];varying vec2 vUv;varying float vLevel,vGain;varying vec2 vSign;
         ${FOG_V}
         void main(){vUv=uv;int i=int(info.x+0.5);vLevel=levels[i/4][i-(i/4)*4];vGain=info.y;vSign=info.xw;
             vec4 mvPosition=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mvPosition;
@@ -841,7 +842,7 @@
     // The layout offers thousands of places a sign could hang. Take the ones the
     // cameras see: the street faces first (low floors densest, a few up high),
     // the main alleys next, little elsewhere; keep them from crowding.
-    const chooseSlots = (layout, max, random) => {
+    const chooseSlots = (layout, max, random, hot = []) => {
         const all = [];
         (layout.facades || []).forEach(facade => (facade.slots || []).forEach(slot => {
             if (slot.use !== 'sign') return;
@@ -862,7 +863,11 @@
             else score *= floor <= 1 ? 1.25 : floor <= 5 ? 1 : floor <= 9 ? 0.55 : 0.3;
             score *= 0.6 + random() * 0.8;
             if (alleyId && slot.kind === 'blade') score *= 1.4;
-            all.push({ slot: { ...slot, _street: street, _alley: alley, _alleyW: alleyW }, score });
+            // Where the walking cameras pass, the alley should be thick with signs.
+            const p = vec(slot.pos);
+            const near = alleyId && hot.some(h => Math.hypot(h[0] - p[0], h[2] - p[2]) < 20);
+            if (near) score *= 3;
+            all.push({ slot: { ...slot, _street: street, _alley: alley, _alleyW: alleyW, _hot: near }, score });
         }));
         all.sort((a, b) => b.score - a.score);
         // Shares: the south street face, the east one, the two main alleys, the rest.
@@ -870,13 +875,14 @@
             const n = vec(x.slot.normal);
             // Rooftop billboards across the whole roofscape, facing the high camera.
             if (x.slot.kind === 'roof') return 4;
+            if (x.slot._hot) return 5;
             if (x.slot._street) return n[2] > 0.5 ? 0 : n[0] > 0.5 ? 1 : 3;
             return x.slot._alley === 2 ? 2 : 3;
         };
-        const quota = [0.36, 0.17, 0.24, 0.09, 0.14].map(q => Math.round(q * max));
+        const quota = (hot.length ? [0.27, 0.13, 0.12, 0.05, 0.12, 0.31] : [0.36, 0.17, 0.24, 0.09, 0.14, 0]).map(q => Math.round(q * max));
         const picked = [];
         const minGap = s => s.kind === 'roof' ? 11 : s._street ? 3.0 : 2.6;
-        const taken = [0, 0, 0, 0, 0];
+        const taken = [0, 0, 0, 0, 0, 0];
         const tryTake = (slot, b) => {
             const p = vec(slot.pos);
             const gap = minGap(slot);
@@ -905,8 +911,10 @@
 
         // --- slots → specs
         const pools = { vertical: VERTICAL_SHOPS.slice(), horizontal: HORIZONTAL_SHOPS.slice(), roof: ROOF_BRANDS.slice() };
-        const MAX_SIGNS = (tier.name === 'energy-saving' ? 120 : 184);
-        const chosen = chooseSlots(layout, MAX_SIGNS + 8, random);
+        const MAX_SIGNS = (tier.name === 'energy-saving' ? 140 : 248);
+        const rigs = (ctx.alley?.cameraRigs?.() || ctx.cameraRigs || []);
+        const hot = rigs.filter(r => /^alley|^street-enter/.test(r.id) && r.id !== 'alley-rise').flatMap(r => r.points || []);
+        const chosen = chooseSlots(layout, MAX_SIGNS + 8, random, hot);
         // A few of the street's flat places carry small advert screens instead.
         const adScreens = [];
         for (let i = chosen.length - 1; i >= 0 && adScreens.length < 8; i -= 1) {
@@ -1108,7 +1116,7 @@
         // The shared night light: the same uniform objects, so the manager's
         // updates reach this material too.
         if (Shared && ctx.lightUniforms) Object.assign(hardwareMat.uniforms, ctx.lightUniforms);
-        const levelArray = Array.from({ length: 48 }, () => new T.Vector4(1, 1, 1, 1));
+        const levelArray = Array.from({ length: 64 }, () => new T.Vector4(1, 1, 1, 1));
         const tubeArray = Array.from({ length: 4 }, () => new T.Vector4(1, 1, 1, 1));
         const glowMat = new T.ShaderMaterial({
             name: 'kowloon:signs:glow', fog: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
@@ -1300,7 +1308,7 @@
             g.font = `700 34px ${FONTS.latin}`; g.fillText('NEXT ▸', 512, 48);
         };
         // --- per-frame state
-        const levels = new Float32Array(192).fill(0);
+        const levels = new Float32Array(256).fill(0);
         const tubes = new Float32Array(16).fill(1);
         const igniteAt = specs.map(() => 0.15 + random() * 2.4);
         const tubeSeed = Array.from({ length: 16 }, () => random() * 100);
@@ -1373,7 +1381,7 @@
             
             // Signs.
             for (let i = 0; i < specs.length; i += 1) levels[i] = signLevel(specs[i], i, local, audio, still ? 60 : awake);
-            for (let i = 0; i < 48; i += 1) levelArray[i].set(levels[i * 4], levels[i * 4 + 1], levels[i * 4 + 2], levels[i * 4 + 3]);
+            for (let i = 0; i < 64; i += 1) levelArray[i].set(levels[i * 4], levels[i * 4 + 1], levels[i * 4 + 2], levels[i * 4 + 3]);
             for (let k = 0; k < 16; k += 1) {
                 // One tube in a few drops out for a moment now and then.
                 const w = noise1(local * 0.21, tubeSeed[k]);
