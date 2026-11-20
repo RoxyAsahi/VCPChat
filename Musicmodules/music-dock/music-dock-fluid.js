@@ -116,6 +116,15 @@
         let frame = 0;
         let last = 0;
 
+        const GLOW_MS = 600;
+        const glow = { cur: [null, null, null], frame: 0 };
+        const parseHex = (hex) => {
+            const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+            if (!m) return null;
+            const n = parseInt(m[1], 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        };
+        const toHex = (rgb) => `#${rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('')}`;
         const setAttr = (node, name, value) => {
             const text = typeof value === 'number' ? value.toFixed(2) : String(value);
             if (node.getAttribute(name) !== text) node.setAttribute(name, text);
@@ -317,11 +326,21 @@
                 retargetRing();
                 kick();
             },
+            // 换主题、换舞台时颜色在 0.6 秒里慢慢过去；降低动态时直接换。
             setGlow(colors) {
-                const [a, b, c] = colors || [];
-                if (a) setAttr(in0, 'stop-color', a);
-                if (b) setAttr(in1, 'stop-color', b);
-                if (c) setAttr(in2, 'stop-color', c);
+                const target = [0, 1, 2].map((i) => parseHex(colors?.[i]) || glow.cur[i]);
+                if (glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; }
+                const paint = (rgbs) => { glow.cur = rgbs; [in0, in1, in2].forEach((stop, i) => setAttr(stop, 'stop-color', toHex(rgbs[i]))); };
+                if (reduced() || !glow.cur.every(Boolean)) { paint(target); return; }
+                const from = glow.cur.slice();
+                const start = win.performance?.now?.() ?? Date.now();
+                const step = (now) => {
+                    const t = Math.min(1, (now - start) / GLOW_MS);
+                    const k = t * t * (3 - 2 * t);
+                    paint(from.map((c, i) => c.map((v, j) => v + (target[i][j] - v) * k)));
+                    glow.frame = t < 1 ? win.requestAnimationFrame(step) : 0;
+                };
+                glow.frame = win.requestAnimationFrame(step);
             },
             setEnabled(on) {
                 s.enabled = Boolean(on);
@@ -336,6 +355,7 @@
             debug: () => ({ progress: s.progress, solidity: s.solidity.v, vol: s.vol.v, ring: { ...s.ring }, geo: { ...geo }, animating: Boolean(frame) }),
             destroy() {
                 if (frame) win.cancelAnimationFrame(frame);
+                if (glow.frame) win.cancelAnimationFrame(glow.frame);
                 frame = 0;
                 svg.remove();
                 mist.remove();

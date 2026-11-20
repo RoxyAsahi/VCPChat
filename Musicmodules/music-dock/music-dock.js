@@ -217,9 +217,84 @@
         // 暂停时整条化成雾，鼠标移上来（关注）又凝固。设置小环停在顶边时播放条凹进去让它，
         // 打开面板时小环飞到右下角，凹口愈合。音量从播放条里像水滴一样分裂上去。
         // 舞台的「性能档位」选节能时不跑流体层，播放条退成不透明的实色。
+        // 播放条玻璃里透出的颜色跟着主题走：平时取 VCPChat 当前主题的强调色（--highlight-text），
+        // 舞台换了自定义主题就取舞台的；有自己固定色调的舞台（镜台黄昏、隧图深空、町景霓虹）用各自的颜色。
+        // 强调色太灰（单色主题）时退回默认的暖橙。深浅两套各自调亮度，保证上面的字看得清。
         const SCENE_GLOW = {
-            light: { base: ['#f29a63', '#f7d9c6', '#ffffff'], diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'], tunnel: ['#4fa597', '#cfe9e2', '#ffffff'] },
-            dark: { base: ['#d9773f', '#6b4c3b', '#46403b'], diorama: ['#e06a30', '#6e4733', '#45403b'], tunnel: ['#46a593', '#3c5853', '#3d4441'] }
+            light: {
+                diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'],
+                tunnel: ['#4fa597', '#cfe9e2', '#ffffff'],
+                kowloon: ['#e0629f', '#bfe2ea', '#ffffff']
+            },
+            dark: {
+                diorama: ['#e06a30', '#6e4733', '#45403b'],
+                tunnel: ['#46a593', '#3c5853', '#3d4441'],
+                kowloon: ['#d24a8d', '#2f5a6a', '#3b3e46']
+            }
+        };
+        const FALLBACK_ACCENT = [217, 119, 63];
+        const colorProbe = document.createElement('i');
+        colorProbe.hidden = true;
+        const readRgb = (value) => {
+            const text = String(value || '').trim();
+            if (!text) return null;
+            colorProbe.style.color = '';
+            colorProbe.style.color = text;
+            if (!colorProbe.style.color) return null;
+            if (!colorProbe.isConnected) host.appendChild(colorProbe);
+            const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/.exec(getComputedStyle(colorProbe).color || '');
+            return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+        };
+        const rgbToHsl = ([r, g, b]) => {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const l = (max + min) / 2;
+            if (max === min) return [0, 0, l];
+            const d = max - min;
+            const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            return [h / 6, s, l];
+        };
+        const hslToRgb = ([h, s, l]) => {
+            if (!s) return [l * 255, l * 255, l * 255];
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            const f = (t) => {
+                t = (t + 1) % 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+            return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+        };
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+        const hex = (rgb) => `#${rgb.map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('')}`;
+        const glowFromAccent = (accent, light) => {
+            let [h, s, l] = rgbToHsl(accent || FALLBACK_ACCENT);
+            if (s < 0.12) [h, s, l] = rgbToHsl(FALLBACK_ACCENT);
+            if (light) {
+                const a = hslToRgb([h, clamp(s, 0.5, 0.85), clamp(l, 0.6, 0.68)]);
+                return [hex(a), hex(mix(a, [255, 255, 255], 0.7)), '#ffffff'];
+            }
+            const a = hslToRgb([h, clamp(s, 0.45, 0.8), clamp(l, 0.5, 0.58)]);
+            return [hex(a), hex(mix(a, [70, 64, 59], 0.68)), hex(mix(a, [64, 63, 62], 0.92))];
+        };
+        const themeAccent = () => {
+            const stageRoot = document.getElementById('music-stage');
+            if (stageActive() && stageRoot?.classList.contains('stage-theme-custom')) {
+                const custom = readRgb(getComputedStyle(stageRoot).getPropertyValue('--highlight-text'));
+                if (custom) return custom;
+            }
+            return readRgb(getComputedStyle(document.documentElement).getPropertyValue('--highlight-text'));
+        };
+        const currentGlow = () => {
+            const light = document.body.classList.contains('light-theme');
+            const mode = stageActive() ? app.stageHost?.modeId : null;
+            const custom = stageActive() && document.getElementById('music-stage')?.classList.contains('stage-theme-custom');
+            return (!custom && SCENE_GLOW[light ? 'light' : 'dark'][mode]) || glowFromAccent(themeAccent(), light);
         };
         const lowQuality = () => global.MusicStageConfig?.get?.()?.quality === 'energy-saving';
         let fluid = null;
@@ -247,11 +322,17 @@
                 renderProgress();
             }
         };
+        // 节能档没有流体层：把同一套颜色混进实心播放条的进度底色和快捷胶囊的描边里。
+        let lastGlowKey = '';
         const syncGlow = () => {
-            if (!fluid) return;
-            const palette = SCENE_GLOW[document.body.classList.contains('light-theme') ? 'light' : 'dark'];
-            const mode = stageActive() ? app.stageHost?.modeId : null;
-            fluid.setGlow(palette[mode] || palette.base);
+            const colors = currentGlow();
+            const key = colors.join();
+            const light = document.body.classList.contains('light-theme');
+            const a = readRgb(colors[0]) || FALLBACK_ACCENT;
+            host.style.setProperty('--md-fl-low-fill', hex(mix(a, light ? [247, 242, 238] : [43, 41, 39], light ? 0.62 : 0.55)));
+            host.style.setProperty('--md-fl-tint', colors[0]);
+            if (fluid && (key !== lastGlowKey || !fluid.glowSet)) { fluid.setGlow(colors); fluid.glowSet = true; }
+            lastGlowKey = key;
         };
         // 实心 = 正在播放，或者正被关注（悬停、拖动）。
         const syncSolid = () => {
@@ -1321,6 +1402,15 @@
         let lastPlaying = null;
         let lastStage = null;
         let lastTheme = null;
+        // 主题文件换了（样式表重新加载、换了 href）或舞台换了自定义主题：颜色跟着换。
+        let glowTimer = 0;
+        const queueGlow = () => { clearTimeout(glowTimer); glowTimer = setTimeout(syncGlow, 60); timers.add(glowTimer); };
+        observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] }, queueGlow);
+        listen(document, 'load', (event) => { if (event.target?.tagName === 'LINK') queueGlow(); }, true);
+        const stageRootEl = document.getElementById('music-stage');
+        if (stageRootEl) observe(stageRootEl, { attributes: true, attributeFilter: ['class'] }, queueGlow);
+        // 舞台顶部的模式切换（不经过底栏）也要换色：跟着选中按钮的 aria-pressed 走。
+        observe(stageRootEl?.querySelector('.music-stage-mode-switcher'), { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] }, queueGlow);
         observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => {
             const playing = app.isPlaying === true;
             if (playing !== lastPlaying) { lastPlaying = playing; renderPlay(); kickProgress(); }
@@ -1539,7 +1629,7 @@
         state.expanded = shouldExpand();
         el.cap.classList.toggle('md-ex', state.expanded);
         syncFluid();
-        if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => syncFluid()));
+        if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => { syncFluid(); syncGlow(); }));
         // 字体和布局稳定后再量一次（流体层要对齐按钮的真实位置）。
         requestAnimationFrame(() => { if (!state.destroyed) animateCapsule(); });
         kickProgress();
@@ -1558,6 +1648,7 @@
             get stageSettingsOpen() { return state.subOpen; },
             get soundSettingsOpen() { return state.sheetOpen; },
             get tab() { return state.tab; },
+            get glowColors() { return currentGlow(); },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
