@@ -909,3 +909,44 @@ test('大曲库整体变化：分片重建，中途不改画面，做完后阵�
     assert.equal(files(), 30);
     f.close();
 });
+
+test('扫描途中一批批进来：阵列和目录跟着长，选中的还是那首歌，目录眼前的内容不被顶走，也不碰播放；扫完重排后仍是那首', async () => {
+    const fns = {};
+    const api = { onMusicScanStart: (fn) => { fns.start = fn; }, onMusicScanProgress: (fn) => { fns.progress = fn; }, onMusicScanComplete: (fn) => { fns.complete = fn; }, onMusicScanBatch: (fn) => { fns.batch = fn; } };
+    const mk = (n, tag) => Array.from({ length: n }, (_, i) => ({ path: '/s/' + tag + i, title: tag + ' ' + String(i).padStart(3, '0'), artist: 'Ren' }));
+    const f = fixture({ tracks: mk(80, 'M'), playlists: [], setup: (w, app) => { app.api = api; } });
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    const selPath = () => f.app.playlist[f.view.debug().selected].path;
+    f.view.setListOpen(true);
+    for (let k = 0; k < 7; k++) f.key('ArrowDown');
+    const chosen = selPath();
+    // 目录滚到别处看
+    const vp = f.view.list.el.querySelector('[data-l="viewport"]');
+    vp.scrollTop = 2000; vp.dispatchEvent(new f.w.Event('scroll'));
+    await wait(40);
+    const topTitle = () => {
+        const rows = [...vp.querySelectorAll('.archive-list-row')].map((n) => ({ y: parseFloat((n.style.transform.match(/translateY\(([-\d.]+)px/) || [])[1]), t: n.textContent }))
+            .filter((x) => x.y >= vp.scrollTop).sort((a, b) => a.y - b.y);
+        return rows[0] && rows[0].t;
+    };
+    const before = topTitle();
+    assert.ok(before);
+    fns.start({ total: 200, folderPath: '/s' });
+    fns.progress({ current: 100, total: 200 });
+    assert.equal(f.text('status'), 'SCANNING 0100 / 0200');
+    // 新来的歌排在前面（标题 A 开头）
+    f.app.playlist = f.app.playlist.concat(mk(40, 'A'));
+    fns.batch({ tracks: [] });
+    assert.equal(Number(f.text('files')), 80, '攒一会儿再排');
+    await wait(650);
+    assert.equal(Number(f.text('files')), 120);
+    assert.equal(selPath(), chosen);
+    assert.equal(topTitle(), before, '眼前最上面还是那首');
+    assert.deepEqual(f.calls, [], '没有碰播放');
+    // 扫完：曲库按磁盘顺序重排（下标全变）
+    f.app.playlist = f.app.playlist.slice().reverse();
+    fns.complete({ tracks: f.app.playlist });
+    f.view.refreshSoon();
+    assert.equal(selPath(), chosen);
+    f.close();
+});

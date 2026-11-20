@@ -166,9 +166,22 @@
         // 时长：扫描器给的 duration，没有就用播放过后记下的；都没有就不显示
         const durationOf = (t, i) => (Number(t && t.duration) > 0 ? Number(t.duration) : Number(opts.durationOf?.(t, i)) || 0);
 
-        const rebuild = () => {
+        /*
+         * steady：曲库只是变多了（扫描途中一批批进来）。这时不把目录拉回选中行，
+         * 而是让眼前最上面那首歌留在原来的位置，上面多出来的歌不把正在看的内容顶走。
+         */
+        const rebuild = ({ steady = false } = {}) => {
             const index = opts.getIndex();
             if (!index) return;
+            let anchor = null;
+            if (steady && state.rows.length) {
+                const top = r.viewport.scrollTop;
+                for (let k = 0; k < state.rows.length; k++) {
+                    if (state.offsets[k] < top || state.rows[k].type !== 'track') continue;
+                    anchor = { i: state.rows[k].i, ctx: state.rows[k].ctx, dy: state.offsets[k] - top };
+                    break;
+                }
+            }
             const out = Index.listRows({
                 tracks: tracks(), playlists: app.customPlaylists, recent: opts.getRecent(), index,
                 kind: state.kind, query: state.query, columnOfGroup: opts.columnOfGroup, spec: opts.getSpec?.() || null
@@ -206,7 +219,10 @@
             state.rendered.clear();
             state.selectedRow = findRow(state.selected, state.preferCtx);
             // 重排后（比如拼音表加载好、分组变了）选中行可能跑到视野外，拉回来
-            if (state.selectedRow >= 0 && !inView(state.selectedRow)) scrollToRow(state.selectedRow, { center: true });
+            if (steady) {
+                const k = anchor ? findRow(anchor.i, anchor.ctx) : -1;
+                if (k >= 0) r.viewport.scrollTop = Math.max(0, state.offsets[k] - anchor.dy);
+            } else if (state.selectedRow >= 0 && !inView(state.selectedRow)) scrollToRow(state.selectedRow, { center: true });
             render();
         };
 
@@ -360,13 +376,13 @@
         };
 
         /* 阵列那边换了选中：列表跟着高亮并滚到那一行 */
-        const reveal = (i, ctx, { center = false } = {}) => {
+        const reveal = (i, ctx, { center = false, quiet = false } = {}) => {
             state.selected = i;
             state.preferCtx = ctx;
             const k = findRow(i, ctx);
             const moved = k !== state.selectedRow;
             state.selectedRow = k;
-            if ((moved || center) && k >= 0) scrollToRow(k, { center: center || !inView(k) });
+            if (!quiet && (moved || center) && k >= 0) scrollToRow(k, { center: center || !inView(k) });
             render(); // 当场画，避免阵列和目录高亮差一帧
         };
         const inView = (k) => {
