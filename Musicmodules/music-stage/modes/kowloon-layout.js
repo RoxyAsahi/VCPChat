@@ -311,7 +311,7 @@
         iso: { position: [78, 62, 128], target: [6, 20, 46], fov: 38, orbit: 22 },
         street: { from: [-34, 2.4, 67.6], to: [50, 5.5, 67.6], target: [10, 13, 60], fov: 62 },
         roof: { from: [-90, 56, 40], to: [60, 50, -40], fov: 55 },
-        screen: { position: [10, 22, 80], target: [10, 22.4, 60], fov: 43 }
+        screen: { position: [10, 22, 80], target: [10, 22.4, 60], fov: 45 }
     });
 
     // 主入口：主巷 B 的南口，牌楼和集市雨棚（巷道模块画）。招牌避开 keepOut 这个盒子。
