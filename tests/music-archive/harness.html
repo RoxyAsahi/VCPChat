@@ -17,6 +17,7 @@
 <script src="/Musicmodules/music-archive/archive-scene.js"></script>
 <script src="/Musicmodules/music-archive/archive-index.js"></script>
 <script src="/Musicmodules/music-archive/archive-list.js"></script>
+<script src="/Musicmodules/music-archive/archive-lyrics.js"></script>
 <script src="/Musicmodules/music-archive/archive-view.js"></script>
 <script>
 /* 假播放器：只有档案页用到的字段和函数。?n=曲目数 ?light ?dock=像素 ?empty */
@@ -61,6 +62,15 @@
     app.playlist = [];
     setTimeout(() => { app.playlist = playlist; }, 300);
     setTimeout(() => { app.currentTrackIndex = Number(q.get('late') || 137) % Math.max(1, n); }, 700);
+  }
+  // ?lyrics：正在播放第 0 首，带一份歌词（部分行有译文），进度停在第 30 秒附近
+  if (q.has('lyrics')) {
+    const L1 = ['空车厢里只剩下光', '窗外的海一点点暗下来', '我数着经过的站台', 'まだ見ぬ朝を待っている', '信号灯在远处闪', '你说过会在终点等我', '潮水漫过了铁轨', '倒影里有另一个夏天', '把旧磁带倒回开头', '风把名字吹散', '下一站是哪里', '灯塔亮起的时候'];
+    app.currentLyrics = L1.map((text, i) => ({ time: i * 6 + 2, text, translation: i % 3 === 1 ? 'the sea fades slowly outside the window' : '' }));
+    app.isPlaying = true;
+    app.lastKnownCurrentTime = 31;
+    app.lastStateUpdateTime = Date.now();
+    app.seekTo = (t) => { app.calls.push(['seekTo', t]); };
   }
   window.MusicArchive.init(app);
   window.__ready = true;

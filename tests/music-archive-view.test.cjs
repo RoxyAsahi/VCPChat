@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
 const read = (p) => fs.readFileSync(p, 'utf8');
-const SCRIPTS = ['model', 'scene', 'index', 'list', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
+const SCRIPTS = ['model', 'scene', 'index', 'list', 'lyrics', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });
@@ -648,5 +648,70 @@ test('阵列上 Shift+F10 打开选中卡的右键菜单；歌单分类里的行
     const row = f.view.list.el.querySelector('.archive-list-row');
     row.dispatchEvent(new f.w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     assert.deepEqual(JSON.parse(JSON.stringify(f.app.contextMenuScopeHint)), { type: 'playlist', id: 'p', name: '夜间散步' });
+    f.close();
+});
+
+test('右侧滚动歌词：播放器有歌词时显示，当前行跟着进度走，点一行跳过去；没有歌词就不显示', async () => {
+    const seeks = [];
+    const f = fixture({
+        setup: (w, app) => {
+            Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
+            app.currentLyrics = [{ time: 0, text: '第一句' }, { time: 5, text: '第二句', translation: 'second' }, { time: 10, text: '' }, { time: 12, text: '第三句' }];
+            app.isPlaying = true;
+            app.lastKnownCurrentTime = 6;
+            app.lastStateUpdateTime = Date.now();
+            app.seekTo = (t) => seeks.push(t);
+        }
+    });
+    const el = f.w.document.querySelector('.archive-lyrics');
+    assert.ok(el && !el.hidden);
+    assert.ok(f.w.document.querySelector('.archive-hud').classList.contains('has-lyrics'));
+    const d = f.view.debug().lyrics;
+    assert.equal(d.lines, 3); // 空行不显示
+    assert.equal(d.index, 1);
+    assert.equal(el.querySelector('p.on b').textContent, '第二句');
+    assert.equal(el.querySelector('p.on em').textContent, 'second');
+    assert.ok(d.ticking);
+    // 点第三句：跳到 12 秒，高亮跟过去
+    el.querySelectorAll('p')[2].dispatchEvent(new f.w.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual(seeks, [12]);
+    assert.equal(el.querySelector('p.on b').textContent, '第三句');
+    // 换了一首没有歌词的：收起
+    f.app.currentLyrics = [];
+    f.app.currentTrackIndex = 3;
+    f.view.refresh();
+    assert.ok(el.hidden);
+    assert.ok(!f.w.document.querySelector('.archive-hud').classList.contains('has-lyrics'));
+    assert.ok(!f.view.debug().lyrics.ticking);
+    f.close();
+});
+
+test('右侧歌词：经典视图和播放页里不显示，暂停时不走表', () => {
+    const f = fixture({
+        setup: (w, app) => {
+            Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
+            app.currentLyrics = [{ time: 0, text: 'a' }, { time: 5, text: 'b' }];
+            app.isPlaying = false;
+            app.lastKnownCurrentTime = 1;
+        }
+    });
+    const el = f.w.document.querySelector('.archive-lyrics');
+    assert.ok(!el.hidden);
+    assert.ok(!f.view.debug().lyrics.ticking);
+    f.view.showClassic();
+    assert.ok(el.hidden);
+    f.view.show();
+    assert.ok(!el.hidden);
+    f.w.document.body.classList.add('music-stage-active');
+    f.view.refresh();
+    f.w.dispatchEvent(new f.w.Event('resize'));
+    assert.ok(el.hidden);
+    f.w.document.body.classList.remove('music-stage-active');
+    f.w.dispatchEvent(new f.w.Event('resize'));
+    assert.ok(!el.hidden);
+    // 窄窗口放不下：收起
+    Object.defineProperty(f.w, 'innerWidth', { value: 900 });
+    f.w.dispatchEvent(new f.w.Event('resize'));
+    assert.ok(el.hidden);
     f.close();
 });

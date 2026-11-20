@@ -493,6 +493,7 @@
             }
             state.scene?.setPlaying(cell, app.isPlaying);
             list?.setPlaying(app.currentTrackIndex);
+            syncLyrics();
             if (recordRecent()) {
                 if (letterOf) queueMicrotask(() => { if (!state.destroyed) rebuild(); });
                 else if (list && list.kind === 'recent') list.rebuild();
@@ -585,6 +586,12 @@
         };
 
         let list = null;
+        let lyrics = null;
+        const syncLyrics = () => {
+            if (!lyrics) return;
+            lyrics.setAllowed(isShown() && !isNarrow() && !document.body.classList.contains('music-stage-active'));
+            lyrics.sync();
+        };
         const LIST_KEY = 'musicArchiveList';
         let listPref = null;
         try { listPref = localStorage.getItem(LIST_KEY); } catch (e) { listPref = null; }
@@ -710,6 +717,7 @@
                 if (!app.isStageActive) originalCreateAmbient?.();
                 app.visualizerCanvas && (app.visualizerCanvas.width = app.visualizerCanvas.clientWidth);
             }
+            syncLyrics();
         };
 
         // 档案页显示时，旧界面的背景声纹不需要画
@@ -791,6 +799,7 @@
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
+            syncLyrics();
             updateLabelMask();
             kick();
         };
@@ -805,7 +814,13 @@
             const pad = 24 * sc;
             // 说明块右半是一条延伸到边缘的细线，只挡文字和封面那一段
             const right = Math.min(r.right, r.left + 730 * sc);
-            state.scene.setLabelMask([{ left: r.left - base.left - pad, top: r.top - base.top - pad, right: right - base.left + pad, bottom: r.bottom - base.top + pad }]);
+            const masks = [{ left: r.left - base.left - pad, top: r.top - base.top - pad, right: right - base.left + pad, bottom: r.bottom - base.top + pad }];
+            // 右侧歌词下面的卡也不印标题，免得字叠字
+            if (lyrics && lyrics.shown) {
+                const y = lyrics.el.getBoundingClientRect();
+                masks.push({ left: y.left - base.left - pad, top: y.top - base.top - pad, right: y.right - base.left, bottom: y.bottom - base.top });
+            }
+            state.scene.setLabelMask(masks);
         };
 
         const frame = (now) => {
@@ -1061,6 +1076,7 @@
             if (dataChanged()) rebuild();
             updatePlaying();
             recordDuration();
+            syncLyrics();
         }, 1000);
 
         const destroy = () => {
@@ -1071,6 +1087,7 @@
             clearInterval(clockTimer);
             clearTimeout(state.coverTimer);
             stopInertia();
+            lyrics?.destroy();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);
@@ -1105,6 +1122,12 @@
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
         }
+        // 右侧滚动歌词（播放器取到歌词时显示；窄窗口、经典视图、播放页里不显示）
+        const LyricsLib = global.MusicArchiveLyrics;
+        lyrics = LyricsLib ? LyricsLib.create({
+            host: refs.hud, app, reducedMotion,
+            onChange: (on) => { refs.hud.classList.toggle('has-lyrics', on); updateLabelMask(); kick(); }
+        }) : null;
         loadPinyin();
 
         let initialMode = 'archive';
@@ -1130,7 +1153,8 @@
             get mode() { return state.mode; },
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null
+                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null,
+                lyrics: lyrics ? lyrics.debug() : null
             })
         };
         app.archiveView = api;

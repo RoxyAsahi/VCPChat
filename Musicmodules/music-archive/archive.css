@@ -324,3 +324,58 @@ body.music-reduce-motion .archive-list-row.on::after, body.music-reduce-motion .
 /* 从档案页用键盘打开的右键菜单：当前项高亮，→ 打开的「加入歌单」子菜单保持展开 */
 #track-context-menu .context-menu-item:focus, #track-context-menu .submenu-item:focus { outline: none; background: var(--hover-bg, rgba(128, 128, 128, .14)); }
 #track-context-menu .has-submenu.archive-kbd-sub .context-submenu { opacity: 1; transform: translateX(0); pointer-events: auto; }
+
+/* ═════════ 右侧滚动歌词：和左侧目录同一套排版，柔光从右边缘向左渐隐 ═════════ */
+.archive-lyrics {
+    position: absolute;
+    right: 0;
+    top: 265px;
+    bottom: calc(150px + var(--archive-dock-lift, 0px));
+    width: 470px;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+    user-select: none;
+    --glow: .92;
+}
+body.light-theme .archive-lyrics { --glow: .85; }
+.archive-lyrics[hidden] { display: none; }
+.archive-lyrics::before {
+    content: "";
+    position: absolute;
+    right: 0; top: -60px; bottom: -40px;
+    width: calc(100% + 120px);
+    background: linear-gradient(to left, rgba(var(--ar-paper-rgb), var(--glow)) 0, rgba(var(--ar-paper-rgb), calc(var(--glow) - .07)) 55%, rgba(var(--ar-paper-rgb), 0) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60px, #000 calc(100% - 40px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 60px, #000 calc(100% - 40px), transparent 100%);
+    pointer-events: none;
+    z-index: -1;
+}
+.archive-lyrics-head { display: flex; align-items: baseline; gap: 10px; margin-right: 59px; padding: 0 0 9px 20px; border-bottom: 1px solid var(--ar-rule); font-size: 12px; letter-spacing: 1.3px; color: var(--ar-muted); white-space: nowrap; }
+.archive-lyrics-head i { font-style: normal; opacity: .7; }
+.archive-lyrics-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; letter-spacing: .4px; }
+.archive-lyrics-viewport {
+    position: relative; flex: 1; min-height: 0; overflow: hidden; margin-top: 10px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
+}
+.archive-lyrics-track { padding-top: 40px; transition: transform .6s var(--mt-ease, cubic-bezier(.32, .72, 0, 1)); will-change: transform; }
+.archive-lyrics-track p { position: relative; height: 52px; margin: 0 59px 0 0; padding-left: 20px; display: flex; flex-direction: column; justify-content: center; gap: 4px; cursor: pointer; }
+.archive-lyrics-track p.tr { height: 74px; }
+.archive-lyrics-track b { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .62; transition: color .3s, opacity .3s; }
+.archive-lyrics-track em { font-style: normal; font-size: 12px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
+.archive-lyrics-track p:hover b { opacity: .9; }
+/* 正在唱：目录选中行同款记号（小方块 + 延伸到行尾的细线），字变成墨色加粗 */
+.archive-lyrics-track p.on b { color: var(--ar-ink); opacity: 1; font-weight: 750; }
+.archive-lyrics-track p.on em { color: var(--ar-ink); opacity: .8; }
+.archive-lyrics-track p.on::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--ar-square); }
+.archive-lyrics-track p.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 9.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
+body.music-reduce-motion .archive-lyrics-track { transition: none; }
+body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
+
+/* 有歌词时说明块收窄到左半，封面缩到 160 放在 ACCESS FILE 右边，右半给歌词 */
+.archive-hud.has-lyrics .archive-callout { width: 470px; }
+.archive-hud.has-lyrics .archive-cover { left: 300px; top: 210px; width: 160px; height: 160px; }
+.archive-hud.has-lyrics .archive-powered { visibility: hidden; }
+.archive-hud.has-lyrics .archive-summary { width: 412px; flex-direction: column; align-items: flex-start; gap: 6px; }
+.archive-hud.has-lyrics .archive-summary > span:first-child { max-width: 100%; }
