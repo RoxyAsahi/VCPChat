@@ -466,3 +466,42 @@ test('stage transport synchronizes play mode, mute and volume with the existing 
     app.stageHost.destroy();
     dom.window.close();
 });
+test('3D stage waits for the new song\'s lyrics behind a fade instead of building twice', async () => {
+    const dom = createStageDom();
+    installCanvasStub(dom.window);
+    for (const file of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js',
+        'modes/stage-lyric-layout.js', 'modes/stage-lyric-performance.js', 'modes/luminous-manager.js',
+        'modes/partita-manager.js', 'modes/cadenza-manager.js', 'modes/diorama-manager.js',
+        'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-host.js']) {
+        runScript(dom, `Musicmodules/music-stage/${file}`);
+    }
+    dom.window.localStorage.setItem('musicStageMode', 'diorama');
+    const { app } = createApp();
+    dom.window.setupMusicStage(app);
+    app.stageHost.enter();
+    await wait(dom.window, 20);
+    app.stageHost.updateFrame(1000);
+    const modeRoot = () => dom.window.document.querySelector('.music-stage-mode-root > .music-stage-mode');
+    assert.equal(app.stageHost.getDebugSnapshot().songHandover, null);
+
+    // The player switches songs: lyrics are emptied first and filled in later.
+    const lyrics = app.currentLyrics;
+    app.playlist.push({ ...app.playlist[0], path: 'C:\\Music\\next.flac', title: '下一首.flac' });
+    app.currentTrackIndex = 1;
+    app.currentLyrics = [];
+    app.stageHost.updateFrame(1100);
+    assert.equal(app.stageHost.getDebugSnapshot().songHandover, 'new-song');
+    assert.ok(modeRoot().classList.contains('is-song-leaving'));
+
+    await wait(dom.window, 400);
+    app.stageHost.updateFrame(1500);
+    // Faded out, but still no words: keep waiting rather than building a wordless journey.
+    assert.equal(app.stageHost.getDebugSnapshot().songHandover, 'new-song');
+
+    app.currentLyrics = lyrics.map((line) => ({ ...line }));
+    app.stageHost.updateFrame(1600);
+    assert.equal(app.stageHost.getDebugSnapshot().songHandover, null);
+    await wait(dom.window, 40);
+    assert.equal(modeRoot().classList.contains('is-song-leaving'), false);
+    app.stageHost.destroy();
+});

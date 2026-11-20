@@ -305,6 +305,11 @@
             // one has drawn, then one blurs away as the other settles in.
             leaving: null,
             arriving: null,
+            // Song handover: what the current mode is performing; see songHandover.
+            handover: null,
+            committedSong: null,
+            committedIdentity: null,
+            committedInstance: null,
             generation: 0,
             trackPath: null,
             trackSignature: '',
@@ -1046,6 +1051,69 @@
             updateTransportControls();
         };
 
+        // Which song (and which lyrics) the current mode is performing. The
+        // player empties the lyrics when a song changes and fills them in a
+        // moment later, from cache or a search. A 3D mode that followed along
+        // directly would build its whole journey for a song without words,
+        // then again once the words arrive: two jumps. So the 3D modes stay
+        // on the song they have until the new one is ready, fade out softly,
+        // rebuild unseen and come back out of the same blur.
+        const SONG_LEAVE_MS = 360;
+        const LYRICS_WAIT_MS = 2000;
+        const SCENE_MODES = new Set(['diorama', 'tunnel', 'kowloon']);
+        const linesIds = new WeakMap();
+        let nextLinesId = 1;
+        const songKey = (frame) => {
+            const track = frame.track;
+            const identity = track?.path || `${track?.title || ''}\u0001${track?.artist || ''}`;
+            const lines = frame.lines;
+            if (!lines?.length) return { identity, key: `${identity}\u0001-` };
+            if (!linesIds.has(lines)) linesIds.set(lines, nextLinesId++);
+            return { identity, key: `${identity}\u0001${linesIds.get(lines)}` };
+        };
+        // Returns whether the mode should get this frame.
+        const songHandover = (frame) => {
+            const instance = state.modeInstance;
+            const { identity, key } = songKey(frame);
+            const handover = state.handover;
+            if (!instance || !SCENE_MODES.has(state.modeId) || reducedMotion() || state.arriving
+                || state.committedSong === null || state.committedInstance !== instance) {
+                if (handover) instance?.root.classList.remove('is-song-leaving');
+                state.handover = null;
+                state.committedSong = key;
+                state.committedIdentity = identity;
+                state.committedInstance = instance;
+                return true;
+            }
+            if (key === state.committedSong) {
+                if (handover) {
+                    // Went back to what is on screen (a quick skip back): show it again.
+                    instance.root.classList.remove('is-song-leaving');
+                    state.handover = null;
+                }
+                return true;
+            }
+            const now = performance.now();
+            const newSong = identity !== state.committedIdentity;
+            if (!handover || handover.newSong !== newSong) {
+                state.handover = { since: handover?.since ?? now, newSong };
+                instance.root.classList.add('is-song-leaving');
+                state.stats.songHandovers = (state.stats.songHandovers || 0) + 1;
+            }
+            const waited = now - state.handover.since;
+            // A new song waits for its words, or until it is clearly playing without them.
+            const ready = !newSong || frame.lines?.length > 0 || waited >= LYRICS_WAIT_MS;
+            if (waited < SONG_LEAVE_MS || !ready) return false;
+            state.handover = null;
+            state.committedSong = key;
+            state.committedIdentity = identity;
+            // Rebuild on this frame while hidden, then let the picture come back.
+            requestAnimationFrame(() => {
+                if (state.modeInstance === instance && !state.handover) instance.root.classList.remove('is-song-leaving');
+            });
+            return true;
+        };
+
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
             applySeekHold();
@@ -1073,7 +1141,7 @@
                 root.style.setProperty('--stage-audio-vocal', audioVocal);
             }
             drawEdgeSpectrum(frame);
-            state.modeInstance?.updateFrame?.(frame);
+            if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
             if (state.leaving || state.arriving) {
                 state.leaving?.instance.updateFrame?.(frame);
                 advanceSoftSwitch(performance.now());
@@ -1489,6 +1557,7 @@
                     hasModeInstance: Boolean(state.modeInstance),
                     switching: state.arriving ? 'waiting' : state.leaving ? 'crossfading' : null,
                     leavingModeId: state.leaving?.instance.id || null,
+                    songHandover: state.handover ? (state.handover.newSong ? 'new-song' : 'new-lyrics') : null,
                     modeRootChildren: elements.modeRoot.childElementCount,
                     canvasCount: elements.modeRoot.querySelectorAll('canvas').length,
                     ...state.stats,
