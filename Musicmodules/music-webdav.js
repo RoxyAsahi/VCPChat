@@ -2,6 +2,8 @@
 // WebDAV logic
 
 function setupWebDav(app) {
+    // 曲名、歌手、专辑来自文件标签，歌单名、服务器名、WebDAV 文件名来自用户或远端：拼进 HTML 前都要转义。
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     app.openWebDavModal = async () => {
         app.webdavModal.classList.add('active');
         if (!app.api?.listWebdavServers) return;
@@ -21,7 +23,7 @@ function setupWebDav(app) {
         app.webdavServers.forEach((server) => {
             const div = document.createElement('div');
             div.className = 'webdav-server-item' + (app.activeWebDavServer && app.activeWebDavServer.id === server.id ? ' active' : '');
-            div.innerHTML = `<span class="webdav-server-name">${server.name}</span><button class="webdav-server-remove" data-id="${server.id}" title="删除">×</button>`;
+            div.innerHTML = `<span class="webdav-server-name">${esc(server.name)}</span><button class="webdav-server-remove" data-id="${esc(server.id)}" title="删除">×</button>`;
             div.querySelector('.webdav-server-name').addEventListener('click', () => {
                 app.activeWebDavServer = server;
                 app.webdavCurrentPath = '/';
@@ -59,7 +61,7 @@ function setupWebDav(app) {
             path: dirPath,
         });
         if (!result || result.status !== 'success') {
-            app.webdavFileList.innerHTML = `<div class="no-lyrics" style="padding:20px;">错误: ${result ? result.message : '未知错误'}</div>`;
+            app.webdavFileList.innerHTML = `<div class="no-lyrics" style="padding:20px;">错误: ${esc(result ? result.message : '未知错误')}</div>`;
             return;
         }
         const entries = result.entries.filter((entry) => {
@@ -79,7 +81,7 @@ function setupWebDav(app) {
             const isAudio = !entry.isDir && AUDIO_EXTS.has(ext);
             const div = document.createElement('div');
             div.className = 'webdav-file-item' + (entry.isDir ? ' is-dir' : '') + (isAudio ? ' is-audio' : '');
-            div.innerHTML = `<span class="webdav-file-icon">${entry.isDir ? '📁' : (isAudio ? '🎍' : '📄')}</span><span class="webdav-file-name">${entry.name}</span>`;
+            div.innerHTML = `<span class="webdav-file-icon">${entry.isDir ? '📁' : (isAudio ? '🎍' : '📄')}</span><span class="webdav-file-name">${esc(entry.name)}</span>`;
             if (entry.isDir) {
                 div.addEventListener('dblclick', () => {
                     const href = entry.href.replace(/\/$/, '');
@@ -201,9 +203,11 @@ function setupWebDav(app) {
         });
         app.webdavImportBtn?.addEventListener('click', () => {
             if (app.webdavScannedTracks.length === 0) return;
+            // 按地址去重：同名不同曲（各张专辑的 Intro）、本地已有同名歌，都不该把远程曲目挡掉；同一首导入两次才算重复。
+            const known = new Set(app.playlist.map((p) => p && p.path).filter(Boolean));
             const newTracks = app.webdavScannedTracks
-                .map((t) => ({ ...t, serverId: app.activeWebDavServer.id, isRemote: true }))
-                .filter((rt) => !app.playlist.some((p) => (p.title || p.name || '').toLowerCase() === (rt.title || rt.name || '').toLowerCase()));
+                .filter((rt) => rt && rt.path && !known.has(rt.path) && known.add(rt.path))
+                .map((t) => ({ ...t, serverId: app.activeWebDavServer.id, isRemote: true }));
             app.playlist.push(...newTracks);
             app.currentFilteredTracks = null;
             app.renderPlaylist(null);
