@@ -866,3 +866,29 @@ test('右侧歌词：正在放的歌等一会儿还没有歌词，只留栏头�
     assert.ok(hud.classList.contains('has-lyrics'));
     f.close();
 });
+
+test('大曲库整体变化：分片重建，中途不改画面，做完后阵列、目录、检索都是新曲库；小曲库当场重建', async () => {
+    const make = (n, tag = '') => Array.from({ length: n }, (_, i) => ({ path: '/big/' + tag + i, title: '清晨的站台 ' + tag + i, artist: i % 2 ? 'Aki' : '周杰伦', album: 'A' + (i % 9) }));
+    const f = fixture({ tracks: make(2400), playlists: [] });
+    const files = () => Number(f.text('files'));
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    f.view.setListOpen(true);
+    assert.equal(files(), 2400);
+    f.app.playlist = make(2600);
+    f.view.refreshSoon();
+    assert.equal(files(), 2400, '这一片只算了一部分条目，画面还没换');
+    // 中途曲库又变了：按最新的那份重来
+    f.app.playlist = make(2700, 'x');
+    await wait(400);
+    assert.equal(files(), 2700);
+    assert.equal(f.view.list.count, 2700);
+    assert.equal(f.view.debug().columns.reduce((a, c) => a + (/^letter:/.test(c.id) ? c.n : 0), 0), 2700);
+    f.view.list.input.value = 'x2699';
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.equal(f.view.list.count, 1);
+    // 小曲库不分片
+    f.app.playlist = make(30, 's');
+    f.view.refreshSoon();
+    assert.equal(files(), 30);
+    f.close();
+});

@@ -22,14 +22,19 @@
      * playlists 是 app.customPlaylists（{ id, name, tracks: [path] }）。
      * 专辑列只收两首以上的专辑，按曲目数从多到少，最多 maxAlbums 列。
      */
+    const pathIndex = (list) => {
+        const map = new Map();
+        (Array.isArray(list) ? list : []).forEach((track, index) => {
+            const key = normalizePath(track && track.path);
+            if (key && !map.has(key)) map.set(key, index);
+        });
+        return map;
+    };
     const buildColumns = (tracks, playlists, options = {}) => {
         const list = Array.isArray(tracks) ? tracks : [];
         const maxAlbums = Number.isFinite(options.maxAlbums) ? options.maxAlbums : 24;
-        const indexByPath = new Map();
-        list.forEach((track, index) => {
-            const key = normalizePath(track && track.path);
-            if (key && !indexByPath.has(key)) indexByPath.set(key, index);
-        });
+        // 路径 → 曲库下标。调用方已经有这张表时（options.indexByPath）直接用，大曲库省一遍
+        const indexByPath = options.indexByPath || pathIndex(list);
 
         const columns = [{
             id: 'all',
@@ -199,7 +204,7 @@
     const signature = (columns) => columns.map((c) => c.id + ':' + c.items.length).join('|');
 
     const api = Object.freeze({
-        wrap, normalizePath, stripExtension, buildColumns, search, searchColumn,
+        wrap, normalizePath, pathIndex, stripExtension, buildColumns, search, searchColumn,
         fileCode, cellTrack, locate, step, createWheel, createInertia, rowAtFraction, signature
     });
 

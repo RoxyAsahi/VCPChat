@@ -71,10 +71,39 @@ for (let round = 0; round < 3; round++) {
   }
 }
 out.sort = { median: med(sorts.map((x) => x.ms)), max: Math.max(...sorts.map((x) => x.ms)), each: sorts.slice(0, 4) };
-// 只重建索引（拼音）一次的耗时，作参考
+// 曲库整体变化后的重建：条目缓存是热的时一次重建多久；多了 50 首新歌时多久；
+// 缓存全冷时（第一次）分片预热，每片多久
 const a = t(); view.refresh(); out.refresh = +(t() - a).toFixed(1);
+app.playlist = tracks.concat(Array.from({ length: 50 }, (_, i) => ({ path: 'D:\\N\\' + i + '.flac', title: '新歌 ' + i + '.flac', artist: 'Aki', album: 'New' })));
+const a2 = t(); view.refresh(); out.refreshPlus50 = +(t() - a2).toFixed(1);
+{
+  const cache = new Map(); const slices = []; let at = 0;
+  while (at !== -1) { const s0 = t(); at = w.MusicArchiveIndex.warm(tracks, { cache, from: at, budgetMs: 8 }); slices.push(t() - s0); }
+  out.coldWarm = { slices: slices.length, maxSliceMs: +Math.max(...slices).toFixed(1), totalMs: +slices.reduce((x, y) => x + y, 0).toFixed(1) };
+}
 out.columns = view.debug().columns.length;
 if (global.gc) global.gc();
 out.heapMB = +((process.memoryUsage().heapUsed - heap0) / 1048576).toFixed(1); // 索引、列、目录合计（node --expose-gc 时才准）
-console.log(JSON.stringify(out, args.full ? 1 : (k, v) => (k === 'each' ? undefined : v), 1));
-view.destroy(); w.close();
+// 分片重建（界面实际走的路）：曲库换成一份新的，量每一片占多久。先是缓存全冷（第一次读进来），再是多了 50 首
+const sliced = async (label, next, cold) => {
+  const st = w.setTimeout; const tasks = [];
+  w.setTimeout = (fn, ms, ...a) => st(() => { const s0 = t(); fn(...a); tasks.push(t() - s0); }, ms);
+  if (cold) { view.destroy(); app.archiveView = null; w.document.getElementById('music-archive-view').innerHTML = ''; }
+  const v = cold ? w.MusicArchive.init(Object.assign(app, { playlist: [] }), { pinyinSrc: false }) : view;
+  if (cold) v.setListOpen(true);
+  app.playlist = next;
+  const s0 = t(); v.refreshSoon(); const first = t() - s0;
+  const begun = t();
+  while (Number(w.document.querySelector('[data-ref="files"]').textContent) !== next.length && t() - begun < 5000) await new Promise((r) => st(r, 5));
+  await new Promise((r) => st(r, 120));
+  w.setTimeout = st;
+  const all = [first, ...tasks.filter((x) => x > 0.5)];
+  out[label] = { slices: all.length, maxSliceMs: +Math.max(...all).toFixed(1), totalMs: +all.reduce((x, y) => x + y, 0).toFixed(1), top: all.slice().sort((x, y) => y - x).slice(0, 4).map((x) => +x.toFixed(1)), tail: all.slice(-5).map((x) => +x.toFixed(1)) };
+  return v;
+};
+(async () => {
+  const v = await sliced('slicedPlus50', tracks.concat(Array.from({ length: 120 }, (_, i) => ({ path: 'D:\\X\\' + i + '.flac', title: '又一首 ' + i + '.flac', artist: 'Ren', album: 'New' }))), false);
+  const v2 = await sliced('slicedCold', tracks.map((x) => ({ ...x })), true);
+  console.log(JSON.stringify(out, args.full ? 1 : (k, val) => (k === 'each' ? undefined : val), 1));
+  v2.destroy(); w.close();
+})();

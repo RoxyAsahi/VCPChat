@@ -140,3 +140,27 @@ test('排序方式：歌手按歌手首字母分组、时长按时长段、添�
     assert.deepEqual(rows.rows.filter((r) => r.type === 'head').map((r) => r.key), ['sort:d0', 'sort:d3', 'sort:d4', 'sort:d7', 'sort:d?']);
     assert.deepEqual(Index.SORTS, ['title', 'artist', 'duration', 'added']);
 });
+
+test('分片排名次和一次排完结果一样；曲库多了几首时沿用上次的顺序，结果也一样', () => {
+    const mk = (n, extra = []) => Array.from({ length: n }, (_, i) => ({ path: '/r/' + i, title: ['潮汐', 'Blue', '夏日', 'アイドル', '10 号', '2 号'][i % 6] + ' ' + ((i * 7919) % 1000), artist: ['Ren', '周杰伦', '', 'YOASOBI'][i % 4] })).concat(extra);
+    const order = (index, mode) => Index.sortedIndices(index, Array.from({ length: index.size }, (_, i) => i), Index.sortSpec(index, { mode }));
+    const tracks = mk(3000);
+    const whole = Index.createIndex(tracks);
+    const cache = new Map();
+    let at = 0, slices = 0;
+    while (at !== -1) { at = Index.warm(tracks, { cache, from: at, budgetMs: 1 }); slices++; }
+    assert.ok(slices > 1, '预热分了多片');
+    const sliced = Index.createIndex(tracks, { cache });
+    for (const mode of ['title', 'artist']) {
+        const step = Index.prepareSort(sliced, mode);
+        let steps = 0;
+        while (!step(0.2)) { steps++; assert.ok(steps < 5000); }
+        assert.deepEqual(order(sliced, mode), order(whole, mode), mode);
+    }
+    // 多了几首：新索引里的旧条目是同一批对象，名次靠归并得到
+    const more = mk(3000, [{ path: '/r/new1', title: 'Blue 0', artist: 'Aki' }, { path: '/r/new2', title: '阿', artist: '' }]);
+    const next = Index.createIndex(more, { cache });
+    const fresh = Index.createIndex(more);
+    for (const mode of ['title', 'artist']) assert.deepEqual(order(next, mode), order(fresh, mode), mode);
+    assert.equal(cache.size, 3002);
+});
