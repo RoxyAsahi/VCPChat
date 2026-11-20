@@ -829,7 +829,7 @@
             p = add(p, n, -1.2); p[1] += spec.lift + spec.height / 2;
             ht = spec.width / 2; hn = 1.4; hu = spec.height / 2 + spec.lift / 2;
         } else {
-            if (slot.kind === 'shop') p[1] = Math.max(p[1], 2.35 + spec.height / 2);
+            if (slot.kind === 'shop') p[1] = Math.max(p[1], 2.9 + spec.height / 2);
             p = add(p, n, 0.3); ht = spec.width / 2; hn = 0.35;
         }
         const ext = k => Math.abs(t[k]) * ht + Math.abs(n[k]) * hn + (k === 1 ? hu : 0);
@@ -928,6 +928,11 @@
                 spec.rise = spec.height / 2 - 1.2;
                 spec.gain *= 1.15;
             }
+            // Street level (shutters, stalls, awnings to 2.7 m) belongs to the alley.
+            if (slot.kind !== 'shop' && slot.kind !== 'roof') {
+                const bottom = vec(slot.pos)[1] + (spec.rise || 0) - spec.height / 2;
+                if (bottom < 2.9) spec.rise = (spec.rise || 0) + 2.9 - bottom;
+            }
             return { ...spec, slot };
         }).filter((spec, i, all) => {
             // Signs must not run through one another: keep the earlier (better
@@ -1015,8 +1020,8 @@
             // and cages that sit mid-bay.
             if (spec.kind === 'blade') p = add(p, tangent, bay / 2 * bladeSide(slot));
             if (spec.rise) p = add(p, UP, spec.rise);
-            // Shop fascias sit over the door, not across it.
-            if (slot.kind === 'shop') p = [p[0], Math.max(p[1], 2.35 + spec.height / 2), p[2]];
+            // Shop fascias sit above the awnings and shutters (street level is the alley's).
+            if (slot.kind === 'shop') p = [p[0], Math.max(p[1], 2.9 + spec.height / 2), p[2]];
             const info = [spec.index, spec.gain, 0, spec.beat];
             const faceUv = uvOf(spec.rect);
             let c, r, u, f;
