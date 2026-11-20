@@ -1394,3 +1394,34 @@ body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
 }
 #music-dock-root .md-fx-sc .ir-load-btn { color: var(--md-t1); background: transparent; border: 1px solid var(--md-line2); border-radius: 0; }
 #music-dock-root .md-fx-sc .help-tip-box { color: var(--md-t1); background: var(--md-menu); border: 1px solid var(--md-line2); border-radius: 0; box-shadow: var(--md-panel-shadow); }
+
+/* ───────── 搜索面板（Ctrl+K）收小：和右侧抽屉、目录同一套写法 ─────────
+ * 不再是大圆角卡片加图标圆圈：细线方框、一行一个结果，选中行是墨色文字、前面一个实心小方块。 */
+.md-cmd-scrim { background: rgba(0, 0, 0, .22); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .3); }
+.md-cmd-box {
+  max-width: 30rem;
+  border-radius: 2px;
+  border: 1px solid var(--md-line2);
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .45);
+  clip-path: inset(calc(100% - 44px) 20% 0 20%);
+}
+.md-cmd.md-open .md-cmd-box { clip-path: inset(0 0 0 0); }
+.md-cmd-list { height: auto; max-height: min(360px, 45vh); padding: 4px 0; gap: 0; }
+#music-dock-root .md-cmd-row { gap: 10px; border-radius: 0; padding: 7px 16px; }
+#music-dock-root .md-cmd-row.md-act { background: var(--md-fill); }
+.md-cmd-ri { width: 16px; height: 16px; border: 0; border-radius: 0; color: var(--md-t3); }
+.md-cmd-ri .md-i { width: 14px; height: 14px; }
+.md-cmd-row.md-cur .md-cmd-ri { background: none; color: var(--md-t1); }
+.md-cmd-row.md-act .md-cmd-title { color: var(--md-t1); font-weight: 600; }
+.md-cmd-title { font-size: 13px; font-weight: 400; color: var(--md-t1); }
+.md-cmd-desc { font-size: 11px; opacity: 1; color: var(--md-t2); }
+.md-cmd-grp { padding: 0; letter-spacing: .08em; opacity: 1; color: var(--md-t3); }
+.md-cmd-chip { border-radius: 0; background: none; box-shadow: inset 0 0 0 1px var(--md-line2); }
+.md-cmd-sec { padding: 8px 16px 2px; letter-spacing: .16em; opacity: 1; color: var(--md-t3); }
+.md-cmd-empty { margin: 0; padding: 14px 16px; gap: 4px; align-items: flex-start; font-size: 13px; opacity: 1; color: var(--md-t2); }
+.md-cmd-tip { font-size: 11px; color: var(--md-t3); }
+.md-cmd-hd { padding: 10px 16px; }
+.md-cmd-in { font-size: 14px; }
+.md-cmd-kbd { border-radius: 0; background: none; box-shadow: inset 0 0 0 1px var(--md-line2); }
+.md-cmd-foot kbd { border-radius: 0; }

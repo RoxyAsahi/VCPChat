@@ -94,7 +94,7 @@
         root.innerHTML = `
 <div class="md-cmd-scrim" data-cmd="scrim"></div>
 <div class="md-cmd-wrap">
-  <section class="md-cmd-box" role="dialog" aria-modal="true" aria-label="命令面板">
+  <section class="md-cmd-box" role="dialog" aria-modal="true" aria-label="搜索歌曲">
     <div class="md-cmd-body">
       <div class="md-cmd-hints" hidden></div>
       <div class="md-cmd-list" role="listbox" id="music-dock-cmd-list" aria-label="结果"></div>
@@ -102,7 +102,7 @@
     </div>
     <div class="md-cmd-hd">
       <span class="md-cmd-ic">${icon('search', 18)}</span>
-      <input class="md-cmd-in" type="text" spellcheck="false" autocomplete="off" placeholder="搜歌、歌手、专辑，或输入操作…  --歌手 / --专辑 可过滤"
+      <input class="md-cmd-in" type="text" spellcheck="false" autocomplete="off" placeholder="搜索歌曲、歌手、专辑"
         role="combobox" aria-expanded="true" aria-controls="music-dock-cmd-list" aria-autocomplete="list">
       <kbd class="md-cmd-kbd">Esc</kbd>
     </div>
@@ -320,10 +320,8 @@
             const q = parseQuery(raw);
             let items = [];
             if (!raw.trim()) {
-                const recent = recentItems();
-                const seen = new Set(recent.map((r) => r.id));
-                items.push(...recent);
-                items.push(...commands().filter((c) => !seen.has(c.id)).map((c) => ({ ...c, section: '命令' })));
+                // 没输入时只放最近找过的歌和歌单；播放、切歌这些底栏上都有，不在这里列一排。
+                items.push(...recentItems().filter((it) => !String(it.id).startsWith('cmd') && (it.queueable || String(it.id).startsWith('playlist:'))).slice(0, 8));
             } else {
                 const songs = [];
                 const playlists = [];
@@ -381,7 +379,9 @@
 
         const render = () => {
             if (!state.items.length) {
-                list.innerHTML = `<div class="md-cmd-empty">${icon('search', 22)}<span>没有找到匹配的歌、歌单或操作</span></div>`;
+                list.innerHTML = input.value.trim()
+                    ? `<div class="md-cmd-empty"><span>没有找到匹配的歌、歌单或操作</span></div>`
+                    : `<div class="md-cmd-empty"><span>输入歌名、歌手或专辑</span><span class="md-cmd-tip">加 --歌手、--专辑 可以缩小范围；输入「暂停」「音量 50」这类词也能直接执行</span></div>`;
                 input.removeAttribute('aria-activedescendant');
                 foot.hidden = true;
                 return;

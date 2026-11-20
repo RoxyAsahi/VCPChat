@@ -493,10 +493,8 @@
         });
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button')) return;
-            // 舞台里点胶囊就在要去的地方，这一下改成打开命令面板。
+            // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
             if (!stageActive()) app.stageHost?.enter?.();
-            else if (palette) palette.open();
-            else openPanel();
         });
 
         const quickItems = () => {
@@ -512,14 +510,12 @@
             const items = quickItems();
             el.quickGroup.innerHTML = items.map((item) => (
                 `<button class="md-qb${item.on ? ' md-on' : ''}" type="button" data-q="${item.id}" title="${item.label}" aria-label="${item.label}"${item.on ? ' aria-pressed="true"' : ''}>${icon(item.icon, 16)}</button>`
-            )).join('') + '<span class="md-qsep" aria-hidden="true"></span>'
-                + `<button class="md-qb" type="button" data-q="panel" title="命令面板（Ctrl+K）" aria-label="命令面板">${icon('command', 16)}</button>`;
+            )).join('');
         };
         listen(el.quickGroup, 'click', (event) => {
             const button = event.target.closest('[data-q]');
             if (!button) return;
             event.stopPropagation();
-            if (button.dataset.q === 'panel') { if (palette) palette.toggle(); else togglePanel(); return; }
             quickItems().find((item) => item.id === button.dataset.q)?.run();
         });
 
@@ -733,7 +729,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
-            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K），左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
+            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
             syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
@@ -1462,12 +1458,12 @@
             ['Shift + ← / →', '上一首 / 下一首'],
             ['Ctrl + ↑ / ↓', '音量 +5% / −5%'],
             ['M', '静音 / 恢复（档案页里是打字检索）'],
-            ['Ctrl + K', '命令面板：搜歌、歌单和操作'],
+            ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
             ['Ctrl + L', '档案页里定位当前播放'],
             ['/', '档案页里打开检索'],
             ['字母 / 数字', '档案页里直接打字就是检索目录'],
-            ['?', '打开这张快捷键表（档案页里用命令面板打开）'],
-            ['Esc', '关闭面板、命令面板或这张表']
+            ['?', '打开这张快捷键表（档案页里用 Ctrl + K 搜「快捷键」）'],
+            ['Esc', '关闭面板、搜索或这张表']
         ];
         const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')));
         const modalOpen = () => [app.playlistDialog, app.playlistEditModal, app.lyricsFetchModal].some((m) => m?.classList?.contains('visible'))
