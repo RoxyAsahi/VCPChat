@@ -1058,6 +1058,7 @@
             clearTimeout(state.coverTimer);
             stopInertia();
             if (state.raf) cancelAnimationFrame(state.raf);
+            state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
@@ -1069,7 +1070,10 @@
             state.scene = null;
             if (originalCreateAmbient) app.createAmbientPixi = originalCreateAmbient;
         };
+        // 关窗、刷新、离开页面时都彻底停掉：取消渲染循环和计时器，释放 WebGL 上下文（forceContextLoss），
+        // 不让已经关掉的页面还在占用显卡或软件渲染。beforeunload 不一定触发（比如直接关进程），pagehide 兜底
         global.addEventListener('beforeunload', destroy, { once: true });
+        global.addEventListener('pagehide', destroy, { once: true });
 
         if (ListLib && IndexLib) {
             list = ListLib.create({
