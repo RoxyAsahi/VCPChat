@@ -358,6 +358,8 @@ body.light-theme #music-dock-root {
   transform: scaleY(0);
 }
 #music-dock-root.md-vopen .md-vrail { opacity: 1; pointer-events: auto; transition-delay: .18s; }
+/* 流体档：竖条的出现由水滴的高度带着走（--md-vgrow 由流体层每帧写入），不再单独计时 */
+#music-dock-root.md-fl-on .md-vrail { opacity: var(--md-vgrow, 0); transform: scaleY(calc(.35 + .65 * var(--md-vgrow, 0))); transform-origin: 50% 100%; transition: none; }
 #music-dock-root.md-fl-low .md-vrail { box-shadow: 0 0 0 14px var(--md-fl-low-bg), 0 0 0 15px var(--md-fl-low-edge), 0 14px 30px 6px rgba(0, 0, 0, .25); transition-delay: 0s; }
 
 .md-cap.md-notrack .md-nx,

@@ -217,6 +217,7 @@
                 || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
         };
 
+        let lastGrow = '';
         const draw = (force = false) => {
             const sol = s.solidity.v;
             setAttr(solidR, 'opacity', 0.15 + 0.85 * sol);
@@ -226,6 +227,10 @@
             setAttr(volB, 'x', geo.volX - 24); setAttr(volB, 'width', 48); setAttr(volB, 'rx', 24);
             setAttr(volB, 'y', vy); setAttr(volB, 'height', Math.max(0, geo.h - 12 + s.vol.v * VOL_RISE));
             setAttr(volSolid, 'opacity', s.vol.v);
+            // 水滴里的白色音量条跟着水滴长：水滴升到七成以后才开始出现，收起时它先消失。
+            const grow = Math.max(0, Math.min(1, (s.vol.v - 0.7) / 0.28));
+            const growText = (grow * grow * (3 - 2 * grow)).toFixed(3);
+            if (growText !== lastGrow) { lastGrow = growText; host.style.setProperty('--md-vgrow', growText); }
             if (s.split.p < 1) {
                 const e = s.split.p;
                 setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
@@ -359,6 +364,7 @@
                 frame = 0;
                 svg.remove();
                 mist.remove();
+                host.style.removeProperty('--md-vgrow');
             }
         };
         return api;
