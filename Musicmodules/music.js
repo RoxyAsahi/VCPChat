@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.remove('sidebar-is-scrolling');
 
         if ('mediaSession' in navigator) {
-            ['play', 'pause', 'previoustrack', 'nexttrack'].forEach((action) => {
+            ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((action) => {
                 try { navigator.mediaSession.setActionHandler(action, null); } catch (error) {}
             });
             navigator.mediaSession.metadata = null;
@@ -1209,6 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (app.isTrackLoading && !options.force) return;
         app.lastKnownCurrentTime = state.current_time; app.lastKnownDuration = state.duration;
         app.lastStateUpdateTime = Date.now();
+        app.syncMediaPosition?.();
         if (state.duration > 0 && !app.dragInProgress) {
             const percent = (state.current_time / state.duration) * 100;
             app.progress.style.width = `${percent}%`;

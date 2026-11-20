@@ -7,14 +7,14 @@ const path = require('node:path');
 const titles = (list) => Array.from(list, (t) => t.title);
 
 // 播放器的「下一首」和自动预载：先把现有行为锁住，再测手动队列。
-function setup({ mode = 'repeat', count = 5 } = {}) {
+function setup({ mode = 'repeat', count = 5, nav = {} } = {}) {
     const events = [];
     const context = vm.createContext({
         console: { log() {}, warn() {}, error() {} },
         setTimeout, clearTimeout, setInterval, clearInterval,
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
         document: { body: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }, dispatchEvent: (e) => events.push(e.type) },
-        navigator: {},
+        navigator: nav,
         localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })()
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-player.js'), 'utf8'), context);
@@ -265,4 +265,91 @@ test('reorderContext: follows a new sort of the same group, only while that orig
     // 直接改上下文（旧代码路径）也让记录失效
     app.currentFilteredTracks = [playlist[4]];
     assert.equal(app.contextFrom('archive'), false);
+});
+
+test('lyrics offset: shifts the parsed timeline in place, is remembered per track, and is picked up on the next load', () => {
+    const { app, playlist, context } = setup();
+    let renders = 0;
+    app.renderLyrics = () => { renders += 1; };
+    const fetched = [];
+    // 换歌时播放器会调用 fetchAndDisplayLyrics；这里只看它被调用时的偏移
+    app.currentTrackIndex = 1;
+    app.lastKnownCurrentTime = 10;
+    app.lyricOffset = 0;
+    app.currentLyrics = [
+        { time: 5, startTime: 5, endTime: 9, words: [{ startTime: 5, endTime: 6 }] },
+        { time: 9.8, startTime: 9.8, endTime: 12 }
+    ];
+    app.currentLyricIndex = 1;
+    assert.equal(app.shiftLyrics(0.5), 0.5);
+    assert.equal(app.currentLyrics[0].time, 5.5);
+    assert.equal(app.currentLyrics[0].words[0].endTime, 6.5);
+    assert.equal(app.currentLyricIndex, 0, 'the current line moves with the timeline');
+    assert.ok(renders > 0);
+    app.shiftLyrics(-1.5);
+    assert.equal(app.lyricOffset, -1);
+    assert.equal(app.currentLyrics[1].time, 8.8);
+    assert.equal(JSON.parse(context.localStorage.getItem('musicLyricOffsets'))['C:/m/1.flac'], -1);
+    assert.equal(app.lyricOffsetFor(playlist[2].path), 0);
+    assert.equal(app.setLyricOffset(99), 30, 'clamped');
+    app.setLyricOffset(0);
+    assert.equal(context.localStorage.getItem('musicLyricOffsets'), '{}', 'zero is not stored');
+    assert.equal(app.currentLyrics[0].time, 5);
+});
+
+test('lyrics offset is applied before the next track parses its lyrics; translation toggle persists', () => {
+    const { app, context } = setup();
+    context.localStorage.setItem('musicLyricOffsets', JSON.stringify({ 'C:/m/3.flac': 1.5 }));
+    // 播放器会把已有的取歌词函数包一层：调用时先换成这首歌的偏移
+    const seen = [];
+    const fresh = { ...app, fetchAndDisplayLyrics() { seen.push(fresh.lyricOffset); } };
+    context.setupPlayer(fresh);
+    fresh.fetchAndDisplayLyrics('a', 't', { path: 'C:/m/3.flac' });
+    fresh.fetchAndDisplayLyrics('a', 't', { path: 'C:/m/0.flac' });
+    assert.deepEqual(seen, [1.5, 0]);
+
+    assert.equal(fresh.lyricsTranslation, true, 'translation is shown by default');
+    let renders = 0;
+    fresh.renderLyrics = () => { renders += 1; };
+    fresh.setLyricsTranslation(false);
+    assert.equal(context.localStorage.getItem('musicLyricsTranslation'), 'false');
+    assert.equal(renders, 1);
+});
+
+test('media session: seekto seeks the engine, position is reported on jumps and drift only', async () => {
+    const handlers = {};
+    const positions = [];
+    const nav = { mediaSession: { setActionHandler: (name, fn) => { handlers[name] = fn; }, setPositionState: (p) => positions.push(p ? { ...p } : null) } };
+    const { app } = setup({ nav });
+    const seeks = [];
+    app.api.seekMusic = async (t) => { seeks.push(t); return { status: 'success' }; };
+    app.startStatePolling = () => {};
+    app.lastKnownDuration = 200;
+    app.isPlaying = true;
+    app.lastKnownCurrentTime = 10;
+    app.lastStateUpdateTime = Date.now();
+
+    assert.equal(typeof handlers.seekto, 'function');
+    handlers.seekto({ seekTime: 63.2 });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(seeks, [63.2]);
+    assert.equal(positions.at(-1).position, 63.2);
+    assert.equal(positions.at(-1).duration, 200);
+    assert.equal(positions.at(-1).playbackRate, 1);
+    handlers.seekto({ seekTime: 999 });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(seeks.at(-1), 199.5, 'clamped short of the end');
+
+    // 引擎按时报进度，和推算的一致：不重复报
+    const count = positions.length;
+    app.lastKnownCurrentTime = 199.5; app.lastStateUpdateTime = Date.now();
+    assert.equal(app.syncMediaPosition(), false);
+    assert.equal(positions.length, count);
+    // 差了 1 秒以上（比如引擎自己跳了）才报
+    app.lastKnownCurrentTime = 120; app.lastStateUpdateTime = Date.now();
+    assert.equal(app.syncMediaPosition(), true);
+    // 时长未知时清掉系统进度条
+    app.lastKnownDuration = 0;
+    app.syncMediaPosition(true);
+    assert.equal(positions.at(-1), null);
 });

@@ -131,6 +131,7 @@ function setupPlayer(app) {
         app.playPauseBtn.classList.toggle('is-playing', playing);
         app.setPhantomAudio(playing);
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+        app.syncMediaPosition?.(true);
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
     };
 
@@ -209,10 +210,12 @@ function setupPlayer(app) {
         app.renderPlaylist(app.currentFilteredTracks);
         app.scrollCurrentTrackToSidebarTop?.();
         app.fetchAndDisplayLyrics(track.artist, track.title, {
+            path: track.path,
             duration: track.duration || 0,
             album: track.album || ''
         });
         app.updateMediaSessionMetadata();
+        app.syncMediaPosition?.(true);
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
 
         // 旧歌的轮询到此为止；加载期间由下面的等待循环负责读状态。
@@ -360,6 +363,7 @@ function setupPlayer(app) {
         const epoch = ++app.controlEpoch;
         app.lastKnownCurrentTime = seconds;
         app.lastStateUpdateTime = Date.now();
+        app.syncMediaPosition?.(true);
         const result = await app.enqueueControl(() => app.api.seekMusic(seconds));
         if (epoch === app.controlEpoch && app.isPlaying) app.startStatePolling();
         return result;
@@ -486,6 +490,135 @@ function setupPlayer(app) {
         scheduleSessionSave();
         return true;
     };
+
+    // ───────── 系统媒体控制：进度条和拖动 ─────────
+    // 系统的媒体浮层按 setPositionState 给的位置和速率自己往前推，所以只在会跳变的时候报：
+    // 切歌、播放/暂停、拖动、时长变了，或者引擎报的进度和推算的差了 1 秒以上。
+    const mediaSession = () => (typeof navigator !== 'undefined' && navigator && navigator.mediaSession) || null;
+    let mediaPosition = null; // 上次报给系统的 { position, duration, playing, at }
+    const nowMs = () => Date.now();
+    app.syncMediaPosition = (force = false) => {
+        const session = mediaSession();
+        if (!session || typeof session.setPositionState !== 'function') return false;
+        const duration = Number(app.lastKnownDuration) || 0;
+        const playing = app.isPlaying === true;
+        if (!(duration > 0)) {
+            if (mediaPosition) { try { session.setPositionState(); } catch (error) { /* 旧内核不认空参数 */ } mediaPosition = null; }
+            return false;
+        }
+        const elapsed = playing && app.lastStateUpdateTime ? (nowMs() - app.lastStateUpdateTime) / 1000 : 0;
+        const position = Math.min(duration, Math.max(0, (Number(app.lastKnownCurrentTime) || 0) + elapsed));
+        if (!force && mediaPosition && mediaPosition.duration === duration && mediaPosition.playing === playing) {
+            const expected = mediaPosition.position + (playing ? (nowMs() - mediaPosition.at) / 1000 : 0);
+            if (Math.abs(expected - position) < 1) return false;
+        }
+        try {
+            session.setPositionState({ duration, playbackRate: 1, position });
+            mediaPosition = { position, duration, playing, at: nowMs() };
+            return true;
+        } catch (error) {
+            mediaPosition = null;
+            return false;
+        }
+    };
+    {
+        const session = mediaSession();
+        if (session && typeof session.setActionHandler === 'function') {
+            try {
+                session.setActionHandler('seekto', (details) => {
+                    const time = Number(details && details.seekTime);
+                    if (!Number.isFinite(time)) return;
+                    const duration = Number(app.lastKnownDuration) || 0;
+                    app.seekTo(Math.max(0, duration > 0 ? Math.min(time, Math.max(0, duration - 0.5)) : time));
+                });
+            } catch (error) { /* 不支持 seekto 的内核就只有上一首/下一首 */ }
+        }
+    }
+
+    // ───────── 歌词偏移和翻译开关 ─────────
+    // 偏移按歌记住（路径 → 秒，正数是歌词推后），换歌时先取出来，解析歌词时就带上。
+    // 调整时直接平移已经解析好的时间轴，不重新读歌词。翻译开关是全局的，只管显示。
+    const LYRIC_OFFSETS_KEY = 'musicLyricOffsets';
+    const LYRIC_TRANSLATION_KEY = 'musicLyricsTranslation';
+    const LYRIC_OFFSET_LIMIT = 30;
+    const MAX_LYRIC_OFFSETS = 500;
+    const readStore = (key, fallback) => {
+        try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); } catch (error) { return fallback; }
+    };
+    const writeStore = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { /* 存不了就只在本次生效 */ } };
+    app.lyricOffsetFor = (path) => {
+        const offsets = readStore(LYRIC_OFFSETS_KEY, {});
+        const value = Number(path && offsets && offsets[path]);
+        return Number.isFinite(value) ? value : 0;
+    };
+    const lyricTrackPath = () => app.playlist?.[app.currentTrackIndex]?.path || null;
+    const shiftLine = (line, d) => {
+        for (const k of ['time', 'startTime', 'endTime']) if (typeof line[k] === 'number') line[k] += d;
+        if (line.renderHints && typeof line.renderHints.renderEndTime === 'number') line.renderHints.renderEndTime += d;
+        for (const w of Array.isArray(line.words) ? line.words : []) {
+            if (typeof w.startTime === 'number') w.startTime += d;
+            if (typeof w.endTime === 'number') w.endTime += d;
+            for (const syl of Array.isArray(w.syllables) ? w.syllables : []) {
+                if (typeof syl.startTime === 'number') syl.startTime += d;
+                if (typeof syl.endTime === 'number') syl.endTime += d;
+            }
+        }
+    };
+    const lyricIndexAt = (time) => {
+        const lines = Array.isArray(app.currentLyrics) ? app.currentLyrics : [];
+        let index = -1;
+        for (let i = 0; i < lines.length && time >= lines[i].time; i++) index = i;
+        return index;
+    };
+    app.setLyricOffset = (value) => {
+        const next = Math.max(-LYRIC_OFFSET_LIMIT, Math.min(LYRIC_OFFSET_LIMIT, Math.round((Number(value) || 0) * 10) / 10));
+        const d = Math.round((next - (Number(app.lyricOffset) || 0)) * 1000) / 1000;
+        if (!d) return app.lyricOffset || 0;
+        app.lyricOffset = next;
+        for (const line of Array.isArray(app.currentLyrics) ? app.currentLyrics : []) shiftLine(line, d);
+        const path = lyricTrackPath();
+        if (path) {
+            const offsets = readStore(LYRIC_OFFSETS_KEY, {}) || {};
+            delete offsets[path];
+            if (next) offsets[path] = next;
+            const keys = Object.keys(offsets);
+            for (const k of keys.slice(0, Math.max(0, keys.length - MAX_LYRIC_OFFSETS))) delete offsets[k];
+            writeStore(LYRIC_OFFSETS_KEY, offsets);
+        }
+        // 当前行按新时间轴重新定位，再重画（逐字高亮的时间在 DOM 上也要跟着变）。
+        app.currentLyricIndex = lyricIndexAt(Number(app.lastKnownCurrentTime) || 0);
+        try { app.renderLyrics?.(); } catch (error) { /* 歌词区没准备好时只改数据 */ }
+        lyricsEvent('music-lyrics-offset', { offset: next });
+        return next;
+    };
+    app.shiftLyrics = (delta) => app.setLyricOffset((Number(app.lyricOffset) || 0) + (Number(delta) || 0));
+    app.lyricsTranslation = readStore(LYRIC_TRANSLATION_KEY, true) !== false;
+    const lyricsEvent = (type, detail) => {
+        if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        document.dispatchEvent(new CustomEvent(type, { detail }));
+    };
+    const applyTranslationClass = () => {
+        if (typeof document !== 'undefined') document.body?.classList?.toggle?.('music-lyrics-hide-translation', !app.lyricsTranslation);
+    };
+    applyTranslationClass();
+    app.setLyricsTranslation = (on) => {
+        app.lyricsTranslation = Boolean(on);
+        writeStore(LYRIC_TRANSLATION_KEY, app.lyricsTranslation);
+        applyTranslationClass();
+        // 行高变了，歌词区缓存的位置作废
+        app._lyricLayout = null;
+        try { app.renderLyrics?.(); } catch (error) { /* 同上 */ }
+        lyricsEvent('music-lyrics-translation', { on: app.lyricsTranslation });
+        return app.lyricsTranslation;
+    };
+    // 换歌取歌词前先换成这首的偏移。
+    if (typeof app.fetchAndDisplayLyrics === 'function') {
+        const fetchLyricsBase = app.fetchAndDisplayLyrics;
+        app.fetchAndDisplayLyrics = (artist, title, options = {}) => {
+            app.lyricOffset = app.lyricOffsetFor(options.path || lyricTrackPath());
+            return fetchLyricsBase(artist, title, options);
+        };
+    }
 
     // ───────── 重启恢复：队列、上下文、进度 ─────────
     // 和「上次那首」「播放模式」一样存在 localStorage：
@@ -797,10 +930,12 @@ function setupPlayer(app) {
             app.renderPlaylist(app.currentFilteredTracks);
             app.scrollCurrentTrackToSidebarTop?.();
             app.fetchAndDisplayLyrics(track.artist, track.title, {
+                path: track.path,
                 duration: track.duration || 0,
                 album: track.album || ''
             });
             app.updateMediaSessionMetadata();
+            app.syncMediaPosition?.(true);
 
             // 如果是随机播放，从队列中移除当前已开始播放的这首歌，防止之后再次随机到它
             if (app.playModes[app.currentPlayMode] === 'shuffle') {
@@ -850,10 +985,12 @@ function setupPlayer(app) {
                     app.renderPlaylist(app.currentFilteredTracks);
                     app.scrollCurrentTrackToSidebarTop?.();
                     app.fetchAndDisplayLyrics(track.artist, track.title, {
+                        path: track.path,
                         duration: track.duration || 0,
                         album: track.album || ''
                     });
                     app.updateMediaSessionMetadata();
+                    app.syncMediaPosition?.(true);
 
                     // 同样处理模糊匹配的情况
                     if (app.playModes[app.currentPlayMode] === 'shuffle') {
