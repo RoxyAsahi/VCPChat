@@ -100,13 +100,14 @@
         const selectedTrack = () => tracks()[selectedIndex()] || null;
         const playlistsSig = () => (app.customPlaylists || []).map((p) => (p && p.id) + ':' + (p && p.tracks ? p.tracks.length : 0) + ':' + (p && p.name)).join('|');
 
-        const rebuild = ({ keep = true, track = -1 } = {}) => {
+        const rebuild = ({ keep = true, track = -1, reindex = true } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : track;
             const firstData = state.dataRefs.length <= 0 && tracks().length > 0;
-            rebuildIndex();
+            // 只换排序时曲库没变，检索索引（拼音、罗马音）不用重建
+            if (reindex || !searchIndex || searchIndex.size !== tracks().length) rebuildIndex();
             const columns = buildColumns();
             state.columns = columns;
             state.sig = Model.signature(columns);
@@ -573,7 +574,7 @@
             try { localStorage.setItem(SORT_KEY, mode); } catch (e) { /* 只是记住 */ }
             // 按新顺序重排：选中的那首留在选中，换到它在新排法里的那一列
             const keepIndex = selectedIndex();
-            rebuild({ keep: false, track: keepIndex });
+            rebuild({ keep: false, track: keepIndex, reindex: false });
             followSort();
         };
         // 拼音表按需加载（项目已有的依赖），加载好之后重建索引，汉字才能按拼音检索和分组
