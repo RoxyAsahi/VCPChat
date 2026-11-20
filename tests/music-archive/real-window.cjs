@@ -38,11 +38,15 @@ const FAKE = ({ n, light }) => {
   fs.mkdirSync(OUT, { recursive: true });
   const server = await require('../music-stage-bench/serve.cjs')(ROOT);
   const url = `http://127.0.0.1:${server.address().port}/Musicmodules/music.html`;
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  // 每个主题开一个新的浏览器（连 GPU 进程一起新开）：软件渲染下前一页关掉后，
+  // GPU 进程里排着的绘制命令还要再跑一阵，同一个浏览器里紧接着开的下一页会被它拖慢到加载超时。
+  const launch = () => chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const results = [];
   const check = (name, ok, extra = '') => { results.push([name, ok]); console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
   for (const light of [false, true]) {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    const browser = await launch();
+    const context = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+    const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.addInitScript(FAKE, { n: N, light });
@@ -55,7 +59,7 @@ const FAKE = ({ n, light }) => {
       return { shown: v && !v.hidden, bodyOn: document.body.classList.contains('music-archive-on'), files: document.querySelector('[data-ref="files"]')?.textContent, cols: document.querySelector('[data-ref="colT"]')?.textContent };
     });
     check(tag + ': archive is the default view', d0.shown && d0.bodyOn, JSON.stringify(d0));
-    await page.screenshot({ path: path.join(OUT, `real-${tag}.png`) });
+    await page.screenshot({ path: path.join(OUT, `real-${tag}.png`), timeout: 90000 });
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
@@ -65,7 +69,7 @@ const FAKE = ({ n, light }) => {
     const d1 = await page.evaluate(() => ({ calls: window.__calls.slice(), stage: document.body.classList.contains('music-stage-active'), filtered: Array.isArray(window.__appFiltered) }));
     check(tag + ': Enter loads the selected track of the playlist column', d1.calls.some((c) => c[0] === 'musicLoad' && c[1] === 'D:\\Music\\t2.flac'), JSON.stringify(d1.calls.slice(-3)));
     check(tag + ': Enter opens the stage page', d1.stage);
-    await page.screenshot({ path: path.join(OUT, `real-${tag}-stage.png`) });
+    await page.screenshot({ path: path.join(OUT, `real-${tag}-stage.png`), timeout: 90000 });
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1200);
     const d2 = await page.evaluate(() => ({ stage: document.body.classList.contains('music-stage-active'), shown: !document.getElementById('music-archive-view').hidden }));
@@ -74,14 +78,27 @@ const FAKE = ({ n, light }) => {
     await page.waitForTimeout(600);
     const d3 = await page.evaluate(() => ({ off: document.body.classList.contains('music-archive-off'), hidden: document.getElementById('music-archive-view').hidden, ret: getComputedStyle(document.getElementById('music-archive-return')).display }));
     check(tag + ': classic view hides the archive and shows the return button', d3.off && d3.hidden && d3.ret !== 'none');
-    await page.screenshot({ path: path.join(OUT, `real-${tag}-classic.png`) });
+    await page.screenshot({ path: path.join(OUT, `real-${tag}-classic.png`), timeout: 90000 });
     await page.evaluate(() => document.getElementById('music-archive-return').click());
     await page.waitForTimeout(500);
     check(tag + ': return button brings the archive back', await page.evaluate(() => !document.getElementById('music-archive-view').hidden));
     check(tag + ': no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
-    await page.close();
+    // 关页时档案页的 3D 场景要彻底停掉：触发 pagehide 后渲染循环、画布和 WebGL 上下文都不在了
+    const gone = await page.evaluate(async () => {
+      const canvas = document.querySelector('#music-archive-view canvas');
+      const gl = canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+      // 停掉之后一秒内档案页不该再请求任何一帧
+      let frames = 0;
+      const raf = window.requestAnimationFrame;
+      window.requestAnimationFrame = (cb) => { if (/archive-view/.test(new Error().stack)) frames++; return raf(cb); };
+      await new Promise((r) => setTimeout(r, 1000));
+      return { hadCanvas: Boolean(canvas), canvasLeft: Boolean(document.querySelector('#music-archive-view canvas')), contextLost: gl ? gl.isContextLost() : null, frames };
+    });
+    check(tag + ': pagehide stops and releases the 3D scene', gone.hadCanvas && !gone.canvasLeft && gone.contextLost !== false && gone.frames === 0, JSON.stringify(gone));
+    await context.close();
+    await browser.close();
   }
-  await browser.close();
   server.close();
   process.exitCode = results.every((r) => r[1]) ? 0 : 1;
 })();
