@@ -228,3 +228,56 @@ test('queue page shows now playing, the manual layer and the real upcoming order
         window.close();
     }
 });
+
+test('palette groups songs, playlists and commands; shift/ctrl+enter queue; pinyin search uses the archive index', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        window.eval(read('Musicmodules/music-archive/archive-index.js'));
+        const PY = { 夜: 'ye', 航: 'hang' };
+        window.pinyinPro = { pinyin: (c) => PY[c] || '' };
+        app.playlist.push({ path: 'C:/y.flac', title: '夜航.flac', artist: '远舟', album: 'Demo' });
+        app.customPlaylists = [{ id: 'p1', name: 'Beta Mix', tracks: ['C:/b.flac', 'C:/y.flac'] }];
+        app.queuePlayNext = (t) => { calls.push(['qnext', t.path]); return t; };
+        app.queueAdd = (t) => { calls.push(['qadd', t.path]); return t; };
+        app.renderPlaylist = () => {};
+        const seen = [];
+        doc.addEventListener('keydown', (e) => seen.push(e.key));
+
+        dock.openPalette();
+        const palette = doc.querySelector('.md-cmd');
+        const input = palette.querySelector('.md-cmd-in');
+        const type = (text) => { input.value = text; input.dispatchEvent(new window.Event('input')); };
+        const key = (k, extra = {}) => input.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true, ...extra }));
+
+        type('yh');
+        assert.equal(palette.querySelector('.md-cmd-row .md-cmd-title').textContent, '夜航', 'initials find the Chinese title');
+        type('beta');
+        assert.deepEqual([...palette.querySelectorAll('.md-cmd-sec')].map((n) => n.textContent), ['歌曲', '歌单']);
+        assert.equal(palette.querySelector('.md-cmd-foot').hidden, false);
+        key('Enter', { shiftKey: true });
+        assert.deepEqual(calls.pop(), ['qnext', 'C:/b.flac']);
+        assert.ok(palette.classList.contains('md-open') || !palette.hidden, 'stays open after queueing');
+        key('Enter', { ctrlKey: true });
+        assert.deepEqual(calls.pop(), ['qadd', 'C:/b.flac']);
+
+        // 歌单那一行：Ctrl+回车整单入队，回车把歌单设成当前列表并播放
+        const rows = [...palette.querySelectorAll('.md-cmd-row')];
+        const plRow = rows.find((r) => r.querySelector('.md-cmd-title').textContent === 'Beta Mix');
+        plRow.dispatchEvent(new window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
+        assert.deepEqual(calls.splice(-2), [['qadd', 'C:/b.flac'], ['qadd', 'C:/y.flac']]);
+        plRow.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+        assert.deepEqual(calls.pop(), ['load', 1]);
+        assert.equal(app.filteredPlaylistSource.id, 'p1');
+        assert.equal(app.currentFilteredTracks.length, 2);
+
+        dock.openPalette();
+        type('下一');
+        assert.equal(palette.querySelector('.md-cmd-sec').textContent, '命令');
+        assert.equal(palette.querySelector('.md-cmd-foot').hidden, true);
+        key('k');
+        assert.ok(!seen.includes('k'), 'single keys typed in the palette do not reach window shortcuts');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});

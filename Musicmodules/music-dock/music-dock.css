@@ -894,6 +894,13 @@ body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .46); }
 .md-cmd-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; font-size: 14px; opacity: .5; }
 .md-cmd-hints { padding: 8px 8px 0; }
 .md-cmd-hints[hidden] { display: none; }
+.md-cmd-sec { flex-shrink: 0; padding: 10px 12px 4px; font-size: 10px; font-weight: 600; line-height: 14px; letter-spacing: .12em; opacity: .42; }
+.md-cmd-sec:last-child { padding-top: 2px; }
+.md-cmd-foot { display: flex; gap: 14px; justify-content: flex-end; padding: 6px 16px 8px; font-size: 11px; line-height: 16px; color: var(--md-t3); border-top: 1px solid var(--md-line); }
+.md-cmd-foot[hidden] { display: none; }
+.md-cmd-foot span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.md-cmd-foot kbd { border-radius: 4px; padding: 0 4px; font: 10px/14px ui-monospace, Consolas, monospace; background: var(--md-fill); color: var(--md-t2); }
+@media (max-width: 520px) { .md-cmd-foot span:first-child { display: none; } }
 .md-cmd-hints-k { padding: 0 8px 4px; font-size: 10px; font-weight: 600; letter-spacing: .06em; opacity: .4; }
 #music-dock-root .md-cmd-hint { display: flex; width: 100%; align-items: baseline; gap: 8px; border-radius: 8px; padding: 6px 8px; text-align: left; }
 #music-dock-root .md-cmd-hint:hover { background: var(--md-fill); }

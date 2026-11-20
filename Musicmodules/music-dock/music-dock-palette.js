@@ -1,6 +1,8 @@
 // Musicmodules/music-dock/music-dock-palette.js
 // 命令面板（Ctrl+K / ⌘K，或快捷行最后那个按钮）：从底部胶囊的位置往上长出来，
-// 一个输入框同时搜歌（当前队列优先，再到全部曲目）和常用操作，记住最近用过的十项。
+// 一个输入框同时搜歌（当前队列优先，再到全部曲目）、歌单和常用操作，记住最近用过的十项。
+// 结果分「歌曲 / 歌单 / 命令」三组。歌和歌单：回车播放，Shift+回车下一首播放，Ctrl+回车加入队列。
+// 有档案目录的拼音索引（MusicArchiveIndex + pinyin-pro）就用它，能按拼音、首字母找；没有时退回简单匹配。
 // 过滤写法：--歌手 名字、--专辑 名字、--标题 名字（也认 --artist / --album / --title 和 --a / --al / --t），
 // 输入 -- 时列出可用的过滤。主界面和舞台里都能用。
 (function (global) {
@@ -96,6 +98,7 @@
     <div class="md-cmd-body">
       <div class="md-cmd-hints" hidden></div>
       <div class="md-cmd-list" role="listbox" id="music-dock-cmd-list" aria-label="结果"></div>
+      <div class="md-cmd-foot" hidden><span><kbd>↵</kbd> 播放</span><span><kbd>Shift</kbd><kbd>↵</kbd> 下一首播放</span><span><kbd>Ctrl</kbd><kbd>↵</kbd> 加入队列</span></div>
     </div>
     <div class="md-cmd-hd">
       <span class="md-cmd-ic">${icon('search', 18)}</span>
@@ -110,6 +113,7 @@
         const list = root.querySelector('.md-cmd-list');
         const hints = root.querySelector('.md-cmd-hints');
         const box = root.querySelector('.md-cmd-box');
+        const foot = root.querySelector('.md-cmd-foot');
 
         const state = { open: false, items: [], active: 0, lastFocus: null, closeTimer: null };
 
@@ -167,67 +171,193 @@
             return score;
         };
 
+        const notify = (message) => { try { global.MusicToast?.show({ id: 'queue', kind: 'success', message }); } catch (error) {} };
+        const queueTracks = (tracks, front, label) => {
+            const list = tracks.filter(Boolean);
+            if (!list.length || typeof app.queueAdd !== 'function') return;
+            // 「下一首播放」一组歌：倒着插到最前，放出来还是原来的顺序。
+            if (front) list.slice().reverse().forEach((t) => app.queuePlayNext?.(t));
+            else list.forEach((t) => app.queueAdd(t));
+            notify(`${front ? '下一首播放' : '已加入队列'}：${label}`);
+        };
+
         const songItem = (track, group) => {
             const index = app.playlist.indexOf(track);
             const isCurrent = index === app.currentTrackIndex;
             return {
                 id: `song:${track.path}`,
+                section: '歌曲',
                 group,
                 icon: isCurrent && app.isPlaying ? 'audio-lines' : 'music',
                 title: trackTitle(track),
                 desc: [trackArtist(track), track.album].filter(Boolean).join(' · '),
                 current: isCurrent,
-                run: () => { if (index !== -1) app.loadTrack?.(index); }
+                queueable: true,
+                run: () => { if (index !== -1) app.loadTrack?.(index); },
+                playNext: () => queueTracks([track], true, trackTitle(track)),
+                addToQueue: () => queueTracks([track], false, trackTitle(track))
             };
+        };
+
+        const playlistTracks = (pl) => {
+            const byPath = new Map((app.playlist || []).map((t) => [t.path, t]));
+            return (pl.tracks || []).map((p) => byPath.get(p)).filter(Boolean);
+        };
+        const playlistItem = (pl, group = '歌单') => {
+            const tracks = playlistTracks(pl);
+            return {
+                id: `playlist:${pl.id}`,
+                section: '歌单',
+                group,
+                icon: 'list-music',
+                title: pl.name || '未命名歌单',
+                desc: `${tracks.length} 首`,
+                queueable: tracks.length > 0,
+                run: () => {
+                    // 和经典侧栏点歌单一样：把这个歌单设成当前列表，从第一首放起。
+                    if (!tracks.length) return;
+                    app.filteredPlaylistSource = { type: 'playlist', name: pl.name, id: pl.id };
+                    app.currentFilteredTracks = tracks;
+                    try { app.renderPlaylist?.(tracks); } catch (error) { /* 旧列表只是同步显示 */ }
+                    const index = app.playlist.indexOf(tracks[0]);
+                    if (index !== -1) app.loadTrack?.(index);
+                },
+                playNext: () => queueTracks(tracks, true, `歌单「${pl.name}」`),
+                addToQueue: () => queueTracks(tracks, false, `歌单「${pl.name}」`)
+            };
+        };
+
+        // 拼音索引：跟曲库同一份，曲库换了（数组或长度变了）才重建。
+        let searchIndex = null;
+        let indexedList = null;
+        let indexedLength = -1;
+        let indexedPinyin = false;
+        const pinyinCache = new Map();
+        const pinyinFn = () => {
+            const lib = global.pinyinPro;
+            if (!lib || typeof lib.pinyin !== 'function') return null;
+            return (c) => {
+                if (!pinyinCache.has(c)) {
+                    let p = '';
+                    try { p = lib.pinyin(c, { toneType: 'none' }); } catch (error) { p = ''; }
+                    pinyinCache.set(c, p);
+                }
+                return pinyinCache.get(c);
+            };
+        };
+        const getIndex = () => {
+            const Lib = global.MusicArchiveIndex;
+            if (!Lib || typeof Lib.createIndex !== 'function') return null;
+            const pinyin = pinyinFn();
+            if (searchIndex && indexedList === app.playlist && indexedLength === app.playlist.length && indexedPinyin === Boolean(pinyin)) return searchIndex;
+            try { searchIndex = Lib.createIndex(app.playlist || [], { pinyin }); } catch (error) { searchIndex = null; }
+            indexedList = app.playlist;
+            indexedLength = (app.playlist || []).length;
+            indexedPinyin = Boolean(pinyin);
+            return searchIndex;
+        };
+        const nameMatches = (name, text) => {
+            const words = lower(text).split(/\s+/).filter(Boolean);
+            if (!words.length) return 0;
+            const plain = lower(name);
+            let romanized = null;
+            const Lib = global.MusicArchiveIndex;
+            let score = 0;
+            for (const word of words) {
+                if (plain.startsWith(word)) { score += 3; continue; }
+                if (plain.includes(word)) { score += 2; continue; }
+                if (/^[a-z0-9]+$/.test(word) && Lib?.romanize) {
+                    romanized = romanized || Lib.romanize(name, pinyinFn());
+                    if (romanized.py.includes(word) || romanized.ini.includes(word)) { score += 1; continue; }
+                }
+                return 0;
+            }
+            return score;
+        };
+
+        /* 按检索词找歌，返回曲库里的歌（按得分排好）。有索引用索引，没有就用简单匹配。 */
+        const findSongs = (q, limit) => {
+            const tracks = app.playlist || [];
+            const index = getIndex();
+            if (!index) {
+                const strip = app.stripAudioExtension;
+                return tracks.map((track) => ({ track, s: scoreTrack(track, q, strip) }))
+                    .filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.track);
+            }
+            let order = q.text ? index.query(q.text, { limit: Math.max(limit * 4, 400) }) : tracks.map((_, i) => i);
+            const keep = (kind, value) => {
+                if (!value) return;
+                const hits = new Set(index.query(value, { kind }));
+                order = order.filter((i) => hits.has(i));
+            };
+            keep('artist', q.artist);
+            keep('album', q.album);
+            if (q.title) {
+                const want = lower(q.title);
+                const strip = app.stripAudioExtension;
+                order = order.filter((i) => lower(strip ? strip(tracks[i]?.title) : tracks[i]?.title).includes(want));
+            }
+            return order.slice(0, limit).map((i) => tracks[i]).filter(Boolean);
         };
 
         const recentItems = () => {
             const all = commands();
             const byPath = new Map((app.playlist || []).map((t) => [`song:${t.path}`, t]));
             return readRecent().map((id) => {
-                if (id.startsWith('song:')) { const t = byPath.get(id); return t ? songItem(t, '最近') : null; }
+                if (id.startsWith('song:')) { const t = byPath.get(id); return t ? { ...songItem(t, '最近'), section: '最近' } : null; }
+                if (id.startsWith('playlist:')) {
+                    const pl = (app.customPlaylists || []).find((p) => `playlist:${p.id}` === id);
+                    return pl ? { ...playlistItem(pl, '最近'), section: '最近' } : null;
+                }
                 const cmd = all.find((c) => c.id === id);
-                return cmd ? { ...cmd, group: '最近' } : null;
+                return cmd ? { ...cmd, group: '最近', section: '最近' } : null;
             }).filter(Boolean);
         };
 
         const build = () => {
             const raw = input.value;
             const q = parseQuery(raw);
-            const items = [];
+            let items = [];
             if (!raw.trim()) {
                 const recent = recentItems();
                 const seen = new Set(recent.map((r) => r.id));
                 items.push(...recent);
-                items.push(...commands().filter((c) => !seen.has(c.id)));
+                items.push(...commands().filter((c) => !seen.has(c.id)).map((c) => ({ ...c, section: '命令' })));
             } else {
+                const songs = [];
+                const playlists = [];
+                const cmds = [];
                 const vol = volumeCommand(raw);
-                if (vol) items.push(vol);
-                if (q.text && !q.artist && !q.album && !q.title) {
+                if (vol) cmds.push({ ...vol, section: '命令' });
+                const onlyText = q.text && !q.artist && !q.album && !q.title;
+                let commandPrefix = false;
+                if (onlyText) {
                     commands()
                         .map((c) => ({ c, s: matchCommand(c, q.text) }))
                         .filter((x) => x.s > 0)
                         .sort((a, b) => b.s - a.s)
                         .slice(0, 6)
-                        .forEach((x) => items.push(x.c));
+                        .forEach((x) => { if (x.s >= 3) commandPrefix = true; cmds.push({ ...x.c, section: '命令' }); });
+                    (app.customPlaylists || [])
+                        .map((pl) => ({ pl, s: nameMatches(pl.name || '', q.text) }))
+                        .filter((x) => x.s > 0)
+                        .sort((a, b) => b.s - a.s)
+                        .slice(0, 6)
+                        .forEach((x) => playlists.push(playlistItem(x.pl)));
                 }
                 if (hasSongFilter(q)) {
-                    const strip = app.stripAudioExtension;
-                    const queue = app.currentFilteredTracks || null;
-                    const seen = new Set();
-                    const rank = (tracks, group, limit) => {
-                        const scored = [];
-                        for (const track of tracks || []) {
-                            if (!track || seen.has(track)) continue;
-                            const s = scoreTrack(track, q, strip);
-                            if (s > 0) scored.push({ track, s });
-                        }
-                        scored.sort((a, b) => b.s - a.s);
-                        for (const { track } of scored.slice(0, limit)) { seen.add(track); items.push(songItem(track, group)); }
-                    };
-                    if (queue && queue !== app.playlist) rank(queue, '队列', 20);
-                    rank(app.playlist, '曲库', MAX_SONGS);
+                    const found = findSongs(q, MAX_SONGS);
+                    const queue = app.currentFilteredTracks && app.currentFilteredTracks !== app.playlist ? new Set(app.currentFilteredTracks) : null;
+                    // 当前列表里的排前面，其余按得分。
+                    const inQueue = queue ? found.filter((t) => queue.has(t)).slice(0, 20) : [];
+                    const picked = new Set(inQueue);
+                    inQueue.forEach((t) => songs.push(songItem(t, '队列')));
+                    found.forEach((t) => { if (!picked.has(t)) songs.push(songItem(t, '曲库')); });
                 }
+                // 默认歌曲贴着输入框；输入像是在找操作（命令名开头命中、又没有歌名开头命中）时命令排前。
+                const songPrefix = songs.some((it) => lower(it.title).startsWith(lower(q.text)));
+                const groups = commandPrefix && !songPrefix ? [cmds, songs, playlists] : [songs, playlists, cmds];
+                items = groups.flat();
             }
             state.items = items;
             state.active = 0;
@@ -250,21 +380,31 @@
 
         const render = () => {
             if (!state.items.length) {
-                list.innerHTML = `<div class="md-cmd-empty">${icon('search', 22)}<span>没有找到匹配的歌或操作</span></div>`;
+                list.innerHTML = `<div class="md-cmd-empty">${icon('search', 22)}<span>没有找到匹配的歌、歌单或操作</span></div>`;
                 input.removeAttribute('aria-activedescendant');
+                foot.hidden = true;
                 return;
             }
-            list.innerHTML = state.items.map((item, i) => (
+            // 列表是倒着排的（column-reverse），所以每组的标题写在这组最后一项后面，显示出来就在上方。
+            const parts = [];
+            state.items.forEach((item, i) => {
+                parts.push(rowHtml(item, i));
+                const next = state.items[i + 1];
+                if (item.section && (!next || next.section !== item.section)) parts.push(`<div class="md-cmd-sec" role="presentation">${escapeHtml(item.section)}</div>`);
+            });
+            list.innerHTML = parts.join('');
+            syncActive(false);
+        };
+
+        const rowHtml = (item, i) => (
                 `<button type="button" class="md-cmd-row${i === state.active ? ' md-act' : ''}${item.current ? ' md-cur' : ''}" role="option" id="md-cmd-opt-${i}" aria-selected="${i === state.active}" data-i="${i}">`
                 + `<span class="md-cmd-ri">${icon(item.icon || 'command', 16)}</span>`
                 + `<span class="md-cmd-rt"><span class="md-cmd-l1"><span class="md-cmd-title">${escapeHtml(item.title)}</span>`
                 + (item.hint ? `<kbd class="md-cmd-chip">${escapeHtml(item.hint)}</kbd>` : '')
                 + `<span class="md-cmd-grp">${escapeHtml(item.group)}</span></span>`
                 + (item.desc ? `<span class="md-cmd-desc">${escapeHtml(item.desc)}</span>` : '')
-                + `</span><span class="md-cmd-run">${icon('corner-down-left', 13)}${item.id.startsWith('song:') ? '播放' : '运行'}</span></button>`
-            )).join('');
-            syncActive(false);
-        };
+                + `</span><span class="md-cmd-run">${icon('corner-down-left', 13)}${item.queueable ? '播放' : '运行'}</span></button>`
+        );
 
         const syncActive = (scroll = true) => {
             const prev = list.querySelector('.md-cmd-row.md-act');
@@ -274,6 +414,7 @@
             row.classList.add('md-act');
             row.setAttribute('aria-selected', 'true');
             input.setAttribute('aria-activedescendant', row.id);
+            foot.hidden = !state.items[state.active]?.queueable;
             if (scroll) row.scrollIntoView?.({ block: 'nearest' });
         };
 
@@ -282,9 +423,15 @@
             writeRecent([item.id, ...readRecent().filter((id) => id !== item.id)]);
         };
 
-        const execute = (index) => {
+        const execute = (index, how = 'run') => {
             const item = state.items[index];
             if (!item) return;
+            if (how !== 'run' && item.queueable) {
+                // 入队后面板留着，方便接着挑下一首。
+                if (how === 'next') item.playNext(); else item.addToQueue();
+                input.focus();
+                return;
+            }
             remember(item);
             if (item.keepOpen) {
                 item.run();
@@ -341,7 +488,10 @@
             // 列表倒着排（最好的结果贴着输入框），所以 ↑ 是往后、↓ 是往前。
             if (event.key === 'ArrowUp') { event.preventDefault(); if (n) { state.active = (state.active + 1) % n; syncActive(); } }
             else if (event.key === 'ArrowDown') { event.preventDefault(); if (n) { state.active = (state.active - 1 + n) % n; syncActive(); } }
-            else if (event.key === 'Enter') { event.preventDefault(); if (!event.isComposing) execute(state.active); }
+            else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (!event.isComposing) execute(state.active, event.shiftKey ? 'next' : (event.ctrlKey || event.metaKey) ? 'queue' : 'run');
+            }
             else if (event.key === 'Escape') { event.preventDefault(); if (input.value) { input.value = ''; build(); } else close(); }
             else if (event.key === 'Tab') {
                 event.preventDefault();
@@ -368,7 +518,7 @@
         });
         list.addEventListener('click', (event) => {
             const row = event.target.closest('.md-cmd-row');
-            if (row) execute(Number(row.dataset.i));
+            if (row) execute(Number(row.dataset.i), event.shiftKey ? 'next' : (event.ctrlKey || event.metaKey) ? 'queue' : 'run');
         });
         root.querySelector('[data-cmd="scrim"]').addEventListener('pointerdown', () => close());
         box.addEventListener('keydown', (event) => event.stopPropagation());
