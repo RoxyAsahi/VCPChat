@@ -154,6 +154,18 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-empty button { font-size: 14px; letter-spacing: 1px; margin-right: 56px; }
 .archive-empty button:hover { color: var(--ar-accent); }
 #music-archive-view.is-empty .archive-empty { display: block; }
+.archive-empty button span { margin-left: 12px; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
+.archive-empty button:hover span { color: inherit; }
+/* 扫描中：空状态换成进度（一条细线从左长到右），入口先收起；有歌时进度写在左下角状态里 */
+.archive-scan-bar { display: none; width: 420px; height: 1px; margin: -18px 0 40px; background: var(--ar-rule); }
+.archive-scan-bar i { display: block; height: 100%; background: var(--ar-ink); transform-origin: left; transform: scaleX(0); transition: transform .3s linear; }
+#music-archive-view.is-scanning .archive-scan-bar { display: block; }
+#music-archive-view.is-scanning .archive-empty button { display: none; }
+#music-archive-view.is-scanning .archive-status-light { animation: archive-scan-blink 1s steps(2, jump-none) infinite; }
+@keyframes archive-scan-blink { from { opacity: 1; } to { opacity: .25; } }
+body.music-reduce-motion #music-archive-view.is-scanning .archive-status-light { animation: none; }
+body.music-reduce-motion .archive-scan-bar i { transition: none; }
+.archive-status [data-ref="status"] { font-variant-numeric: tabular-nums; }
 #music-archive-view.is-empty .archive-callout,
 #music-archive-view.is-empty .archive-counter,
 #music-archive-view.is-empty .archive-rows,
@@ -306,6 +318,9 @@ body.light-theme .archive-list { --glow: .85; }
 @keyframes archive-eq { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
 
 .archive-list-empty { display: none; margin-left: var(--gutter); padding: 40px 0 0 20px; font-size: 13px; color: var(--ar-muted); letter-spacing: .6px; }
+.archive-list-empty b { display: block; margin-bottom: 14px; font-size: 10px; font-weight: 400; letter-spacing: 1.3px; }
+.archive-list-empty span { display: block; font-size: 17px; line-height: 24px; font-weight: 600; color: var(--ar-ink); letter-spacing: .3px; overflow-wrap: anywhere; }
+.archive-list-empty i { display: block; margin-top: 10px; font-style: normal; font-size: 11px; letter-spacing: .8px; }
 
 /* 底部计数：照左下计数器的样子 */
 .archive-list-foot { display: flex; align-items: baseline; gap: 16px; margin-left: var(--gutter); padding-top: 12px; }

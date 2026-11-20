@@ -803,3 +803,46 @@ test('封面：自带封面直接用，读不出来不留破图；没有封面�
     assert.equal(asked.some((u) => /x\.test/.test(u)), false);
     f.close();
 });
+
+test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时写在左下角状态里，扫完恢复', () => {
+    const fns = {};
+    const api = { onMusicScanStart: (fn) => { fns.start = fn; return () => { fns.start = null; }; }, onMusicScanProgress: (fn) => { fns.progress = fn; }, onMusicScanComplete: (fn) => { fns.complete = fn; } };
+    const f = fixture({ n: 0, playlists: [], setup: (w, app) => { app.api = api; } });
+    const root = f.w.document.getElementById('music-archive-view');
+    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    assert.match(root.querySelector('[data-act="add-local"]').textContent, /添加音乐文件夹/);
+    fns.start();
+    assert.ok(root.classList.contains('is-scanning'));
+    assert.equal(f.text('emptyTitle'), 'SCANNING ARCHIVE');
+    fns.progress({ current: 437, total: 1280 });
+    assert.match(f.text('emptyText'), /0437 \/ 1280/);
+    assert.equal(f.text('status'), 'SCANNING 0437 / 1280');
+    assert.match(root.querySelector('[data-ref="scanBar"]').style.transform, /scaleX\(0\.34/);
+    fns.complete({ tracks: new Array(1280) });
+    assert.equal(root.classList.contains('is-scanning'), false);
+    assert.equal(f.text('status'), 'SCAN COMPLETE ／ 1280 FILES');
+    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    f.close();
+    assert.equal(fns.start, null, '关掉时取消订阅');
+});
+
+test('空的原因各有说法：检索没结果、空歌单、还没有播放记录', () => {
+    const f = fixture({ playlists: [{ id: 'e', name: '空歌单', tracks: [] }] });
+    const empty = () => f.view.list.el.querySelector('[data-l="empty"]');
+    f.view.setListOpen(true);
+    f.view.list.input.value = 'zzqx';
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.match(empty().textContent, /没有找到「zzqx」.*ESC 清除检索/);
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(empty().style.display, 'none');
+    f.view.list.el.querySelector('[data-kind="playlist"]').click();
+    assert.match(empty().textContent, /歌单里还没有歌.*右键/);
+    f.view.list.el.querySelector('[data-kind="recent"]').click();
+    assert.match(empty().textContent, /还没有播放记录/);
+    // 阵列走到空歌单那一列：说明是空的，并提示怎么加歌
+    const lane = f.view.debug().columns.findIndex((c) => c.id === 'playlist:e');
+    for (let k = 0; k < lane; k++) f.key('ArrowRight');
+    assert.equal(f.text('ftitle'), '这个歌单还是空的');
+    assert.match(f.text('fmeta'), /右键/);
+    f.close();
+});

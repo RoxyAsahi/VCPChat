@@ -38,11 +38,12 @@
                 <button type="button" class="archive-access" data-act="access" data-ref="access">ACCESS FILE <span>→</span></button>
                 <div class="archive-cover" data-ref="cover" aria-hidden="true"></div>
             </div>
-            <div class="archive-empty">
-                <h2>ARCHIVE EMPTY</h2>
-                <p>曲库里还没有歌曲。添加本地文件夹或从云端导入后，这里会按歌单排成档案阵列。</p>
-                <button type="button" data-act="add-local">ADD LOCAL FOLDER →</button>
-                <button type="button" data-act="add-cloud">IMPORT FROM CLOUD →</button>
+            <div class="archive-empty" role="status">
+                <h2 data-ref="emptyTitle">ARCHIVE EMPTY</h2>
+                <p data-ref="emptyText"></p>
+                <div class="archive-scan-bar" aria-hidden="true"><i data-ref="scanBar"></i></div>
+                <button type="button" data-act="add-local">添加音乐文件夹 <span>ADD LOCAL FOLDER →</span></button>
+                <button type="button" data-act="add-cloud">从云端导入 <span>IMPORT FROM CLOUD →</span></button>
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
@@ -50,7 +51,7 @@
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
                 <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> 直接打字检索</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
-                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
+                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status">SESSION AUTHORIZED</span></span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
         </div>`;
 
@@ -239,6 +240,43 @@
         };
         const columnOfGroup = (g) => (letterOf && letterOf.get(g)) || 'all';
 
+        /*
+         * 扫描曲库的过程：主进程先报总数、再逐首报进度、扫完才把曲目一次交过来，
+         * 所以这里显示的是进度（空曲库时占中间的位置，有歌时写在左下角状态里），阵列在扫完那一刻换上新曲库。
+         */
+        const EMPTY_TEXT = '曲库里还没有歌曲。添加本地文件夹或从云端导入后，这里会按首字母和歌单排成档案阵列。';
+        const scan = { active: false, current: 0, total: 0, timer: 0 };
+        const renderScan = () => {
+            root.classList.toggle('is-scanning', scan.active);
+            const total = scan.total;
+            const digits = Math.max(4, String(total).length);
+            const progress = total ? pad(scan.current, digits) + ' / ' + pad(total, digits) : '';
+            refs.emptyTitle.textContent = scan.active ? 'SCANNING ARCHIVE' : 'ARCHIVE EMPTY';
+            refs.emptyText.textContent = scan.active
+                ? (total ? '正在读取曲目信息 ' + progress + '，读完后这里会排成档案阵列。' : '正在查找音乐文件…')
+                : EMPTY_TEXT;
+            refs.scanBar.style.transform = `scaleX(${total ? Math.min(1, scan.current / total) : 0})`;
+            if (scan.active) refs.status.textContent = total ? 'SCANNING ' + progress : 'SCANNING';
+            else if (!scan.timer) refs.status.textContent = 'SESSION AUTHORIZED';
+        };
+        const setScan = (next) => {
+            Object.assign(scan, next);
+            renderScan();
+        };
+        const scanDone = (data) => {
+            const got = Array.isArray(data) ? data.length : (data && Array.isArray(data.tracks) ? data.tracks.length : 0);
+            clearTimeout(scan.timer);
+            setScan({ active: false });
+            refs.status.textContent = got ? 'SCAN COMPLETE ／ ' + pad(got, 4) + ' FILES' : 'SCAN COMPLETE ／ NO FILES FOUND';
+            scan.timer = setTimeout(() => { scan.timer = 0; renderScan(); }, 4000);
+        };
+        const scanOff = [
+            app.api?.onMusicScanStart?.((data) => setScan({ active: true, current: 0, total: Number(data && data.total) || 0 })),
+            app.api?.onMusicScanProgress?.((data) => setScan({ active: true, current: Number(data && data.current) || 0, total: Number(data && data.total) || scan.total })),
+            app.api?.onMusicScanComplete?.(scanDone)
+        ];
+        renderScan();
+
         const dataChanged = () => {
             const d = state.dataRefs;
             return d.playlist !== app.playlist || d.length !== tracks().length || d.playlists !== app.customPlaylists || d.plSig !== playlistsSig();
@@ -320,7 +358,9 @@
             refs.fno.textContent = t ? fileNumber(t, index) : 'TRK-000';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
             const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
-            refs.fmeta.textContent = (meta || (t ? 'UNKNOWN ARTIST' : '')).toUpperCase();
+            // 空列：告诉人下一步怎么做
+            const idle = col.kind === 'search' ? 'ESC 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
+            refs.fmeta.textContent = t ? (meta || 'UNKNOWN ARTIST').toUpperCase() : idle;
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -1179,6 +1219,8 @@
             savePlace();
             state.destroyed = true;
             clearInterval(clockTimer);
+            clearTimeout(scan.timer);
+            scanOff.forEach((off) => { if (typeof off === 'function') off(); });
             clearTimeout(state.coverTimer);
             stopInertia();
             lyrics?.destroy();

@@ -326,7 +326,7 @@
                 const items = (pl.tracks || []).map((p) => byPath.get(String(p || '').replace(/\\/g, '/').toLowerCase())).filter((i) => i !== undefined);
                 const nameHit = q && norm(pl.name).includes(norm(q));
                 const hits = !q || nameHit ? items : index.query(q, { only: items });
-                if (!hits.length) return;
+                if (!hits.length && (q || items.length)) return;
                 const id = 'playlist:' + (pl.id ?? order);
                 head(String(pl.name || '未命名歌单'), id, hits.length);
                 hits.forEach((i) => push(i, id));

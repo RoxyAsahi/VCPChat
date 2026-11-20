@@ -42,7 +42,7 @@
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
             <div class="archive-list-spacer" data-l="spacer"></div>
-            <div class="archive-list-empty" data-l="empty">没有匹配的曲目</div>
+            <div class="archive-list-empty" data-l="empty" role="status"></div>
         </div>
         <div class="archive-list-foot" aria-live="polite">
             <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span>
@@ -186,6 +186,16 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
+            if (!out.count) {
+                // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
+                const q = state.query.trim();
+                const [line, hint] = q ? ['没有找到「' + q + '」', 'ESC 清除检索']
+                    : !tracks().length ? ['曲库里还没有歌曲', '']
+                    : state.kind === 'playlist' ? [out.rows.length ? '歌单里还没有歌' : '还没有歌单', '在曲目上右键 → 加入歌单']
+                    : state.kind === 'recent' ? ['还没有播放记录', '播放过的歌会排在这里']
+                    : ['这里还没有曲目', ''];
+                r.empty.innerHTML = `<b>NO DATA</b><span>${esc(line)}</span>${hint ? `<i>${esc(hint)}</i>` : ''}`;
+            }
             el.querySelectorAll('[data-kind]').forEach((b) => {
                 const on = b.dataset.kind === state.kind;
                 b.classList.toggle('on', on);

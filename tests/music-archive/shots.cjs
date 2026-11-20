@@ -27,8 +27,9 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     if (name.includes('empty')) qs.set('empty', '');
     if (name.includes('playing')) qs.set('playing', '');
     if (name.includes('lyrics')) qs.set('lyrics', '');
+    if (name.includes('plzero')) qs.set('emptypl', '');
     if (args.n) qs.set('n', args.n);
-    await page.goto(base + '?' + qs.toString());
+    await page.goto(base + '?' + qs.toString(), { timeout: 120000 });
     await page.waitForFunction(() => window.__ready);
     await page.waitForTimeout(400);
     if (name.includes('nolist') || name.includes('narrow-list')) await page.evaluate(() => document.querySelector('[data-act="list"]').click());
@@ -52,7 +53,14 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
       await page.close();
       continue;
     }
-    if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
+    if (name.includes('scan')) await page.evaluate(() => { window.__scan(0, 1280); window.__scan(437, 1280); });
+    if (name.includes('nomatch')) { await page.keyboard.press('/'); await page.keyboard.type('zzqx'); await page.waitForTimeout(300); }
+    else if (name.includes('plzero')) {
+      // 目录切到歌单分类，阵列走到那个空歌单
+      await page.evaluate(() => { document.querySelector('[data-kind="playlist"]').click(); const v = window.app.archiveView; const k = v.debug().columns.findIndex((c) => c.id === 'playlist:e'); for (let i = 0; i < k; i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); });
+    }
+    else if (name.includes('scan')) { /* 停在原处 */ }
+    else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
     await page.waitForTimeout(2600);
