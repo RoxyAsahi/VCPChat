@@ -1422,16 +1422,17 @@ body.music-reduce-motion .md-fluid,
 body.music-reduce-motion .md-mist { transition: none; }
 
 /* ───────── 抽屉一直到窗口底，右下角让出一个凹口给小环 ─────────
- * 凹口是遮罩里减掉的一块形状（右下角 140px 见方的 SVG）：抽屉的边从右缘缓缓弯进来，绕过小环（同心，留一道缝），
- * 再缓缓弯回底边；左上方留一截越收越细的颈，一直搭到环上。颈和抽屉是同一层磨砂，没有描边。
+ * 凹口是遮罩里减掉的一块形状（右下角 120px 见方的 SVG）：抽屉的右下角整块退后一步，
+ * 两头是外凸的圆角，里角是一段大的内凹圆弧，中间是直边，没有鼓包也没有颈。
+ * 小环悬在让出来的空处，和抽屉的边隔着差不多一个环半径的空隙，互不相碰；没有描边。
  * 圆心距右、下各 40px，和流体层 cornerLocal 一致。 */
 .md-pnl { bottom: 20px; }
-.md-pnl .md-dockrow { padding-right: 76px; }
+.md-pnl .md-dockrow { padding-right: 88px; }
 .md-drbg {
-  -webkit-mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cpath d='M140 24C140 50 126 64 100 64A36 36 0 0 0 85.93 66.86C79.87 70.15 81.55 77.62 87.66 85.55L85.55 87.66C77.62 81.55 70.15 79.87 66.86 85.93A36 36 0 0 0 64 100C64 126 50 140 24 140H140Z'/%3E%3C/svg%3E");
-  mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cpath d='M140 24C140 50 126 64 100 64A36 36 0 0 0 85.93 66.86C79.87 70.15 81.55 77.62 87.66 85.55L85.55 87.66C77.62 81.55 70.15 79.87 66.86 85.93A36 36 0 0 0 64 100C64 126 50 140 24 140H140Z'/%3E%3C/svg%3E");
-  -webkit-mask-size: 100% 100%, 140px 140px;
-  mask-size: 100% 100%, 140px 140px;
+  -webkit-mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M120 24A18 18 0 0 1 102 42L72 42A30 30 0 0 0 42 72L42 102A18 18 0 0 1 24 120H120Z'/%3E%3C/svg%3E");
+  mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M120 24A18 18 0 0 1 102 42L72 42A30 30 0 0 0 42 72L42 102A18 18 0 0 1 24 120H120Z'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%, 120px 120px;
+  mask-size: 100% 100%, 120px 120px;
   -webkit-mask-position: 0 0, right bottom;
   mask-position: 0 0, right bottom;
   -webkit-mask-repeat: no-repeat;
@@ -1615,3 +1616,18 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl button:focus-visible { outlin
 #music-dock-root.md-squeeze .md-slot[data-md="mode"] { display: none; }
 #music-dock-root.md-squeeze .md-ttl { flex: 1 1 auto; }
 body.music-reduce-motion .mtst-layer { transition: none; }
+
+/* ───────── 抽屉的材质：奶白（深色下是烟灰）的厚玻璃，不透出脏灰 ─────────
+ * 抽屉本体比底下的页面明显亮一档，凹口里露出来的才是页面本身，这样右下角退后的那一步看得清。
+ * 小环在凹口里悬空：白环、中间透空，只有一圈很淡的光；浅色下加一点落影，免得白环化在浅底里。 */
+.md-drbg {
+  background:
+    radial-gradient(420px 360px at 100% 0%, color-mix(in srgb, var(--md-accent) 14%, transparent), transparent 70%),
+    linear-gradient(to left, var(--md-dr-glass, var(--md-glass)) 0, var(--md-dr-glass, var(--md-glass)) var(--md-dr-tint, 46%), transparent 100%);
+}
+#music-dock-root { --md-dr-glass: rgba(40, 40, 45, .88); }
+body.light-theme #music-dock-root { --md-dr-glass: rgba(252, 252, 253, .92); }
+#music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 0 10px 1px rgba(255, 255, 255, .35); }
+#music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .5); }
+body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 2px 10px rgba(40, 30, 20, .16), 0 0 0 .5px rgba(40, 30, 20, .06); }
+body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 3px 14px rgba(40, 30, 20, .22), 0 0 0 .5px rgba(40, 30, 20, .08); }
