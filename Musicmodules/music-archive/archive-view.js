@@ -102,15 +102,17 @@
         const selectedTrack = () => tracks()[selectedIndex()] || null;
         const playlistsSig = () => (app.customPlaylists || []).map((p) => (p && p.id) + ':' + (p && p.tracks ? p.tracks.length : 0) + ':' + (p && p.name)).join('|');
 
-        const rebuild = ({ keep = true, track = -1, reindex = true } = {}) => {
+        let listTimer = 0;
+        const rebuild = ({ keep = true, track = -1, reindex = true, prepared = null, laterList = false } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : track;
             const firstData = state.dataRefs.length <= 0 && tracks().length > 0;
             // 只换排序时曲库没变，检索索引（拼音、罗马音）不用重建
-            if (reindex || !searchIndex || searchIndex.size !== tracks().length) rebuildIndex();
-            const columns = buildColumns();
+            if (prepared && prepared.index && prepared.list === app.playlist && prepared.index.size === tracks().length) searchIndex = prepared.index;
+            else if (reindex || !searchIndex || searchIndex.size !== tracks().length) rebuildIndex();
+            const columns = buildColumns(prepared);
             state.columns = columns;
             state.sig = Model.signature(columns);
             state.dataRefs = { playlist: app.playlist, length: tracks().length, playlists: app.customPlaylists, plSig: playlistsSig() };
@@ -140,8 +142,9 @@
             if (firstData && !pendingPlace && !placed) { placeSettled = true; followUntil.t = performance.now() + 4000; }
             renderHud(true);
             updatePlaying(true);
-            list?.rebuild();
-            syncList();
+            // 大曲库分片重建时，目录（两万行的分组和排序）放到下一片再排
+            if (laterList && list) { clearTimeout(listTimer); listTimer = setTimeout(() => { listTimer = 0; if (state.destroyed) return; list.rebuild(); syncList(); }, 0); }
+            else { clearTimeout(listTimer); listTimer = 0; list?.rebuild(); syncList(); }
             schedulePlace();
         };
 
@@ -215,28 +218,40 @@
         const LETTER_MIN_SIZE = 4;
         let letterOf = null;          // 首字母 → 列 id
         const favoritePaths = () => (Array.isArray(app.favoriteTracks) ? app.favoriteTracks : []).map((t) => (typeof t === 'string' ? t : t && t.path)).filter(Boolean);
-        const buildColumns = () => {
-            const base = Model.buildColumns(tracks(), app.customPlaylists);
-            letterOf = null;
+        // 路径（归一化后）→ 曲库下标，同一份曲库只建一次；建列、最近播放、收藏都用它
+        let pathMemo = { list: null, n: -1, map: new Map() };
+        const pathIndex = () => {
+            if (pathMemo.list !== app.playlist || pathMemo.n !== tracks().length) pathMemo = { list: app.playlist, n: tracks().length, map: Model.pathIndex(tracks()) };
+            return pathMemo.map;
+        };
+        /* 算出各列和「首字母 → 列」的对照，不改任何状态（分片重建时可以提前算好） */
+        const computeColumns = (index) => {
+            const base = Model.buildColumns(tracks(), app.customPlaylists, { indexByPath: pathIndex() });
+            let letters0 = null;
             // 「全部曲目」用全局顺序（和目录一致），不用扫描顺序
-            const spec = sortSpec();
-            if (spec) base[0].items = IndexLib.sortedIndices(searchIndex, base[0].items, spec);
+            const spec = sortSpecFor(index);
+            if (spec) base[0].items = IndexLib.sortedIndices(index, base[0].items, spec);
             const n = tracks().length;
-            if (n < LETTER_SPLIT_MIN || !spec) return base;
-            const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE, spec });
-            letterOf = new Map();
-            for (const c of letters) for (const g of c.groups) letterOf.set(g, c.id);
+            if (n < LETTER_SPLIT_MIN || !spec) return { columns: base, letterOf: null };
+            const letters = IndexLib.groupColumns(index, base[0].items, { minSize: LETTER_MIN_SIZE, spec });
+            letters0 = new Map();
+            for (const c of letters) for (const g of c.groups) letters0.set(g, c.id);
             const front = [];
             const recent = recentIndices();
             if (recent.length) front.push({ id: 'recent', kind: 'recent', name: '最近播放', ref: 'RECENT FILES', items: recent });
             const fav = favoritePaths();
             if (fav.length) {
-                const byPath = new Map();
-                tracks().forEach((t, i) => { const k = Model.normalizePath(t && t.path); if (k && !byPath.has(k)) byPath.set(k, i); });
+                const byPath = pathIndex();
                 const items = fav.map((p) => byPath.get(Model.normalizePath(p))).filter((i) => i !== undefined);
                 if (items.length) front.push({ id: 'favorite', kind: 'favorite', name: '收藏', ref: 'SAVED FILES', items });
             }
-            return [...front, ...letters, ...base.slice(1)];
+            return { columns: [...front, ...letters, ...base.slice(1)], letterOf: letters0 };
+        };
+        const columnsKey = () => sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
+        const buildColumns = (prepared = null) => {
+            const out = prepared && prepared.cols && prepared.colsKey === columnsKey() && prepared.index === searchIndex ? prepared.cols : computeColumns(searchIndex);
+            letterOf = out.letterOf;
+            return out.columns;
         };
         const columnOfGroup = (g) => (letterOf && letterOf.get(g)) || 'all';
 
@@ -641,10 +656,12 @@
         const IndexLib = global.MusicArchiveIndex;
         const ListLib = global.MusicArchiveList;
         const pinyinCache = new Map();
+        let pinyinFn = null; // 同一份拼音表始终是同一个函数，条目缓存靠它判断拼音有没有变
         const pinyinOf = () => {
             const lib = global.pinyinPro;
             if (!lib || typeof lib.pinyin !== 'function') return null;
-            return (c) => {
+            if (pinyinFn && pinyinFn.lib === lib) return pinyinFn;
+            pinyinFn = (c) => {
                 if (!pinyinCache.has(c)) {
                     let p = '';
                     try { p = lib.pinyin(c, { toneType: 'none' }); } catch (e) { p = ''; }
@@ -652,17 +669,55 @@
                 }
                 return pinyinCache.get(c);
             };
+            pinyinFn.lib = lib;
+            return pinyinFn;
         };
         let searchIndex = null;
-        const rebuildIndex = () => { searchIndex = IndexLib ? IndexLib.createIndex(tracks(), { pinyin: pinyinOf() }) : null; };
+        const entryCache = new Map();
+        const rebuildIndex = () => { searchIndex = IndexLib ? IndexLib.createIndex(tracks(), { pinyin: pinyinOf(), cache: entryCache }) : null; };
+
+        /*
+         * 曲库整体变了（读进来、扫完、拼音表到了）之后的重建。大曲库的检索条目（拼音、罗马音）是最慢的一步，
+         * 先分片算进缓存（每片最多 8ms，片与片之间让出线程，输入不被卡住），算完再一次重建；
+         * 小曲库或者缓存已经是热的（只多了几首歌）就当场重建。
+         */
+        const WARM_ABOVE = 1500;
+        let warming = null;
+        const rebuildSoon = () => {
+            const list = tracks();
+            if (!IndexLib || !IndexLib.warm || list.length <= WARM_ABOVE) { warming = null; rebuild(); return; }
+            if (warming && warming.list === app.playlist && warming.n === list.length) return;
+            const job = warming = { list: app.playlist, n: list.length, at: 0, pinyin: pinyinOf() };
+            const later = () => setTimeout(slice, 0);
+            const slice = () => {
+                if (state.destroyed || warming !== job) return;
+                if (job.list !== app.playlist || job.n !== tracks().length) { warming = null; rebuildSoon(); return; }
+                // 一片只做一件事：算条目（可能要很多片）→ 建索引 → 排名次（可能几片）→ 重建阵列 → 目录（rebuild 里再排一片）
+                if (job.at !== -1) {
+                    job.at = IndexLib.warm(tracks(), { pinyin: job.pinyin, cache: entryCache, from: job.at, budgetMs: 8 });
+                    return later();
+                }
+                if (!job.index) {
+                    job.index = IndexLib.createIndex(tracks(), { pinyin: job.pinyin, cache: entryCache });
+                    job.sort = IndexLib.prepareSort ? IndexLib.prepareSort(job.index, sortMode) : () => true;
+                    return later();
+                }
+                if (!job.sort(8)) return later();
+                if (!job.cols) { job.colsKey = columnsKey(); job.cols = computeColumns(job.index); return later(); }
+                warming = null;
+                rebuild({ prepared: job, laterList: true });
+            };
+            slice();
+        };
 
         /* 排序方式（标题、歌手、时长、添加时间）：阵列的列、目录、队列都跟着它；记在本机 */
         const SORT_KEY = 'musicArchiveSort';
         let sortMode = 'title';
         try { sortMode = localStorage.getItem(SORT_KEY) || 'title'; } catch (e) { sortMode = 'title'; }
         if (!IndexLib || !IndexLib.SORTS || !IndexLib.SORTS.includes(sortMode)) sortMode = 'title';
-        const sortSpec = () => (IndexLib && searchIndex && IndexLib.sortSpec
-            ? IndexLib.sortSpec(searchIndex, { mode: sortMode, tracks: tracks(), durationOf: (t) => durationOf(t) }) : null);
+        const sortSpecFor = (index) => (IndexLib && index && IndexLib.sortSpec
+            ? IndexLib.sortSpec(index, { mode: sortMode, tracks: tracks(), durationOf: (t) => durationOf(t) }) : null);
+        const sortSpec = () => sortSpecFor(searchIndex);
         const setSort = (mode) => {
             if (!IndexLib || !IndexLib.SORTS.includes(mode) || mode === sortMode) return;
             sortMode = mode;
@@ -680,7 +735,7 @@
             const tag = document.createElement('script');
             tag.src = src;
             tag.async = true;
-            tag.onload = () => { if (!state.destroyed) rebuild(); }; // 汉字有了拼音，分组和检索都要重算
+            tag.onload = () => { if (!state.destroyed) rebuildSoon(); }; // 汉字有了拼音，分组和检索都要重算
             tag.onerror = () => { /* 没有拼音表就只按原文检索 */ };
             document.head.appendChild(tag);
         };
@@ -690,9 +745,8 @@
         let recentPaths = [];
         try { recentPaths = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter((p) => typeof p === 'string'); } catch (e) { recentPaths = []; }
         const recentIndices = () => {
-            const byPath = new Map();
-            tracks().forEach((t, i) => { if (t && t.path && !byPath.has(t.path)) byPath.set(t.path, i); });
-            return recentPaths.map((p) => byPath.get(p)).filter((i) => i !== undefined);
+            const byPath = pathIndex();
+            return recentPaths.map((p) => byPath.get(Model.normalizePath(p))).filter((i) => i !== undefined);
         };
         let lastRecorded = null;
         const recordRecent = () => {
@@ -845,7 +899,7 @@
                 app.destroyAmbientPixi?.();
                 ensureScene();
                 resize();
-                if (dataChanged()) rebuild();
+                if (dataChanged()) rebuildSoon();
                 updatePlaying(true);
                 kick();
             } else {
@@ -1209,7 +1263,7 @@
         const clockTimer = setInterval(() => {
             refs.clock.textContent = new Date().toTimeString().slice(0, 8);
             if (!isShown()) return;
-            if (dataChanged()) rebuild();
+            if (dataChanged()) rebuildSoon();
             updatePlaying();
             recordDuration();
             syncLyrics();
@@ -1279,7 +1333,8 @@
         const api = {
             show: () => setMode('archive'),
             showClassic: () => setMode('classic'),
-            refresh: () => rebuild(),
+            refresh: () => { warming = null; rebuild(); },
+            refreshSoon: () => rebuildSoon(),
             select,
             playSelected,
             openSearch,

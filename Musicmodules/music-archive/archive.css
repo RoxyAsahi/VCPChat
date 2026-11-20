@@ -154,6 +154,9 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-empty button { font-size: 14px; letter-spacing: 1px; margin-right: 56px; }
 .archive-empty button:hover { color: var(--ar-accent); }
 #music-archive-view.is-empty .archive-empty { display: block; }
+/* 空状态直接压在阵列上：垫一层纸色柔光，说明文字才够对比（两套主题小字都过 AA） */
+.archive-empty::before { content: ""; position: absolute; left: -110px; right: -60px; top: -80px; bottom: -80px; z-index: -1; pointer-events: none; background: radial-gradient(closest-side, rgba(var(--ar-paper-rgb), .94) 0, rgba(var(--ar-paper-rgb), .86) 55%, rgba(var(--ar-paper-rgb), 0) 100%); }
+#music-archive-view.is-scanning .archive-status { color: var(--ar-muted); }
 .archive-empty button span { margin-left: 12px; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
 .archive-empty button:hover span { color: inherit; }
 /* 扫描中：空状态换成进度（一条细线从左长到右），入口先收起；有歌时进度写在左下角状态里 */

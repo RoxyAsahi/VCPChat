@@ -82,22 +82,54 @@
 
     const FIELDS = [['title', 3], ['artist', 2], ['album', 1]];
 
-    const createIndex = (tracks, { pinyin = null } = {}) => {
+    /* 一首歌的检索条目：三个字段的原文、全拼、首字母，加上分组和排序键 */
+    const entryOf = (t, pinyin) => {
+        const e = { group: groupOf(t && t.title, pinyin) };
+        for (const [f] of FIELDS) {
+            const raw = f === 'title' ? stripExt(t && t.title) : (t && t[f]) || '';
+            const r = romanize(raw, pinyin);
+            e[f] = norm(raw);
+            e[f + 'Py'] = r.py;
+            e[f + 'Ini'] = r.ini;
+        }
+        e.sort = e.titlePy || e.title;
+        e.artistGroup = e.artist ? groupOf(t && t.artist, pinyin) : '#';
+        e.artistSort = e.artistPy || e.artist;
+        return e;
+    };
+    /*
+     * 条目缓存（可选）：按路径记住算好的条目，标题、歌手、专辑和拼音表都没变就直接用。
+     * 曲库整体变化（扫进来一批新歌）时只有新歌要算；很大的曲库第一次可以用 warm 分片先算好，不卡输入。
+     */
+    const cachedEntry = (t, pinyin, cache) => {
+        const key = t && t.path;
+        if (!cache || !key) return entryOf(t, pinyin);
+        const hit = cache.get(key);
+        if (hit && hit.pinyin === pinyin && hit.title === t.title && hit.artist === t.artist && hit.album === t.album) return hit.e;
+        const e = entryOf(t, pinyin);
+        cache.set(key, { pinyin, title: t.title, artist: t.artist, album: t.album, e });
+        return e;
+    };
+    /* 从第 from 首开始算，最多用 budgetMs 毫秒；返回下一次从哪首接着算，算完返回 -1 */
+    const warm = (tracks, { pinyin = null, cache, from = 0, budgetMs = 8, now = () => performance.now() } = {}) => {
         const list = Array.isArray(tracks) ? tracks : [];
-        const entries = list.map((t) => {
-            const e = { group: groupOf(t && t.title, pinyin) };
-            for (const [f] of FIELDS) {
-                const raw = f === 'title' ? stripExt(t && t.title) : (t && t[f]) || '';
-                const r = romanize(raw, pinyin);
-                e[f] = norm(raw);
-                e[f + 'Py'] = r.py;
-                e[f + 'Ini'] = r.ini;
-            }
-            e.sort = e.titlePy || e.title;
-            e.artistGroup = e.artist ? groupOf(t && t.artist, pinyin) : '#';
-            e.artistSort = e.artistPy || e.artist;
-            return e;
-        });
+        const end = now() + budgetMs;
+        let i = from;
+        while (i < list.length) {
+            for (const stop = Math.min(list.length, i + 40); i < stop; i++) cachedEntry(list[i], pinyin, cache);
+            if (now() >= end) break;
+        }
+        return i < list.length ? i : -1;
+    };
+
+    const createIndex = (tracks, { pinyin = null, cache = null } = {}) => {
+        const list = Array.isArray(tracks) ? tracks : [];
+        const entries = list.map((t) => cachedEntry(t, pinyin, cache));
+        if (cache && cache.size > list.length + 64) {
+            // 曲库里已经没有的歌，条目不留
+            const keep = new Set(list.map((t) => t && t.path));
+            for (const k of cache.keys()) if (!keep.has(k)) cache.delete(k);
+        }
 
         /* 一个词在一个字段上的得分；0 表示不匹配 */
         const termScore = (e, f, w, term, ascii) => {
@@ -146,6 +178,7 @@
 
         return {
             size: entries.length,
+            entry: (i) => entries[i],
             group: (i) => (entries[i] ? entries[i].group : '#'),
             sortKey: (i) => (entries[i] ? entries[i].sort : ''),
             artistGroup: (i) => (entries[i] ? entries[i].artistGroup : '#'),
@@ -169,29 +202,123 @@
         ['d7', Infinity, '7 分钟以上', 'OVER 07:00'],
         ['d?', 0, '时长未知', 'UNKNOWN LENGTH']
     ];
+    /*
+     * 名次表：每个索引、每种排序键只排一次。曲库整体变化后新索引里绝大多数条目还是原来那些（条目缓存），
+     * 这时沿用上一次排好的顺序：留下还在的，只把新来的排好再归并进去，比较次数从 n·log n 降到约 n。
+     */
     const RANKS = new WeakMap();
+    const LAST_ORDER = {};
+    const mergeOrder = (index, prev, cmp) => {
+        const n = index.size;
+        if (!prev || !index.entry || prev.length < n / 2) return null;
+        const at = new Map();
+        for (let i = 0; i < n; i++) {
+            const e = index.entry(i);
+            if (at.has(e)) return null; // 同一路径出现两次（共用条目）：不走捷径
+            at.set(e, i);
+        }
+        const kept = [];
+        const seen = new Uint8Array(n);
+        for (const e of prev) {
+            const i = at.get(e);
+            if (i !== undefined) { kept.push(i); seen[i] = 1; }
+        }
+        if (kept.length < n / 2) return null;
+        const fresh = [];
+        for (let i = 0; i < n; i++) if (!seen[i]) fresh.push(i);
+        fresh.sort(cmp);
+        const order = new Array(n);
+        let a = 0, b = 0, k = 0;
+        while (a < kept.length && b < fresh.length) order[k++] = cmp(kept[a], fresh[b]) <= 0 ? kept[a++] : fresh[b++];
+        while (a < kept.length) order[k++] = kept[a++];
+        while (b < fresh.length) order[k++] = fresh[b++];
+        return order;
+    };
     const rankOf = (index, key, cmp) => {
         let per = RANKS.get(index);
         if (!per) RANKS.set(index, per = {});
         if (!per[key]) {
-            const order = Array.from({ length: index.size }, (_, i) => i).sort(cmp);
+            const order = mergeOrder(index, LAST_ORDER[key], cmp) || Array.from({ length: index.size }, (_, i) => i).sort(cmp);
             const rank = new Uint32Array(index.size);
             order.forEach((i, k) => { rank[i] = k; });
             per[key] = rank;
+            if (index.entry) LAST_ORDER[key] = order.map((i) => index.entry(i));
         }
         return per[key];
     };
+    /*
+     * 分片排名次：先把下标切成小段各自排好，再两两归并；每一步都很短，step(budgetMs) 用完预算就返回 false，下次接着来。
+     * 排完把结果放进名次表，之后 sortSpec 直接用。上一次的顺序能沿用时（mergeOrder）一步就完。
+     */
+    const rankJob = (index, key, cmp) => {
+        let runs = null, sorted = 0, done = false;
+        const finish = (order) => {
+            let per = RANKS.get(index);
+            if (!per) RANKS.set(index, per = {});
+            const rank = new Uint32Array(index.size);
+            order.forEach((i, k) => { rank[i] = k; });
+            per[key] = rank;
+            if (index.entry) LAST_ORDER[key] = order.map((i) => index.entry(i));
+            done = true;
+        };
+        return (budgetMs = 8, now = () => performance.now()) => {
+            if (done || (RANKS.get(index) || {})[key]) return true;
+            const end = now() + budgetMs;
+            if (!runs) {
+                const quick = mergeOrder(index, LAST_ORDER[key], cmp);
+                if (quick) { finish(quick); return true; }
+                runs = [];
+                for (let i = 0; i < index.size; i += 1024) runs.push(Array.from({ length: Math.min(1024, index.size - i) }, (_, k) => i + k));
+                if (!runs.length) { finish([]); return true; }
+            }
+            while (sorted < runs.length) { runs[sorted++].sort(cmp); if (now() >= end) return false; }
+            while (runs.length > 1) {
+                // 每次归并最短的相邻一对里的第一对；一对最多 n 次比较
+                const next = [];
+                for (let k = 0; k < runs.length; k += 2) {
+                    const a = runs[k], b = runs[k + 1];
+                    if (!b) { next.push(a); continue; }
+                    if (now() >= end) { next.push(a, b); continue; }
+                    const out = new Array(a.length + b.length);
+                    let x = 0, y = 0, z = 0;
+                    while (x < a.length && y < b.length) out[z++] = cmp(a[x], b[y]) <= 0 ? a[x++] : b[y++];
+                    while (x < a.length) out[z++] = a[x++];
+                    while (y < b.length) out[z++] = b[y++];
+                    next.push(out);
+                }
+                const stuck = next.length === runs.length;
+                runs = next;
+                if (stuck || now() >= end) return false;
+            }
+            finish(runs[0]);
+            return true;
+        };
+    };
+    const TITLE_CMP = (index) => (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
+    const ARTIST_CMP = (index, titleRank) => (a, b) => {
+        const ka = index.artistKey(a), kb = index.artistKey(b);
+        if (!ka !== !kb) return ka ? -1 : 1; // 没写歌手的放最后
+        return COLLATE(ka, kb) || titleRank[a] - titleRank[b];
+    };
+    /* 给界面用：为某种排序方式分片备好名次。返回 step(budgetMs) → 是否完成 */
+    const prepareSort = (index, mode = 'title') => {
+        const title = rankJob(index, 'title', TITLE_CMP(index));
+        let artist = null;
+        return (budgetMs = 8) => {
+            if (!title(budgetMs)) return false;
+            if (mode !== 'artist') return true;
+            if (!artist) { artist = rankJob(index, 'artist', ARTIST_CMP(index, RANKS.get(index).title)); return false; }
+            return artist(budgetMs);
+        };
+    };
+
     const sortSpec = (index, { mode = 'title', tracks = [], durationOf = null } = {}) => {
         // 标题的名次只排一次（按索引缓存）：之后各处比较都是数字相减，两万首切排序才不卡
-        const titleRank = rankOf(index, 'title', (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b);
+        const titleRank = rankOf(index, 'title', TITLE_CMP(index));
         const byTitle = (a, b) => titleRank[a] - titleRank[b];
         const letter = { rank: (g) => GROUP_RANK.get(g) ?? 999, name: groupName, ref: groupRef, family: familyOf };
         if (mode === 'artist') {
-            const artistRank = rankOf(index, 'artist', (a, b) => {
-                const ka = index.artistKey(a), kb = index.artistKey(b);
-                if (!ka !== !kb) return ka ? -1 : 1; // 没写歌手的放最后
-                return COLLATE(ka, kb) || byTitle(a, b);
-            });
+            const artistRank = rankOf(index, 'artist', ARTIST_CMP(index, titleRank));
             return { mode, ...letter, group: (i) => index.artistGroup(i), cmp: (a, b) => artistRank[a] - artistRank[b] };
         }
         if (mode === 'duration') {
@@ -379,7 +506,7 @@
     /* 全局顺序：先按首字母分组的固定顺序，组内按标题（数字按数值）。阵列、目录、队列都用它 */
     const sortedIndices = (index, indices, spec = null) => groupColumns(index, indices, { spec }).flatMap((c) => c.items);
 
-    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, groupColumns, sortedIndices, listRows, sortSpec, SORTS, GROUP_ORDER });
+    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, warm, prepareSort, groupColumns, sortedIndices, listRows, sortSpec, SORTS, GROUP_ORDER });
     if (typeof module === 'object' && module.exports) module.exports = api;
     global.MusicArchiveIndex = api;
 })(typeof window !== 'undefined' ? window : globalThis);
