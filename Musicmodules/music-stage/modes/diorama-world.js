@@ -42,6 +42,22 @@
     // Landmarks on the far shore, as bearings round the sky. The line runs towards -z.
     const ISLE = Object.freeze({ bearing: -1.3, reach: 0.2, radius: 520, crest: 34, height: 27, tower: 0.16 });
     const PEAK = Object.freeze({ bearing: -1.08, reach: 0.21, radius: 646, height: 62 });
+    /*
+     * The train's body and its saloon are fixed shapes that take most of the
+     * time it takes to build the world (about three quarters, half a second
+     * on a laptop). They are built once per window and lent to each world
+     * after that, so entering the stage again, switching back to it or
+     * recovering a lost context does not build them again. A world disposing
+     * them only frees their GPU buffers; the next renderer uploads them anew.
+     */
+    const SHARED_SHAPES = new Map();
+    const sharedShape = (T, name, build) => {
+        const hit = SHARED_SHAPES.get(name);
+        if (hit && hit.T === T) return hit.shape;
+        const shape = build();
+        SHARED_SHAPES.set(name, { T, shape });
+        return shape;
+    };
     const create = (T, scene) => {
         const root = new T.Group();
         scene.add(root);
@@ -1261,7 +1277,7 @@
             return path;
         };
         // Paint groups: 0 upper body, 1 lower body, 2 running gear, 3 roof, 4 brushed trim, 5 tread, 6 spring steel.
-        const carGeometry = (() => {
+        const carGeometry = geometry(sharedShape(T, 'car', () => {
             const { add, boxAt, beam, sheet, bogie, finish, detail } = fuser();
             const sash = (side, z, [y, width, height]) => {
                 // Three visible faces of the surround, with the back buried in the bodywork.
@@ -1723,7 +1739,7 @@
                 beam(0.42, base, centre - 0.7, 0.36, roofAt(0.36) + 0.3, -5.0 + 0.19, 0.02, 2);
             }
             return finish();
-        })();
+        }));
         carGeometry.setAttribute('finish', new T.Float32BufferAttribute(carGeometry.userData.groups, 1));
         // Which car carries an outer cab: 1 the leading car, 2 the last, as an attribute per
         // car rather than from the instance index.
@@ -2396,7 +2412,7 @@
             [-1, -2.9, 'doze', 1.05], [-1, -0.7, 'bag', 0.94], [1, -1.9, 'read', 1.0],
             [1, 0.9, 'bag', 0.92], [-1, 2.3, 'rest', 1.08], [1, 4.9, 'doze', 0.96]
         ];
-        const saloonGeometry = (() => {
+        const saloonGeometry = geometry(sharedShape(T, 'saloon', () => {
             // Two lists: the shell and the cab, drawn at any distance through the
             // windscreen, then the fittings, drawn only when the camera is close.
             const lists = { coarse: [[], [], []], fine: [[], [], []] };
@@ -2767,8 +2783,8 @@
             shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
             shape.setAttribute('paint', new T.Float32BufferAttribute(paints, 1));
             shape.userData.coarse = lists.coarse[2].length;
-            return geometry(shape);
-        })();
+            return shape;
+        }));
         const saloonMaterial = material(new T.ShaderMaterial({
             uniforms: { warm: glassMaterial.uniforms.warm, seat: glassMaterial.uniforms.seat,
                 sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway,
