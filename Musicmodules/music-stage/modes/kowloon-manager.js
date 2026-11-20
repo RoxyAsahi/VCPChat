@@ -91,6 +91,7 @@
             mode: 'auto',
             pose(frame, time) {
                 if (director.mode === 'diorama' && !director.force) return { id: 'diorama', ...rigs.diorama(0, 0, time) };
+                if (director.force?.position) return { id: 'custom', fov: 60, ...director.force };
                 if (director.force) {
                     const { id, t } = director.force;
                     return { id, ...evalRig({ id, seed: 0.3, start: 0, end: 1 }, t) };
@@ -407,7 +408,7 @@
         // harness 用：固定机位截图。
         mode.debugScene = () => ({ scene, camera, renderer, T });
         mode.debugTime = (t) => { if (latest) { latest = { ...latest, playbackTime: t }; dirty = true; update(latest, true); } };
-        mode.debugSetShot = (id, t = 0.5) => { if (director) director.force = id ? { id, t } : null; dirty = true; if (latest) update(latest, true); };
+        mode.debugSetShot = (id, t = 0.5) => { if (director) director.force = id && typeof id === 'object' ? id : id ? { id, t } : null; dirty = true; if (latest) update(latest, true); };
         mode.scope.add(() => { disposeGraphics(); latest = null; });
         resize();
         void initialize();

@@ -429,7 +429,7 @@
                             if (abs(n.y) < 0.5) {
                                 alb *= 0.8 + 0.25 * sin(along * 60.0);
                                 // 每一面自己决定开不开窗、窗在哪、亮不亮，免得一排排像人脸。
-                                float faceId = dot(n, vec3(1.0, 0.0, 3.0)) + vSeed * 17.0;
+                                float faceId = dot(floor(n + 0.5), vec3(1.0, 0.0, 3.0)) + vSeed * 17.0;
                                 float hf = fract(sin(faceId * 12.9898) * 43758.5453);
                                 float hg = fract(sin(faceId * 78.233) * 12543.123);
                                 float cx = 0.2 + 0.6 * hf, wwid = 0.08 + 0.12 * hg;

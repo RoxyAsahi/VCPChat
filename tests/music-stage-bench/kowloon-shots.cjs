@@ -10,7 +10,7 @@ const args = Object.fromEntries(process.argv.slice(2).filter(a => a.startsWith('
 const ROOT = path.resolve(path.join(__dirname, '..', '..'));
 const OUT = path.resolve(args.out || path.join(ROOT, 'artifacts', 'kowloon'));
 const [W, H] = (args.size || '1600x900').split('x').map(Number);
-const SHOTS = (args.shots || 'iso,street,screen,roof').split(',');
+const SHOTS = (args.shots || 'iso,street,screen,roof').split(/;|,(?=[a-z])/);
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
     const server = await require('./serve.cjs')(ROOT);
@@ -32,6 +32,16 @@ const SHOTS = (args.shots || 'iso,street,screen,roof').split(',');
     await page.waitForFunction(() => { try { const m = __h.snap().mode; return m?.initialized || m?.fallbackMode; } catch { return false; } }, null, { timeout: 180000 });
     await page.evaluate(() => __h.pause && __h.pause());
     for (const shot of SHOTS) {
+        // 自定义机位：cam:x,y,z>x,y,z
+        if (shot.startsWith('cam:')) {
+            const [a, b] = shot.slice(4).split('>').map(v => v.split(',').map(Number));
+            await page.evaluate(({ a, b }) => MusicStageKowloonManager.debugInstance().debugSetShot({ position: a, look: b }), { a, b });
+            await page.waitForTimeout(600);
+            const file = path.join(OUT, `cam-${SHOTS.indexOf(shot)}.png`);
+            await page.screenshot({ path: file });
+            console.log(shot, file);
+            continue;
+        }
         const [id, tt] = shot.split('@');
         if (args.time) await page.evaluate((t) => MusicStageKowloonManager.debugInstance().debugTime(t), Number(args.time));
         await page.evaluate(({ id, tt }) => MusicStageKowloonManager.debugInstance().debugSetShot(id, tt === undefined ? 0.5 : Number(tt)), { id, tt });
