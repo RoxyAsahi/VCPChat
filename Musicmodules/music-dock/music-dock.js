@@ -83,6 +83,7 @@
     </div></div>
     <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
     <div class="md-slots">
+      <button class="md-slot md-like" type="button" data-md="like" aria-label="喜欢" aria-pressed="false" title="喜欢（L）" hidden>${icon('heart', 18)}</button>
       <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、歌词舞台、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
     </div>
   </div>
@@ -129,6 +130,7 @@
             quick: $('.md-quick'),
             quickGroup: $('.md-quick-g'),
             more: $('[data-md="more"]'),
+            like: $('[data-md="like"]'),
             cap: $('.md-cap'),
             play: $('[data-md="play"]'),
             prev: $('[data-md="prev"]'),
@@ -535,6 +537,40 @@
             if (!show && state.volOpen) setVolumeOpen(false);
             fluid?.setQuick(show, show ? el.quickGroup.getBoundingClientRect() : null);
         };
+        // ───────── 喜欢 ─────────
+        // 心形：喜欢的接口在（music-likes.js）才显示。点一下切换，点亮时像一滴液体鼓起来、外面荡开一圈；
+        // 别处（档案菜单、快捷键）改了喜欢，靠 music-like-change 同步。
+        const likeAvailable = () => typeof app.isLiked === 'function' && typeof app.toggleLike === 'function';
+        const paintLike = () => {
+            if (!el.like) return;
+            const track = currentTrack();
+            el.like.hidden = !likeAvailable();
+            if (el.like.hidden) return;
+            const liked = Boolean(track && app.isLiked(track));
+            el.like.disabled = !track;
+            el.like.classList.toggle('md-liked', liked);
+            el.like.setAttribute('aria-pressed', String(liked));
+            el.like.setAttribute('aria-label', liked ? '取消喜欢' : '喜欢');
+            el.like.title = liked ? '取消喜欢（L）' : '喜欢（L）';
+        };
+        const toggleCurrentLike = () => {
+            const track = currentTrack();
+            if (!track || !likeAvailable()) return;
+            const willLike = !app.isLiked(track);
+            app.toggleLike(track);
+            paintLike();
+            if (willLike && !document.body.classList.contains('music-reduce-motion')) {
+                el.like.classList.remove('md-like-pop');
+                void el.like.offsetWidth;
+                el.like.classList.add('md-like-pop');
+            }
+        };
+        if (el.like) {
+            listen(el.like, 'click', (event) => { event.stopPropagation(); toggleCurrentLike(); });
+            listen(el.like, 'animationend', () => el.like.classList.remove('md-like-pop'));
+            listen(document, 'music-like-change', paintLike);
+        }
+
         listen(el.more, 'pointerenter', (event) => {
             if (event.pointerType === 'touch') return;
             if (!dwellTimer) dwellTimer = later(() => { dwellTimer = null; setQuick(true); }, QUICK_DWELL_MS);
@@ -838,6 +874,7 @@
             el.pTitle.textContent = title;
             el.pArtist.textContent = artist;
             el.cap.classList.toggle('md-notrack', !track);
+            paintLike();
             const coverCss = cover ? `url("${cover.replace(/"/g, '%22')}")` : '';
             el.pCover.innerHTML = cover ? '' : icon('music', 18);
             el.pCover.style.backgroundImage = coverCss;
@@ -1744,6 +1781,7 @@
             ['Shift + ← / →', '上一首 / 下一首'],
             ['Ctrl + ↑ / ↓', '音量 +5% / −5%'],
             ['M', '静音 / 恢复（档案页里是打字检索）'],
+            ['L', '喜欢 / 取消喜欢当前这首（档案页里是打字检索）'],
             ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
             ['Ctrl + L', '档案页里定位当前播放'],
             ['/', '档案页里打开检索'],
@@ -1839,6 +1877,11 @@
                 take();
                 toggleMute();
                 flashVolume();
+                return;
+            }
+            if ((key === 'l' || key === 'L') && !event.repeat && likeAvailable() && currentTrack()) {
+                take();
+                toggleCurrentLike();
                 return;
             }
             if (key === '?') { take(); openHelp(); }
