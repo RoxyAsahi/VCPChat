@@ -1180,8 +1180,9 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const track of app.playlist) {
                 if (addedDuringScan?.has(track.path)) continue;
                 if (scannedPaths.has(track.path)) {
-                    // Track exists in new scan — use updated metadata
-                    updatedPlaylist.push(scannedMap.get(track.path));
+                    // 已有的曲目原地更新信息，保住对象本身：歌单视图、队列、播放历史都拿着它。
+                    Object.assign(track, scannedMap.get(track.path));
+                    updatedPlaylist.push(track);
                     handledPaths.add(track.path);
                 } else if (folderPrefix && track.path.startsWith(folderPrefix)) {
                     // Track belongs to the scanned folder but was NOT found in new scan
