@@ -608,3 +608,85 @@ test('fluid colours follow the theme accent, keep scene colours on themed stages
         assert.ok(doc.getElementById('music-dock-root').style.getPropertyValue('--md-fl-low-fill'), 'low tier fill is tinted');
     } finally { dock.destroy(); }
 });
+
+test('fluid layer schedules no animation frames once it is at rest, when hidden, or when the window is unfocused', () => {
+    const dom = new JSDOM('<!doctype html><body><div id="host"><div class="md-dock"><div class="md-cap" id="bar"></div></div><div id="ring"></div></div></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
+    const { window } = dom;
+    window.eval(read('Musicmodules/music-dock/music-dock-fluid.js'));
+    // 模拟时钟：rAF 只进队列，由测试一帧一帧推；数一共排了多少帧。
+    let now = 1000;
+    let queue = [];
+    let scheduled = 0;
+    window.performance.now = () => now;
+    window.requestAnimationFrame = (cb) => { scheduled += 1; queue.push(cb); return scheduled; };
+    window.cancelAnimationFrame = () => { queue = []; };
+    const run = (ms) => {
+        for (let t = 0; t < ms; t += 16) {
+            now += 16;
+            const batch = queue; queue = [];
+            for (const cb of batch) cb(now);
+        }
+    };
+    const bar = window.document.getElementById('bar');
+    bar.getBoundingClientRect = () => ({ left: 300, right: 900, top: 620, bottom: 684, width: 600, height: 64 });
+    const fluid = window.createMusicDockFluid({ host: window.document.getElementById('host'), bar, ring: window.document.getElementById('ring') });
+    try {
+        fluid.layout();
+        fluid.setRingMode('playhead');
+        fluid.setPlaying(true);
+        fluid.setSolid(true);
+        fluid.pointer(500);
+        run(300);
+        assert.ok(scheduled > 0, 'a state change does animate');
+        // 指针离开、暂停：动画收尾以后就该彻底停下。
+        fluid.pointer(null);
+        fluid.setPlaying(false);
+        fluid.setSolid(false);
+        run(4000);
+        assert.equal(queue.length, 0, 'the loop has ended');
+        assert.equal(fluid.animating, false);
+        const settled = scheduled;
+        run(2000);
+        assert.equal(scheduled, settled, 'no frames in 2 s of rest');
+
+        // 播放中：进度没走满一个像素不动；走满了也只是直接落位，不起动画帧。
+        fluid.setPlaying(true);
+        fluid.setSolid(true);
+        run(4000);
+        const playing = scheduled;
+        const mask = () => window.document.querySelector('linearGradient stop:nth-child(2)').getAttribute('offset');
+        fluid.setProgress(0.5);           // 大跳（相当于拖动）：走动画
+        run(4000);
+        assert.equal(fluid.animating, false);
+        const before = mask();
+        const afterJump = scheduled;
+        fluid.setProgress(0.5 + 0.4 / 600);   // 不到一个像素
+        assert.equal(mask(), before, 'sub-pixel progress leaves the mask alone');
+        fluid.setProgress(0.5 + 2.5 / 528);   // 两个多像素（进度区间宽 600 × 0.88）
+        assert.notEqual(mask(), before, 'a whole pixel moves the mask');
+        run(2000);
+        assert.equal(scheduled, afterJump, 'steady playback needs no animation frames');
+        assert.ok(playing >= settled);
+
+        // 失焦：状态变化直接落位，不排帧。
+        fluid.setSuspended(true);
+        const suspended = scheduled;
+        fluid.pointer(520); fluid.setVolumeOpen(true); fluid.setSolid(false);
+        run(2000);
+        assert.equal(scheduled, suspended, 'no frames while the window is unfocused');
+        assert.equal(fluid.volumeOpen, true);
+        fluid.setSuspended(false);
+
+        // 不可见：什么都不画，回来时一次到位。
+        fluid.setHidden(true);
+        const hiddenMask = mask();
+        fluid.setProgress(0.9); fluid.setVolumeOpen(false); fluid.split();
+        run(2000);
+        assert.equal(scheduled, suspended, 'no frames while hidden');
+        assert.equal(mask(), hiddenMask, 'nothing is repainted while hidden');
+        fluid.setHidden(false);
+        assert.notEqual(mask(), hiddenMask, 'coming back paints the current progress once');
+        run(2000);
+        assert.equal(scheduled, suspended, 'and returning needs no animation either');
+    } finally { fluid.destroy(); }
+});

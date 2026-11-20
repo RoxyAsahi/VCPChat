@@ -319,6 +319,7 @@
             if (fluid) {
                 fluid.layout();
                 lastRange = '';
+                fluid.setHidden(document.hidden === true);
                 fluid.setRingDocked(!state.panelOpen);
                 syncGlow();
                 syncSolid();
@@ -1554,7 +1555,14 @@
             const scroller = el.body.querySelector('.md-ql');
             if (scroller) renderQueueWindow(scroller, true);
         });
-        listen(document, 'visibilitychange', () => { if (!document.hidden) kickProgress(); });
+        // 省电：窗口看不见时流体层整个停下，失焦时不跑动画帧（状态变化直接落位）。
+        const syncPower = () => {
+            fluid?.setHidden?.(document.hidden === true);
+            fluid?.setSuspended?.(typeof document.hasFocus === 'function' && !document.hasFocus());
+        };
+        listen(document, 'visibilitychange', () => { syncPower(); if (!document.hidden) kickProgress(); });
+        listen(global, 'blur', syncPower);
+        listen(global, 'focus', syncPower);
         listen(global, 'resize', () => {
             syncShift();
             animateCapsule();

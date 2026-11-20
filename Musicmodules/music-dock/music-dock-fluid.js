@@ -123,7 +123,10 @@
             playing: true,
             ringFocus: false,
             drop: { p: 1 },
-            enabled: true
+            enabled: true,
+            hidden: false,     // 窗口不可见
+            suspended: false,  // 窗口失焦
+            dirty: false
         };
         let frame = 0;
         let last = 0;
@@ -265,6 +268,15 @@
                 || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
         };
 
+        // 除了小环的位置以外还有没有量在动（进度小步推进时用来判断能不能直接落位）
+        const moving2 = () => {
+            const eps = 0.01;
+            return Math.abs(s.solidity.v - s.solidity.t) > eps || Math.abs(s.bump.r - s.bump.tr) > 0.3
+                || Math.abs(s.vol.v - s.vol.t) > eps || Math.abs(s.quick.v - s.quick.t) > eps
+                || s.split.p < 1 || s.drop.p < 1
+                || Math.abs(s.show.v - showTarget()) > 0.01 || Math.abs(s.size.v - sizeTarget()) > 0.01
+                || Math.abs(s.ring.y - s.ring.ty) > 0.5;
+        };
         let lastGrow = '';
         const draw = (force = false) => {
             const sol = s.solidity.v;
@@ -349,8 +361,24 @@
             draw();
             if (s.enabled && moving()) frame = win.requestAnimationFrame(step);
         };
+        // 把所有量直接放到目标上，画一次，不排动画帧。
+        const settle = () => {
+            if (frame) { win.cancelAnimationFrame(frame); frame = 0; }
+            s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t; s.quick.v = s.quick.t;
+            s.split.p = 1; s.drop.p = 1;
+            retargetRing();
+            s.show.t = showTarget(); s.show.v = s.show.t; s.size.t = sizeTarget(); s.size.v = s.size.t;
+            s.ring.x = s.ring.tx; s.ring.y = s.ring.ty;
+        };
+        // 省电：窗口看不见时什么都不画；失焦（还看得见）时不跑动画，状态变了直接落到位画一次。
+        // 没有东西在动时本来就不排帧（见 step 结尾），这里保证的是「不该动的时候一帧也不排」。
         const kick = () => {
             if (!s.enabled || frame) return;
+            // 目标没变就不排帧：外面每次状态同步都会调到这里，大多数时候其实没有东西要动。
+            s.show.t = showTarget();
+            if (!moving()) return;
+            if (s.hidden) { s.dirty = true; return; }
+            if (s.suspended) { settle(); draw(); return; }
             last = (win.performance || Date).now();
             frame = win.requestAnimationFrame(step);
         };
@@ -361,11 +389,35 @@
             layout,
             setProgress(p) {
                 const next = Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
-                if (Math.abs(next - s.progress) < 0.0005) return;
+                // 进度边界没走满一个像素就不动：不改遮罩、不重画滤镜。
+                const span = geo.w * (s.range.b - s.range.a);
+                const px = Math.abs(next - s.progress) * span;
+                if (span > 0 ? px < 1 : Math.abs(next - s.progress) < 0.0005) return;
                 s.progress = next;
+                if (s.hidden) { s.dirty = true; return; }
                 writeProgress();
-                if (s.ringMode === 'playhead' && s.ring.docked) { retargetRing(); kick(); }
+                if (s.ringMode !== 'playhead' || !s.ring.docked) return;
+                retargetRing();
+                // 正常播放一次只挪一两个像素：直接落位画一次，不为它起一轮动画帧。拖动、切歌的大跳才走动画。
+                if (!frame && px < 4 && !moving2()) { s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; draw(); return; }
+                kick();
             },
+            // 窗口不可见：停掉一切；回来时一次画到位。失焦：不跑动画帧。
+            setHidden(on) {
+                const next = Boolean(on);
+                if (s.hidden === next) return;
+                s.hidden = next;
+                if (next) { if (frame) { win.cancelAnimationFrame(frame); frame = 0; } if (glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; glow.paintTarget?.(); } s.dirty = true; return; }
+                if (s.dirty) { s.dirty = false; settle(); writeProgress(); draw(true); }
+            },
+            setSuspended(on) {
+                const next = Boolean(on);
+                if (s.suspended === next) return;
+                s.suspended = next;
+                if (next && frame) { settle(); draw(); }
+                if (next && glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; glow.paintTarget?.(); }
+            },
+            get animating() { return Boolean(frame) || Boolean(glow.frame); },
             setProgressRange(a, b) {
                 const na = Math.min(0.6, Math.max(0, Number(a) || 0)); const nb = Math.min(1, Math.max(na + 0.1, Number(b) || 1));
                 if (Math.abs(na - s.range.a) < 0.001 && Math.abs(nb - s.range.b) < 0.001) return;
@@ -406,7 +458,8 @@
                 const target = [0, 1, 2].map((i) => parseHex(colors?.[i]) || glow.cur[i]);
                 if (glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; }
                 const paint = (rgbs) => { glow.cur = rgbs; [in0, in1, in2].forEach((stop, i) => setAttr(stop, 'stop-color', toHex(rgbs[i]))); };
-                if (reduced() || !glow.cur.every(Boolean)) { paint(target); return; }
+                glow.paintTarget = () => paint(target);
+                if (reduced() || s.hidden || s.suspended || !glow.cur.every(Boolean)) { paint(target); return; }
                 const from = glow.cur.slice();
                 const start = win.performance?.now?.() ?? Date.now();
                 const step = (now) => {
