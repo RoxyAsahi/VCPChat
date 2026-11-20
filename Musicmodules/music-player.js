@@ -183,6 +183,7 @@ function setupPlayer(app) {
         const track = app.playlist[trackIndex];
         app.pendingTrackPath = track.path;
         try { localStorage.setItem('musicLastTrackPath', track.path); } catch (error) {}
+        scheduleSessionSave();
         if (!skipHistory) app.rememberPlayed(track);
         app.engineTrackPath = null;
         app.isTrackLoading = true;
@@ -452,6 +453,117 @@ function setupPlayer(app) {
         queueChanged();
     };
 
+    // ───────── 从某一组点播 ─────────
+    // 档案页的列、目录分组、经典列表都走这一个入口：把「看到的这一组、按看到的顺序」设成上下文队列，再放其中一首。
+    // list 为空或就是整个曲库原顺序时记为 null（= 整个曲库）。origin 记下是从哪来的（如 'classic'），
+    // 之后那里的排序变了可以跟着更新。
+    app.playFromContext = (list, index, { source = null, origin = null, render = true, play = true } = {}) => {
+        const tracks = Array.isArray(list) ? list.filter(Boolean) : null;
+        const whole = !tracks || (tracks.length === app.playlist.length && tracks.every((t, i) => t === app.playlist[i]));
+        app.currentFilteredTracks = whole ? null : tracks;
+        app.filteredPlaylistSource = source || null;
+        // 记下这次设的是哪一份列表：之后别处（档案页等）换了上下文，这条记录就不再算数。
+        app.playbackContext = { origin: origin || null, list: app.currentFilteredTracks, source: app.filteredPlaylistSource };
+        if (render) { try { app.renderPlaylist?.(app.currentFilteredTracks); } catch (error) { /* 旧列表只是同步显示 */ } }
+        return app.loadTrack(index, play);
+    };
+    // 上下文的顺序变了（比如经典列表换了排序），但还是同一组歌：换成新顺序，不打断播放。
+    app.contextFrom = (origin) => {
+        const ctx = app.playbackContext;
+        return Boolean(ctx && ctx.origin === origin && ctx.list === app.currentFilteredTracks && ctx.source === app.filteredPlaylistSource);
+    };
+    app.reorderContext = (list, origin = null) => {
+        if (origin && !app.contextFrom(origin)) return false;
+        const current = app.currentFilteredTracks || app.playlist;
+        if (!Array.isArray(list) || list.length !== current.length) return false;
+        const members = new Set(current);
+        if (!list.every(t => members.has(t))) return false;
+        if (list.every((t, i) => t === current[i])) return false;
+        const whole = list.every((t, i) => t === app.playlist[i]);
+        app.currentFilteredTracks = whole ? null : list.slice();
+        if (app.playbackContext) app.playbackContext.list = app.currentFilteredTracks;
+        announceQueue();
+        scheduleSessionSave();
+        return true;
+    };
+
+    // ───────── 重启恢复：队列、上下文、进度 ─────────
+    // 和「上次那首」「播放模式」一样存在 localStorage：
+    // { v, track, time, context: 路径数组或 null（整个曲库）, source, manual: 路径数组 }。
+    // 只恢复，不自动播放。
+    const SESSION_KEY = 'musicSession';
+    const pathsOf = (list) => (list || []).map(t => t && t.path).filter(Boolean);
+    app.saveSession = () => {
+        const track = app.playlist?.[app.currentTrackIndex];
+        if (!track) return;
+        const context = app.currentFilteredTracks && app.currentFilteredTracks !== app.playlist ? pathsOf(app.currentFilteredTracks) : null;
+        const session = {
+            v: 1,
+            track: track.path,
+            time: Math.max(0, Math.round((Number(app.lastKnownCurrentTime) || 0) * 10) / 10),
+            context,
+            source: app.filteredPlaylistSource ? { ...app.filteredPlaylistSource } : null,
+            manual: pathsOf(app.manualQueue),
+            savedAt: Date.now()
+        };
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (error) { /* 存不下就算了 */ }
+    };
+    app.readSession = () => {
+        try {
+            const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+            return session && session.v === 1 ? session : null;
+        } catch (error) { return null; }
+    };
+    const byPathMap = () => {
+        const map = new Map();
+        for (const t of app.playlist || []) map.set(app.normalizePathForCompare ? app.normalizePathForCompare(t.path) : t.path, t);
+        return map;
+    };
+    const lookup = (map, path) => map.get(app.normalizePathForCompare ? app.normalizePathForCompare(path) : path) || null;
+    // 恢复上下文列表和手动队列（曲库里已经没有的歌跳过）。在侧栏初始化之后调，免得被它清掉。
+    app.applySessionQueue = (session = app.readSession()) => {
+        if (!session) return false;
+        const map = byPathMap();
+        if (Array.isArray(session.context)) {
+            const list = session.context.map(p => lookup(map, p)).filter(Boolean);
+            if (list.length) {
+                app.currentFilteredTracks = list;
+                app.filteredPlaylistSource = session.source && typeof session.source === 'object' ? session.source : null;
+                try { app.renderPlaylist?.(list); } catch (error) { /* 旧列表只是同步显示 */ }
+            }
+        }
+        if (Array.isArray(session.manual)) {
+            app.manualQueue = session.manual.map(p => lookup(map, p)).filter(Boolean);
+            if (app.manualQueue.length) announceQueue();
+        }
+        return true;
+    };
+    // 启动时该停在哪一首、哪一秒。
+    app.sessionStartPoint = (session = app.readSession()) => {
+        if (!session || !session.track) return null;
+        const map = byPathMap();
+        const track = lookup(map, session.track);
+        const index = track ? app.playlist.indexOf(track) : -1;
+        return index === -1 ? null : { index, time: Math.max(0, Number(session.time) || 0) };
+    };
+    let sessionTimer = null;
+    const scheduleSessionSave = () => {
+        if (sessionTimer || typeof setTimeout !== 'function') return;
+        sessionTimer = setTimeout(() => { sessionTimer = null; app.saveSession(); }, 1000);
+    };
+    app.scheduleSessionSave = scheduleSessionSave;
+    // 播放中每 5 秒记一次进度。
+    if (typeof setInterval === 'function') {
+        const sessionTick = setInterval(() => { if (app.isPlaying) app.saveSession(); }, 5000);
+        sessionTick?.unref?.();
+    }
+    try {
+        document.addEventListener?.('music-queue-change', scheduleSessionSave);
+        document.addEventListener?.('visibilitychange', () => { if (document.hidden) app.saveSession(); });
+        globalThis.addEventListener?.('pagehide', () => app.saveSession());
+        globalThis.addEventListener?.('beforeunload', () => app.saveSession());
+    } catch (error) { /* 测试环境里没有这些事件 */ }
+
     // 随机顺序只在这里生成：预载和「下一首」用同一份，列表换了就重洗。
     const ensureShuffleQueue = (activeList) => {
         if (app.lastShuffleList !== activeList) {
@@ -494,6 +606,20 @@ function setupPlayer(app) {
             for (let k = 0; k < count && context.length < limit; k++) context.push(activeList[(pos + 1 + k) % activeList.length]);
         }
         return { manual, context };
+    };
+
+    // 「上一首」会放哪一首，但不动播放历史（底栏悬停标题区时预览用）。
+    app.peekPrevious = () => {
+        const activeList = app.currentFilteredTracks || app.playlist;
+        if (!activeList.length) return null;
+        const currentTrack = app.playlist[app.currentTrackIndex];
+        for (let k = playHistory.length - 1; k >= 0; k--) {
+            const track = playHistory[k];
+            if (track === currentTrack) continue;
+            if (app.playlist.includes(track)) return track;
+        }
+        const position = activeList.indexOf(currentTrack);
+        return activeList[(Math.max(position, 0) - 1 + activeList.length) % activeList.length] || null;
     };
 
     app.prevTrack = () => {
@@ -758,6 +884,7 @@ function setupPlayer(app) {
         const queued = manualHead();
         if (queued && path && app.normalizePathForCompare(queued.path) === app.normalizePathForCompare(path)) beginManual(queued);
         syncTrackIndexByPath(path);
+        scheduleSessionSave();
         app.publishCapsuleState();
     };
 

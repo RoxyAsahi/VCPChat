@@ -346,6 +346,7 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 #music-dock-root .md-slot:hover { opacity: 1; background: var(--md-slot-hover); }
 #music-dock-root .md-slot.md-on { opacity: 1; background: var(--md-slot-on-bg); color: var(--md-slot-on-fg); }
 #music-dock-root .md-slot:active { transform: scale(.9); }
+#music-dock-root .md-vslot.md-vshow { opacity: 1; }
 .md-cap-e > .md-prow { grid-column: 2; grid-row: 2; padding: 0 8px; }
 
 /* ───────── 右下：面板把手 ───────── */
@@ -585,6 +586,7 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
   transition: color .12s;
 }
 #music-dock-root .md-seg.md-inline button { flex: 0 0 auto; width: 30px; padding: 0; }
+#music-dock-root .md-seg.md-inline.md-seg-tx button { width: auto; min-width: 30px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 #music-dock-root .md-seg-l button { border-radius: 8px; }
 #music-dock-root .md-seg button:hover,
 #music-dock-root .md-seg button.md-on { color: var(--md-t1); }
@@ -792,6 +794,8 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
   .md-zone { width: 28px; }
   .md-txt > div { left: 28px; right: 28px; }
   .md-slots { gap: 0; }
+  /* 窄窗口里胶囊放不下第三个按钮，留给歌名；滚轮和 M 键照样能调 */
+  #music-dock-root .md-vslot { display: none; }
   .md-cap-e > .md-prow { padding: 0; gap: 8px; }
   .md-cap-c { padding: 0 4px 0 12px; }
   .md-hdl { right: calc(var(--md-cap-right) + 8px); bottom: 21px; width: 40px; height: 40px; z-index: calc(var(--mt-z-dock, 60) + 1); }
@@ -799,11 +803,10 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
   .md-pnl { right: var(--md-cap-right); bottom: 100px; margin-bottom: 0; max-width: calc(100vw - 2 * var(--md-cap-right)); max-height: calc(100vh - 150px); transform-origin: calc(100% - 28px) calc(100% + 60px); }
   .md-sheet { bottom: 100px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  #music-dock-root *,
-  #music-dock-root *::before,
-  #music-dock-root *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
-}
+/* 「降低动态」：body.music-reduce-motion 由音乐窗口的设置决定（跟随系统 / 开 / 关） */
+body.music-reduce-motion #music-dock-root *,
+body.music-reduce-motion #music-dock-root *::before,
+body.music-reduce-motion #music-dock-root *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 
 /* ───────── 命令面板（Ctrl+K） ───────── */
 .md-cmd { position: fixed; inset: 0; z-index: var(--mt-z-popover, 70); pointer-events: auto; }
@@ -1017,7 +1020,35 @@ body.music-dock-cmd-open .md-np { opacity: 0; pointer-events: none; }
 .mtst-bar { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2px; border-radius: 1px; background: rgba(var(--md-tp-rgb), .1); overflow: hidden; }
 .mtst-bar span { display: block; height: 100%; background: var(--md-accent); transform-origin: left center; transition: transform 200ms linear; }
 .mtst :focus-visible { outline: 2px solid var(--md-accent); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .mtst, .mtst.mtst-out { transition-duration: 1ms; transform: none; }
-  .mtst-progress .mtst-ic svg { animation: none; }
+body.music-reduce-motion .mtst,
+body.music-reduce-motion .mtst.mtst-out { transition-duration: 1ms; transform: none; }
+body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
+
+/* ───────── 快捷键表（?）───────── */
+.md-keys { position: fixed; inset: 0; z-index: var(--mt-z-popover, 70); display: grid; place-items: center; pointer-events: auto; }
+.md-keys[hidden] { display: none; }
+.md-keys-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity .16s; }
+.md-keys.md-open .md-keys-scrim { opacity: 1; }
+.md-keys-box {
+  position: relative;
+  width: min(30rem, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border-radius: 24px;
+  padding: 18px 20px 16px;
+  background: var(--md-menu);
+  color: var(--md-tp);
+  box-shadow: var(--md-panel-shadow);
+  outline: none;
+  opacity: 0;
+  transform: translateY(8px) scale(.98);
+  transition: opacity .16s, transform .22s var(--mt-ease, ease-out);
 }
+.md-keys.md-open .md-keys-box { opacity: 1; transform: none; }
+.md-keys-box header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 15px; }
+.md-keys-box dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; align-items: center; }
+.md-keys-box dt { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.md-keys-box dt i { font-style: normal; font-size: 11px; opacity: .45; }
+.md-keys-box kbd { min-width: 22px; padding: 1px 6px; border-radius: 6px; text-align: center; font: 11px/18px ui-monospace, Consolas, monospace; background: var(--md-fill2); }
+.md-keys-box dd { margin: 0; font-size: 13px; line-height: 18px; color: var(--md-t2); }
+.md-keys-box footer { margin-top: 14px; font-size: 12px; color: var(--md-t3); }

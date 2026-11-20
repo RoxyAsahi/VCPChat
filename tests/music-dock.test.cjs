@@ -281,3 +281,151 @@ test('palette groups songs, playlists and commands; shift/ctrl+enter queue; piny
         window.close();
     }
 });
+
+test('capsule volume slot: wheel adjusts, click and M mute and restore', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const slot = doc.querySelector('[data-md="vol"]');
+        assert.ok(slot);
+        const wheel = (deltaY) => slot.dispatchEvent(new window.WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+        wheel(-100);
+        assert.deepEqual(calls.pop(), ['volume', '0.55']);
+        wheel(40); wheel(40);
+        assert.equal(calls.filter((c) => c[0] === 'volume').length, 0, 'small trackpad deltas accumulate first');
+        wheel(40);
+        assert.deepEqual(calls.pop(), ['volume', '0.5']);
+        slot.click();
+        assert.deepEqual(calls.pop(), ['volume', '0']);
+        assert.equal(slot.getAttribute('aria-label'), '取消静音');
+        doc.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+        assert.deepEqual(calls.pop(), ['volume', '0.5'], 'M restores the volume from before muting');
+        const field = doc.createElement('input');
+        doc.body.appendChild(field);
+        field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+        assert.equal(calls.filter((c) => c[0] === 'volume').length, 0, 'typing m in a text field does nothing');
+        assert.equal(app.volumeSlider.value, '0.5');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});
+
+test('controls tab offers the window-wide reduce-motion setting and follows outside changes', () => {
+    const { window, doc, dock } = setup();
+    try {
+        const sets = [];
+        let pref = 'system';
+        window.MusicMotion = {
+            PREFERENCES: [{ value: 'system', label: '跟随系统' }, { value: 'on', label: '开' }, { value: 'off', label: '关' }],
+            get preference() { return pref; },
+            set(v) { sets.push(v); pref = v; },
+            reduced: () => pref === 'on'
+        };
+        dock.openPanel('控制');
+        const seg = () => doc.querySelector('.md-seg[data-act="motion"]');
+        assert.equal(seg().querySelector('button.md-on').textContent, '跟随系统');
+        seg().querySelectorAll('button')[1].click();
+        assert.deepEqual(sets, ['on']);
+        assert.equal(seg().querySelector('button.md-on').textContent, '开');
+        pref = 'off';
+        window.dispatchEvent(new window.Event('music-motion-change'));
+        assert.equal(seg().querySelector('button.md-on').textContent, '关');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});
+
+test('window keymap: space without repeat, seek, track and volume keys, help, input and archive guards', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const key = (k, extra = {}, target = doc.body) => {
+            const e = new window.KeyboardEvent('keydown', { key: k, code: extra.code || (k === ' ' ? 'Space' : ''), bubbles: true, cancelable: true, ...extra });
+            target.dispatchEvent(e);
+            return e.defaultPrevented;
+        };
+        const later = [];
+        doc.addEventListener('keydown', (e) => later.push(e.key)); // 档案页这种在冒泡阶段的监听
+
+        assert.equal(key(' '), true);
+        assert.equal(calls.pop(), 'play');
+        key(' ', { repeat: true });
+        key(' ');
+        assert.equal(calls.length, 0, 'holding space does not toggle again');
+        doc.dispatchEvent(new window.KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
+        key(' ');
+        assert.equal(calls.pop(), 'play');
+        assert.ok(!later.includes(' '), 'handled keys do not reach later listeners');
+
+        app.lastKnownCurrentTime = 50; app.lastStateUpdateTime = Date.now();
+        key('ArrowRight');
+        assert.deepEqual(calls.pop(), ['seek', 55]);
+        key('ArrowLeft', { shiftKey: true });
+        assert.equal(calls.pop(), 'prev');
+        key('ArrowUp', { ctrlKey: true });
+        assert.deepEqual(calls.pop(), ['volume', '0.55']);
+
+        app.archiveView = { mode: 'archive' };
+        later.length = 0;
+        key('ArrowRight');
+        assert.equal(calls.length, 0, 'archive keeps the arrow keys for picking songs');
+        assert.deepEqual(later, ['ArrowRight']);
+        key('ArrowRight', { shiftKey: true });
+        assert.equal(calls.pop(), 'next', 'shift+arrow still switches tracks on the archive page');
+        later.length = 0;
+        assert.equal(key('m'), false); assert.equal(key('?'), false);
+        assert.equal(calls.length, 0, 'typing on the archive page goes to its search, not mute or help');
+        assert.deepEqual(later, ['m', '?']);
+        assert.equal(doc.querySelector('.md-keys'), null);
+        app.archiveView = { mode: 'classic' };
+
+        const field = doc.createElement('input');
+        doc.body.appendChild(field);
+        key(' ', {}, field); key('m', {}, field); key('?', {}, field);
+        assert.equal(calls.length, 0, 'single keys in a text field are left for typing');
+
+        key('?');
+        const help = doc.querySelector('.md-keys');
+        assert.ok(help && !help.hidden);
+        assert.ok(help.textContent.includes('按住不会连续切换'));
+        key('Escape');
+        assert.ok(help.hidden);
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});
+
+test('clicking the capsule body enters the stage, and inside the stage opens the command palette', () => {
+    const { doc, app, dock, calls } = setup();
+    try {
+        const cap = doc.querySelector('.md-cap');
+        cap.click();
+        assert.equal(calls.pop(), 'enter');
+        app.isStageActive = true;
+        doc.body.classList.add('music-stage-active');
+        cap.click();
+        assert.ok(doc.querySelector('.md-cmd').classList.contains('md-open') || !doc.querySelector('.md-cmd').hidden);
+        assert.ok(doc.body.classList.contains('music-dock-cmd-open'));
+        assert.ok(!calls.includes('enter'));
+    } finally {
+        dock.destroy();
+    }
+});
+
+test('hovering the title edges previews the real previous and next track', () => {
+    const { window, doc, app, dock } = setup();
+    try {
+        const c = { path: 'C:/c.flac', title: 'Gamma.flac', artist: 'C' };
+        app.getUpNext = () => ({ manual: [c], context: [app.playlist[1]] });
+        app.peekPrevious = () => app.playlist[1];
+        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerenter'));
+        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Gamma', 'queued track comes first');
+        assert.ok(doc.querySelector('.md-tnav').classList.contains('md-previewing'));
+        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerleave'));
+        doc.querySelector('.md-zone.md-l').dispatchEvent(new window.Event('pointerenter'));
+        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Beta');
+    } finally {
+        dock.destroy();
+    }
+});

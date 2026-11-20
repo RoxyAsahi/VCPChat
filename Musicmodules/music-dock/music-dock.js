@@ -88,6 +88,7 @@
       <div class="md-slots">
         <button class="md-slot" type="button" data-md="mode"></button>
         <button class="md-slot" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 18)}</button>
+        <button class="md-slot md-vslot" type="button" data-md="vol" aria-label="静音"></button>
       </div>
       <div class="md-prow"><span class="md-tm" data-md="t1"></span><div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div><span class="md-tm md-r" data-md="t2"></span></div>
     </div>
@@ -134,6 +135,7 @@
             preview: $('[data-md="preview"]'),
             modeSlot: $('[data-md="mode"]'),
             stageSlot: $('[data-md="stage"]'),
+            volSlot: $('[data-md="vol"]'),
             tracks: $$('.md-trk'),
             t1: $$('[data-md="t1"]'),
             t2: $$('[data-md="t2"]'),
@@ -183,7 +185,7 @@
         const currentTrack = () => app.playlist?.[app.currentTrackIndex] || null;
         const activeList = () => app.currentFilteredTracks || app.playlist || [];
         const playMode = () => app.playModes?.[app.currentPlayMode] || 'repeat';
-        const stageActive = () => app.isStageActive === true;
+        const stageActive = () => app.isStageActive === true || document.body.classList.contains('music-stage-active');
         const duration = () => Math.max(0, Number(app.lastKnownDuration) || 0);
         const currentTime = () => {
             if (state.dragging) return state.dragging.time;
@@ -211,7 +213,16 @@
                 ? { w: max, h: CAPSULE_H_EXPANDED }
                 : { w: Math.round(max * ratio), h: CAPSULE_H_COLLAPSED };
         };
-        const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
+        // 「降低动态」统一读音乐窗口的设置（跟随系统 / 开 / 关）；没有这个模块时才退回系统设置。
+        const systemReduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
+        const reducedMotion = {
+            get matches() { return global.MusicMotion ? global.MusicMotion.reduced() : Boolean(systemReduced?.matches); }
+        };
+        if (!global.MusicMotion && systemReduced) {
+            const syncBodyClass = () => document.body.classList.toggle('music-reduce-motion', systemReduced.matches);
+            syncBodyClass();
+            listen(systemReduced, 'change', syncBodyClass);
+        }
         const writeCapsuleSize = () => {
             el.cap.style.width = `${spring.w.v.toFixed(2)}px`;
             el.cap.style.height = `${spring.h.v.toFixed(2)}px`;
@@ -423,10 +434,17 @@
             else app.playTrack?.();
         });
 
+        // 悬停标题区左右两边时预览上一首 / 下一首：下一首取播放器的真实队列（手动层优先，随机时也是洗好的那首），
+        // 上一首按播放历史。播放器没提供这两个接口时退回按列表前后数。
         const neighbour = (dir) => {
+            if (dir > 0 && typeof app.getUpNext === 'function') {
+                const up = app.getUpNext(1);
+                return up.manual[0] || up.context[0] || null;
+            }
+            if (dir < 0 && typeof app.peekPrevious === 'function') return app.peekPrevious();
             const list = activeList();
             if (!list.length) return null;
-            if (playMode() === 'shuffle' && dir > 0) return null; // 随机播放时下一首事先不知道
+            if (playMode() === 'shuffle' && dir > 0) return null;
             const pos = list.indexOf(currentTrack());
             return list[((Math.max(pos, 0) + dir) % list.length + list.length) % list.length] || null;
         };
@@ -467,6 +485,34 @@
 
         const toggleStage = () => app.stageHost?.toggle?.();
         listen(el.stageSlot, 'click', (event) => { event.stopPropagation(); toggleStage(); });
+        // 胶囊右侧的音量：悬停时滚轮调（一格 5%，触控板按累计距离算），单击静音 / 恢复。
+        let wheelAcc = 0;
+        let vtipTimer = null;
+        // 调的时候在歌名那一行借位显示「音量 55%」，停手 0.9 秒后换回歌名（胶囊会裁掉外面的气泡）。
+        const flashVolume = () => {
+            const v = readVolume();
+            el.volSlot.classList.add('md-vshow');
+            el.preview.textContent = v > 0.001 ? `音量 ${Math.round(v * 100)}%` : '已静音';
+            el.tnav.classList.add('md-previewing');
+            clearTimeout(vtipTimer);
+            vtipTimer = setTimeout(() => {
+                el.volSlot.classList.remove('md-vshow');
+                el.tnav.classList.remove('md-previewing');
+            }, 900);
+            timers.add(vtipTimer);
+        };
+        listen(el.volSlot, 'click', (event) => { event.stopPropagation(); toggleMute(); flashVolume(); });
+        listen(el.volSlot, 'wheel', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+            wheelAcc += (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
+            const steps = Math.trunc(wheelAcc / 100); // 鼠标滚轮一格约 100px
+            if (!steps) return;
+            wheelAcc -= steps * 100;
+            setVolume(Math.round((readVolume() - steps * 0.05) * 100) / 100);
+            flashVolume();
+        }, { passive: false });
         listen(el.np, 'click', () => app.stageHost?.enter?.());
 
         const renderStage = () => {
@@ -474,7 +520,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
-            el.cap.title = inStage ? '点一下打开面板' : '点一下进入歌词舞台';
+            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K）' : '点一下进入歌词舞台';
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
         };
@@ -517,7 +563,19 @@
         function volumeIcon(v = readVolume()) {
             return v <= 0.001 ? 'volume-x' : v < 0.5 ? 'volume-1' : 'volume-2';
         }
-        let volumeBeforeMute = 1;
+        // 静音前的音量记下来（也存一份，重启后再点也能恢复到原来的大小）。
+        const MUTE_KEY = 'musicDockVolumeBeforeMute';
+        let volumeBeforeMute = (() => {
+            try { const v = parseFloat(global.localStorage.getItem(MUTE_KEY)); return v > 0.001 && v <= 1 ? v : 1; } catch (error) { return 1; }
+        })();
+        const toggleMute = () => {
+            const v = readVolume();
+            if (v > 0.001) {
+                volumeBeforeMute = v;
+                try { global.localStorage.setItem(MUTE_KEY, String(v)); } catch (error) {}
+                setVolume(0);
+            } else setVolume(volumeBeforeMute || 1);
+        };
         const setVolume = (value) => {
             const slider = app.volumeSlider;
             if (!slider) return;
@@ -538,6 +596,16 @@
                 const btn = row.querySelector('[data-act="mute"]');
                 const name = volumeIcon(v);
                 if (btn.dataset.icon !== name) { btn.dataset.icon = name; btn.innerHTML = icon(name, 17); }
+            }
+            if (el.volSlot) {
+                const name = volumeIcon(v);
+                const pct = Math.round(v * 100);
+                if (el.volSlot.dataset.icon !== name) {
+                    el.volSlot.dataset.icon = name;
+                    el.volSlot.innerHTML = icon(name, 18);
+                }
+                el.volSlot.setAttribute('aria-label', v > 0.001 ? `静音（音量 ${pct}%）` : '取消静音');
+                el.volSlot.title = v > 0.001 ? `音量 ${pct}%：滚轮调节，点一下静音（M）` : '已静音：点一下恢复（M）';
             }
             const qb = el.quickGroup.querySelector('[data-q="volume"]');
             if (qb) {
@@ -613,6 +681,14 @@
                 html += `<div class="md-nrow"><span class="md-lb">${light ? '日光素白' : '午夜墨染'}</span><span class="md-r">`
                     + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
                     + '</span></div>';
+                const motion = global.MusicMotion;
+                if (motion && Array.isArray(motion.PREFERENCES)) {
+                    const prefs = motion.PREFERENCES;
+                    const at = Math.max(0, prefs.findIndex((p) => p.value === motion.preference));
+                    html += `<div class="md-nrow"><span class="md-lb">降低动态</span><span class="md-r">`
+                        + segment('data-act="motion"', prefs.map((p) => ({ html: escapeHtml(p.label), aria: `降低动态：${p.label}` })), at, 'md-inline md-seg-tx')
+                        + '</span></div>';
+                }
                 if (typeof global.MusicIntro?.replay === 'function') {
                     html += `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`;
                 }
@@ -857,6 +933,13 @@
         listen(el.body, 'click', (event) => {
             const target = event.target.closest('[data-qact], [data-act], [data-q], .md-lyrl p, .md-seg button');
             if (!target) return;
+            const motionSeg = target.closest('.md-seg[data-act="motion"]');
+            if (motionSeg && target.matches('button[data-i]')) {
+                const pref = global.MusicMotion?.PREFERENCES?.[Number(target.dataset.i)];
+                if (pref) global.MusicMotion.set(pref.value);
+                renderBody();
+                return;
+            }
             const seg = target.closest('.md-seg[data-act="theme"]');
             if (seg && target.matches('button[data-i]')) {
                 const light = target.dataset.i === '0';
@@ -878,8 +961,7 @@
             else if (act === 'intro') { closePanel(); global.MusicIntro?.replay?.(); }
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
-                const v = readVolume();
-                if (v > 0.001) { volumeBeforeMute = v; setVolume(0); } else setVolume(volumeBeforeMute || 1);
+                toggleMute();
             } else if (act === 'scene-step') {
                 const modes = stageModes();
                 const cur = modes.indexOf(currentStageMode());
@@ -1063,6 +1145,7 @@
         });
         // 手动队列增删、排序后跟着重画。
         listen(document, 'music-queue-change', rerenderQueue);
+        listen(global, 'music-motion-change', () => { if (state.panelOpen && state.tab === '控制') renderBody(); });
         observe(app.playlistEl, { subtree: true, attributes: true, attributeFilter: ['class'] }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;
             const scroller = el.body.querySelector('.md-ql');
@@ -1074,11 +1157,122 @@
             if (state.panelOpen) placeMarks(el.pnl);
         });
 
+        // ───────── 全窗口键位 ─────────
+        // 在 document 的捕获阶段统一处理，处理了就 preventDefault，档案页等后面的监听看到就不再重复处理。
+        // 焦点在输入框里时单键一律不管（打字优先）；有弹窗开着时也不管。
+        // 档案页显示时方向键留给它选歌，快进快退只在舞台和经典视图里用 ←/→；
+        // 档案页里直接打字就是检索，所以 M 和 ? 这类单字符也留给它。
+        const KEYMAP = [
+            ['空格', '播放 / 暂停（按住不会连续切换）'],
+            ['← / →', '快退 / 快进 5 秒（档案页里方向键用来选歌）'],
+            ['Shift + ← / →', '上一首 / 下一首'],
+            ['Ctrl + ↑ / ↓', '音量 +5% / −5%'],
+            ['M', '静音 / 恢复（档案页里是打字检索）'],
+            ['Ctrl + K', '命令面板：搜歌、歌单和操作'],
+            ['Ctrl + L', '档案页里定位当前播放'],
+            ['/', '档案页里打开检索'],
+            ['字母 / 数字', '档案页里直接打字就是检索目录'],
+            ['?', '打开这张快捷键表（档案页里用命令面板打开）'],
+            ['Esc', '关闭面板、命令面板或这张表']
+        ];
+        const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')));
+        const modalOpen = () => [app.playlistDialog, app.playlistEditModal, app.lyricsFetchModal].some((m) => m?.classList?.contains('visible'))
+            || document.body.classList.contains('music-intro-playing');
+        const archiveShown = () => !stageActive() && !document.body.classList.contains('music-stage-active')
+            && app.archiveView?.mode === 'archive';
+        let helpEl = null;
+        const helpOpen = () => Boolean(helpEl && !helpEl.hidden);
+        const closeHelp = () => {
+            if (!helpOpen()) return;
+            helpEl.classList.remove('md-open');
+            helpEl.hidden = true;
+        };
+        const openHelp = () => {
+            if (!helpEl) {
+                helpEl = document.createElement('div');
+                helpEl.className = 'md-keys';
+                helpEl.innerHTML = `<div class="md-keys-scrim" data-keys="close"></div>`
+                    + `<section class="md-keys-box" role="dialog" aria-modal="true" aria-label="快捷键" tabindex="-1">`
+                    + `<header><b>快捷键</b><button class="md-ib md-m" type="button" data-keys="close" aria-label="关闭">${icon('x', 16)}</button></header>`
+                    + `<dl>${KEYMAP.map(([k, v]) => `<dt>${k.split(' ').map((part) => (/^[+/]$/.test(part) ? `<i>${part}</i>` : `<kbd>${escapeHtml(part)}</kbd>`)).join('')}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`
+                    + `<footer>焦点在输入框里时，单个按键只用来打字。</footer></section>`;
+                host.appendChild(helpEl);
+                helpEl.addEventListener('click', (event) => { if (event.target.closest('[data-keys="close"]')) closeHelp(); });
+            }
+            closePop(); setQuick(false);
+            helpEl.hidden = false;
+            requestAnimationFrame(() => helpEl.classList.add('md-open'));
+            helpEl.querySelector('.md-keys-box').focus({ preventScroll: true });
+        };
+        const seekBy = (delta) => {
+            const d = duration();
+            if (!(d > 0)) return;
+            app.seekTo?.(Math.min(Math.max(0, d - 0.5), Math.max(0, currentTime() + delta)));
+            kickProgress();
+        };
+        let spaceHeld = false;
+        listen(document, 'keyup', (event) => { if (event.code === 'Space') spaceHeld = false; }, true);
+        listen(global, 'blur', () => { spaceHeld = false; });
+        listen(document, 'keydown', (event) => {
+            if (event.defaultPrevented || state.destroyed) return;
+            const t = event.target;
+            if (t?.closest?.('.md-cmd')) return; // 命令面板自己处理
+            if (helpOpen()) {
+                if (event.key === 'Escape' || event.key === '?') { event.preventDefault(); event.stopPropagation(); closeHelp(); }
+                return;
+            }
+            if (typingTarget(t) || modalOpen()) return;
+            const key = event.key;
+            const mod = event.ctrlKey || event.metaKey;
+            const take = () => { event.preventDefault(); event.stopPropagation(); };
+
+            if (event.code === 'Space' && !mod && !event.altKey) {
+                // 焦点在按钮上时空格就是按那个按钮，不再额外切一次
+                if (t?.closest?.('button, [role="button"], a[href], [role="slider"]')) return;
+                take();
+                if (event.repeat || spaceHeld) return; // 按住不连发
+                spaceHeld = true;
+                if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.();
+                return;
+            }
+            if (event.altKey) return;
+            if (mod && !event.shiftKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
+                take();
+                setVolume(Math.round((readVolume() + (key === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100);
+                flashVolume();
+                return;
+            }
+            if (mod) return;
+            if (event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+                take();
+                if (event.repeat) return;
+                showPreview(null);
+                slideTitle(key === 'ArrowLeft' ? -1 : 1);
+                if (key === 'ArrowLeft') app.prevTrack?.(); else app.nextTrack?.();
+                return;
+            }
+            if (!event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+                if (archiveShown()) return; // 档案页里留给选歌
+                if (t?.closest?.('[role="slider"], [role="tablist"], .md-seg, .md-ql')) return;
+                take();
+                seekBy(key === 'ArrowLeft' ? -5 : 5);
+                return;
+            }
+            if (key.length === 1 && archiveShown()) return; // 档案页里单字符是打字检索
+            if ((key === 'm' || key === 'M') && !event.repeat) {
+                take();
+                toggleMute();
+                flashVolume();
+                return;
+            }
+            if (key === '?') { take(); openHelp(); }
+        }, true);
+
         // ───────── 命令面板 ─────────
         const palette = typeof global.createMusicDockPalette === 'function'
             ? global.createMusicDockPalette(app, {
                 host, icon, escapeHtml, trackTitle, trackArtist,
-                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume,
+                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute, openHelp,
                 closeOthers: () => { closePop(); setQuick(false); }
             })
             : null;
@@ -1152,6 +1346,7 @@
             openSheet,
             closeSheet,
             openPalette: (text) => palette?.open(text),
+            openShortcuts: () => openHelp(),
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
@@ -1160,6 +1355,7 @@
                 state.destroyed = true;
                 closeSheet();
                 palette?.destroy();
+                helpEl?.remove();
                 global.MusicToast?.clear();
                 for (const id of timers) clearTimeout(id);
                 timers.clear();

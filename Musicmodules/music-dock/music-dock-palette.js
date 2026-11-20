@@ -86,7 +86,7 @@
     };
 
     function createMusicDockPalette(app, deps) {
-        const { host, icon, escapeHtml, trackTitle, trackArtist, openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, closeOthers } = deps;
+        const { host, icon, escapeHtml, trackTitle, trackArtist, openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute, openHelp, closeOthers } = deps;
 
         const root = document.createElement('div');
         root.className = 'md-cmd';
@@ -135,7 +135,7 @@
                 { id: 'shuffle', group: '播放', icon: 'shuffle', title: mode === 'shuffle' ? '关闭随机播放' : '随机播放', words: 'shuffle random 随机 suiji', run: () => app.setPlayMode?.(mode === 'shuffle' ? 'repeat' : 'shuffle') },
                 { id: 'volume-up', group: '音量', icon: 'volume-2', title: '音量 +10%', desc: `现在 ${Math.round(v * 100)}%`, words: 'volume up louder 音量 大 yinliang', run: () => setVolume(readVolume() + 0.1), keepOpen: true },
                 { id: 'volume-down', group: '音量', icon: 'volume-1', title: '音量 −10%', desc: `现在 ${Math.round(v * 100)}%`, words: 'volume down quieter 音量 小 yinliang', run: () => setVolume(readVolume() - 0.1), keepOpen: true },
-                { id: 'mute', group: '音量', icon: v > 0.001 ? 'volume-x' : 'volume-2', title: v > 0.001 ? '静音' : '取消静音', words: 'mute 静音 jingyin', run: () => setVolume(v > 0.001 ? 0 : 0.7) },
+                { id: 'mute', group: '音量', icon: v > 0.001 ? 'volume-x' : 'volume-2', title: v > 0.001 ? '静音' : '取消静音', words: 'mute 静音 jingyin', run: () => (toggleMute ? toggleMute() : setVolume(v > 0.001 ? 0 : 0.7)) },
                 { id: 'stage', group: '舞台', icon: 'captions', title: inStage ? '离开歌词舞台' : '进入歌词舞台', words: 'stage lyrics 舞台 歌词 wutai geci', run: toggleStage },
                 panelCmd('封面', 'image', 'cover 封面 fengmian'),
                 panelCmd('歌词', 'file-text', 'lyrics 歌词 geci'),
@@ -146,6 +146,7 @@
                 ...(typeof global.MusicIntro?.replay === 'function'
                     ? [{ id: 'intro', group: '外观', icon: 'clapperboard', title: '播放完整开场', words: 'intro opening replay 开场 过场 动画 kaichang', run: () => global.MusicIntro.replay() }]
                     : []),
+                ...(openHelp ? [{ id: 'shortcuts', group: '帮助', icon: 'command', title: '快捷键', hint: '?', words: 'keys shortcuts help 快捷键 按键 帮助 kuaijiejian', run: () => openHelp() }] : []),
                 { id: 'theme', group: '外观', icon: light ? 'moon' : 'sun', title: light ? '切到深色' : '切到浅色', words: 'theme dark light 深色 浅色 主题 zhuti', run: () => { app.applyTheme?.(light ? 'dark' : 'light'); app.stageHost?.updateTheme?.(); } }
             ];
         };

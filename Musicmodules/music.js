@@ -404,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.wnpAdapter = new WebNowPlayingAdapter(app);
 
         if (app.api?.getMusicPlaylist) {
+            let restoreQueueAfterSidebar = false;
             const savedPlaylist = await app.api.getMusicPlaylist();
             if (savedPlaylist && savedPlaylist.length > 0) {
                 app.playlist = savedPlaylist;
@@ -424,9 +425,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 app.playRequestedTrack(pendingPlayback)
                     .catch(error => console.error('[Music] Pending playback failed:', error));
             } else if (app.playlist.length > 0) {
-                // 没有待播放曲目：回到上次听的那首（找不到就第一首），不自动播放。
+                // 没有待播放曲目：回到上次听的那首和进度（找不到就第一首），不自动播放。
                 let initialIndex = 0;
-                try {
+                const resume = app.sessionStartPoint?.();
+                if (resume) initialIndex = resume.index;
+                else try {
                     const lastPath = app.normalizePathForCompare(localStorage.getItem('musicLastTrackPath'));
                     const found = lastPath
                         ? app.playlist.findIndex(t => app.normalizePathForCompare(t.path) === lastPath)
@@ -434,11 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (found !== -1) initialIndex = found;
                 } catch (error) {}
                 app.loadTrack(initialIndex, false)
+                    .then(() => {
+                        // 加载期间用户没换歌，才跳回上次的进度
+                        if (resume && resume.time > 1 && app.currentTrackIndex === initialIndex && !app.playIntent) app.seekTo(resume.time);
+                    })
                     .catch(error => console.error('[Music] Initial track load failed:', error));
+                restoreQueueAfterSidebar = !pendingTrack;
             }
 
             await app.loadCustomPlaylists();
             app.renderSidebarContent('all');
+            // 侧栏初始化会清掉当前列表，所以上次的上下文和手动队列放在它之后恢复。
+            if (restoreQueueAfterSidebar) app.applySessionQueue?.();
 
             const initialState = await app.api.getMusicState();
             if (initialState?.state?.volume !== undefined) {
@@ -885,12 +895,21 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         app.playlistEl.addEventListener('scroll', markSidebarScrolling, { passive: true });
 
+        // 经典列表当前显示的顺序（可能按标题、歌手等排过序）。
+        app.classicOrder = () => Array.from(app.playlistEl.children, li => app.playlist[Number(li.dataset.index)]).filter(Boolean);
         app.playlistEl.addEventListener('click', (e) => {
-            if (e.target.tagName === 'LI') app.loadTrack(parseInt(e.target.dataset.index, 10));
+            const li = e.target.closest?.('li');
+            if (!li || !app.playlistEl.contains(li)) return;
+            const index = parseInt(li.dataset.index, 10);
+            // 从经典列表点播：上下文就是看到的这一组、按看到的顺序。
+            if (typeof app.playFromContext === 'function') {
+                app.playFromContext(app.classicOrder(), index, { source: app.filteredPlaylistSource, origin: 'classic', render: false });
+            } else app.loadTrack(index);
         });
         app.playlistEl.addEventListener('contextmenu', (e) => {
-            if (e.target.tagName === 'LI') {
-                e.preventDefault(); app.contextMenuTrackIndex = parseInt(e.target.dataset.index, 10);
+            const li = e.target.closest?.('li');
+            if (li && app.playlistEl.contains(li)) {
+                e.preventDefault(); app.contextMenuTrackIndex = parseInt(li.dataset.index, 10);
                 app.showContextMenu(e.clientX, e.clientY);
             }
         });
@@ -932,7 +951,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!pl || !filtered.every(t => paths.has(t.path))) source = { type: 'filter' };
             }
             app.playlistViewSource = source;
-            return renderPlaylistBase(filtered);
+            const result = renderPlaylistBase(filtered);
+            // 正在放的上下文是从经典列表点出来的：列表换了排序（同一组歌），队列跟着换顺序。
+            if (app.contextFrom?.('classic') && app.classicOrder) app.reorderContext(app.classicOrder(), 'classic');
+            return result;
         };
         let pendingMenuSurface = null;
         document.addEventListener('contextmenu', (e) => {

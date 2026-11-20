@@ -14,7 +14,8 @@ function setup({ mode = 'repeat', count = 5 } = {}) {
         setTimeout, clearTimeout, setInterval, clearInterval,
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
         document: { body: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }, dispatchEvent: (e) => events.push(e.type) },
-        navigator: {}
+        navigator: {},
+        localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })()
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-player.js'), 'utf8'), context);
     const playlist = Array.from({ length: count }, (_, i) => ({ path: `C:/m/${i}.flac`, title: `t${i}` }));
@@ -35,7 +36,7 @@ function setup({ mode = 'repeat', count = 5 } = {}) {
     // 只看选了哪一首，不真的加载。
     app.loadTrack = (i) => { loads.push(i); app.currentTrackIndex = i; };
     const preload = async () => { app.isPreloadingNext = false; await app.handleNeedsPreload(); return preloads[preloads.length - 1]; };
-    return { app, playlist, preloads, loads, preload, events };
+    return { app, playlist, preloads, loads, preload, events, context };
 }
 
 test('repeat: next and preload both pick the following track in the active list and wrap', async () => {
@@ -173,4 +174,95 @@ test('up next shows the manual layer then the real context order (shuffle includ
     const r = setup();
     r.app.currentTrackIndex = 3;
     assert.deepEqual(titles(r.app.getUpNext().context), ['t4', 't0', 't1', 't2']);
+});
+
+test('peekPrevious names what prev will play without touching history', () => {
+    const { app, playlist } = setup();
+    app.currentTrackIndex = 2;
+    assert.equal(app.peekPrevious(), playlist[1], 'no history: previous in the list');
+    app.rememberPlayed(playlist[4]);
+    app.rememberPlayed(playlist[2]);
+    assert.equal(app.peekPrevious(), playlist[4], 'history wins, skipping the current track');
+    assert.equal(app.peekPrevious(), playlist[4], 'peeking twice gives the same answer');
+    const loads = [];
+    app.loadTrack = (i) => loads.push(i);
+    app.prevTrack();
+    assert.deepEqual(loads, [4]);
+});
+
+test('session: saves track, time, context and manual queue, and restores them by path without autoplay', () => {
+    const { app, playlist, context } = setup();
+    app.currentTrackIndex = 2;
+    app.lastKnownCurrentTime = 83.46;
+    app.currentFilteredTracks = [playlist[2], playlist[4], playlist[0]];
+    app.filteredPlaylistSource = { type: 'playlist', id: 'p1', name: '通勤' };
+    app.queueAdd(playlist[3]);
+    app.saveSession();
+    const saved = JSON.parse(context.localStorage.getItem('musicSession'));
+    assert.equal(saved.track, 'C:/m/2.flac');
+    assert.equal(saved.time, 83.5);
+    assert.deepEqual(Array.from(saved.context), ['C:/m/2.flac', 'C:/m/4.flac', 'C:/m/0.flac']);
+    assert.deepEqual(Array.from(saved.manual), ['C:/m/3.flac']);
+
+    // 「重启」：新的播放器，曲库是重新扫描出来的新对象，还少了一首
+    const next = setup();
+    next.context.localStorage.setItem('musicSession', JSON.stringify(saved));
+    next.app.playlist.splice(4, 1);
+    next.app.renderPlaylist = () => {};
+    const start = next.app.sessionStartPoint();
+    assert.deepEqual({ ...start }, { index: 2, time: 83.5 });
+    next.app.applySessionQueue();
+    assert.deepEqual(titles(next.app.currentFilteredTracks), ['t2', 't0'], 'missing tracks are skipped');
+    assert.equal(next.app.filteredPlaylistSource.id, 'p1');
+    assert.deepEqual(titles(next.app.manualQueue), ['t3']);
+    assert.equal(next.loads.length, 0, 'restoring does not start playback');
+});
+
+test('session: a whole-library context is stored as null and a missing track gives no start point', () => {
+    const { app, context } = setup();
+    app.currentTrackIndex = 1;
+    app.saveSession();
+    assert.equal(JSON.parse(context.localStorage.getItem('musicSession')).context, null);
+    const next = setup();
+    next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/gone.flac', time: 9 }));
+    assert.equal(next.app.sessionStartPoint(), null);
+});
+
+test('playFromContext: the shown order becomes the context; library order is stored as the whole library', () => {
+    const { app, playlist, loads } = setup();
+    let rendered = 0;
+    app.renderPlaylist = () => { rendered += 1; };
+    const shown = [playlist[3], playlist[1], playlist[4]];
+    app.playFromContext(shown, 1, { origin: 'classic', render: false });
+    assert.deepEqual(titles(app.currentFilteredTracks), ['t3', 't1', 't4']);
+    assert.equal(rendered, 0, 'render: false leaves the list alone');
+    assert.deepEqual(loads, [1]);
+    assert.equal(app.getUpNext(3).context.map(t => t.title).join(), 't4,t3');
+
+    app.playFromContext(playlist.slice(), 0, { origin: 'classic' });
+    assert.equal(app.currentFilteredTracks, null, 'same as the library order means the whole library');
+    assert.equal(rendered, 1);
+});
+
+test('reorderContext: follows a new sort of the same group, only while that origin still owns the context', () => {
+    const { app, playlist, events } = setup();
+    app.playFromContext([playlist[0], playlist[1], playlist[2]], 1, { origin: 'classic', render: false });
+    const before = events.filter(e => e === 'music-queue-change').length;
+
+    assert.equal(app.reorderContext([playlist[2], playlist[1], playlist[0]], 'classic'), true);
+    assert.deepEqual(titles(app.currentFilteredTracks), ['t2', 't1', 't0']);
+    assert.equal(app.getUpNext(1).context[0].title, 't0', 'next follows the new order');
+    assert.ok(events.filter(e => e === 'music-queue-change').length > before, 'the queue page is told');
+    assert.equal(app.contextFrom('classic'), true, 'still owned after reordering');
+
+    assert.equal(app.reorderContext([playlist[2], playlist[3], playlist[0]], 'classic'), false, 'different members are ignored');
+    assert.equal(app.reorderContext([playlist[0], playlist[1], playlist[2]], 'archive'), false, 'another origin does not own it');
+
+    // 档案页换了上下文：经典列表再怎么排序都不碰
+    app.playFromContext([playlist[0], playlist[1], playlist[2]], 0, { origin: 'archive', render: false });
+    assert.equal(app.contextFrom('classic'), false);
+    assert.equal(app.reorderContext([playlist[1], playlist[0], playlist[2]], 'classic'), false);
+    // 直接改上下文（旧代码路径）也让记录失效
+    app.currentFilteredTracks = [playlist[4]];
+    assert.equal(app.contextFrom('archive'), false);
 });
