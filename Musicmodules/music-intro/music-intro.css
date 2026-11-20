@@ -7,7 +7,7 @@ body {
     --mi-line: var(--ar-line, rgba(224, 227, 220, .24));
     --mi-ring: var(--ar-ink-2, #c3cbc9);
     /* 深色的白场用偏灰的纸色，不那么刺眼；但必须不透明，进出舞台靠它盖住切换。 */
-    --mi-flash: #c9cdc6;
+    --mi-flash: #b3b8b1;
     --mi-flash-peak: 1;
 }
 

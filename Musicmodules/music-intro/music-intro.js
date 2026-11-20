@@ -321,11 +321,13 @@
             n.scan.style.opacity = String(smooth(progress(t, 0, 0.08)));
             n.fileLabel.textContent = 'TRACK DATABASE';
             n.fileText.textContent = typed(ctx.file, t, 0.04, 0.34);
-            n.flash.style.opacity = String(smooth(progress(t, 0.34, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.08, TRANSIT.enter))));
+            // 白场 90% 以上只维持约 110ms：0.45 起快速升到不透明，放开舞台后立刻开始退。
+            n.flash.style.opacity = String(smooth(progress(t, 0.45, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.01, TRANSIT.enter - 0.1))));
             // 白场盖严之后，遮罩和圆环一起撤掉，白场退去时只剩舞台。
             if (t >= releaseAt) { n.veil.setAttribute('opacity', '0'); n.scan.style.opacity = '0'; }
         } else {
-            n.flash.style.opacity = String(smooth(progress(t, 0, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.04, 0.6))));
+            // 同样把接近不透明的时间压在约 110ms 内
+            n.flash.style.opacity = String(smooth(progress(t, 0, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.01, 0.5))));
             n.veil.setAttribute('opacity', String(t < releaseAt ? 0 : 0.3 * (1 - smooth(progress(t, 0.4, 0.75)))));
             r = keys([[releaseAt, 160], [0.62, 520]], t);
             sweep = keys([[releaseAt, 360], [0.62, 40]], t) * DEG;
