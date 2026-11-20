@@ -227,7 +227,7 @@
                 for (const key of [...multi]) if (!alive.has(key)) multi.delete(key);
                 multiAnchor = -1;
                 r.multiNote.hidden = multi.size < 2;
-                r.multiNote.textContent = multi.size < 2 ? '' : `已选 ${multi.size} 首 · 右键批量操作 · ESC 取消`;
+                r.multiNote.textContent = multi.size < 2 ? '' : `已选 ${multi.size} 首 · 右键或菜单键操作 · ESC 取消`;
                 el.classList.toggle('has-multi', multi.size > 1);
             }
             state.selectedRow = findRow(state.selected, state.preferCtx);
@@ -283,7 +283,7 @@
         const paintMulti = () => {
             const n = multi.size;
             r.multiNote.hidden = n < 2;
-            r.multiNote.textContent = n < 2 ? '' : `已选 ${n} 首 · 右键批量操作 · ESC 取消`;
+            r.multiNote.textContent = n < 2 ? '' : `已选 ${n} 首 · 右键或菜单键操作 · ESC 取消`;
             el.classList.toggle('has-multi', n > 1);
             for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k);
         };
@@ -485,6 +485,20 @@
                 if (state.rows[j].type === 'track') { pickRow(j); return; }
             }
         };
+        /*
+         * 键盘移动之后：按着 Shift 就把起点到现在这一行都选上（起点是上一次不带 Shift 停下的那一行），
+         * 不按 Shift 就回到单选
+         */
+        const afterMove = (shift, before) => {
+            const k = state.selectedRow;
+            if (!shift || k < 0) { multiAnchor = k; clearMulti(); return; }
+            const ok = (j) => j >= 0 && j < state.rows.length && state.rows[j].type === 'track';
+            const from = ok(multiAnchor) ? multiAnchor : ok(before) ? before : k;
+            multiAnchor = from;
+            multi.clear();
+            if (from !== k) for (let j = Math.min(from, k); j <= Math.max(from, k); j++) if (state.rows[j].type === 'track') multi.add(keyOf(state.rows[j]));
+            paintMulti();
+        };
         const selectedRowData = () => state.rows[state.selectedRow] || null;
         /* 第 k 行所在的那一组：组名和组里的曲目（按显示顺序） */
         const groupOf = (k) => {
@@ -524,13 +538,15 @@
         const onKey = (e) => {
             const inInput = e.target === r.input;
             if (inInput) flushQuery();
+            const before = state.selectedRow;
+            const range = e.shiftKey && !inInput;
             switch (e.key) {
-                case 'ArrowDown': e.preventDefault(); stepRow(1); break;
-                case 'ArrowUp': e.preventDefault(); stepRow(-1); break;
-                case 'PageDown': e.preventDefault(); stepRow(1, 10); break;
-                case 'PageUp': e.preventDefault(); stepRow(-1, 10); break;
-                case 'Home': if (!inInput) { e.preventDefault(); edgeRow(false); } break;
-                case 'End': if (!inInput) { e.preventDefault(); edgeRow(true); } break;
+                case 'ArrowDown': e.preventDefault(); stepRow(1); afterMove(range, before); break;
+                case 'ArrowUp': e.preventDefault(); stepRow(-1); afterMove(range, before); break;
+                case 'PageDown': e.preventDefault(); stepRow(1, 10); afterMove(range, before); break;
+                case 'PageUp': e.preventDefault(); stepRow(-1, 10); afterMove(range, before); break;
+                case 'Home': if (!inInput) { e.preventDefault(); edgeRow(false); afterMove(range, before); } break;
+                case 'End': if (!inInput) { e.preventDefault(); edgeRow(true); afterMove(range, before); } break;
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
@@ -559,8 +575,10 @@
                     if (e.key === 'F10' && !e.shiftKey) return;
                     e.preventDefault();
                     if (multi.size > 1) {
-                        const box = r.viewport.getBoundingClientRect();
-                        openBatchMenu(box.left + 80, box.top + 80, { keyboard: true });
+                        // 菜单开在当前那一行旁边（那一行滚出去了就开在目录左上）
+                        const node = state.rendered.get(state.selectedRow);
+                        const box = (node && inView(state.selectedRow) ? node : r.viewport).getBoundingClientRect();
+                        openBatchMenu(box.left + 80, box.top + (node && inView(state.selectedRow) ? box.height : 80), { keyboard: true });
                     } else openMenuForRow(state.selectedRow);
                     break;
                 }
@@ -699,7 +717,8 @@
                 const name = input.value;
                 host.innerHTML = before;
                 if (commit) done(name);
-                else r.viewport.focus?.();
+                // 键盘操作完焦点回目录（改名后整张目录重排，原来的按钮已经不在了）
+                if (!el.contains(document.activeElement) || document.activeElement === document.body) r.viewport.focus?.();
             };
             input.addEventListener('keydown', (e) => {
                 e.stopPropagation();
@@ -735,9 +754,11 @@
             } else if (act === 'delete-no') {
                 manage.confirm = null;
                 repaintHead(node);
+                node.querySelector('[data-pl="delete"]')?.focus();
             } else if (act === 'delete-yes') {
                 manage.confirm = null;
                 deletePlaylist(pl);
+                r.viewport.focus?.();
             }
         });
 

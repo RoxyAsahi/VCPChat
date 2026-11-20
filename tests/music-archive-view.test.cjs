@@ -1197,3 +1197,45 @@ test('批量移除后撤销：只把移除的插回原位，期间新扫进来�
     assert.equal(Number(f.text('files')), 31);
     f.close();
 });
+
+test('只用键盘：Shift+方向键选一段、回头收窄、不按 Shift 回到单选；菜单键开批量菜单并加入歌单；歌单的删除确认取消后焦点回到删除按钮', () => {
+    const toasts = [];
+    const f = fixture({ setup: (w, app) => { app.saveCustomPlaylists = () => {}; w.MusicToast = { show: (t) => toasts.push(t) }; } });
+    const el = f.view.list.el;
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    const vp = el.querySelector('[data-l="viewport"]');
+    const kd = (key, mods = {}, target = vp) => target.dispatchEvent(new f.w.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...mods }));
+    const picked = () => Array.from(f.view.list.picked, (i) => f.app.playlist[i].title);
+    const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
+    rowOf('Song 3').dispatchEvent(new f.w.MouseEvent('click', { bubbles: true }));
+    kd('ArrowDown', { shiftKey: true });
+    kd('ArrowDown', { shiftKey: true });
+    assert.deepEqual(picked(), ['Song 3', 'Song 4', 'Song 5']);
+    kd('ArrowUp', { shiftKey: true });
+    assert.deepEqual(picked(), ['Song 3', 'Song 4'], '往回走是收窄，不是另起一段');
+    kd('ArrowUp', { shiftKey: true });
+    assert.deepEqual(picked(), [], '回到起点就只剩单选');
+    kd('ArrowUp', { shiftKey: true });
+    assert.deepEqual(picked(), ['Song 2', 'Song 3'], '越过起点往另一边选');
+    assert.match(el.querySelector('[data-l="multiNote"]').textContent, /已选 2 首.*菜单键/);
+    // 菜单键：批量菜单，焦点在第一项；方向键走到「加入歌单」回车
+    kd('ContextMenu');
+    const menu = doc.querySelector('.archive-batch-menu');
+    assert.ok(menu && doc.activeElement && menu.contains(doc.activeElement), '焦点进了菜单');
+    const target = menu.querySelector('[data-batch="pl"]');
+    target.focus();
+    kd('Enter', {}, target);
+    assert.ok(['/m/2', '/m/3'].every((p) => f.app.customPlaylists[0].tracks.includes(p)));
+    assert.equal(doc.querySelector('.archive-batch-menu'), null);
+    assert.equal(doc.activeElement, vp, '菜单关掉后焦点回目录');
+    kd('ArrowDown');
+    assert.deepEqual(picked(), [], '不按 Shift 移动就回到单选');
+    // 歌单标题上的删除：取消后焦点回到删除按钮，不掉到页面上
+    el.querySelector('[data-kind="playlist"]').click();
+    el.querySelector('[data-pl="delete"]').click();
+    assert.equal(doc.activeElement.dataset.pl, 'delete-no');
+    doc.activeElement.click();
+    assert.equal(doc.activeElement.dataset.pl, 'delete');
+    f.close();
+});
