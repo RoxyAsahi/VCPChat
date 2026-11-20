@@ -12,6 +12,7 @@
     const ROW_H = 58;     // 曲目行高
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
+    const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];
     const KINDS = [['all', '全部', 'ALL'], ['artist', '歌手', 'ARTIST'], ['album', '专辑', 'ALBUM'], ['playlist', '歌单', 'LIST'], ['recent', '最近', 'RECENT']];
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
@@ -31,6 +32,12 @@
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
             ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="${zh}（${en}）">${zh}</button>`).join('')}
+            <span class="archive-list-sort">
+                <button type="button" data-l="sortBtn" aria-haspopup="menu" aria-expanded="false" title="排序方式（阵列跟着重排）"><span class="archive-glyph-sort" aria-hidden="true"></span><span data-l="sortName">标题</span></button>
+                <span class="archive-list-sort-menu" role="menu" data-l="sortMenu" hidden>
+                    ${SORTS.map(([k, zh, en]) => `<button type="button" role="menuitemradio" data-sort="${k}" aria-checked="false"><span>${zh}</span><i>${en}</i></button>`).join('')}
+                </span>
+            </span>
         </div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
@@ -93,7 +100,7 @@
             if (!index) return;
             const out = Index.listRows({
                 tracks: tracks(), playlists: app.customPlaylists, recent: opts.getRecent(), index,
-                kind: state.kind, query: state.query, columnOfGroup: opts.columnOfGroup
+                kind: state.kind, query: state.query, columnOfGroup: opts.columnOfGroup, spec: opts.getSpec?.() || null
             });
             state.rows = out.rows;
             state.count = out.count;
@@ -113,6 +120,7 @@
                 b.classList.toggle('on', on);
                 b.setAttribute('aria-selected', String(on));
             });
+            paintSort();
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
             state.selectedRow = findRow(state.selected, state.preferCtx);
@@ -373,6 +381,62 @@
             if (b) setKind(b.dataset.kind);
         });
 
+        // ---------- 排序菜单 ----------
+        const sortMode = () => (opts.getSort ? opts.getSort() : 'title');
+        const paintSort = () => {
+            const mode = sortMode();
+            const entry = SORTS.find(([k]) => k === mode) || SORTS[0];
+            r.sortName.textContent = entry[1];
+            r.sortBtn.classList.toggle('on', mode !== 'title');
+            r.sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sort === mode)));
+        };
+        const sortOpen = () => !r.sortMenu.hidden;
+        const closeSort = ({ focus = false } = {}) => {
+            if (!sortOpen()) return;
+            r.sortMenu.hidden = true;
+            r.sortBtn.setAttribute('aria-expanded', 'false');
+            document.removeEventListener('pointerdown', outside, true);
+            if (focus) r.sortBtn.focus();
+        };
+        const outside = (e) => { if (!e.target.closest || !e.target.closest('.archive-list-sort')) closeSort(); };
+        const openSort = () => {
+            paintSort();
+            r.sortMenu.hidden = false;
+            r.sortBtn.setAttribute('aria-expanded', 'true');
+            document.addEventListener('pointerdown', outside, true);
+            (r.sortMenu.querySelector('[aria-checked="true"]') || r.sortMenu.querySelector('[data-sort]')).focus();
+        };
+        const chooseSort = (mode) => {
+            closeSort({ focus: true });
+            if (mode === sortMode()) return;
+            opts.onSort?.(mode); // 阵列和目录一起按新顺序重建
+        };
+        r.sortBtn.addEventListener('click', (e) => { e.stopPropagation(); sortOpen() ? closeSort() : openSort(); });
+        r.sortMenu.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-sort]');
+            if (!b) return;
+            e.stopPropagation();
+            chooseSort(b.dataset.sort);
+        });
+        r.sortMenu.addEventListener('keydown', (e) => {
+            const items = [...r.sortMenu.querySelectorAll('[data-sort]')];
+            const at = items.indexOf(document.activeElement);
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+            } else if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault();
+                items[e.key === 'Home' ? 0 : items.length - 1].focus();
+            } else if (e.key === 'Escape' || e.key === 'Tab') {
+                e.preventDefault();
+                closeSort({ focus: true });
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (at >= 0) chooseSort(items[at].dataset.sort);
+            } else return;
+            e.stopPropagation();
+        });
+
         const setKind = (kind) => {
             if (kind === state.kind) return;
             state.kind = kind;
@@ -397,6 +461,16 @@
             setKind,
             render: schedule,
             focusSearch: () => { r.input.focus(); r.input.select(); },
+            /* 在档案页直接打字：聚焦检索框并带入这个字（替换掉原来的检索词） */
+            typeInto: (text) => {
+                r.input.focus();
+                r.input.value = text;
+                r.input.setSelectionRange(text.length, text.length);
+                r.input.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+            input: r.input,
+            closeSort,
+            get sortOpen() { return sortOpen(); },
             hasFocus: () => el.contains(document.activeElement),
             get kind() { return state.kind; },
             get query() { return state.query; },
@@ -405,5 +479,5 @@
         };
     };
 
-    global.MusicArchiveList = Object.freeze({ create, KINDS });
+    global.MusicArchiveList = Object.freeze({ create, KINDS, SORTS });
 })(window);

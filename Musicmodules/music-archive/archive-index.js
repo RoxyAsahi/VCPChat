@@ -94,6 +94,8 @@
                 e[f + 'Ini'] = r.ini;
             }
             e.sort = e.titlePy || e.title;
+            e.artistGroup = e.artist ? groupOf(t && t.artist, pinyin) : '#';
+            e.artistSort = e.artistPy || e.artist;
             return e;
         });
 
@@ -146,8 +148,86 @@
             size: entries.length,
             group: (i) => (entries[i] ? entries[i].group : '#'),
             sortKey: (i) => (entries[i] ? entries[i].sort : ''),
+            artistGroup: (i) => (entries[i] ? entries[i].artistGroup : '#'),
+            artistKey: (i) => (entries[i] ? entries[i].artistSort : ''),
             query
         };
+    };
+
+    /*
+     * 排序方式：标题（默认）、歌手、时长、添加时间。每种方式给出：
+     * group(i) 分到哪一组、组的顺序 rank、组名 name/ref、同类可合并 family、组内比较 cmp。
+     * 阵列的列、目录的分组、播放队列都按它排，换排序时三者一起变。
+     * 曲库里没有记录添加时间，按曲库里的先后（新扫进来的追加在后面）当添加顺序，新的在前。
+     */
+    const SORTS = ['title', 'artist', 'duration', 'added'];
+    const DURATION_BUCKETS = [
+        ['d0', 180, '3 分钟以内', 'UNDER 03:00'],
+        ['d3', 240, '3–4 分钟', '03:00–04:00'],
+        ['d4', 300, '4–5 分钟', '04:00–05:00'],
+        ['d5', 420, '5–7 分钟', '05:00–07:00'],
+        ['d7', Infinity, '7 分钟以上', 'OVER 07:00'],
+        ['d?', 0, '时长未知', 'UNKNOWN LENGTH']
+    ];
+    const sortSpec = (index, { mode = 'title', tracks = [], durationOf = null } = {}) => {
+        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
+        const letter = { rank: (g) => GROUP_RANK.get(g) ?? 999, name: groupName, ref: groupRef, family: familyOf };
+        if (mode === 'artist') {
+            return {
+                mode, ...letter,
+                group: (i) => index.artistGroup(i),
+                cmp: (a, b) => {
+                    const ka = index.artistKey(a), kb = index.artistKey(b);
+                    if (!ka !== !kb) return ka ? -1 : 1; // 没写歌手的放最后
+                    return COLLATE(ka, kb) || byTitle(a, b);
+                }
+            };
+        }
+        if (mode === 'duration') {
+            const len = (i) => {
+                const t = tracks[i];
+                const d = Number(t && t.duration);
+                return d > 0 ? d : Number(durationOf ? durationOf(t, i) : 0) || 0;
+            };
+            const bucketOf = (i) => {
+                const d = len(i);
+                if (!(d > 0)) return 'd?';
+                return DURATION_BUCKETS.find(([, max]) => d < max)[0];
+            };
+            const meta = new Map(DURATION_BUCKETS.map(([id, , name, ref], k) => [id, { k, name, ref }]));
+            return {
+                mode,
+                group: bucketOf,
+                rank: (g) => (meta.has(g) ? meta.get(g).k : 999),
+                name: (g) => (meta.get(g) || {}).name || g,
+                ref: (g) => (meta.get(g) || {}).ref || g,
+                family: (g) => g, // 时长段不合并
+                cmp: (a, b) => {
+                    const da = len(a), db = len(b);
+                    if (!(da > 0) || !(db > 0)) return (da > 0 ? -1 : db > 0 ? 1 : 0) || byTitle(a, b);
+                    return da - db || byTitle(a, b);
+                }
+            };
+        }
+        if (mode === 'added') {
+            const n = Math.max(1, index.size);
+            const chunk = Math.max(50, Math.ceil(n / 12));
+            const pos = (i) => n - 1 - i; // 0 = 最新加入
+            const range = (g) => {
+                const k = Number(String(g).slice(1));
+                return [k * chunk + 1, Math.min(n, (k + 1) * chunk)];
+            };
+            return {
+                mode,
+                group: (i) => 'n' + Math.floor(pos(i) / chunk),
+                rank: (g) => Number(String(g).slice(1)),
+                name: (g) => { const [a, b] = range(g); return a === 1 ? '最近加入 ' + b + ' 首' : '第 ' + a + '–' + b + ' 首'; },
+                ref: (g) => { const [a, b] = range(g); return 'ADDED ' + String(a).padStart(3, '0') + '–' + String(b).padStart(3, '0'); },
+                family: (g) => g,
+                cmp: (a, b) => b - a
+            };
+        }
+        return { mode: 'title', ...letter, group: (i) => index.group(i), cmp: byTitle };
     };
 
     const familyOf = (g) => (/^[A-Z]$/.test(g) ? 'latin' : KANA_ROW_OF.has(g) ? 'kana' : g);
@@ -162,18 +242,19 @@
      * minSize > 1 时，同一类（拉丁字母、假名行）里歌太少的相邻组合并成「X–Z」这样的一列，免得一列只有一两张卡。
      * 返回的每列带 groups（包含的首字母），方便从首字母找到所在列。
      */
-    const groupColumns = (index, indices, { minSize = 1 } = {}) => {
+    const groupColumns = (index, indices, { minSize = 1, spec = null } = {}) => {
+        const sp = spec || sortSpec(index);
         const groups = new Map();
         for (const i of indices) {
-            const g = index.group(i);
+            const g = sp.group(i);
             if (!groups.has(g)) groups.set(g, []);
             groups.get(g).push(i);
         }
-        const ordered = [...groups.entries()].sort((a, b) => (GROUP_RANK.get(a[0]) ?? 999) - (GROUP_RANK.get(b[0]) ?? 999));
+        const ordered = [...groups.entries()].sort((a, b) => sp.rank(a[0]) - sp.rank(b[0]));
         const runs = [];
         for (const [g, items] of ordered) {
             const last = runs[runs.length - 1];
-            if (last && familyOf(last.groups[0]) === familyOf(g) && last.items.length < minSize) {
+            if (last && sp.family(last.groups[0]) === sp.family(g) && last.items.length < minSize) {
                 last.groups.push(g); last.items.push(...items);
             } else {
                 runs.push({ groups: [g], items: [...items] });
@@ -182,22 +263,22 @@
         // 每一类最后一段还是太少，就并到同一类的前一段
         for (let k = runs.length - 1; k > 0; k--) {
             const cur = runs[k], prev = runs[k - 1];
-            if (cur.items.length < minSize && familyOf(prev.groups[0]) === familyOf(cur.groups[0])) {
+            if (cur.items.length < minSize && sp.family(prev.groups[0]) === sp.family(cur.groups[0])) {
                 prev.groups.push(...cur.groups); prev.items.push(...cur.items); runs.splice(k, 1);
             }
         }
-        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
+        const prefix = sp.mode === 'title' ? 'letter:' : 'sort-' + sp.mode + ':';
         return runs.map(({ groups: gs, items }) => {
             const first = gs[0], lastG = gs[gs.length - 1];
             const single = gs.length === 1;
             return {
-                id: 'letter:' + (single ? first : first + '-' + lastG),
+                id: prefix + (single ? first : first + '-' + lastG),
                 kind: 'letter',
                 group: first,
                 groups: gs,
-                name: single ? groupName(first) : mergedName(first, lastG),
-                ref: single ? groupRef(first) : 'INDEX ' + first + '–' + lastG,
-                items: items.sort(byTitle)
+                name: single ? sp.name(first) : mergedName(first, lastG),
+                ref: single ? sp.ref(first) : 'INDEX ' + first + '–' + lastG,
+                items: items.sort(sp.cmp)
             };
         });
     };
@@ -208,15 +289,16 @@
      * kind: all | artist | album | playlist | recent。有检索词时 all 按得分排成一组。
      * columnOfGroup(g)：首字母分组对应的列 id（阵列按首字母拆列时用），没有就用 'all'。
      */
-    const listRows = ({ tracks, playlists = [], recent = [], index, kind = 'all', query = '', columnOfGroup = null }) => {
+    const listRows = ({ tracks, playlists = [], recent = [], index, kind = 'all', query = '', columnOfGroup = null, spec = null }) => {
         const list = Array.isArray(tracks) ? tracks : [];
         const q = String(query || '').trim();
         const rows = [];
         let count = 0;
         const head = (label, key, n) => rows.push({ type: 'head', label, key, n });
         const push = (i, ctx) => { rows.push({ type: 'track', i, ctx }); count++; };
-        const allCtx = (i) => (columnOfGroup ? columnOfGroup(index.group(i)) : 'all');
-        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
+        const sp = spec || sortSpec(index, { tracks: list });
+        const allCtx = (i) => (columnOfGroup ? columnOfGroup(sp.group(i)) : 'all');
+        const byTitle = sp.cmp; // 组内顺序跟着排序方式
 
         if (kind === 'recent') {
             const pool = recent.filter((i) => i >= 0 && i < list.length);
@@ -268,23 +350,25 @@
         }
         const groups = new Map();
         list.forEach((_, i) => {
-            const g = index.group(i);
+            const g = sp.group(i);
             if (!groups.has(g)) groups.set(g, []);
             groups.get(g).push(i);
         });
+        // 标题、歌手排序：组标题是首字母（放在左侧外边距）；时长、添加时间：组标题是小标题行
+        const letterHeads = sp.mode === 'title' || sp.mode === 'artist';
         [...groups.entries()]
-            .sort((a, b) => (GROUP_RANK.get(a[0]) ?? 999) - (GROUP_RANK.get(b[0]) ?? 999))
+            .sort((a, b) => sp.rank(a[0]) - sp.rank(b[0]))
             .forEach(([g, items]) => {
-                head(groupName(g), 'letter:' + g, items.length);
-                items.sort(byTitle).forEach((i) => push(i, allCtx(i)));
+                head(sp.name(g), (letterHeads ? 'letter:' : 'sort:') + g, items.length);
+                items.sort(sp.cmp).forEach((i) => push(i, allCtx(i)));
             });
         return { rows, count };
     };
 
     /* 全局顺序：先按首字母分组的固定顺序，组内按标题（数字按数值）。阵列、目录、队列都用它 */
-    const sortedIndices = (index, indices) => groupColumns(index, indices).flatMap((c) => c.items);
+    const sortedIndices = (index, indices, spec = null) => groupColumns(index, indices, { spec }).flatMap((c) => c.items);
 
-    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, groupColumns, sortedIndices, listRows, GROUP_ORDER });
+    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, groupColumns, sortedIndices, listRows, sortSpec, SORTS, GROUP_ORDER });
     if (typeof module === 'object' && module.exports) module.exports = api;
     global.MusicArchiveIndex = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -121,17 +121,18 @@ test('目录里回车只播放不进播放页；→ 进播放页；Esc 先清空
     f.close();
 });
 
-test('L 开关目录并记住；阵列里换选中，目录高亮跟着走', () => {
+test('LIST 按钮开关目录并记住；阵列里换选中，目录高亮跟着走', () => {
     const f = fixture();
     f.view.setListOpen(false);
-    f.key('l');
+    const btn = f.w.document.querySelector('[data-act="list"]');
+    btn.click();
     assert.ok(!f.view.list.el.hidden);
     assert.equal(f.w.localStorage.getItem('musicArchiveList'), '1');
     f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown');
     const on = f.view.list.el.querySelector('.archive-list-row.on');
     assert.ok(on);
     assert.match(on.textContent, /Song 3/);
-    f.key('L');
+    btn.click();
     assert.ok(f.view.list.el.hidden);
     assert.equal(f.w.localStorage.getItem('musicArchiveList'), '0');
     f.close();
@@ -379,5 +380,201 @@ test('每一列记住上次停在第几首，换列回来回到那一首', () =>
     assert.equal(f.view.debug().selected, 5);
     f.key('ArrowRight');                       // 再进歌单：回到刚才那首
     assert.equal(f.view.debug().selected, inPlaylist);
+    f.close();
+});
+
+test('目录排序菜单：换成按歌手排，阵列按歌手首字母重排，选中的歌不变，并记住', () => {
+    const f = fixture({ n: 60 });
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown'); // Song 3（Aki）
+    const before = f.view.debug().selected;
+    doc.querySelector('[data-l="sortBtn"]').click();
+    const menu = doc.querySelector('[data-l="sortMenu"]');
+    assert.equal(menu.hidden, false);
+    menu.querySelector('[data-sort="artist"]').click();
+    assert.equal(menu.hidden, true);
+    assert.equal(f.view.sort, 'artist');
+    assert.equal(doc.querySelector('[data-l="sortName"]').textContent, '歌手');
+    const ids = f.view.debug().columns.map((c) => c.id);
+    assert.ok(ids.includes('sort-artist:A') && ids.includes('sort-artist:R'), ids.join());
+    assert.equal(f.view.debug().selected, before);
+    assert.equal(f.text('cat'), 'A');
+    assert.equal(f.w.localStorage.getItem('musicArchiveSort'), 'artist');
+    // 目录的首字母组也按歌手
+    f.view.list.el.querySelector('[data-l="viewport"]').scrollTop = 0;
+    f.view.list.rebuild();
+    const letters = [...doc.querySelectorAll('.archive-list-letter span')].map((s) => s.textContent);
+    assert.equal(letters[0], 'A');
+    // 键盘：菜单里上下选、回车确定
+    doc.querySelector('[data-l="sortBtn"]').click();
+    const kd = (k) => doc.activeElement.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    kd('ArrowDown'); kd('Enter');
+    assert.equal(f.view.sort, 'duration');
+    assert.equal(f.text('cat'), '时长未知');
+    f.close();
+});
+
+test('在档案页直接打字：打开目录、聚焦检索框并带入这个字；输入法组字时不抢', async () => {
+    const f = fixture();
+    f.view.setListOpen(false);
+    const input = f.view.list.input;
+    f.key('a', { isComposing: true });
+    f.key('Process', { keyCode: 229 });
+    assert.ok(f.view.list.el.hidden);
+    assert.equal(input.value, '');
+    f.key('2');
+    assert.ok(!f.view.list.el.hidden);
+    assert.equal(f.w.document.activeElement, input);
+    assert.equal(input.value, '2');
+    assert.equal(f.w.localStorage.getItem('musicArchiveList'), '0'); // 打字打开的不改用户「收起」的设置
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(f.view.list.query, '2');
+    assert.equal(f.view.debug().selected, 2); // 第一条结果直接选中
+    // 已有检索词时，回到阵列再打字是新的检索
+    input.blur();
+    f.key('9');
+    assert.equal(input.value, '9');
+    // 空格、修饰键、方向键不进检索框
+    input.blur();
+    f.key(' ', { code: 'Space' });
+    f.key('k', { ctrlKey: true });
+    f.key('ArrowDown');
+    assert.equal(input.value, '9');
+    assert.ok(f.calls.some((c) => c[0] === 'play'));
+    f.close();
+});
+
+test('重启回到上次的列和那张卡，不自动播放；上次在播放页就回到播放页', async () => {
+    const place = { mode: 'archive', stage: true, col: 'playlist:p', row: 2, path: '/m/9' };
+    const f = fixture({ setup: (w) => w.localStorage.setItem('musicArchivePlace', JSON.stringify(place)) });
+    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.view.debug().selected, 9);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(f.calls, [['stage']]); // 只进播放页，没有 load / play
+    f.close();
+});
+
+test('曲库晚到：等曲库到了再落位；换了选中会记下来，下次打开回到这里', async () => {
+    const tracks = Array.from({ length: 30 }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: 'A', album: 'B' }));
+    let store = null;
+    const f = fixture({
+        tracks: [],
+        setup: (w) => w.localStorage.setItem('musicArchivePlace', JSON.stringify({ mode: 'archive', stage: false, col: 'all', row: 0, path: '/m/12' }))
+    });
+    f.app.playlist = tracks;
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 12);
+    f.key('ArrowDown');
+    assert.equal(f.view.debug().selected, 13);
+    await new Promise((r) => setTimeout(r, 450));
+    store = JSON.parse(f.w.localStorage.getItem('musicArchivePlace'));
+    assert.equal(store.path, '/m/13');
+    assert.equal(store.col, 'all');
+    assert.equal(store.stage, false);
+    assert.ok(!f.calls.length);
+    f.close();
+});
+
+test('没有记录时：播放器晚一点恢复上次那首，选中直接落到那张卡', () => {
+    const tracks = Array.from({ length: 30 }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: 'A', album: 'B' }));
+    const f = fixture({ tracks: [] });
+    f.app.playlist = tracks;
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 0);
+    f.app.currentTrackIndex = 21; // 播放器 loadTrack(上次那首, 不播放)
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 21);
+    f.close();
+});
+
+test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页盖住时一帧不画', () => {
+    // 假场景：记录 step 次数；idle 由「距上次操作」决定，和真场景一致
+    let now = 0;
+    let lastInput = 0;
+    let steps = 0;
+    const canvas = { addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1, height: 1 }), style: {} };
+    const fake = {
+        create: () => ({
+            canvas, tier: { fps: 60, idleFps: 12 }, target: { lane: 0, row: 0 }, dirty: false,
+            step: () => { steps++; return { moving: false, idle: now - lastInput > 2000, animated: true }; },
+            select: () => { lastInput = now; }, jump() {}, resize() {}, setTheme() {}, setPlaying() {}, setHover() {}, setPointer() {},
+            touch: () => { lastInput = now; }, raise() {}, setLabeler() {}, setLabelMask() {}, refreshLabels() {}, dispose() {}, pick: () => null, debug: () => ({})
+        })
+    };
+    const queue = [];
+    const f = fixture({
+        setup: (w) => {
+            w.requestAnimationFrame = (cb) => { queue.push(cb); return queue.length; };
+            w.cancelAnimationFrame = () => {};
+            w.HTMLElement.prototype.insertBefore = function (n) { return n; };
+        }
+    });
+    // 换成假场景重新初始化
+    f.view.destroy();
+    f.app.archiveView = null;
+    const w = f.w;
+    w.document.getElementById('music-archive-view').innerHTML = '';
+    const view = w.MusicArchive.init(f.app, { sceneLib: fake, pinyinSrc: false });
+    const run = (ms) => {
+        const start = steps;
+        const end = now + ms;
+        while (now < end) {
+            now += 1000 / 60;
+            const cbs = queue.splice(0);
+            for (const cb of cbs) cb(now);
+        }
+        return steps - start;
+    };
+    w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    lastInput = now;
+    const active = run(1000);
+    run(1500);
+    const idle = run(2000) / 2;
+    w.document.body.classList.add('music-stage-active');
+    run(50);
+    const covered = run(2000);
+    assert.ok(active >= 55, 'active ' + active);
+    assert.ok(idle >= 11 && idle <= 13, 'idle ' + idle);
+    assert.equal(covered, 0);
+    view.destroy();
+    f.close();
+});
+
+test('降低动态读设置里的统一开关；开关不在时按系统设置挂 body 类', () => {
+    // 系统开着减少动态，但用户在设置里选了「关」：档案页照常动
+    let fire = null;
+    const f = fixture({
+        setup: (w) => {
+            w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+            w.MusicMotion = { reduced: () => false, onChange: (fn) => { fire = fn; return () => { fire = null; }; } };
+        }
+    });
+    assert.ok(!f.w.document.body.classList.contains('music-reduce-motion'));
+    assert.equal(typeof fire, 'function');
+    f.close();
+    assert.equal(fire, null); // 关窗时取消订阅
+    // 没有统一开关：跟随系统
+    const g = fixture({ setup: (w) => { w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} }); } });
+    assert.ok(g.w.document.body.classList.contains('music-reduce-motion'));
+    g.close();
+});
+
+test('有统一点播入口时走 playFromContext（按阵列顺序）；换排序时正在放的整库队列跟着换顺序', () => {
+    const got = [];
+    let owned = false;
+    const f = fixture({
+        n: 60,
+        setup: (w, app) => {
+            app.playFromContext = (list, index, opts) => { got.push(['ctx', list.length, index, opts.origin]); owned = true; app.currentTrackIndex = index; };
+            app.contextFrom = (o) => owned && o === 'archive';
+            app.reorderContext = (list, o) => { got.push(['reorder', list.length, o, list[0].path]); return true; };
+        }
+    });
+    f.key('ArrowDown');
+    f.key('Enter');
+    assert.deepEqual(got[0], ['ctx', 60, f.view.debug().selected, 'archive']);
+    f.view.setSort('added');
+    assert.deepEqual(got[1], ['reorder', 60, 'archive', '/m/59']); // 新的在前
     f.close();
 });
