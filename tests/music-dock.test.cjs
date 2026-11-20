@@ -389,3 +389,20 @@ test('window keymap: space without repeat, seek, track and volume keys, help, in
         window.close();
     }
 });
+
+test('clicking the capsule body enters the stage, and inside the stage opens the command palette', () => {
+    const { doc, app, dock, calls } = setup();
+    try {
+        const cap = doc.querySelector('.md-cap');
+        cap.click();
+        assert.equal(calls.pop(), 'enter');
+        app.isStageActive = true;
+        doc.body.classList.add('music-stage-active');
+        cap.click();
+        assert.ok(doc.querySelector('.md-cmd').classList.contains('md-open') || !doc.querySelector('.md-cmd').hidden);
+        assert.ok(doc.body.classList.contains('music-dock-cmd-open'));
+        assert.ok(!calls.includes('enter'));
+    } finally {
+        dock.destroy();
+    }
+});

@@ -185,7 +185,7 @@
         const currentTrack = () => app.playlist?.[app.currentTrackIndex] || null;
         const activeList = () => app.currentFilteredTracks || app.playlist || [];
         const playMode = () => app.playModes?.[app.currentPlayMode] || 'repeat';
-        const stageActive = () => app.isStageActive === true;
+        const stageActive = () => app.isStageActive === true || document.body.classList.contains('music-stage-active');
         const duration = () => Math.max(0, Number(app.lastKnownDuration) || 0);
         const currentTime = () => {
             if (state.dragging) return state.dragging.time;
@@ -513,7 +513,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
-            el.cap.title = inStage ? '点一下打开面板' : '点一下进入歌词舞台';
+            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K）' : '点一下进入歌词舞台';
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
         };
