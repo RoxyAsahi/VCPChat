@@ -379,3 +379,21 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-hud.has-lyrics .archive-powered { visibility: hidden; }
 .archive-hud.has-lyrics .archive-summary { width: 412px; flex-direction: column; align-items: flex-start; gap: 6px; }
 .archive-hud.has-lyrics .archive-summary > span:first-child { max-width: 100%; }
+
+/* ═════════ 流体小滴（底栏的流体标记模块在时） ═════════ */
+.archive-ticks.has-drop, .archive-list.has-drop .archive-list-viewport { --mfm-color: var(--ar-sel, var(--ar-ink)); }
+.archive-ticks .mfm, .archive-list-viewport .mfm { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.archive-ticks .mfm rect, .archive-list-viewport .mfm rect { fill: var(--mfm-color); }
+/* 小滴代替竖线游标；当前那格的刻度藏起来，其余按离当前位置的远近渐淡，远处略糊（不超过 .35px） */
+.archive-ticks.has-drop .archive-ticks-cursor { opacity: 0; }
+.archive-ticks.has-drop > span.on::before { opacity: 0; }
+.archive-ticks.has-drop > span[data-md-dist="1"]::before { opacity: .85; }
+.archive-ticks.has-drop > span[data-md-dist="2"]::before { opacity: .65; }
+.archive-ticks.has-drop > span[data-md-dist="3"]::before { opacity: .48; filter: blur(.2px); }
+.archive-ticks.has-drop > span[data-md-dist="4"]::before { opacity: .34; filter: blur(.35px); }
+.archive-list.has-drop .archive-list-letter[data-md-dist="1"] > span { opacity: .8; }
+.archive-list.has-drop .archive-list-letter[data-md-dist="2"] > span { opacity: .6; }
+.archive-list.has-drop .archive-list-letter[data-md-dist="3"] > span { opacity: .45; filter: blur(.2px); }
+.archive-list.has-drop .archive-list-letter[data-md-dist="4"] > span { opacity: .35; filter: blur(.35px); }
+/* 节能档不做模糊 */
+.archive-hud.low-power .archive-ticks.has-drop > span::before, .archive-hud.low-power .archive-list.has-drop .archive-list-letter > span { filter: none; }
