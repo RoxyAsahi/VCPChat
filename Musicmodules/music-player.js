@@ -870,10 +870,25 @@ function setupPlayer(app) {
         return activeList[(Math.max(position, 0) - 1 + activeList.length) % activeList.length] || null;
     };
 
-    app.prevTrack = () => {
+    // 「上一首」的通用规则：这首已经放了 3 秒以上，先回到这首开头；3 秒内再按一次才真的回上一首。
+    // 引擎还在加载、或者当前没有歌时，直接回上一首。
+    const PREV_RESTART_AFTER = 3;
+    app.playedSeconds = () => {
+        if (app.isTrackLoading || !app.playlist?.[app.currentTrackIndex]) return 0;
+        const base = Number(app.lastKnownCurrentTime) || 0;
+        const elapsed = app.isPlaying && app.lastStateUpdateTime ? (Date.now() - app.lastStateUpdateTime) / 1000 : 0;
+        return Math.max(0, base + elapsed);
+    };
+    app.prevRestarts = () => app.playedSeconds() > PREV_RESTART_AFTER;
+
+    app.prevTrack = ({ force = false } = {}) => {
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;
         const currentTrack = app.playlist[app.currentTrackIndex];
+        if (!force && app.prevRestarts()) {
+            app.seekTo(0);
+            return 'restart';
+        }
 
         // 先按播放历史回退（历史里的歌可能已被移出列表，跳过）。
         if (playHistory[playHistory.length - 1] === currentTrack) playHistory.pop();

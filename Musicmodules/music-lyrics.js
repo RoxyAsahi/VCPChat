@@ -197,8 +197,16 @@ function setupLyrics(app) {
         if (!lrcContent || typeof lrcContent !== 'string') return [];
 
         const lines = lrcContent.replace(/^\uFEFF/, '').split(/\r?\n/);
-        const timeRegex = /\[(\d{2}):(\d{2})[.:](\d{2,3})\]/g;
+        const timeRegex = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
         const rawEntries = [];
+        // 只有时间戳、没有字的行是「这一句到这里结束」（间奏开始），记下来用来算每句的结束时间。
+        const breaks = [];
+        const stamp = (match) => {
+            const minutes = parseInt(match[1], 10);
+            const seconds = parseInt(match[2], 10);
+            const milliseconds = parseInt(String(match[3] || '0').padEnd(3, '0'), 10);
+            return Number(((minutes * 60 + seconds + milliseconds / 1000) * app.lyricSpeedFactor + app.lyricOffset).toFixed(3));
+        };
 
         for (const line of lines) {
             const trimmedLine = line.trim();
@@ -207,18 +215,17 @@ function setupLyrics(app) {
             if (/^\[[a-zA-Z]+:/.test(trimmedLine)) continue;
 
             const text = trimmedLine.replace(timeRegex, '').trim();
-            if (!text || text === '//') continue;
-
             let match;
             timeRegex.lastIndex = 0;
-            while ((match = timeRegex.exec(trimmedLine)) !== null) {
-                const minutes = parseInt(match[1], 10);
-                const seconds = parseInt(match[2], 10);
-                const milliseconds = parseInt(match[3].padEnd(3, '0'), 10);
-                const time = (minutes * 60 + seconds + milliseconds / 1000) * app.lyricSpeedFactor + app.lyricOffset;
+            if (!text) {
+                while ((match = timeRegex.exec(trimmedLine)) !== null) breaks.push(stamp(match));
+                continue;
+            }
+            if (text === '//') continue;
 
+            while ((match = timeRegex.exec(trimmedLine)) !== null) {
                 rawEntries.push({
-                    time: Number(time.toFixed(3)),
+                    time: stamp(match),
                     text
                 });
             }
@@ -316,13 +323,41 @@ function setupLyrics(app) {
             }
         }
 
-        // 统一补全 endTime（方便后续计算）
+        // 统一补全 endTime（方便后续计算）：到下一句开始为止；中间有空的时间戳行（间奏开始）就在那里结束。
+        breaks.sort((a, b) => a - b);
+        let b = 0;
         for (let idx = 0; idx < resultLines.length; idx++) {
+            const line = resultLines[idx];
             const next = resultLines[idx + 1];
-            resultLines[idx].endTime = next ? next.time : resultLines[idx].time + 5.0;
+            let end = next ? next.time : line.time + 5.0;
+            while (b < breaks.length && breaks[b] <= line.time) b++;
+            if (b < breaks.length && breaks[b] < end) end = breaks[b];
+            line.endTime = end;
         }
 
         return resultLines;
+    };
+
+    // 当前该亮哪一句：最后一个开始时间不晚于 t 的句子（二分查找），没有就是 -1。
+    app.lyricIndexAt = (t, lines = app.currentLyrics) => {
+        let lo = 0, hi = (lines?.length || 0) - 1, at = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (lines[mid].time <= t) { at = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        return at;
+    };
+    // 间奏：上一句结束到下一句开始之间空了 5 秒以上（或者第一句前的前奏有 5 秒以上），
+    // 返回 { index: 间奏之后那一句, start, end, progress }，否则 null。
+    const INTERLUDE_MIN = 5;
+    app.lyricInterlude = (t, lines = app.currentLyrics) => {
+        if (!lines?.length) return null;
+        const at = app.lyricIndexAt(t, lines);
+        const next = lines[at + 1];
+        if (!next) return null;
+        const start = at < 0 ? 0 : Number(lines[at].endTime ?? next.time);
+        if (!(t >= start) || next.time - start < INTERLUDE_MIN) return null;
+        return { index: at + 1, start, end: next.time, progress: Math.min(1, Math.max(0, (t - start) / (next.time - start))) };
     };
 
     app.renderLyrics = () => {
@@ -368,9 +403,18 @@ function setupLyrics(app) {
                 li.appendChild(translationSpan);
             }
 
-            // 4. 点击跳转播放 (Seek-on-Click)
+            // 间奏等待点：放在间奏之后那一句的上方，间奏期间依次亮起
+            const gap = document.createElement('span');
+            gap.className = 'lyric-gap';
+            gap.setAttribute('aria-hidden', 'true');
+            gap.innerHTML = '<i></i><i></i><i></i>';
+            li.insertBefore(gap, li.firstChild);
+
+            // 4. 点击跳转播放 (Seek-on-Click)；正在选中歌词文字（想复制）时不跳
             li.onclick = (e) => {
                 e.stopPropagation();
+                const picked = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+                if (picked && !picked.isCollapsed && li.contains(picked.anchorNode)) return;
                 if (typeof line.time === 'number' && app.api?.seekMusic) {
                     if (app.seekTo) app.seekTo(line.time); else app.api.seekMusic(line.time);
                     if (app.lastKnownDuration > 0) {
@@ -417,14 +461,7 @@ function setupLyrics(app) {
         const elapsedTime = (Date.now() - app.lastStateUpdateTime) / 1000;
         const estimatedTime = app.lastKnownCurrentTime + elapsedTime;
 
-        let newLyricIndex = -1;
-        for (let i = 0; i < app.currentLyrics.length; i++) {
-            if (estimatedTime >= app.currentLyrics[i].time) {
-                newLyricIndex = i;
-            } else {
-                break;
-            }
-        }
+        let newLyricIndex = app.lyricIndexAt(estimatedTime);
 
         // 防回滚保护：当音乐正常向前播放时，如果只是一两帧估计时间的微小扰动，禁止行索引后退
         if (newLyricIndex < app.currentLyricIndex) {
@@ -516,6 +553,23 @@ function setupLyrics(app) {
                 }
             }
         }
+
+        // 间奏：下一句上方的三个点按间奏进度依次亮起，刚唱完的那句淡下去。只在进出间奏时改 class。
+        const gap = app.lyricInterlude(estimatedTime);
+        const gapIndex = gap ? gap.index : -1;
+        if (layout.gapIndex !== gapIndex || layout.gapHead !== allLi[0]) {
+            for (const li of layout.gapMarked || []) li.classList.remove('gap-on', 'gap-rest');
+            layout.gapMarked = [];
+            if (gap) {
+                const on = allLi[gap.index];
+                const rest = allLi[gap.index - 1];
+                if (on) { on.classList.add('gap-on'); layout.gapMarked.push(on); }
+                if (rest) { rest.classList.add('gap-rest'); layout.gapMarked.push(rest); }
+            }
+            layout.gapIndex = gapIndex;
+            layout.gapHead = allLi[0];
+        }
+        if (gap) allLi[gap.index]?.style.setProperty('--gap-progress', gap.progress.toFixed(3));
 
         // --- 弹性阻尼平滑滚动引擎 (Spring Lerp Physics) ---
         if (app.currentLyricIndex > -1 && !app.lyricUserScrolling) {
