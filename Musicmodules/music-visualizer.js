@@ -122,6 +122,7 @@ function setupVisualizer(app) {
                 return;
             }
             console.log('[Music.js] Connected to Rust Audio Engine via WebSocket.');
+            app.visualizerReconnectAttempts = 0;
             if (!app.animationFrameId) {
                 app.startVisualizerAnimation();
             }
@@ -200,10 +201,14 @@ function setupVisualizer(app) {
                 app.api?.publishMusicGroove?.({ playing: false });
             }
             if (app.visualizerDestroyed || app.visualizerReconnectTimer) return;
+            // 切歌、播完这些事件都走这条连接（引擎会攒着，连上再发），断开期间一首歌放完就会静音到重连为止。
+            // 所以先快后慢：0.5、1、2、4 秒，之后每 5 秒一次；连上就归零。
+            const attempt = app.visualizerReconnectAttempts || 0;
+            app.visualizerReconnectAttempts = attempt + 1;
             app.visualizerReconnectTimer = setTimeout(() => {
                 app.visualizerReconnectTimer = null;
                 app.connectWebSocket();
-            }, 5000);
+            }, Math.min(5000, 500 * 2 ** attempt));
         };
 
         socket.onerror = (err) => {
