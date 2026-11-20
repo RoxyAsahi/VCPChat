@@ -309,3 +309,29 @@ test('capsule volume slot: wheel adjusts, click and M mute and restore', () => {
         window.close();
     }
 });
+
+test('controls tab offers the window-wide reduce-motion setting and follows outside changes', () => {
+    const { window, doc, dock } = setup();
+    try {
+        const sets = [];
+        let pref = 'system';
+        window.MusicMotion = {
+            PREFERENCES: [{ value: 'system', label: '跟随系统' }, { value: 'on', label: '开' }, { value: 'off', label: '关' }],
+            get preference() { return pref; },
+            set(v) { sets.push(v); pref = v; },
+            reduced: () => pref === 'on'
+        };
+        dock.openPanel('控制');
+        const seg = () => doc.querySelector('.md-seg[data-act="motion"]');
+        assert.equal(seg().querySelector('button.md-on').textContent, '跟随系统');
+        seg().querySelectorAll('button')[1].click();
+        assert.deepEqual(sets, ['on']);
+        assert.equal(seg().querySelector('button.md-on').textContent, '开');
+        pref = 'off';
+        window.dispatchEvent(new window.Event('music-motion-change'));
+        assert.equal(seg().querySelector('button.md-on').textContent, '关');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});

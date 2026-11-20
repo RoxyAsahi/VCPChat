@@ -586,6 +586,7 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
   transition: color .12s;
 }
 #music-dock-root .md-seg.md-inline button { flex: 0 0 auto; width: 30px; padding: 0; }
+#music-dock-root .md-seg.md-inline.md-seg-tx button { width: auto; min-width: 30px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 #music-dock-root .md-seg-l button { border-radius: 8px; }
 #music-dock-root .md-seg button:hover,
 #music-dock-root .md-seg button.md-on { color: var(--md-t1); }
@@ -802,11 +803,10 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
   .md-pnl { right: var(--md-cap-right); bottom: 100px; margin-bottom: 0; max-width: calc(100vw - 2 * var(--md-cap-right)); max-height: calc(100vh - 150px); transform-origin: calc(100% - 28px) calc(100% + 60px); }
   .md-sheet { bottom: 100px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  #music-dock-root *,
-  #music-dock-root *::before,
-  #music-dock-root *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
-}
+/* 「降低动态」：body.music-reduce-motion 由音乐窗口的设置决定（跟随系统 / 开 / 关） */
+body.music-reduce-motion #music-dock-root *,
+body.music-reduce-motion #music-dock-root *::before,
+body.music-reduce-motion #music-dock-root *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 
 /* ───────── 命令面板（Ctrl+K） ───────── */
 .md-cmd { position: fixed; inset: 0; z-index: var(--mt-z-popover, 70); pointer-events: auto; }
@@ -1020,7 +1020,6 @@ body.music-dock-cmd-open .md-np { opacity: 0; pointer-events: none; }
 .mtst-bar { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2px; border-radius: 1px; background: rgba(var(--md-tp-rgb), .1); overflow: hidden; }
 .mtst-bar span { display: block; height: 100%; background: var(--md-accent); transform-origin: left center; transition: transform 200ms linear; }
 .mtst :focus-visible { outline: 2px solid var(--md-accent); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .mtst, .mtst.mtst-out { transition-duration: 1ms; transform: none; }
-  .mtst-progress .mtst-ic svg { animation: none; }
-}
+body.music-reduce-motion .mtst,
+body.music-reduce-motion .mtst.mtst-out { transition-duration: 1ms; transform: none; }
+body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }

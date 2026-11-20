@@ -213,7 +213,16 @@
                 ? { w: max, h: CAPSULE_H_EXPANDED }
                 : { w: Math.round(max * ratio), h: CAPSULE_H_COLLAPSED };
         };
-        const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
+        // 「降低动态」统一读音乐窗口的设置（跟随系统 / 开 / 关）；没有这个模块时才退回系统设置。
+        const systemReduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
+        const reducedMotion = {
+            get matches() { return global.MusicMotion ? global.MusicMotion.reduced() : Boolean(systemReduced?.matches); }
+        };
+        if (!global.MusicMotion && systemReduced) {
+            const syncBodyClass = () => document.body.classList.toggle('music-reduce-motion', systemReduced.matches);
+            syncBodyClass();
+            listen(systemReduced, 'change', syncBodyClass);
+        }
         const writeCapsuleSize = () => {
             el.cap.style.width = `${spring.w.v.toFixed(2)}px`;
             el.cap.style.height = `${spring.h.v.toFixed(2)}px`;
@@ -665,6 +674,14 @@
                 html += `<div class="md-nrow"><span class="md-lb">${light ? '日光素白' : '午夜墨染'}</span><span class="md-r">`
                     + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
                     + '</span></div>';
+                const motion = global.MusicMotion;
+                if (motion && Array.isArray(motion.PREFERENCES)) {
+                    const prefs = motion.PREFERENCES;
+                    const at = Math.max(0, prefs.findIndex((p) => p.value === motion.preference));
+                    html += `<div class="md-nrow"><span class="md-lb">降低动态</span><span class="md-r">`
+                        + segment('data-act="motion"', prefs.map((p) => ({ html: escapeHtml(p.label), aria: `降低动态：${p.label}` })), at, 'md-inline md-seg-tx')
+                        + '</span></div>';
+                }
                 if (typeof global.MusicIntro?.replay === 'function') {
                     html += `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`;
                 }
@@ -909,6 +926,13 @@
         listen(el.body, 'click', (event) => {
             const target = event.target.closest('[data-qact], [data-act], [data-q], .md-lyrl p, .md-seg button');
             if (!target) return;
+            const motionSeg = target.closest('.md-seg[data-act="motion"]');
+            if (motionSeg && target.matches('button[data-i]')) {
+                const pref = global.MusicMotion?.PREFERENCES?.[Number(target.dataset.i)];
+                if (pref) global.MusicMotion.set(pref.value);
+                renderBody();
+                return;
+            }
             const seg = target.closest('.md-seg[data-act="theme"]');
             if (seg && target.matches('button[data-i]')) {
                 const light = target.dataset.i === '0';
@@ -1114,6 +1138,7 @@
         });
         // 手动队列增删、排序后跟着重画。
         listen(document, 'music-queue-change', rerenderQueue);
+        listen(global, 'music-motion-change', () => { if (state.panelOpen && state.tab === '控制') renderBody(); });
         observe(app.playlistEl, { subtree: true, attributes: true, attributeFilter: ['class'] }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;
             const scroller = el.body.querySelector('.md-ql');
