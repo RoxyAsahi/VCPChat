@@ -94,11 +94,14 @@
     <button class="md-ib md-m md-hd-act" type="button" data-md="share" aria-label="分享当前音频" title="分享当前音频">${icon('share-2', 17)}</button>
   </div>
   <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body"></div></div>
+  <div class="md-sp" data-md="stagepage" hidden>
+    <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="sp-back" aria-label="返回控制页" title="返回">${icon('chevron-left', 18)}</button><b>舞台调制</b><span class="md-sp-cur" data-md="sp-cur"></span></div>
+    <div class="md-sp-sc" data-md="sp-scroll">
+      <div class="md-sp-sec"><div class="md-sp-k">当前舞台</div><div class="md-pop-g" role="listbox" aria-label="选择舞台" data-md="sp-modes"></div></div>
+    </div>
+  </div>
   <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist"></div></div>
 </section>
-<div class="md-pop" role="listbox" aria-label="选择舞台"><div class="md-pop-g"></div>
-  <button class="md-pop-more" type="button" data-md="pop-more"><span>更多舞台设置</span>${icon('chevron-right', 14)}</button>
-</div>
 <section class="md-sheet" role="dialog" aria-label="音效设置" aria-hidden="true">
   <div class="md-sheet-hd"><b>音效设置</b><button class="md-ib md-m" type="button" data-md="sheet-close" aria-label="关闭音效设置">${icon('x', 17)}</button></div>
   <div class="md-sheet-body"></div>
@@ -138,9 +141,11 @@
             share: $('[data-md="share"]'),
             body: $('[data-md="body"]'),
             tabs: $('[data-md="tabs"]'),
-            pop: $('.md-pop'),
-            popGrid: $('.md-pop-g'),
-            popMore: $('[data-md="pop-more"]'),
+            sp: $('[data-md="stagepage"]'),
+            spBack: $('[data-md="sp-back"]'),
+            spCur: $('[data-md="sp-cur"]'),
+            spScroll: $('[data-md="sp-scroll"]'),
+            spModes: $('[data-md="sp-modes"]'),
             sheet: $('.md-sheet'),
             sheetBody: $('.md-sheet-body'),
             sheetClose: $('[data-md="sheet-close"]')
@@ -151,7 +156,7 @@
             expanded: false,
             panelOpen: false,
             tab: '控制',
-            popOpen: false,
+            subOpen: false,
             sheetOpen: false,
             dragging: null,
             lastTimeText: '',
@@ -824,7 +829,7 @@
                     + '</div><div class="md-sep"></div>';
                 if (scene) {
                     html += `<div class="md-mode"><div class="md-rw"><button class="md-st" type="button" data-act="scene-step" data-d="-1" aria-label="上一个舞台">${icon('chevron-left', 14)}</button>`
-                        + `<button class="md-mid${state.popOpen ? ' md-open' : ''}" type="button" data-act="scene-pick" aria-haspopup="listbox" aria-expanded="${state.popOpen}"><span class="md-in"><span class="md-pic">${icon('clapperboard', 16)}</span>`
+                        + `<button class="md-mid" type="button" data-act="scene-pick" title="舞台调制：选舞台、演出阵列和模式调制"><span class="md-in"><span class="md-pic">${icon('clapperboard', 16)}</span>`
                         + `<span class="md-mid-tx"><span class="md-cap2">舞台</span><span class="md-val"><span>${escapeHtml(scene.label)}</span>${icon('chevron-down', 13)}</span></span></span></button>`
                         + `<button class="md-st" type="button" data-act="scene-step" data-d="1" aria-label="下一个舞台">${icon('chevron-right', 14)}</button></div></div>`;
                     html += '<div class="md-sep"></div>';
@@ -1127,9 +1132,7 @@
                 closePop();
                 renderBody();
             } else if (act === 'scene-pick') {
-                if (state.popOpen) closePop(); else openPop(target);
-                target.classList.toggle('md-open', state.popOpen);
-                target.setAttribute('aria-expanded', String(state.popOpen));
+                openStagePage();
             }
         });
 
@@ -1166,7 +1169,7 @@
         });
 
         function openPanel(tab) {
-            if (tab) state.tab = tab;
+            if (tab) { state.tab = tab; closePop(); }
             if (!state.panelOpen) {
                 state.panelOpen = true;
                 el.pnl.classList.add('md-open');
@@ -1193,38 +1196,58 @@
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
         listen(el.handle, 'click', togglePanel);
 
-        // 舞台选择弹层：三列缩略格。
-        function openPop(anchor) {
+        // ───────── 舞台调制子页 ─────────
+        // 控制页「舞台」那一行点进来：当前舞台（三列缩略格）+ 原来舞台控制舱里的演出阵列、模式调制、全局输出和「恢复出厂编排」。
+        // 控制舱的内容节点整块搬进这里（appendChild，不重建），舞台宿主绑在上面的事件和引用都还在；
+        // 原来的抽屉外壳和舞台右上角的入口按钮由 CSS 隐藏。
+        const stageSettingsBody = document.querySelector('#music-stage .music-stage-settings-body');
+        const stageSettingsFooter = document.querySelector('#music-stage .music-stage-settings-footer');
+        const stageSettingsHome = [stageSettingsBody, stageSettingsFooter].filter(Boolean)
+            .map((node) => ({ node, parent: node.parentNode, next: node.nextSibling }));
+        for (const { node } of stageSettingsHome) el.spScroll.appendChild(node);
+        if (stageSettingsHome.length) document.body.classList.add('music-dock-stage-settings');
+        cleanups.push(() => {
+            for (const { node, parent, next } of stageSettingsHome.slice().reverse()) {
+                if (parent?.isConnected) parent.insertBefore(node, next?.parentNode === parent ? next : null);
+            }
+            document.body.classList.remove('music-dock-stage-settings');
+        });
+        const renderStageModes = () => {
             const modes = stageModes();
             const current = currentStageMode();
-            el.popGrid.innerHTML = modes.map((mode) => (
+            el.spModes.innerHTML = modes.map((mode) => (
                 `<button class="md-op${mode === current ? ' md-on' : ''}" type="button" role="option" aria-selected="${mode === current}" data-mode="${mode.id}" title="${escapeHtml(mode.description || '')}">`
                 + `<span class="md-th">${icon('clapperboard', 16)}</span>${escapeHtml(mode.label)}</button>`
             )).join('');
-            const panelRect = el.pnl.getBoundingClientRect();
-            const anchorRect = anchor.getBoundingClientRect();
-            el.pop.style.left = `${Math.max(8, panelRect.left + 8)}px`;
-            el.pop.style.top = `${Math.max(8, Math.min(global.innerHeight - 330, anchorRect.bottom + 4))}px`;
-            el.pop.classList.add('md-open');
-            state.popOpen = true;
+            el.spCur.textContent = current ? current.label : '';
+        };
+        function openStagePage() {
+            if (!state.panelOpen) openPanel('控制');
+            renderStageModes();
+            state.subOpen = true;
+            el.sp.hidden = false;
+            el.pnl.classList.add('md-sub');
+            el.spScroll.scrollTop = 0;
+            el.pnl.scrollTop = 0;
+            el.spBack.focus({ preventScroll: true });
         }
         function closePop() {
-            if (!state.popOpen) return;
-            state.popOpen = false;
-            el.pop.classList.remove('md-open');
+            if (!state.subOpen) return;
+            state.subOpen = false;
+            el.sp.hidden = true;
+            el.pnl.classList.remove('md-sub');
         }
-        listen(el.popGrid, 'click', (event) => {
+        listen(el.spBack, 'click', () => {
+            closePop();
+            renderBody();
+            el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
+        });
+        listen(el.spModes, 'click', (event) => {
             const button = event.target.closest('[data-mode]');
             if (!button) return;
             app.stageHost?.setMode?.(button.dataset.mode);
-            closePop();
-            renderBody();
-        });
-        listen(el.popMore, 'click', () => {
-            closePop();
-            closePanel();
-            if (!stageActive()) app.stageHost?.enter?.();
-            document.querySelector('.music-stage-settings-toggle')?.click();
+            syncGlow();
+            renderStageModes();
         });
 
         // 完整音效设置：把原来的设置卡片整块搬进来，关掉时放回原处（事件和引用都不变）。
@@ -1253,15 +1276,15 @@
         listen(document, 'pointerdown', (event) => {
             const t = event.target;
             if (t.closest?.('.md-cmd')) return;
-            if (state.popOpen && !el.pop.contains(t) && !t.closest?.('[data-act="scene-pick"]')) closePop();
             if (state.sheetOpen && !el.sheet.contains(t) && !t.closest?.('[data-act="fx"], [data-q="fx"]')
                 && !t.closest?.('.custom-select-dropdown, select, option')) closeSheet();
-            if (state.panelOpen && !el.pnl.contains(t) && !el.hdl.contains(t) && !el.pop.contains(t)
+            if (state.panelOpen && !el.pnl.contains(t) && !el.hdl.contains(t)
+                && !t.closest?.('.custom-select-dropdown')
                 && !el.sheet.contains(t) && !el.quick.contains(t) && !t.closest?.('.md-cap')) closePanel();
         }, true);
         listen(document, 'keydown', (event) => {
             if (event.key !== 'Escape' || event.target?.closest?.('.md-cmd') || palette?.isOpen) return;
-            if (state.popOpen) { closePop(); renderBody(); event.stopPropagation(); }
+            if (state.subOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
             else if (state.sheetOpen) { closeSheet(); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
@@ -1510,6 +1533,8 @@
             closeSheet,
             openPalette: (text) => palette?.open(text),
             openShortcuts: () => openHelp(),
+            openStageSettings: () => openStagePage(),
+            get stageSettingsOpen() { return state.subOpen; },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
