@@ -927,6 +927,14 @@
         const k = gateOf(layout).keepOut;
         return !!k && p[0] > k.x0 && p[0] < k.x1 && p[2] > k.z0 && p[2] < k.z1 && p[1] < k.y1 + above;
     };
+    // The space in front of the main lyric screen stays empty: nothing may stand
+    // between it and the cameras that look at it, from any side.
+    const screenKeep = layout => {
+        const sc = (layout.SCREENS || []).find(s => s.primary);
+        if (!sc) return null;
+        const w = Number(sc.size?.[0] ?? sc.width ?? 18), h = Number(sc.size?.[1] ?? sc.height ?? 10), c = sc.center;
+        return { min: [c[0] - w / 2 - 4, c[1] - h / 2 - 9, c[2] - 0.3], max: [c[0] + w / 2 + 4, c[1] + h / 2 + 5, c[2] + 40] };
+    };
     const chooseSlots = (layout, max, random, hot = []) => {
         const all = [];
         (layout.facades || []).forEach(facade => (facade.slots || []).forEach(slot => {
@@ -1007,6 +1015,14 @@
         const nRoof = Math.round(count * 0.35);
         roof.sort((a, b) => b.score - a.score).forEach(x => { if (picked.length < nRoof && far(x.p, 34)) picked.push({ ...x, roof: true }); });
         face.sort((a, b) => b.score - a.score).forEach(x => { if (picked.length < count && far(x.p, 20)) picked.push({ ...x, roof: false }); });
+        const keep = screenKeep(layout);
+        const clear = a => {
+            if (!keep) return true;
+            const lo = a.bottom - (a.roof ? 4.8 : 3.4), hi = a.bottom + a.height, e = a.width / 2 + 0.5;
+            const box = { min: [a.centre[0] - e, lo, a.centre[2] - e], max: [a.centre[0] + e, hi, a.centre[2] + e] };
+            const foot = { min: [Math.min(a.foot[0], a.centre[0]) - 0.5, lo, Math.min(a.foot[2], a.centre[2]) - 0.5], max: [Math.max(a.foot[0], a.centre[0]) + 0.5, lo + 1, Math.max(a.foot[2], a.centre[2]) + 0.5] };
+            return !overlaps(box, keep, 0) && !overlaps(foot, keep, 0);
+        };
         return picked.map((x, i) => {
             const r0 = norm(cross([0, 1, 0], x.n));
             if (x.roof) {
@@ -1022,7 +1038,7 @@
             const out = blade ? width / 2 + 1.6 : 4.5 + random() * 1.5;
             const base = add(x.p, x.n, out);
             return { roof: false, blade, foot: x.p, wall: x.n, normal, right: norm(cross([0, 1, 0], normal)), centre: [base[0], bottom + height / 2, base[2]], width, height, bottom, copy: i, seed: random() };
-        });
+        }).filter(clear);
     };
 
     // ---------- the module ---------------------------------------------------
@@ -1054,6 +1070,7 @@
             const w = 3.2 + random() * 2.2, h = w * (0.5 + random() * 0.15);
             adScreens.push({ id: `ad${adScreens.length}`, center: add(vec(slot.pos), vec(slot.normal), 0.5), normal: slot.normal, size: [w, h] });
         }
+        const keepBox = screenKeep(layout);
         // The gate's name board: four characters of neon in the frame the alley builds.
         const gate = gateOf(layout);
         const plaque = gate.plaque || { center: [gate.x, 5.05, gate.z + 0.26], width: 2.6, height: 0.9 };
@@ -1082,7 +1099,7 @@
                 if (bottom < 2.9) spec.rise = (spec.rise || 0) + 2.9 - bottom;
             }
             return { ...spec, slot };
-        }).filter((spec, i, all) => {
+        }).filter(spec => !keepBox || !overlaps(boxOf(spec), keepBox, 0)).filter((spec, i, all) => {
             // Signs must not run through one another: keep the earlier (better
             // placed) of any two whose boxes meet.
             const box = boxOf(spec);
@@ -1386,12 +1403,12 @@
         holoAds.forEach((a, i) => {
             const n = a.normal, r = a.right;
             const P = (sx, sy) => add(add(a.centre, r, sx * a.width / 2), UP, sy * a.height / 2);
-            const inf = [(lyricBanners.has(a) ? 20 : 0) + i % 4, a.seed, a.width, a.height];
+            const inf = [(lyricBanners.has(a) ? 20 : 0) + i % 4, a.seed + (i % 2) * 10, a.width, a.height];
             ab.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), n, [0, 0, 1, 1], inf);
             // The light fans up from the lens to the sheet's foot.
             const lens = add(a.centre, UP, -a.height / 2 - (a.roof ? 4 : 2.6));
             const fan = (sx, dir) => add(add(a.centre, dir, sx * a.width / 2), UP, -a.height / 2);
-            const beamInf = [10 + (i % 4), a.seed, a.width, a.height];
+            const beamInf = [10 + (i % 4), a.seed + (i % 2) * 10, a.width, a.height];
             [r, n].forEach(dir => {
                 const e = 0.12;
                 ab.quad(add(lens, dir, -e), add(lens, dir, e), fan(1, dir), fan(-1, dir), cross(dir, UP), [0, 0, 1, 1], beamInf);
@@ -1577,7 +1594,7 @@
                 float h(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
                 void main(){
                     float role=floor(vInfo.x/10.0);float column=mod(vInfo.x,10.0);float seed=vInfo.y;vec2 size=vInfo.zw;
-                    float pinkish=step(0.55,fract(seed*7.31));
+                    float pinkish=step(5.0,seed);
                     vec3 main=mix(cyan,magenta,pinkish),other=mix(magenta,cyan,pinkish);
                     float win=floor(time*12.0);
                     // Now and then the feed drops a frame: the sheet blinks out or slips.
@@ -1833,7 +1850,7 @@
             holoAdMat.uniforms.time.value = still ? 3.3 : local % 1000;
             // Out of sight of the main screen, the lyric banners take the line up.
             const shotId = String(state.shot || '');
-            const mainInShot = !shotId || /^(street|screen|iso|diorama)/.test(shotId);
+            const mainInShot = !shotId || /^(street|screen|iso|diorama|facade|crane|hero)/.test(shotId);
             const ha = holoAdMat.uniforms;
             const wantLyric = !mainInShot && lyric?.line ? 1 : 0;
             // A cut switches at once; otherwise it fades.
@@ -1863,17 +1880,19 @@
                     halo: false });
             });
             // The nearer banners wash the walls round them in their cold light.
-            holoAds.forEach(a => {
-                const c = (a.seed * 7.31) % 1 >= 0.55 ? [1, 0.3, 0.8] : [0.25, 0.85, 1];
-                out.push({ position: add(a.centre, UP, -a.height * 0.25), color: c, intensity: holoAdMat.uniforms.level.value * (a.roof ? 2.2 : 1.5),
-                    radius: a.height * 0.9, flicker: 1, flickerValue: 1, halo: false });
+            // Kept low and short so the walls keep their own colour; cyan and magenta take turns.
+            holoAds.forEach((a, i) => {
+                const c = i % 2 ? [1, 0.3, 0.8] : [0.25, 0.85, 1];
+                out.push({ position: add(a.centre, UP, -a.height * 0.25), color: c, intensity: holoAdMat.uniforms.level.value * (a.roof ? 0.9 : 0.6),
+                    radius: Math.min(14, a.height * 0.45), flicker: 1, flickerValue: 1, halo: false });
             });
             const ranked = lightSources.map(l => ({ l, v: l.base * (levels[l.spec.index] || 0) })).sort((a, b) => b.v - a.v);
             for (const { l } of ranked) {
                 if (out.length >= 32) break;
                 const k = levels[l.spec.index] || 0;
-                out.push({ position: l.position, color: l.color, intensity: k * Math.min(6, Math.sqrt(l.spec.width * l.spec.height)) * (l.spec.style === 'box' ? 0.6 : 1),
-                    radius: Math.max(l.spec.width, l.spec.height) * 1.8 + 2, flicker: k / Math.max(0.01, night), flickerValue: 1 });
+                // Enough to colour the wall round a sign, not the whole face of the block.
+                out.push({ position: l.position, color: l.color, intensity: k * Math.min(4, Math.sqrt(l.spec.width * l.spec.height)) * (l.spec.style === 'box' ? 0.4 : 0.6),
+                    radius: Math.min(10, Math.max(l.spec.width, l.spec.height) * 1.2 + 1.5), flicker: k / Math.max(0.01, night), flickerValue: 1 });
             }
             return out;
         };
