@@ -674,6 +674,14 @@
             const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + state.sig;
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
+            // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
+            // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
+            const prevPlaying = state.playingIndex;
+            state.playingIndex = app.currentTrackIndex;
+            if (state.lyricsOn && prevPlaying !== undefined && prevPlaying !== app.currentTrackIndex
+                && selectedIndex() === prevPlaying && tracks()[app.currentTrackIndex]) {
+                goToPlaying();
+            }
             // 启动时播放器晚一点才恢复上次那首：用户还没动过，就直接落到那张卡（不飞过去）
             if (!pendingPlace && followUntil.t && performance.now() < followUntil.t && selectedIndex() !== app.currentTrackIndex) {
                 const at0 = Model.locate(state.columns, app.currentTrackIndex, 0);

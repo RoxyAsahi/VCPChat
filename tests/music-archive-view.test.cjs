@@ -1336,3 +1336,34 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     assert.equal(Math.round(parseFloat(hud.style.height)), 667);
     f.close();
 });
+
+test('跟着在听：选中停在正在放的那首时，播放器换到下一首，选中和歌词跟过去；在看别的歌时不动', async () => {
+    const f = fixture({
+        setup: (w, app) => {
+            Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
+            app.currentLyrics = [{ time: 0, text: 'a' }, { time: 5, text: 'b' }];
+            app.isPlaying = true;
+            app.stageHost = { active: false, enter() {} };
+        }
+    });
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    const el = f.w.document.querySelector('.archive-lyrics');
+    f.key('Enter');
+    const first = f.view.debug().selected;
+    assert.equal(first, f.app.currentTrackIndex);
+    assert.equal(el.hidden, false);
+    // 播放器自己接到下一首
+    const next = (first + 1) % f.app.playlist.length;
+    f.app.currentTrackIndex = next;
+    await wait(1150);
+    assert.equal(f.view.debug().selected, next, '选中跟到新的这首');
+    assert.equal(el.hidden, false, '歌词面板留着');
+    // 去看别的歌：歌词收起，之后再换歌也不把选中拽回去
+    f.key('ArrowDown'); f.key('ArrowDown');
+    const browsing = f.view.debug().selected;
+    assert.equal(el.hidden, true);
+    f.app.currentTrackIndex = (next + 5) % f.app.playlist.length;
+    await wait(1150);
+    assert.equal(f.view.debug().selected, browsing);
+    f.close();
+});
