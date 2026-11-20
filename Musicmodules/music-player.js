@@ -250,8 +250,15 @@ function setupPlayer(app) {
             return;
         }
 
-        app.currentTrackIndex = trackIndex;
         const track = app.playlist[trackIndex];
+        if (!track) {
+            // 上下文里的歌已经不在曲库了（被删、或者曲库刚重载）：不去加载第 -1 首。
+            console.warn('[Music.js] loadTrack: no track at index', trackIndex);
+            if (app.playIntent) app.applyPlayingUi(false);
+            app.playIntent = false;
+            return;
+        }
+        app.currentTrackIndex = trackIndex;
         app.pendingTrackPath = track.path;
         try { localStorage.setItem('musicLastTrackPath', track.path); } catch (error) {}
         scheduleSessionSave();
@@ -460,12 +467,61 @@ function setupPlayer(app) {
     app.queueAnchor = null; // { from: 上下文里最后放的那首, playing: 正在放的手动曲目 }
     app.preloadIssuedFor = null;
 
+    // 曲库数组被整个换掉（重新扫描文件夹、删歌、云端导入）时，新数组里是同路径的新对象。
+    // 上下文列表、手动队列、播放历史、随机顺序都按对象身份找歌，留着旧对象就会
+    // 「下一首」去加载第 -1 首、队列被当成全部失效清空。这里按路径换成新对象，曲库里没有了的去掉。
+    // 每次用到这些列表前调一次；曲库数组没换就直接返回。
+    let reconciledLibrary = app.playlist;
+    let reconciledLength = Array.isArray(app.playlist) ? app.playlist.length : 0;
+    const reconcileLibrary = () => {
+        const library = app.playlist;
+        if (!Array.isArray(library) || (reconciledLibrary === library && reconciledLength === library.length)) return;
+        // 同一个数组里删了或插回一首（右键移出曲库、撤销）：按下标存的随机顺序全错位了，重洗。
+        if (reconciledLibrary === library && app.lastShuffleList === library) { app.shuffleQueue = []; app.lastShuffleList = null; }
+        reconciledLibrary = library;
+        reconciledLength = library.length;
+        const live = new Set(library);
+        const stale = (t) => Boolean(t) && !live.has(t);
+        const ctx = app.currentFilteredTracks;
+        const anchor = app.queueAnchor;
+        const shuffleList = app.lastShuffleList;
+        const needed = (Array.isArray(ctx) && ctx.some(stale)) || app.manualQueue.some(stale) || playHistory.some(stale)
+            || Boolean(anchor && (stale(anchor.from) || stale(anchor.playing)))
+            || (Array.isArray(shuffleList) && shuffleList !== library && shuffleList !== ctx);
+        if (!needed) return;
+        const map = byPathMap();
+        const swap = (t) => (!t ? null : live.has(t) ? t : lookup(map, t.path));
+        if (Array.isArray(ctx)) {
+            const list = ctx.map(swap).filter(Boolean);
+            app.currentFilteredTracks = list.length ? list : null;
+            if (app.playbackContext && app.playbackContext.list === ctx) app.playbackContext.list = app.currentFilteredTracks;
+        }
+        const active = app.currentFilteredTracks || library;
+        // 随机顺序存的是上下文里的下标：歌数没变就沿用，变了就让它重洗。
+        if (Array.isArray(shuffleList) && shuffleList !== active) {
+            if (shuffleList.length === active.length) app.lastShuffleList = active;
+            else { app.shuffleQueue = []; app.lastShuffleList = null; }
+        }
+        app.manualQueue = app.manualQueue.map(swap).filter(Boolean);
+        const history = playHistory.map(swap).filter(Boolean);
+        playHistory.length = 0;
+        playHistory.push(...history);
+        if (anchor) {
+            const from = swap(anchor.from);
+            const playing = swap(anchor.playing);
+            app.queueAnchor = from && playing ? { from, playing } : null;
+        }
+        announceQueue();
+    };
+    app.reconcileLibrary = reconcileLibrary;
+
     const contextCurrent = () => {
         const current = app.playlist[app.currentTrackIndex];
         const anchor = app.queueAnchor;
         return anchor && anchor.playing === current && app.playlist.includes(anchor.from) ? anchor.from : current;
     };
     const manualHead = () => {
+        reconcileLibrary();
         while (app.manualQueue.length && !app.playlist.includes(app.manualQueue[0])) app.manualQueue.shift();
         return app.playModes?.[app.currentPlayMode] === 'repeat-one' ? null : (app.manualQueue[0] || null);
     };
@@ -485,12 +541,22 @@ function setupPlayer(app) {
         try { document.dispatchEvent(new CustomEvent('music-queue-change')); } catch (error) { /* 没有 DOM 时忽略 */ }
     };
     // 引擎的预载槽已经按旧队列填过了，就按新队列重填一次。
+    // 播放模式、曲库或歌单变了也要重填：引擎是自己无缝切进预载的那首的，界面来不及拦。
+    // 新队列里没有该预载的（比如只剩一首）就把旧的预载撤掉，免得接着放一首已经移除的歌。
     const refreshPreload = () => {
         const current = app.playlist[app.currentTrackIndex];
         if (!current || app.preloadIssuedFor !== current.path) return;
         if (app.isPreloadingNext) { setTimeout(refreshPreload, 600); return; }
-        app.handleNeedsPreload();
+        // 引擎的预载槽一旦解码好就不再接受新的 queue_next，所以先撤掉旧的再重填。
+        app.preloadIssuedFor = null;
+        Promise.resolve(app.api?.cancelMusicPreload?.())
+            .then(() => {
+                if (app.playlist[app.currentTrackIndex] !== current) return; // 这期间已经换歌，换歌自己会重新预载
+                return app.handleNeedsPreload();
+            })
+            .catch((error) => console.warn('[Music.js] Refreshing preload failed:', error?.message || error));
     };
+    app.refreshPreload = refreshPreload;
     const queueChanged = () => { announceQueue(); refreshPreload(); };
     const resolveTrack = (ref) => {
         if (ref == null) return null;
@@ -845,6 +911,7 @@ function setupPlayer(app) {
 
     // 接下来会放什么：手动层 + 上下文层的真实顺序（随机时就是洗好的顺序）。
     app.getUpNext = (limit = 200) => {
+        reconcileLibrary();
         const activeList = app.currentFilteredTracks || app.playlist;
         const mode = app.playModes[app.currentPlayMode];
         manualHead();
@@ -870,6 +937,7 @@ function setupPlayer(app) {
 
     // 「上一首」会放哪一首，但不动播放历史（底栏悬停标题区时预览用）。
     app.peekPrevious = () => {
+        reconcileLibrary();
         const activeList = app.currentFilteredTracks || app.playlist;
         if (!activeList.length) return null;
         const currentTrack = app.playlist[app.currentTrackIndex];
@@ -894,6 +962,7 @@ function setupPlayer(app) {
     app.prevRestarts = () => app.playedSeconds() > PREV_RESTART_AFTER;
 
     app.prevTrack = ({ force = false } = {}) => {
+        reconcileLibrary();
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;
         const currentTrack = app.playlist[app.currentTrackIndex];
@@ -920,6 +989,7 @@ function setupPlayer(app) {
     };
 
     app.nextTrack = () => {
+        reconcileLibrary();
         const activeList = app.currentFilteredTracks || app.playlist;
         if (app.lastShuffleList !== activeList) {
             app.shuffleQueue = [];
@@ -982,6 +1052,7 @@ function setupPlayer(app) {
 
     app.handleNeedsPreload = async () => {
         if (app.isPreloadingNext) return;
+        reconcileLibrary();
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;
 
@@ -1024,7 +1095,9 @@ function setupPlayer(app) {
             } finally {
                 setTimeout(() => { app.isPreloadingNext = false; }, 500);
             }
+            return true;
         }
+        return false;
     };
 
     app.pollState = async () => {
@@ -1158,7 +1231,18 @@ function setupPlayer(app) {
     };
 
     const syncTrackIndexByPath = app.syncTrackIndexByPath;
+    const sameFile = (a, b) => {
+        const x = app.normalizePathForCompare(a), y = app.normalizePathForCompare(b);
+        return Boolean(x && y) && (x === y || x.split('/').pop() === y.split('/').pop());
+    };
     app.syncTrackIndexByPath = (path) => {
+        // 引擎无缝切进了一首曲库里已经没有的歌（预载之后被移除，重填又没赶上）：
+        // 界面没法显示它，直接按现在的队列切到下一首，不让声音和界面对不上。
+        if (path && !app.playlist.some(t => sameFile(t.path, path))) {
+            console.warn('[Music.js] Engine switched to a track no longer in the library, moving on:', path);
+            app.nextTrack();
+            return;
+        }
         // 无缝切进了队列里的下一首：在当前索引变之前把它从手动层取出来，记下上下文位置。
         const queued = manualHead();
         if (queued && path && app.normalizePathForCompare(queued.path) === app.normalizePathForCompare(path)) beginManual(queued);

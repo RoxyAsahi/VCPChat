@@ -45,6 +45,9 @@ module.exports = {
         onMusicSetTrack: on('music-set-track'),
         onMusicControl: on('music-control'),
         onAudioEngineError: on('audio-engine-error'),
+        // 音频引擎实际监听的地址与状态（端口启动时探测，可能不是默认的 63789）
+        getAudioEngineEndpoint: invoke('music-get-audio-engine-endpoint'),
+        onAudioEngineStatus: on('audio-engine-status'),
         // 桌面小组件 → 音乐窗口的遥控指令（上一首/下一首等）
         sendMusicRemoteCommand: send('music-remote-command', 'command').roles('desktop'),
 

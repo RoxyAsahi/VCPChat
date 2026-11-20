@@ -24,6 +24,7 @@
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
+        <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
         <div class="archive-hud" data-ref="hud">
             <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button></header>
             <nav class="archive-nav">
@@ -40,14 +41,14 @@
                 <div class="archive-rule"><i></i></div>
                 <div class="archive-summary"><span data-ref="fmeta"></span><span data-ref="fspec"></span></div>
                 <div class="archive-callout-acts"><button type="button" class="archive-access" data-act="access" data-ref="access" title="播放并进入歌词舞台（回车）">播放 <span aria-hidden="true">→</span></button><button type="button" class="archive-more" data-act="open-detail">详情 <span aria-hidden="true">↗</span></button></div>
-                <div class="archive-cover" data-ref="cover" aria-hidden="true"></div>
+                <div class="archive-cover" data-ref="cover" data-act="open-detail" title="查看曲目详情" aria-hidden="true"></div>
             </div>
             <section class="archive-detail" data-ref="detail" role="dialog" aria-label="曲目详情" aria-hidden="true" inert>
                 <button type="button" class="archive-detail-back" data-act="detail-close">← 返回曲库 <span class="archive-key">Esc</span></button>
                 <div class="archive-detail-card">
                     <div class="archive-detail-head"><b data-ref="dNo"></b><span data-ref="dWhere"></span><span data-ref="dSpec" class="archive-detail-spec"></span></div>
                     <div class="archive-detail-album" data-ref="dAlbum"></div>
-                    <h2 data-ref="dTitle"></h2>
+                    <div class="archive-detail-titlerow"><h2 data-ref="dTitle"></h2><button type="button" class="archive-detail-like" data-act="d-like" data-ref="dLike" aria-pressed="false" title="喜欢" aria-label="喜欢" hidden><span aria-hidden="true">♡</span></button></div>
                     <div class="archive-detail-artist" data-ref="dArtist"></div>
                     <div class="archive-detail-actions">
                         <button type="button" class="is-primary" data-act="d-play" data-ref="dPlay"><i aria-hidden="true">▶</i><span data-ref="dPlayText">播放</span></button>
@@ -598,6 +599,7 @@
             state.lane = lane;
             state.row = row;
             emitMotion(dLane, dRow);
+            refs.tip.classList.remove('on');
             collapse();
             const col = column();
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
@@ -715,6 +717,15 @@
             refs.dPath.textContent = remote ? '云端曲目' : String(t.path || '—');
             refs.dPath.title = String(t.path || '');
             refs.dArtistBtn.disabled = !t.artist;
+            const canLike = typeof app.toggleLike === 'function' && typeof app.isLiked === 'function';
+            refs.dLike.hidden = !canLike;
+            if (canLike) {
+                const liked = Boolean(app.isLiked(t));
+                refs.dLike.setAttribute('aria-pressed', String(liked));
+                refs.dLike.title = liked ? '取消喜欢' : '喜欢';
+                refs.dLike.setAttribute('aria-label', refs.dLike.title);
+                refs.dLike.firstChild.textContent = liked ? '♥' : '♡';
+            }
             // 没有的信息整格不显示，不放占位横线
             for (const k of ['dAlbum2', 'dDur', 'dFmt']) refs[k].parentElement.hidden = refs[k].textContent === '—';
             const playingThis = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
@@ -749,8 +760,10 @@
                 root.classList.add('is-detail');
                 refs.detail.removeAttribute('inert');
                 refs.detail.setAttribute('aria-hidden', 'false');
+                syncDetailRoom();
                 state.scene?.setDetail(true);
                 state.scene?.setHover(null);
+                refs.tip.classList.remove('on');
             }
             renderDetail();
             refs.dPlay.focus({ preventScroll: true });
@@ -1225,6 +1238,7 @@
             updatePlaying(true);
         };
 
+        const NARROW_W = 1300, MID_W = 1720;
         const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
         const resize = () => {
             const w = root.clientWidth || global.innerWidth;
@@ -1235,14 +1249,23 @@
             refs.hud.style.transform = `scale(${sc})`;
             refs.hud.classList.toggle('short', h / sc < 900);
             const wasNarrow = refs.hud.classList.contains('narrow');
-            refs.hud.classList.toggle('narrow', w / sc < 1500);
+            // 窄：只留阵列和说明块；中等（笔记本常见的 1280×800 就在这档）：目录照常开着，说明块挪到目录右边
+            refs.hud.classList.toggle('narrow', w / sc < NARROW_W);
+            refs.hud.classList.toggle('mid', w / sc >= NARROW_W && w / sc < MID_W);
             if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
+            syncDetailRoom(sc);
             syncLyrics();
             updateLabelMask();
             kick();
+        };
+        // 资料卡左边那块空地给场景，取出的卡整张放在里面（offsetLeft 不受滑入动画的位移影响）
+        const syncDetailRoom = (sc = hudScale(root.clientHeight || global.innerHeight)) => {
+            const card = refs.detail?.querySelector('.archive-detail-card');
+            if (!card || !state.scene?.setDetailRoom) return;
+            state.scene.setDetailRoom(card.offsetLeft * sc);
         };
         // 说明块（档案号、曲名、ACCESS FILE）下面的卡不印标题
         const updateLabelMask = () => {
@@ -1285,6 +1308,17 @@
         let pendingPick = null;
         let pickRaf = 0;
         let turning = null;
+        /* 鼠标指着的卡（不是选中那张）：在指针旁边写出曲名和歌手，远处的卡也能认出是哪首 */
+        const showTip = (c, at) => {
+            const index = c && !detailOpen && !(c.lane === state.lane && c.row === state.row) ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
+            const t = index >= 0 ? tracks()[index] : null;
+            if (!t || !at) { refs.tip.classList.remove('on'); return; }
+            refs.tip.firstChild.textContent = Model.stripExtension(t.title) || '未知标题';
+            refs.tip.lastChild.textContent = [t.artist, fmtDur(trackDuration(t))].filter(Boolean).join(' · ');
+            const base = root.getBoundingClientRect();
+            refs.tip.style.transform = `translate(${Math.round(at.x - base.left + 16)}px, ${Math.round(at.y - base.top + 18)}px)`;
+            refs.tip.classList.add('on');
+        };
         let detailMiss = false;
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
@@ -1312,12 +1346,13 @@
                         if (!pendingPick || !state.scene) return;
                         const c = state.scene.pick(pendingPick.x, pendingPick.y, pendingPick.rect);
                         state.scene.setHover(c);
+                        showTip(c, pendingPick);
                         canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : '';
                     });
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
@@ -1465,6 +1500,12 @@
                         break;
                     }
                     case 'detail-close': closeDetail(); break;
+                    case 'd-like': {
+                        const t = selectedTrack();
+                        if (t && typeof app.toggleLike === 'function') app.toggleLike(t);
+                        renderDetail();
+                        break;
+                    }
                     case 'd-play': {
                         const index = selectedIndex();
                         if (index < 0) break;
@@ -1589,6 +1630,8 @@
         global.addEventListener('resize', onResize);
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
+        const onLikeChange = () => { if (detailOpen) renderDetail(); };
+        document.addEventListener('music-like-change', onLikeChange);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
         const bodyObserver = new MutationObserver(() => {
@@ -1653,6 +1696,7 @@
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
+            document.removeEventListener('music-like-change', onLikeChange);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
             if (typeof unsubscribeQuality === 'function') unsubscribeQuality();

@@ -1337,6 +1337,15 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     f.close();
 });
 
+test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检索、歌词这些入口不藏', () => {
+    const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1280 }); Object.defineProperty(w, 'innerHeight', { value: 800 }); } });
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.ok(hud.classList.contains('mid'));
+    assert.ok(!hud.classList.contains('narrow'));
+    assert.ok(hud.classList.contains('list-open'), '目录默认开着');
+    f.close();
+});
+
 test('跟着在听：选中停在正在放的那首时，播放器换到下一首，选中和歌词跟过去；在看别的歌时不动', async () => {
     const f = fixture({
         setup: (w, app) => {
@@ -1402,6 +1411,30 @@ test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡�
     f.view.openDetail();
     f.key('ArrowRight');
     assert.equal(f.view.detailOpen, false, '换分组时把卡放回');
+    f.close();
+});
+
+test('取出详情里的「喜欢」：有喜欢功能才显示，点了切换状态，外面改了也跟着变', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    f.view.openDetail();
+    const like = doc.querySelector('[data-act="d-like"]');
+    f.view.closeDetail();
+    f.view.openDetail();
+    assert.ok(like.hidden, '没有 app.toggleLike 时不显示');
+    const liked = new Set();
+    f.app.isLiked = (t) => liked.has(t.path);
+    f.app.toggleLike = (t) => { if (liked.has(t.path)) liked.delete(t.path); else liked.add(t.path); };
+    f.view.closeDetail();
+    f.view.openDetail();
+    assert.equal(like.hidden, false);
+    assert.equal(like.getAttribute('aria-pressed'), 'false');
+    like.click();
+    assert.equal(like.getAttribute('aria-pressed'), 'true');
+    assert.equal(like.title, '取消喜欢');
+    liked.clear();
+    doc.dispatchEvent(new f.w.Event('music-like-change'));
+    assert.equal(like.getAttribute('aria-pressed'), 'false', '别处取消喜欢后资料卡跟着变');
     f.close();
 });
 

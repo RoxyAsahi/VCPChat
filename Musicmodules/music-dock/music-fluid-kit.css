@@ -1,0 +1,236 @@
+/* ───────── 流体玻璃：手碰得到的控件共用的一套外观 ─────────
+ * 结构（档案、列表、细线、黑字）不动；只有弹出来给手用的东西换成这层材质：
+ * 奶白（深色下烟灰）的厚玻璃，颜色是从里面透出来的一团光，四周发柔光而不投硬影，没有描边。
+ * 长出来的动作在 music-fluid-kit.js（MusicFluid.bud）。 */
+:root {
+  --mf-fill: rgba(44, 44, 49, .93);
+  --mf-ink: #f1f0ee;
+  --mf-ink2: rgba(241, 240, 238, .58);
+  --mf-hover: rgba(255, 255, 255, .08);
+  --mf-rule: rgba(255, 255, 255, .08);
+  --mf-tint: var(--ar-accent, #d9773f);
+  --mf-glow: inset 0 0 0 .5px rgba(255, 255, 255, .07), 0 24px 52px -20px rgba(0, 0, 0, .6), 0 0 30px -8px rgba(0, 0, 0, .4);
+  --mf-radius: 18px;
+}
+body.light-theme {
+  --mf-fill: rgba(252, 252, 253, .95);
+  --mf-ink: #1c1b19;
+  --mf-ink2: rgba(28, 27, 25, .5);
+  --mf-hover: rgba(28, 22, 16, .06);
+  --mf-rule: rgba(28, 22, 16, .08);
+  --mf-glow: inset 0 0 0 .5px rgba(40, 28, 16, .06), 0 20px 44px -18px rgba(70, 48, 26, .3), 0 0 26px -8px rgba(70, 48, 26, .18);
+}
+
+.mf-glass,
+.context-menu,
+.context-submenu,
+.archive-batch-menu,
+.archive-list-sort-menu {
+  background:
+    radial-gradient(120% 70% at 50% 115%, color-mix(in srgb, var(--mf-tint) 16%, transparent), transparent 62%),
+    var(--mf-fill);
+  border: 0;
+  border-radius: var(--mf-radius);
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+}
+body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch-menu, .archive-list-sort-menu) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 菜单里的行：圆角、留边，悬停是一层很淡的亮，危险项只换字色 */
+.context-menu, .archive-batch-menu, .archive-list-sort-menu { padding: 6px; }
+.context-submenu { padding: 6px; border-radius: 14px; }
+:is(.context-menu-item, .submenu-item) { border-radius: 11px; color: var(--mf-ink); }
+:is(.context-menu-item, .submenu-item):hover { background: var(--mf-hover); color: var(--mf-ink); }
+.context-menu-item svg { opacity: .62; }
+.context-menu-divider { background: var(--mf-rule); margin-left: 10px; margin-right: 10px; }
+.archive-batch-menu header { padding: 8px 12px 6px; color: var(--mf-ink2); font-weight: 500; }
+.archive-batch-menu hr { margin: 5px 10px; border-top-color: var(--mf-rule); opacity: 1; }
+:is(.archive-batch-menu, .archive-list-sort-menu) button { border-radius: 11px; color: var(--mf-ink); }
+:is(.archive-batch-menu, .archive-list-sort-menu) button:is(:hover, :focus-visible) { background: var(--mf-hover); }
+:is(.archive-batch-menu, .archive-list-sort-menu) button i { color: var(--mf-ink2); }
+.archive-list-sort-menu { top: calc(100% + 10px); }
+
+/* 收起：不是缩小消失，而是像雾一样散开 */
+.context-menu:not(.visible) { transform: scale(1.03); filter: blur(6px); transition: opacity .2s ease, transform .2s ease, filter .2s ease; }
+.context-menu.visible { filter: none; transition: opacity .18s ease, transform .18s ease, filter .18s ease; }
+
+/* 长出来的那一下：液体先画，本体在液体快鼓满时才显现 */
+.mf-goo { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: visible; }
+.mf-budding { opacity: 0 !important; filter: blur(4px); transition: none !important; }
+body.music-reduce-motion .context-menu { transition: opacity .12s linear; transform: none; filter: none; }
+
+/* ───────── 抽屉里的分段开关和底部页签：选中标记像液体流过去（MusicFluid.slide） ─────────
+ * 分段开关里那块是一小团奶白玻璃；底部页签下是一道短短的实心线，代替原来的 1px 细线。 */
+#music-dock-root .md-seg .md-mk { transition: none; }
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) .md-mk {
+  background: var(--mf-fill);
+  border-radius: 9999px;
+  box-shadow: var(--mf-glow);
+}
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) { border-radius: 9999px; }
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) button { border-radius: 9999px; }
+#music-dock-root .md-dockrow .md-mk {
+  display: block;
+  top: auto;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--md-t1);
+  box-shadow: none;
+}
+#music-dock-root .md-dockrow .md-seg button.md-on::after { display: none; }
+
+/* ───────── 搜索面板（Ctrl+K）：同一层玻璃，从播放条顶边长出来 ─────────
+ * 液体由 MusicFluid.bud 画；原来用 CSS 缩放做的鼓出和细颈在能画液体时让开，不能画时（节能、降低动态）仍按原样。 */
+#music-dock-root .md-cmd .md-cmd-box,
+#music-dock-root .md-cmd.md-open .md-cmd-box {
+  border: 0;
+  border-radius: 26px;
+  background:
+    radial-gradient(120% 60% at 50% 115%, color-mix(in srgb, var(--mf-tint) 16%, transparent), transparent 62%),
+    var(--mf-fill);
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+}
+#music-dock-root .md-cmd-list { padding: 6px; }
+#music-dock-root .md-cmd-row { border-radius: 14px; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box { transform: none; filter: none; opacity: 1; transition: none; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box::after { display: none; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd:not(.md-open) .md-cmd-box { opacity: 0; }
+
+/* ───────── 弹窗和里面的按钮组 ─────────
+ * 弹窗是给手用的：同一层玻璃、大圆角；正文照常清楚，不做任何糊化。
+ * 按钮是胶囊：确认是实心墨色，次要是一层淡玻璃，取消只换字色；输入框是一道浅浅的凹槽。 */
+:is(.music-modal-overlay, .dialog-overlay) :is(.music-modal, .dialog) {
+  background:
+    radial-gradient(120% 50% at 50% 112%, color-mix(in srgb, var(--mf-tint) 14%, transparent), transparent 60%),
+    var(--mf-fill);
+  border: 0;
+  border-radius: 26px;
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+  backdrop-filter: blur(26px) saturate(1.2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+}
+body.music-fl-low :is(.music-modal-overlay, .dialog-overlay) :is(.music-modal, .dialog) { backdrop-filter: none; -webkit-backdrop-filter: none; }
+:is(.music-modal-overlay, .dialog-overlay) :is(.music-modal-header, .music-modal-footer, .lyrics-fetch-footer) { border-color: var(--mf-rule); }
+.dialog-btn,
+body.light-theme .dialog-btn {
+  border: 0;
+  border-radius: 9999px;
+  padding-left: 18px;
+  padding-right: 18px;
+  background: var(--mf-hover);
+  color: var(--mf-ink);
+  transition: background-color .15s, transform .18s cubic-bezier(.2, .8, .2, 1);
+}
+.dialog-btn:hover { background: color-mix(in srgb, var(--mf-ink) 12%, transparent); border: 0; }
+.dialog-btn:active { transform: scale(.96); }
+.dialog-btn.confirm,
+body.light-theme .dialog-btn.confirm { background: var(--mf-ink); color: #1c1b19; }
+body.light-theme .dialog-btn.confirm { color: #fcfcfd; }
+.dialog-btn.confirm:hover { background: color-mix(in srgb, var(--mf-ink) 86%, var(--mf-tint)); }
+.dialog-btn.cancel,
+body.light-theme .dialog-btn.cancel { background: transparent; color: var(--ar-danger, #dc3c3c); }
+.dialog-btn.cancel:hover { background: color-mix(in srgb, var(--ar-danger, #dc3c3c) 10%, transparent); }
+body .dialog-btn:disabled,
+body .dialog-btn.confirm:disabled,
+body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); color: var(--mf-ink2); opacity: 1; cursor: default; }
+:is(.dialog, .music-modal) input:is([type="text"], [type="url"], [type="password"], :not([type])) {
+  border: 0;
+  border-radius: 14px;
+  padding-left: 12px;
+  padding-right: 12px;
+  background: var(--mf-hover);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+  color: var(--mf-ink);
+}
+.music-modal-close-btn { border-radius: 9999px; }
+.music-modal-close-btn:hover { background: var(--mf-hover); }
+/* 新建歌单这类小对话框：外层的面板样式把内边距清掉了，这里补回来 */
+.dialog-overlay .dialog.glass-panel { padding: 22px 22px 18px; width: 340px; }
+.dialog-overlay .dialog h3 { margin: 0 0 16px; }
+.dialog-overlay .dialog-actions { gap: 10px; margin-top: 18px; }
+
+/* ───────── 搜索框：平时是一道线，点进去凝成一汪玻璃 ─────────
+ * 关注决定凝固：不用的时候它只是档案里的一道细线（结构不变）；聚焦时那道线从底下鼓起来，
+ * 凝成一块圆角的奶白玻璃托住文字；离开时再化开、塌回那道线。文字始终在玻璃上面，不糊。 */
+.archive-list-search,
+.sidebar-actions .search-wrapper { position: relative; isolation: isolate; }
+.archive-list-search::after,
+.sidebar-actions .search-wrapper::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -12px;
+  right: -12px;
+  top: -8px;
+  bottom: -2px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(120% 90% at 50% 120%, color-mix(in srgb, var(--mf-tint) 18%, transparent), transparent 64%),
+    var(--mf-fill);
+  box-shadow: var(--mf-glow);
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 50% 100%;
+  transform: scale(.98, .04);
+  filter: blur(6px);
+  transition: transform .34s cubic-bezier(.32, .72, 0, 1), opacity .22s ease, filter .3s ease;
+}
+.archive-list-search:focus-within::after,
+.sidebar-actions .search-wrapper:focus-within::after {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition: transform .46s cubic-bezier(.34, 1.4, .5, 1), opacity .16s ease, filter .2s ease;
+}
+.sidebar-actions .search-wrapper::after { top: -2px; bottom: -2px; left: -8px; right: -8px; }
+.archive-list-search:focus-within { border-bottom-color: transparent; }
+/* 玻璃本身就是聚焦提示，里面的输入框不再另画一圈焦点框 */
+/* 要压过全局 :focus-visible:not(#messageInput)… 那条，所以同样带上 :not(#messageInput) */
+.archive-list-search:focus-within input:is(:focus, :focus-visible):not(#messageInput) { outline: none; box-shadow: none; }
+body .sidebar-actions .search-wrapper:focus-within #search-input,
+#left-sidebar .sidebar-actions .search-wrapper:focus-within #search-input:is(:focus, :focus-visible) { border-bottom-color: transparent; }
+.archive-list-search:focus-within input,
+.sidebar-actions .search-wrapper:focus-within #search-input { color: var(--mf-ink); }
+.archive-list-search,
+.sidebar-actions #search-input { transition: border-color .2s ease; }
+body.music-reduce-motion :is(.archive-list-search, .sidebar-actions .search-wrapper)::after { transition: opacity .12s linear; transform: none; filter: none; }
+
+/* ───────── 提示条：同一层玻璃 ─────────
+ * 长出来、停留时慢慢化雾的动作还是原来的（music-dock.css 里的 mtst-bud / mtst-mist），这里只换成同一套材质：
+ * 没有描边，四周柔光，颜色从里面透出来。错误提示的那团光是暖红，不再整条变色。 */
+.mtst { border: 0; box-shadow: var(--mf-glow); color: var(--mf-ink); }
+.mtst::after {
+  background:
+    radial-gradient(90% 140% at 0% 50%, color-mix(in srgb, var(--mf-tint) 22%, transparent), transparent 62%),
+    var(--mf-fill);
+}
+.mtst.mtst-error::after {
+  background:
+    radial-gradient(90% 140% at 0% 50%, color-mix(in srgb, var(--ar-danger, #dc3c3c) 24%, transparent), transparent 62%),
+    var(--mf-fill);
+}
+.mtst .mtst-act { border-radius: 9999px; }
+body.music-fl-low .mtst { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ───────── 档案筛选：选中的那一项下面有一道液态的线 ─────────
+ * 位置由 archive-list.js 量好、用 MusicFluid.slide 流过去；这里只管样子：一道圆头的细线，颜色从强调色里透出来。 */
+.archive-list-kinds { position: relative; }
+.archive-kind-mark {
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 0;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--mf-tint);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mf-tint) 55%, transparent);
+  pointer-events: none;
+}

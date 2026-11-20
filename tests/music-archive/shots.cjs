@@ -88,6 +88,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
     if (name.includes('detail')) {
+      if (name.includes('like')) await page.evaluate(() => { window.app.isLiked = () => true; window.app.toggleLike = () => {}; });
       await page.evaluate(() => window.app.archiveView.openDetail());
       if (name.includes('art')) {
         // 假封面（离线截图拿不到本地文件），直接交给场景

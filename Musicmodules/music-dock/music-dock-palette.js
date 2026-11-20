@@ -468,7 +468,12 @@
             document.body.classList.add('music-dock-cmd-open');
             input.value = initial;
             build();
-            requestAnimationFrame(() => root.classList.add('md-open'));
+            requestAnimationFrame(() => {
+                root.classList.add('md-open');
+                // 搜索面板从播放条顶边长出来
+                const cap = host.querySelector('.md-cap')?.getBoundingClientRect();
+                if (cap && cap.width) global.MusicFluid?.bud(box, { x: cap.left + cap.width / 2, y: cap.top + 6 });
+            });
             input.focus();
         }
         function close(restoreFocus = true) {

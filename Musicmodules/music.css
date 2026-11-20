@@ -2934,3 +2934,40 @@ body.light-theme .dialog-btn.cancel {
         display: none;
     }
 }
+
+/* ------------------------- */
+/* --- 音频引擎状态提示 --- */
+/* ------------------------- */
+.audio-engine-notice {
+    position: fixed;
+    top: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: min(640px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 120, 90, 0.45);
+    background: var(--glass-bg);
+    box-shadow: 0 6px 20px var(--glass-shadow);
+    backdrop-filter: blur(12px);
+    color: var(--music-text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.audio-engine-notice[hidden] {
+    display: none;
+}
+
+.audio-engine-notice-title {
+    font-weight: 600;
+}
+
+.audio-engine-notice-detail {
+    color: var(--music-text-secondary);
+    word-break: break-word;
+}

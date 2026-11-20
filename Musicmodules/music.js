@@ -361,6 +361,64 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     };
 
+    // --- Audio engine endpoint & status ---
+    // 引擎端口由主进程启动时探测决定；引擎没起来时在窗口顶部说明原因，而不是只显示时长 0:00。
+    const audioEngineNotice = document.getElementById('audio-engine-notice');
+    const applyAudioEngineEndpoint = (endpoint) => {
+        if (!endpoint) return;
+        const previousUrl = app.audioEngineWsUrl;
+        if (endpoint.wsUrl) app.audioEngineWsUrl = endpoint.wsUrl;
+        const failed = endpoint.state === 'failed';
+        if (audioEngineNotice) {
+            audioEngineNotice.hidden = !failed;
+            const detail = audioEngineNotice.querySelector('.audio-engine-notice-detail');
+            if (detail) detail.textContent = failed ? (endpoint.message || '') : '';
+        }
+        // 引擎换了端口重新就绪后，立即连到新地址，不等 5 秒重连。
+        if (endpoint.state === 'ready' && previousUrl && previousUrl !== app.audioEngineWsUrl) {
+            try { app.ws?.close(); } catch (_) { /* ignore */ }
+            app.ws = null;
+            app.connectWebSocket();
+        }
+        recoverAfterEngineRestart(endpoint.state);
+    };
+    // 引擎用着用着崩了又被重启：新引擎里什么都没加载。把那首歌重新加载回去、跳回原来的位置，
+    // 原来在放就接着放。只认「就绪过 → 断了 → 又就绪」，窗口刚打开时的启动过程不算。
+    let engineSeenReady = false;
+    let engineLost = false;
+    const recoverAfterEngineRestart = (state) => {
+        if (state === 'ready') {
+            const lost = engineLost;
+            engineSeenReady = true;
+            engineLost = false;
+            if (!lost) return;
+            const track = app.playlist[app.currentTrackIndex];
+            app.engineTrackPath = null;
+            if (!track) return;
+            const wasPlaying = app.isPlaying === true || app.playIntent === true;
+            const resumeAt = Math.max(0, Number(app.lastKnownCurrentTime) || 0);
+            const index = app.currentTrackIndex;
+            app.skipHistoryOnce = true;
+            // 先加载、跳到原位置再播，不从头响一下。
+            Promise.resolve(app.loadTrack(index, false)).then(async () => {
+                if (app.currentTrackIndex !== index || app.engineTrackPath !== track.path) return; // 期间换了歌
+                if (resumeAt > 1) await app.seekTo(resumeAt);
+                if (wasPlaying && app.currentTrackIndex === index) app.playTrack();
+            }).catch(error => console.warn('[Music] Reload after engine restart failed:', error));
+        } else if (engineSeenReady && (state === 'failed' || state === 'starting' || state === 'stopped')) {
+            engineLost = true;
+        }
+    };
+    const refreshAudioEngineEndpoint = async () => {
+        if (!app.api?.getAudioEngineEndpoint) return;
+        try {
+            applyAudioEngineEndpoint(await app.api.getAudioEngineEndpoint());
+        } catch (error) {
+            console.warn('[Music] Failed to read audio engine endpoint:', error);
+        }
+    };
+    app.api?.onAudioEngineStatus?.(applyAudioEngineEndpoint);
+
     // --- Initialization ---
     const init = async () => {
         // Setup modules
@@ -393,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.visualizerCanvas.width = app.visualizerCanvas.clientWidth;
         app.visualizerCanvas.height = app.visualizerCanvas.clientHeight;
         app.recreateParticles();
+        await refreshAudioEngineEndpoint();
         app.connectWebSocket();
         if (!app.animationFrameId) app.startVisualizerAnimation();
         app.updateModeButton();
@@ -1004,6 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     app.renderPlaylist(app.currentFilteredTracks);
                 }
                 app.archiveView?.refresh?.();
+                app.refreshPreload?.();
             };
             refresh();
             notify(`已从歌单「${pl.name}」移除`, { label: '撤销', run: () => { if (!pl.tracks.includes(track.path)) { pl.tracks.splice(Math.min(at, pl.tracks.length), 0, track.path); refresh(); } } });
@@ -1032,6 +1092,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             app.api?.saveMusicPlaylist?.(app.playlist);
             app.archiveView?.refresh?.();
+            if (!wasCurrent) app.refreshPreload?.();
             notify(`已从曲库列表移除「${name}」`, { label: '撤销', run: () => {
                 if (app.playlist.includes(track)) return;
                 const at = Math.min(index, app.playlist.length);
@@ -1045,6 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (app.currentFilteredTracks && view) app.renderPlaylist(app.currentFilteredTracks); else app.renderPlaylist();
                 app.api?.saveMusicPlaylist?.(app.playlist);
                 app.archiveView?.refresh?.();
+                app.refreshPreload?.();
             } });
         };
         app.removeTrackInScope = (index, scope = app.contextMenuScope) => {
@@ -1162,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.api.onMusicScanComplete((data) => {
             clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
             // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
-            const addedDuringScan = scanAddedPaths; scanAddedPaths = null;
+            const addedDuringScan = scanAddedPaths;
             const playingPath = app.playlist[app.currentTrackIndex]?.path;
             app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
@@ -1178,12 +1240,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const updatedPlaylist = [];
             const handledPaths = new Set();
+            // 这次扫描途中先接上去的曲目：先从原位置拿掉，下面按磁盘顺序放回（用同一个对象）。
+            // 同时在扫的另一个文件夹接上去的不归这次管，留在原处。
+            const appended = new Map();
 
             for (const track of app.playlist) {
-                if (addedDuringScan?.has(track.path)) continue;
+                if (addedDuringScan?.has(track.path) && scannedPaths.has(track.path)) {
+                    appended.set(track.path, track);
+                    addedDuringScan.delete(track.path);
+                    continue;
+                }
                 if (scannedPaths.has(track.path)) {
-                    // Track exists in new scan — use updated metadata
-                    updatedPlaylist.push(scannedMap.get(track.path));
+                    // 已有的曲目原地更新信息，保住对象本身：歌单视图、队列、播放历史都拿着它。
+                    Object.assign(track, scannedMap.get(track.path));
+                    updatedPlaylist.push(track);
                     handledPaths.add(track.path);
                 } else if (folderPrefix && track.path.startsWith(folderPrefix)) {
                     // Track belongs to the scanned folder but was NOT found in new scan
@@ -1198,10 +1268,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add brand-new tracks that weren't in the existing playlist
             for (const track of newPlaylist) {
                 if (!handledPaths.has(track.path)) {
-                    updatedPlaylist.push(track);
+                    const early = appended.get(track.path);
+                    updatedPlaylist.push(early ? Object.assign(early, track) : track);
                 }
             }
 
+            if (scanAddedPaths && !scanAddedPaths.size) scanAddedPaths = null;
             app.playlist = updatedPlaylist;
             if (playingPath) {
                 const at = updatedPlaylist.findIndex(t => t.path === playingPath);
@@ -1403,6 +1475,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(PLAY_MODE_STORAGE_KEY, app.playModes[app.currentPlayMode]);
         app.updateModeButton();
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
+        app.refreshPreload?.();
     };
 
     app.updateModeButton = () => {

@@ -610,15 +610,20 @@
             const k = detailK;
             const aspect = W / H;
             const baseSpan = lerp(7.33, 6.8, k);
-            const viewSpan = Math.max(baseSpan, baseSpan * (16 / 9) / aspect);
+            let viewSpan = Math.max(baseSpan, baseSpan * (16 / 9) / aspect);
+            /* 取出时卡要整张落在资料卡左边那块空地里：空地窄（笔记本、窄窗口）就把镜头放远一点 */
+            const room = detailRoom > 0 ? Math.min(detailRoom, W) : W * (1161 / 1920);
+            if (k > 0) {
+                const fit = CARD_W * 1.22 * H / Math.max(room * 0.92, 1);
+                viewSpan = lerp(viewSpan, Math.max(viewSpan, fit), k);
+            }
             const distance = lerp(DIST, 72, k);
             camDir.copy(view).lerp(DETAIL_DIR, k).normalize();
             camAim.copy(aim);
             if (k > 0) {
                 camRight.crossVectors(WORLD_UP, camDir).normalize();
                 camUp.crossVectors(camDir, camRight).normalize();
-                const compact = W < 1100;
-                const anchorX = compact ? 0.27 : 540 / 1920, anchorY = compact ? 0.5 : 600 / 1080;
+                const anchorX = Math.min(540 / 1920, room / 2 / W), anchorY = W < 1100 ? 0.5 : 600 / 1080;
                 const pixelScale = H / viewSpan;
                 detailAim.copy(targetPos);
                 detailAim.y += CARD_H / 2;
@@ -648,6 +653,14 @@
             frameMat.opacity = 0.16 * appear;
             blurMat.opacity = appear * (1 - cover.clarity * 0.999);
             sharpMat.opacity = appear * smooth(cover.clarity);
+        };
+        let detailRoom = 0;
+        /* HUD 告诉场景：资料卡左边还剩多宽（画布像素），取出的卡只放在这里面 */
+        const setDetailRoom = (px) => {
+            px = Math.max(0, Number(px) || 0);
+            if (Math.abs(px - detailRoom) < 0.5) return;
+            detailRoom = px;
+            invalidate();
         };
         const setDetail = (on) => {
             on = Boolean(on);
@@ -759,7 +772,7 @@
                 }
             }
             for (const [k, v] of hoverLifts) {
-                const goal = hovered === k ? 0.12 : 0;
+                const goal = hovered === k ? 0.24 : 0;   // 悬停的卡稍微探出来一点，能看出鼠标指着哪张
                 const nv = v + (goal - v) * Math.min(1, dt * 10);
                 if (Math.abs(nv) < 0.001 && goal === 0) hoverLifts.delete(k); else hoverLifts.set(k, nv);
             }
@@ -851,7 +864,7 @@
             canvas,
             tier,
             resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, setLabelMask, refreshLabels, dispose,
-            setDetail, setCover, turn, detailRect,
+            setDetail, setDetailRoom, setCover, turn, detailRect,
             get detail() { return detailOn; },
             get dirty() { return dirty; },
             get target() { return { ...target }; },
