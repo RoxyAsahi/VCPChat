@@ -170,6 +170,92 @@
         /* ------------- sky, haze, ambient ------------- */
         const fog = new T.FogExp2('#141c26', 0.016);
         scene.fog = fog;
+        // Layered haze in place of the flat exponential fog: a thick, dark-blue layer on
+        // the ground, a thin one through the middle, and above the roofs a smog band the
+        // city lights from below, so the far towers stand half in gold.
+        // shape: x ground amount, y ground scale height, z mid amount, w high band amount.
+        const haze = {
+            kwHazeLow: { value: new T.Color('#10151f') },
+            kwHazeMid: { value: new T.Color('#3a2716') },
+            kwHazeHigh: { value: new T.Color('#a8682a') },
+            kwHazeShape: { value: new T.Vector4(1.6, 8, 0.28, 0.45) }
+        };
+        const HAZE_VERTEX_PARS = `#include <fog_pars_vertex>
+            #ifdef USE_FOG
+            varying vec3 vKwHazeW;
+            #endif`;
+        const HAZE_VERTEX = `#include <fog_vertex>
+            #ifdef USE_FOG
+            vKwHazeW=cameraPosition+transpose(mat3(viewMatrix))*mvPosition.xyz;
+            #endif`;
+        const HAZE_FRAGMENT_PARS = `#include <fog_pars_fragment>
+            #ifdef USE_FOG
+            varying vec3 vKwHazeW;
+            uniform vec3 kwHazeLow,kwHazeMid,kwHazeHigh;uniform vec4 kwHazeShape;
+            #ifndef FOG_EXP2
+            uniform float fogDensity;
+            #endif
+            vec4 kwHaze(vec3 p){
+                vec3 d=p-cameraPosition;float ds=length(d)/6.0;
+                float tau=0.0;vec3 acc=vec3(0.0);
+                for(int i=0;i<6;i++){
+                    float y=cameraPosition.y+d.y*((float(i)+0.5)/6.0);
+                    float g=kwHazeShape.x*exp(-max(y,0.0)/kwHazeShape.y);
+                    float hi=kwHazeShape.w*smoothstep(25.0,120.0,y)*(1.0-smoothstep(260.0,420.0,y));
+                    float sg=(g+kwHazeShape.z+hi)*fogDensity*ds;
+                    vec3 c=mix(kwHazeLow,kwHazeMid,smoothstep(4.0,32.0,y));
+                    c=mix(c,kwHazeHigh,smoothstep(24.0,120.0,y));
+                    acc+=c*exp(-tau)*(1.0-exp(-sg));
+                    tau+=sg;
+                }
+                return vec4(acc,exp(-tau));
+            }
+            #endif`;
+        const hazeFragment = additive => `#ifdef USE_FOG
+            {vec4 kwH=kwHaze(vKwHazeW);
+            ${additive ? 'gl_FragColor.rgb*=kwH.a;' : 'gl_FragColor.rgb=gl_FragColor.rgb*kwH.a+kwH.rgb;'}}
+            #endif`;
+        const hazeSource = (vertex, fragment, additive) => [
+            vertex.replace('#include <fog_pars_vertex>', HAZE_VERTEX_PARS).replace('#include <fog_vertex>', HAZE_VERTEX),
+            fragment.replace('#include <fog_pars_fragment>', HAZE_FRAGMENT_PARS).split('#include <fog_fragment>').join(hazeFragment(additive))
+        ];
+        const hazeable = src => typeof src === 'string' && src.includes('#include <fog_fragment>') && src.includes('#include <fog_pars_fragment>');
+        // Every fogged material on the stage (the block's and the signs' too) takes the
+        // layered haze; a material is patched once, and only while it sits in this scene.
+        const hazed = new WeakSet();
+        const hazeMaterial = m => {
+            if (!m || hazed.has(m) || m.fog === false) return;
+            hazed.add(m);
+            const additive = m.blending === T.AdditiveBlending;
+            if (m.isShaderMaterial) {
+                if (!hazeable(m.fragmentShader) || !m.vertexShader.includes('#include <fog_vertex>')) return;
+                [m.vertexShader, m.fragmentShader] = hazeSource(m.vertexShader, m.fragmentShader, additive);
+                Object.assign(m.uniforms, haze);
+                m.needsUpdate = true;
+                return;
+            }
+            const before = m.onBeforeCompile;
+            const key = m.customProgramCacheKey();
+            m.onBeforeCompile = (shader, renderer) => {
+                if (before) before.call(m, shader, renderer);
+                if (!hazeable(shader.fragmentShader)) return;
+                [shader.vertexShader, shader.fragmentShader] = hazeSource(shader.vertexShader, shader.fragmentShader, additive);
+                Object.assign(shader.uniforms, haze);
+            };
+            m.customProgramCacheKey = () => `${key}|kwHaze${additive ? 'A' : ''}`;
+            m.needsUpdate = true;
+        };
+        let hazeScanAt = -1;
+        const hazeScan = force => {
+            if (options.heightFog === false) return;
+            const now = global.performance?.now?.() ?? Date.now();
+            if (!force && now - hazeScanAt < 1000) return;
+            hazeScanAt = now;
+            scene.traverse(o => {
+                if (!o.material || o.isPoints || o.isLine) return;
+                (Array.isArray(o.material) ? o.material : [o.material]).forEach(hazeMaterial);
+            });
+        };
         // The block's own ambient terms live in the shared uniforms; these are their night/day values.
         const hemi = { color: new T.Color(), groundColor: new T.Color(), intensity: 1 };
         // A low, heavy cloud deck lit from below by the city.
@@ -592,7 +678,8 @@
         const SHUTTER_PAINT = ['#4f5a52', '#5a6168', '#6b6a5e', '#3f4f5f', '#5d4e43', '#7a7f80', '#3e5248'];
         const TARP = ['#7a2a2a', '#2a4a7a', '#2f5f45', '#8a6a2a', '#4a4a52', '#6a2f55'];
         const CRATE = ['#5a4a35', '#7a6648', '#3a4a5a', '#6a3030', '#2f5a4a', '#8a8070'];
-        const LAMP_TONES = [[0.75, 1.0, 0.95], [1.0, 0.82, 0.55], [0.6, 0.9, 1.0], [1.0, 0.95, 0.85]];
+        // Warm sodium and bare bulbs for most, a cold cyan tube here and there against them.
+        const LAMP_TONES = [[1.0, 0.7, 0.4], [1.0, 0.6, 0.28], [0.3, 0.9, 1.0], [1.0, 0.84, 0.62]];
         const wallAt = (run, t, side, off = 0) => {
             const x = mix(run.a[0], run.b[0], t), z = mix(run.a[1], run.b[1], t);
             const d = run.width / 2 - off;
@@ -637,7 +724,7 @@
                 const h = range(3, 3.8);
                 boxes.add([x, h, z], [1.2, 0.05, 0.06], yaw, 5, new T.Color(tone[0], tone[1], tone[2]));
                 boxes.add([x, h + 0.05, z], [1.26, 0.03, 0.12], yaw, 0, '#2a2c2e');
-                lamp([x, h - 0.1, z], tone, 1.0, 5, rand() < 0.12 ? 1 : 0);
+                lamp([x, h - 0.1, z], tone, tone === LAMP_TONES[2] ? 1.35 : 1.0, 5, rand() < 0.12 ? 1 : 0);
             }
             // Cables over the alley: bundles crossing, a few running along it.
             for (let d = range(0.5, 2); d < run.length; d += range(1.2, 3.2)) {
@@ -731,7 +818,7 @@
                     const [awx, awz] = at(t, reach / 2);
                     if (street) boxes.add([awx, 2.75, awz], [width, 0.03, reach + 0.1], facing, 3, pick(TARP), -0.22);
                     const [bx, bz] = at(t, reach * 0.35);
-                    const tone = pick(LAMP_TONES);
+                    const tone = pick([LAMP_TONES[0], LAMP_TONES[1], LAMP_TONES[1], LAMP_TONES[3]]);
                     lumps.add([bx, 2.45, bz], [0.05, 0.065, 0.05], 0, 5, new T.Color(tone[0], tone[1], tone[2]));
                     lamp([bx, 2.35, bz], tone, 0.9, 4, rand() < 0.15 ? 1 : 0);
                     if (rand() < 0.35) steamSources.push([cx, 0.95, cz, range(3, 5)]);
@@ -798,6 +885,44 @@
             pipe([px, 7.4, pz], [px - 2.2, 7.6, pz], 0.06, 7, '#3a3d40');
             boxes.add([px - 2.4, 7.43, pz], [0.6, 0.03, 0.28], 0, 5, '#ffd9a0');
             lamp([px - 2.4, 7.2, pz], [1.0, 0.8, 0.55], 2.0, 15);
+        }
+
+        /* ------------- vents: gratings in the floor, outlets on the walls ------------- */
+        // Kept on their own seed so the rest of the alley stays where it was.
+        {
+            const vr = mulberry(hash(`${seedText}:vents`));
+            const vRange = (a, b) => a + (b - a) * vr();
+            runs.forEach(run => {
+                const yaw = Math.atan2(run.dir[0], run.dir[1]);
+                // A grating in the middle of the alley now and then, breathing all night.
+                for (let d = vRange(3, 9); d < run.length - 2; d += vRange(9, 17)) {
+                    if (vr() > 0.5) continue;
+                    const t = d / run.length;
+                    const x = mix(run.a[0], run.b[0], t) + run.normal[0] * vRange(-0.3, 0.3) * run.width;
+                    const z = mix(run.a[1], run.b[1], t) + run.normal[1] * vRange(-0.3, 0.3) * run.width;
+                    boxes.add([x, 0.012, z], [0.7, 0.024, 0.45], yaw, 2, '#1c1d1f');
+                    steamSources.push([x, 0.04, z, vRange(4.5, 7.5)]);
+                }
+                // Exhaust outlets at head height on the walls, and the odd riser pipe venting.
+                for (let d = vRange(4, 10); d < run.length - 2; d += vRange(10, 20)) {
+                    if (vr() > 0.45) continue;
+                    const side = vr() < 0.5 ? -1 : 1;
+                    const t = d / run.length;
+                    if (vr() < 0.6) {
+                        const h = vRange(2.2, 3.6);
+                        const [x, z] = wallAt(run, t, side, 0.06);
+                        boxes.add([x, h, z], [0.42, 0.32, 0.1], yaw, 2, '#2a2b2c');
+                        const [sx, sz] = wallAt(run, t, side, 0.3);
+                        steamSources.push([sx, h, sz, vRange(3, 5)]);
+                    } else {
+                        const [x, z] = wallAt(run, t, side, 0.18);
+                        const h = vRange(0.8, 1.4);
+                        cylinders.add([x, h / 2, z], [0.07, h, 0.07], 0, 7, '#4a4844');
+                        cylinders.add([x, h + 0.04, z], [0.1, 0.08, 0.1], 0, 7, '#3a3836');
+                        steamSources.push([x, h + 0.08, z, vRange(3.5, 6)]);
+                    }
+                }
+            });
         }
 
         /* ------------- under the built-over stretches ------------- */
@@ -1425,32 +1550,47 @@
         };
 
         const baseSky = new T.Color(), flashSky = new T.Color('#aab4e0'), fogBase = new T.Color();
+        const hazeMidBase = new T.Color(), hazeHighBase = new T.Color(), hazeLowBase = new T.Color();
         const applyAtmosphere = () => {
             const light = Boolean(palette.light);
             shared.day.value = light ? 1 : 0;
             const accent = new T.Color(palette.accent || '#f2a900');
             const deep = new T.Color(palette.deep || '#171a1d');
-            // The haze takes a little of the theme's own colour, never its saturation.
-            const hazeColor = light ? new T.Color('#9aa3aa') : new T.Color('#121a24').lerp(deep, 0.25);
-            hazeColor.lerp(accent, light ? 0.03 : 0.04);
-            fog.color.copy(hazeColor);
-            skyMat.uniforms.haze.value.copy(hazeColor);
-            hemi.color.set(light ? '#b8c2cc' : '#2c3e5a');
-            hemi.groundColor.set(light ? '#7a7570' : '#3a2230');
+            // Night: blue-black on the ground, amber smog above the roofs. The low haze takes a
+            // little of the theme's own colour, never its saturation.
+            const hazeColor = light ? new T.Color('#9aa3aa') : new T.Color('#0f141d').lerp(deep, 0.15);
+            hazeColor.lerp(accent, light ? 0.03 : 0.02);
+            haze.kwHazeLow.value.copy(hazeColor);
+            hazeLowBase.copy(hazeColor);
+            haze.kwHazeMid.value.set(light ? '#a8a49c' : '#3a2716');
+            haze.kwHazeHigh.value.set(light ? '#c8b89c' : '#a8682a');
+            // Where the sky meets the roofs it is the smog's own colour.
+            const horizon = light ? new T.Color('#a8aeb2') : new T.Color('#5c3816');
+            skyMat.uniforms.haze.value.copy(horizon);
+            skyMat.uniforms.zenith.value.set(light ? '#5a6670' : '#06070b');
+            skyMat.uniforms.glowA.value.set(light ? '#606a72' : '#2e1a0c');
+            skyMat.uniforms.glowB.value.set(light ? '#7a7c7a' : '#5a3212');
+            hemi.color.set(light ? '#b8c2cc' : '#1c2c48');
+            hemi.groundColor.set(light ? '#7a7570' : '#141826');
             hemi.intensity = light ? 1.4 : 0.55;
             shared.hemiSky.value.copy(hemi.color).multiplyScalar(light ? 0.9 : 0.6);
             shared.hemiGround.value.copy(hemi.groundColor).multiplyScalar(light ? 0.8 : 0.6);
             dayDim = light ? 0.5 : 1;
-            if (scene.background?.isColor) scene.background.copy(hazeColor);
-            else scene.background = hazeColor.clone();
-            fogBase.copy(hazeColor);
-            baseSky.set(light ? '#8e9aa6' : '#2a3a52');
+            if (scene.background?.isColor) scene.background.copy(horizon);
+            else scene.background = horizon.clone();
+            // scene.fog.color is what the far skyline fades into on its own: the lit smog, never
+            // darker than the sky's horizon. Everything else on the stage takes the layered haze.
+            fogBase.copy(options.heightFog === false ? hazeColor : horizon);
+            fog.color.copy(fogBase);
+            hazeMidBase.copy(haze.kwHazeMid.value);
+            hazeHighBase.copy(haze.kwHazeHigh.value);
+            baseSky.set(light ? '#8e9aa6' : '#1e2a42');
             if (lu) {
                 lu.uSky.value.copy(baseSky);
-                lu.uGround.value.set(light ? '#6e6762' : '#3a2a2c');
-                lu.uGlow.value.set(light ? '#d0a080' : '#ff7a4a');
+                lu.uGround.value.set(light ? '#6e6762' : '#1c1a20');
+                lu.uGlow.value.set(light ? '#d0a080' : '#ffa040');
             }
-            shared.glowTint.value.set(light ? '#000000' : '#ff7a4a').multiplyScalar(light ? 0 : 0.18);
+            shared.glowTint.value.set(light ? '#000000' : '#ffa040').multiplyScalar(light ? 0 : 0.18);
         };
         let dayDim = 1;
         applyAtmosphere();
@@ -1478,7 +1618,17 @@
             // Thick between the walls, thin enough from above that the whole block still reads.
             const height = camera ? camera.position.y : 2;
             const near = 1 - smooth(4, 48, height);
-            fog.density = (0.0045 + 0.017 * near) * (1 + rainLevel * 0.45) * (palette.light ? 0.7 : 1) * (options.fog ?? 1);
+            if (options.heightFog === false) {
+                fog.density = (0.0045 + 0.017 * near) * (1 + rainLevel * 0.45) * (palette.light ? 0.7 : 1) * (options.fog ?? 1);
+            } else {
+                // The height model does most of the work; the ground layer still thins as the
+                // camera climbs, so the whole block reads from above.
+                fog.density = 0.0105 * (1 + rainLevel * 0.45) * (palette.light ? 0.7 : 1) * (options.fog ?? 1);
+                const shape = haze.kwHazeShape.value;
+                shape.x = 1.6 * (0.35 + 0.65 * near);
+                shape.z = 0.28 * (1 + rainLevel * 0.3);
+                shape.w = 0.45 * (options.smog ?? 1) * (palette.light ? 0.4 : 1);
+            }
             if (lu) {
                 lu.uRain.value = rainLevel;
                 lu.uWet.value = shared.wetness.value;
@@ -1524,6 +1674,9 @@
                 lu.uSky.value.copy(baseSky).lerp(flashSky, value * 0.8).multiplyScalar(1 + value * 1.6);
             }
             fog.color.copy(fogBase).lerp(flashSky, value * 0.25);
+            haze.kwHazeLow.value.copy(hazeLowBase).lerp(flashSky, value * 0.25);
+            haze.kwHazeMid.value.copy(hazeMidBase).lerp(flashSky, value * 0.3);
+            haze.kwHazeHigh.value.copy(hazeHighBase).lerp(flashSky, value * 0.35).multiplyScalar(1 + value * 0.8);
         };
 
         const update = (state = {}) => {
@@ -1532,6 +1685,7 @@
             shared.time.value = time;
             lastTime = time;
             gather(state, camera);
+            hazeScan(false);
             updateRain(state, camera);
             // Detail that only shows from inside the alleys.
             const far = state.shot === 'iso' || state.shot === 'roof';
