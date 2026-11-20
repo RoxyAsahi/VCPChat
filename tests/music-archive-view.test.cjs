@@ -1326,3 +1326,13 @@ test('目录可以按住上下拖着滚动：拖动时跟手，松手不算点�
     assert.equal(f.view.debug().selected, before, '拖完松手那一下不选中');
     f.close();
 });
+
+test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位置（short）', () => {
+    const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 760 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.match(hud.style.transform, /scale\(0\.9\)/);
+    assert.ok(hud.classList.contains('narrow'));
+    assert.ok(hud.classList.contains('short'));
+    assert.equal(Math.round(parseFloat(hud.style.height)), 667);
+    f.close();
+});

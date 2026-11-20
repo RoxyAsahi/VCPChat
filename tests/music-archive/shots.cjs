@@ -17,7 +17,9 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   for (const name of CASES) {
     const narrow = name.includes('narrow');
-    const page = await browser.newPage({ viewport: { width: narrow ? 900 : W, height: narrow ? 700 : H }, deviceScaleFactor: 1 });
+    // --size=760x600：指定窗口大小（不给时窄窗口是 900×700）
+    const size = args.size ? args.size.split('x').map(Number) : null;
+    const page = await browser.newPage({ viewport: { width: size ? size[0] : narrow ? 900 : W, height: size ? size[1] : narrow ? 700 : H }, deviceScaleFactor: 1 });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
@@ -86,7 +88,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
     await page.waitForTimeout(2600);
-    await page.screenshot({ path: path.join(OUT, name + '.png') });
+    await page.screenshot({ path: path.join(OUT, name + (args.size ? '-' + args.size : '') + '.png') });
     const dbg = await page.evaluate(() => window.app.archiveView.debug());
     console.log(name, JSON.stringify({ lane: dbg.lane, row: dbg.row, sel: dbg.selected, scene: dbg.scene, cols: dbg.columns.length }), errors.length ? 'ERR ' + errors.join(' | ') : '');
     await page.close();

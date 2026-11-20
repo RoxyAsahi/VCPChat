@@ -181,12 +181,23 @@ body.music-reduce-motion .archive-scan-bar i { transition: none; }
 #music-archive-view.is-empty .archive-hint { display: none; }
 
 /* 窄窗口（宽度不到 1500 个设计像素）：只留标题、档案说明、计数和歌单切换 */
-.archive-hud.narrow .archive-nav, .archive-hud.narrow .archive-hint, .archive-hud.narrow .archive-powered,
+.archive-hud.narrow .archive-nav > [data-act="search"], .archive-hud.narrow .archive-nav > [data-act="save"], .archive-hud.narrow .archive-nav > [data-act="lyrics"], .archive-hud.narrow .archive-hint, .archive-hud.narrow .archive-powered,
 .archive-hud.narrow .archive-rows, .archive-hud.narrow .archive-footer > span:nth-child(3), .archive-hud.narrow .archive-queue { display: none; }
 .archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { left: 59px; top: 300px; width: calc(100% - 59px); }
 .archive-hud.narrow .archive-summary { width: calc(100% - 118px); }
 .archive-hud.narrow .archive-cover { left: auto; right: 59px; width: 168px; height: 168px; }
 .archive-hud.narrow .archive-lanes { left: 59px; bottom: 265px; }
+.archive-hud.narrow .archive-nav { gap: 26px; }
+/* 矮窗口（界面不再往下缩，改成挪位置）：换列的箭头放到右下角，不和选中卡的说明叠在一起 */
+.archive-hud.narrow.short .archive-lanes { left: auto; right: 59px; bottom: calc(96px + var(--archive-dock-lift, 0px)); }
+.archive-hud.narrow.short .archive-callout, .archive-hud.narrow.short .archive-empty { top: 270px; }
+/* 矮窗口：第几首的大号计数让给选中卡的说明（右下角的列名还在）；目录往上提一点、底部计数缩小，多露几行 */
+.archive-hud.narrow.short .archive-counter { display: none; }
+.archive-hud.narrow.short .archive-list { top: 238px; }
+.archive-hud.narrow.short .archive-list-foot { padding-top: 6px; }
+.archive-hud.narrow.short .archive-list-foot b { font-size: 30px; }
+.archive-hud.narrow.short .archive-list-foot i { font-size: 20px; }
+.archive-hud.narrow.short .archive-list-foot span { font-size: 15px; }
 
 /* 滚动数字 */
 .archive-roll { display: inline-flex; font-variant-numeric: tabular-nums; }

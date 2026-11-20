@@ -14,6 +14,8 @@
     const SceneLib = global.MusicArchiveScene;
     const VIEW_KEY = 'musicArchiveView';
     const DESIGN_W = 1920, DESIGN_H = 1080;
+    // 窗口再矮，界面也不缩到这个比例以下（小字 11px 缩完还有 10px 左右）；矮窗口改成少显示，不是缩小
+    const MIN_SCALE = 0.9;
     const TICKS = 12;
     const SCRIPT_BASE = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
 
@@ -1050,12 +1052,15 @@
             updatePlaying(true);
         };
 
+        const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
         const resize = () => {
             const w = root.clientWidth || global.innerWidth;
             const h = root.clientHeight || global.innerHeight;
-            const sc = h / DESIGN_H;
+            const sc = hudScale(h);
             refs.hud.style.width = (w / sc) + 'px';
+            refs.hud.style.height = (h / sc) + 'px';
             refs.hud.style.transform = `scale(${sc})`;
+            refs.hud.classList.toggle('short', h / sc < 900);
             const wasNarrow = refs.hud.classList.contains('narrow');
             refs.hud.classList.toggle('narrow', w / sc < 1500);
             if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
@@ -1073,7 +1078,7 @@
             const base = root.getBoundingClientRect();
             if (!callout || callout.offsetParent === null) { state.scene.setLabelMask([]); return; }
             const r = callout.getBoundingClientRect();
-            const sc = (root.clientHeight || global.innerHeight) / DESIGN_H;
+            const sc = hudScale(root.clientHeight || global.innerHeight);
             const pad = 24 * sc;
             // 说明块右半是一条延伸到边缘的细线，只挡文字和封面那一段
             const right = Math.min(r.right, r.left + 730 * sc);
