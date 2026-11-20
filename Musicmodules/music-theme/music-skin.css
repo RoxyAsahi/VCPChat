@@ -95,35 +95,61 @@ body.music-stage-active #custom-title-bar {
     border-left: 1px solid var(--ar-hairline);
 }
 
-/* ---------- 侧栏：搜索、来源按钮、分类页签、歌单 ---------- */
+/* ---------- 侧栏：搜索、导入、分类、歌单 ----------
+ * 和档案页左侧目录一个写法：一条发丝线的搜索、「／」隔开的小字分类、不带框的文字入口；
+ * 选中用实心小方块加一条细线，不铺底色。 */
 .sidebar-actions {
-    padding: 0 16px;
-    gap: 12px;
+    padding: 4px 16px 0;
+    gap: 14px;
 }
 
 .search-wrapper {
+    position: relative;
     border-radius: 0;
+}
+
+/* 放大镜：一个圈加一道柄 */
+.search-wrapper::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin-top: -9px;
+    background: var(--ar-ink);
+    opacity: .85;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Ccircle cx='6.5' cy='6.5' r='4.75'/%3E%3Cpath d='M10 10l4.5 4.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Ccircle cx='6.5' cy='6.5' r='4.75'/%3E%3Cpath d='M10 10l4.5 4.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    pointer-events: none;
 }
 
 .sidebar-actions #search-input {
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--ar-line);
+    border-bottom: 1px solid var(--ar-rule);
     border-radius: 0;
-    padding: 8px 32px 8px 0;
-    font-size: 13px;
+    padding: 6px 32px 9px 28px;
+    font-family: var(--mt-font-archive);
+    font-size: 15px;
+    line-height: 1.4;
     color: var(--ar-ink);
+    caret-color: var(--ar-accent);
     box-shadow: none;
 }
 
 .sidebar-actions #search-input::placeholder {
     color: var(--ar-muted);
+    opacity: .8;
 }
 
-.sidebar-actions #search-input:focus {
+/* 焦点用底线变墨色表示，不套外框 */
+.sidebar-actions #search-input:focus,
+#left-sidebar .sidebar-actions #search-input:focus-visible {
     border-bottom-color: var(--ar-ink);
-    box-shadow: inset 0 -1px 0 var(--ar-ink);
+    box-shadow: none;
     background: transparent;
+    outline: none;
 }
 
 #semantic-search-btn {
@@ -134,60 +160,102 @@ body.music-stage-active #custom-title-bar {
 #semantic-search-btn:hover,
 #semantic-search-btn.active {
     color: var(--ar-ink);
-    background: var(--ar-field);
+    background: transparent;
 }
 
+#semantic-search-btn.active {
+    color: var(--ar-accent);
+}
+
+/* 导入：一行小字，「IMPORT 本地 ／ 云端导入」，不再是两个实心按钮 */
 .sidebar-action-btns {
-    gap: 8px;
+    align-items: baseline;
+    gap: 0;
+    white-space: nowrap;
+}
+
+.sidebar-action-btns::before {
+    content: "IMPORT";
+    margin-right: 14px;
+    color: var(--ar-muted);
+    font-family: var(--mt-font-label);
+    font-size: 10px;
+    letter-spacing: .16em;
+    opacity: .8;
 }
 
 .sidebar-action-btns button,
 .sidebar-action-btns #add-folder-btn,
 .sidebar-action-btns #add-webdav-btn {
-    height: 32px;
-    border-radius: 2px;
-    border: 1px solid var(--ar-line);
+    flex: 0 0 auto;
+    height: auto;
+    padding: 2px 0;
+    border: 0;
+    border-radius: 0;
     background: transparent;
     color: var(--ar-ink);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     box-shadow: none;
-    transition: background-color var(--mt-dur-1) var(--mt-ease-std), color var(--mt-dur-1) var(--mt-ease-std), border-color var(--mt-dur-1) var(--mt-ease-std);
+    filter: none;
+    transition: color var(--mt-dur-1) var(--mt-ease-std);
 }
 
-.sidebar-action-btns #add-folder-btn {
-    background: var(--ar-ink);
-    border-color: var(--ar-ink);
-    color: var(--ar-on-ink);
+.sidebar-action-btns button + button::before {
+    content: "／";
+    display: inline-block;
+    margin: 0 10px;
+    color: var(--ar-muted);
+    opacity: .7;
 }
 
-.sidebar-action-btns #add-folder-btn:hover {
-    background: var(--ar-ink-2);
-    border-color: var(--ar-ink-2);
-}
-
+.sidebar-action-btns #add-folder-btn:hover,
 .sidebar-action-btns #add-webdav-btn:hover {
-    background: var(--ar-field);
-    border-color: var(--ar-ink);
+    background: transparent;
+    color: var(--ar-accent);
+    filter: none;
 }
 
+.sidebar-action-btns button:focus-visible,
+.sidebar-tab:focus-visible {
+    outline: 1px dashed var(--ar-accent);
+    outline-offset: 4px;
+}
+
+/* 分类：「全部 ／ 专辑 ／ 歌手 ／ 歌单」，当前的是墨色粗体，没有下划线 */
 .sidebar-tabs {
-    margin: 16px 0 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    margin: 16px 0 8px;
     padding: 0 16px;
     gap: 0;
-    border-bottom: 1px solid var(--ar-hairline);
+    border-bottom: 0;
     background: transparent;
     border-radius: 0;
+    white-space: nowrap;
 }
 
 .sidebar-tab {
     position: relative;
+    flex: 0 0 auto;
     border-radius: 0;
     background: transparent;
     color: var(--ar-muted);
     font-size: 12px;
-    padding: 10px 0 11px;
+    letter-spacing: 1.3px;
+    padding: 2px 0;
     transition: color var(--mt-dur-1) var(--mt-ease-std);
+}
+
+.sidebar-tab + .sidebar-tab::before {
+    content: "／";
+    display: inline-block;
+    margin: 0 10px;
+    color: var(--ar-muted);
+    font-weight: 400;
+    opacity: .7;
 }
 
 .sidebar-tab:hover {
@@ -198,24 +266,12 @@ body.music-stage-active #custom-title-bar {
 .sidebar-tab.active {
     background: transparent;
     color: var(--ar-ink);
-    font-weight: 600;
+    font-weight: 700;
     box-shadow: none;
 }
 
 .sidebar-tab::after {
-    content: "";
-    position: absolute;
-    left: 25%;
-    right: 25%;
-    bottom: -1px;
-    height: 3px;
-    background: var(--ar-ink);
-    transform: scaleX(0);
-    transition: transform var(--mt-dur-2) var(--mt-ease);
-}
-
-.sidebar-tab.active::after {
-    transform: scaleX(1);
+    display: none;
 }
 
 .sidebar-tab .tab-count,
@@ -266,15 +322,22 @@ body.music-stage-active #custom-title-bar {
 
 .playlist li:hover,
 .sidebar-playlist li:hover {
-    background: var(--ar-field);
+    background: transparent;
 }
 
+.sidebar-playlist li:hover::before {
+    color: var(--ar-ink);
+}
+
+/* 选中：左边一个实心小方块，底下一条细线拉到行尾，和目录一样 */
 .playlist li.active,
 .sidebar-playlist li.active {
-    background: var(--ar-field);
+    background:
+        linear-gradient(var(--ar-square), var(--ar-square)) 4px 15px / 6px 6px no-repeat,
+        linear-gradient(var(--ar-rule), var(--ar-rule)) 16px 100% / calc(100% - 32px) 1px no-repeat;
     color: var(--ar-ink);
-    font-weight: 600;
-    box-shadow: inset 3px 0 0 var(--ar-ink);
+    font-weight: 700;
+    box-shadow: none;
 }
 
 .sidebar-playlist li.active::before {
@@ -294,7 +357,29 @@ body.music-playing .sidebar-playlist li.active::before {
 }
 
 .category-item:hover {
-    background: var(--ar-field);
+    background: transparent;
+}
+
+.category-item:hover .name {
+    font-weight: 700;
+}
+
+.category-item .cover {
+    border-radius: 2px;
+}
+
+.category-item .cover.artist-avatar {
+    border-radius: 50%;
+}
+
+.category-item .count {
+    color: var(--ar-muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.category-item.active {
+    background: linear-gradient(var(--ar-square), var(--ar-square)) 2px 50% / 6px 6px no-repeat;
 }
 
 .sidebar-footer {
