@@ -3,7 +3,7 @@
 const { ipcMain, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
-const { Worker } = require('worker_threads');
+const { scanFolder } = require('../musicLibraryScanner');
 const lyricFetcher = require('../lyricFetcher'); // Import the new lyric fetcher
 const webdavManager = require('../webdavManager'); // WebDAV support
 const windowService = require('../services/windowService');
@@ -194,6 +194,53 @@ function createOrFocusMusicWindow() {
     });
 
     return musicWindowPromise;
+}
+
+// --- Playlist file helpers ---
+async function readPlaylistFile() {
+    try {
+        if (await fs.pathExists(MUSIC_PLAYLIST_FILE)) {
+            const playlist = await fs.readJson(MUSIC_PLAYLIST_FILE);
+            return Array.isArray(playlist) ? playlist : [];
+        }
+    } catch (error) {
+        console.error('Error reading music playlist:', error);
+    }
+    return [];
+}
+
+// 先写临时文件再改名：写到一半退出或断电不会留下半截歌单。同一个文件的保存排队进行，
+// 排队期间又来的保存只留最后一份。歌单本身不缩进，几千首歌时少写一半字节。
+const jsonWriteQueues = new Map();
+function writeJsonAtomic(file, data, options = {}) {
+    let queue = jsonWriteQueues.get(file);
+    if (!queue) {
+        queue = { running: false, next: null };
+        jsonWriteQueues.set(file, queue);
+    }
+    const run = async (job) => {
+        queue.running = true;
+        try {
+            const temp = `${file}.${process.pid}.tmp`;
+            await fs.writeFile(temp, JSON.stringify(job.data, null, options.spaces || 0));
+            await fs.move(temp, file, { overwrite: true });
+            job.waiters.forEach((w) => w.resolve());
+        } catch (error) {
+            job.waiters.forEach((w) => w.reject(error));
+        } finally {
+            queue.running = false;
+            const next = queue.next;
+            queue.next = null;
+            if (next) run(next);
+            else jsonWriteQueues.delete(file);
+        }
+    };
+    return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject };
+        if (!queue.running) run({ data, waiters: [waiter] });
+        else if (queue.next) { queue.next.data = data; queue.next.waiters.push(waiter); }
+        else queue.next = { data, waiters: [waiter] };
+    });
 }
 
 // --- Audio Engine API Helper ---
@@ -724,112 +771,46 @@ function initialize(options) {
             }
 
             const folderPath = result.filePaths[0];
-            const supportedFormats = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a']);
-            const fileList = [];
-
-            async function collectFilePaths(dir) {
-                try {
-                    const files = await fs.readdir(dir, { withFileTypes: true });
-                    for (const file of files) {
-                        const fullPath = path.join(dir, file.name);
-                        if (file.isDirectory()) {
-                            await collectFilePaths(fullPath);
-                        } else if (supportedFormats.has(path.extname(file.name).toLowerCase())) {
-                            fileList.push(fullPath);
-                        }
-                    }
-                } catch (err) {
-                    console.error(`Error collecting file paths in ${dir}:`, err);
+            const sendToRequester = (channel, payload) => {
+                if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send(channel, payload);
                 }
-            }
+            };
+
+            // 窗口在扫描中途关掉就停下，不替一个已经不在的窗口把整个文件夹读完。
+            const abort = new AbortController();
+            const onGone = () => abort.abort();
+            event.sender.once('destroyed', onGone);
 
             try {
-                await collectFilePaths(folderPath);
-                event.sender.send('music-scan-start', { total: fileList.length, folderPath: folderPath });
-
-                await fs.ensureDir(MUSIC_COVER_CACHE_DIR);
-
-                if (fileList.length === 0) {
-                    event.sender.send('music-scan-complete', { tracks: [], folderPath: folderPath });
-                    return;
+                // 上次保存的歌单里带着文件大小和修改时间；没动过的文件不用再读一遍。
+                const knownTracks = await readPlaylistFile();
+                const scanned = await scanFolder({
+                    folderPath,
+                    coverCachePath: MUSIC_COVER_CACHE_DIR,
+                    knownTracks,
+                    signal: abort.signal,
+                    onStart: (info) => sendToRequester('music-scan-start', info),
+                    onProgress: (info) => sendToRequester('music-scan-progress', info),
+                    onBatch: (tracks) => sendToRequester('music-scan-batch', { tracks, folderPath })
+                });
+                console.log(`[Music] Scan of ${folderPath}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
+                if (!scanned.stats.aborted) {
+                    sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
                 }
-
-                const worker = new Worker(path.join(__dirname, '..', '..', 'modules', 'musicScannerWorker.js'), {
-                    workerData: {
-                        coverCachePath: MUSIC_COVER_CACHE_DIR
-                    }
-                });
-                const finalPlaylist = [];
-                let processedCount = 0;
-                let workerFinished = false;
-
-                const sendToRequester = (channel, payload) => {
-                    if (event.sender && !event.sender.isDestroyed()) {
-                        event.sender.send(channel, payload);
-                    }
-                };
-
-                const finishWorker = async (payload) => {
-                    if (workerFinished) return;
-                    workerFinished = true;
-                    sendToRequester('music-scan-complete', payload);
-                    try {
-                        await worker.terminate();
-                    } catch (terminateError) {
-                        console.warn('[Music] Failed to terminate scanner worker:', terminateError.message);
-                    }
-                };
-
-                worker.on('message', (result) => {
-                    if (result.status === 'success') {
-                        finalPlaylist.push(result.data);
-                    } else {
-                        console.error(result.error);
-                    }
-
-                    processedCount++;
-                    sendToRequester('music-scan-progress', { current: processedCount, total: fileList.length });
-
-                    if (processedCount === fileList.length) {
-                        void finishWorker({ tracks: finalPlaylist, folderPath: folderPath });
-                    }
-                });
-
-                worker.on('error', (error) => {
-                    console.error('Worker thread error:', error);
-                    void finishWorker({ tracks: finalPlaylist, folderPath: folderPath });
-                });
-
-                worker.on('exit', (code) => {
-                    if (code !== 0 && !workerFinished) {
-                        console.error(`Worker stopped with exit code ${code}`);
-                        void finishWorker({ tracks: finalPlaylist, folderPath: folderPath });
-                    }
-                });
-
-                fileList.forEach(filePath => worker.postMessage(filePath));
-
             } catch (err) {
-                console.error("Error during music scan setup:", err);
-                event.sender.send('music-scan-complete', []);
+                console.error("Error during music scan:", err);
+                sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
+            } finally {
+                if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
             }
         });
 
-        ipcMain.handle('get-music-playlist', async () => {
-            try {
-                if (await fs.pathExists(MUSIC_PLAYLIST_FILE)) {
-                    return await fs.readJson(MUSIC_PLAYLIST_FILE);
-                }
-                return [];
-            } catch (error) {
-                console.error('Error reading music playlist:', error);
-                return [];
-            }
-        });
+        ipcMain.handle('get-music-playlist', () => readPlaylistFile());
 
         ipcMain.handle('save-music-playlist', async (event, playlist) => {
             try {
-                await fs.writeJson(MUSIC_PLAYLIST_FILE, playlist, { spaces: 2 });
+                await writeJsonAtomic(MUSIC_PLAYLIST_FILE, playlist);
                 return { success: true };
             } catch (error) {
                 console.error('Error saving music playlist:', error);
@@ -854,7 +835,7 @@ function initialize(options) {
 
         ipcMain.handle('save-custom-playlists', async (event, playlists) => {
             try {
-                await fs.writeJson(CUSTOM_PLAYLISTS_FILE, playlists, { spaces: 2 });
+                await writeJsonAtomic(CUSTOM_PLAYLISTS_FILE, playlists, { spaces: 2 });
                 return { success: true };
             } catch (error) {
                 console.error('[Music] Error saving custom playlists:', error);

@@ -27,8 +27,10 @@ module.exports = {
         addMusicFolder: invoke('music-add-folder'),
         shareMusicTrack: invoke('music-share-track', 'trackPath'),
         onMusicFiles: on('music-files'),
-        onMusicScanStart: onSignal('music-scan-start'),
+        onMusicScanStart: on('music-scan-start'),
         onMusicScanProgress: on('music-scan-progress'),
+        // 扫描途中成批送来的新曲目 { tracks, folderPath }；完整结果仍以 music-scan-complete 为准
+        onMusicScanBatch: on('music-scan-batch'),
         onMusicScanComplete: on('music-scan-complete'),
 
         // 播放控制；桌面小组件也可控制播放

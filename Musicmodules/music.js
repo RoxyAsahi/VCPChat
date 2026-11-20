@@ -1136,7 +1136,31 @@ document.addEventListener('DOMContentLoaded', () => {
             app.scanProgressBar.style.width = `${percent}%`;
             app.scanProgressLabel.textContent = `正在扫描: ${data.current} / ${data.total}`;
         });
+        // 扫描途中先把新读到的曲目接到列表末尾，不用等整个文件夹读完才看得到歌；
+        // 列表最多每 400 毫秒重排一次。扫描结束时下面的 complete 再按磁盘顺序整理并保存。
+        let scanBatchTimer = 0;
+        let scanKnownPaths = null;
+        let scanAddedPaths = null;
+        const flushScanBatches = () => {
+            scanBatchTimer = 0;
+            app.renderPlaylist(); app.renderSidebarContent(app.currentSidebarView);
+        };
+        app.api.onMusicScanBatch?.((data) => {
+            const incoming = data && Array.isArray(data.tracks) ? data.tracks : [];
+            if (!scanKnownPaths) scanKnownPaths = new Set(app.playlist.map(t => t.path));
+            const fresh = incoming.filter(t => t && t.path && !scanKnownPaths.has(t.path));
+            if (!fresh.length) return;
+            if (!scanAddedPaths) scanAddedPaths = new Set();
+            fresh.forEach(t => { scanKnownPaths.add(t.path); scanAddedPaths.add(t.path); });
+            // 换一个新数组：各视图靠数组身份判断曲库变了没有。
+            app.playlist = app.playlist.concat(fresh);
+            if (!scanBatchTimer) scanBatchTimer = setTimeout(flushScanBatches, 400);
+        });
         app.api.onMusicScanComplete((data) => {
+            clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
+            // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
+            const addedDuringScan = scanAddedPaths; scanAddedPaths = null;
+            const playingPath = app.playlist[app.currentTrackIndex]?.path;
             app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
             const newPlaylist = Array.isArray(data) ? data : (data.tracks || []);
@@ -1153,6 +1177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const handledPaths = new Set();
 
             for (const track of app.playlist) {
+                if (addedDuringScan?.has(track.path)) continue;
                 if (scannedPaths.has(track.path)) {
                     // Track exists in new scan — use updated metadata
                     updatedPlaylist.push(scannedMap.get(track.path));
@@ -1175,6 +1200,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             app.playlist = updatedPlaylist;
+            if (playingPath) {
+                const at = updatedPlaylist.findIndex(t => t.path === playingPath);
+                if (at !== -1) app.currentTrackIndex = at;
+            }
             app.renderPlaylist(); app.renderSidebarContent(app.currentSidebarView);
             app.api.saveMusicPlaylist(app.playlist);
         });
