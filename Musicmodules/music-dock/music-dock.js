@@ -1524,7 +1524,6 @@
             el.pnl.classList.add('md-sub');
             el.fxScroll.scrollTop = 0;
             el.pnl.scrollTop = 0;
-            document.body.classList.add('music-dock-sheet-open');
             el.fxBack.focus({ preventScroll: true });
         }
         function closeSheet() {
@@ -1532,7 +1531,6 @@
             state.sheetOpen = false;
             el.fx.hidden = true;
             if (!state.subOpen) el.pnl.classList.remove('md-sub');
-            document.body.classList.remove('music-dock-sheet-open');
             if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
         const backFromFx = () => {
@@ -1775,21 +1773,10 @@
                     baseNotice(message);
                     if (state.destroyed) return;
                     const text = String(message || '');
-                    const failedIndex = app.currentTrackIndex;
-                    const list = app.currentFilteredTracks || app.playlist || [];
-                    const canSkip = /^加载(失败|超时)/.test(text) && list.length > 1;
+                    // 加载失败由播放器自己出提示（带「跳过」和连续失败的处理），这里不再重复一条。
+                    if (/^加载(失败|超时)/.test(text) && typeof app.cancelFailureSkip === 'function') return;
                     state.noticeTrackKey = state.trackKey;
-                    toast.show({
-                        id: 'playback',
-                        kind: 'error',
-                        message: text,
-                        action: canSkip ? {
-                            label: '跳过',
-                            countdown: 5,
-                            // 倒计时期间用户自己换了歌或又放起来了，就别再跳。
-                            run: () => { if (app.currentTrackIndex === failedIndex && !app.isPlaying && !app.playIntent) app.nextTrack(); }
-                        } : null
-                    });
+                    toast.show({ id: 'playback', kind: 'error', message: text });
                 };
                 cleanups.push(() => { if (app.showPlaybackNotice !== baseNotice) app.showPlaybackNotice = baseNotice; });
             }
@@ -1865,7 +1852,7 @@
                 fluid = null;
                 observers.forEach((observer) => observer.disconnect());
                 cleanups.splice(0).forEach((fn) => fn());
-                document.body.classList.remove('music-dock-on', 'music-dock-sheet-open');
+                document.body.classList.remove('music-dock-on');
                 document.body.style.removeProperty('--music-dock-safe-bottom');
                 host.innerHTML = '';
             }

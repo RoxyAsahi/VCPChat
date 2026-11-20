@@ -668,6 +668,20 @@ test('fluid layer schedules no animation frames once it is at rest, when hidden,
         assert.equal(scheduled, afterJump, 'steady playback needs no animation frames');
         assert.ok(playing >= settled);
 
+        // 页面帧率很低（3D 页面占着主线程，两帧隔 3 秒）：切到暂停再播放，动画也在十几帧内收尾，
+        // 之后进度照常推进（每帧之间走了好几个像素）不再排帧。
+        const slow = (frames) => { for (let i = 0; i < frames; i += 1) { now += 3000; fluid.setProgress(Math.min(1, fluid.debug().progress + 22 / 528)); const batch = queue; queue = []; for (const cb of batch) cb(now); } };
+        fluid.setPlaying(false); fluid.setSolid(false);
+        slow(30);
+        fluid.setPlaying(true); fluid.setSolid(true);
+        slow(30);
+        assert.equal(fluid.animating, false, 'settles within a few slow frames');
+        const slowSteady = scheduled;
+        slow(10);
+        assert.equal(scheduled, slowSteady, 'slow steady playback schedules nothing');
+        fluid.setProgress(0.5);
+        run(4000);
+
         // 失焦：状态变化直接落位，不排帧。
         fluid.setSuspended(true);
         const suspended = scheduled;

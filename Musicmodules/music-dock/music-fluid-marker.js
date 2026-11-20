@@ -84,7 +84,7 @@
         const moving = () => Math.abs(s.hs - s.tgS) + Math.abs(s.he - s.tgE) + Math.abs(s.ts - s.tgS) + Math.abs(s.te - s.tgE) > 0.6;
         const step = (now) => {
             s.frame = 0;
-            const dt = Math.min(0.05, (now - s.last) / 1000 || 0.016);
+            const dt = Math.min(0.25, (now - s.last) / 1000 || 0.016); // 低帧率时几帧内收尾
             s.last = now;
             // 头快尾慢；速度越大，尾巴越拖
             const kh = 1 - Math.pow(0.0004, dt);

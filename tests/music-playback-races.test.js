@@ -85,6 +85,7 @@ function setup(api = {}) {
     app.engineTrackPath = track.path; // 默认当作第一首已经在引擎里
     app.renderLyrics = () => {};
     app.setNow = value => { context.__now = value; };
+    app.vmContext = context;
     return app;
 }
 
@@ -176,6 +177,7 @@ test('state polls never overlap', async () => {
 
 test('an engine load error ends the wait at once and is shown', async () => {
     const app = setup();
+    app.failureSkipDelayMs = 60000;
     const startedAt = Date.now();
     const loading = app.loadTrack(0, true);
     await tick(20);
@@ -186,6 +188,7 @@ test('an engine load error ends the wait at once and is shown', async () => {
     assert.equal(app.isPlaying, false);
     assert.equal(app.calls.includes('play'), false);
     assert.match(app.trackBitrate.textContent, /unsupported codec/);
+    app.cancelFailureSkip();
 });
 
 test('old-track state arriving during a load does not touch the progress bar', async () => {
@@ -475,4 +478,105 @@ test('an engine that reports paused is believed at once after the grace period',
     app.setNow(9000);
     app.updateUIWithState(readyState({ is_paused: true, current_time: 8 }).state);
     assert.equal(app.isPlaying, false, 'paused wins even if the clock still creeps');
+});
+
+// 放不了的歌：提示「跳过」并自己跳下一首；连续几首都放不了就停下。
+function failingSetup(broken, extra = {}) {
+    const toasts = [];
+    const app = setup({
+        musicLoad: async t => {
+            app.calls.push(`load:${t.title}`);
+            app.lastLoadedPath = t.path;
+            return broken.has(t.title) ? { status: 'error', message: '文件不存在' } : { status: 'success', state: {} };
+        },
+        getMusicState: async () => ({
+            status: 'success',
+            state: { file_path: app.lastLoadedPath, is_loading: false, is_playing: false, current_time: 0, duration: 200 }
+        }),
+        ...extra
+    });
+    app.playlist = ['a', 'b', 'c', 'd', 'e'].map(title => ({ path: `C:/music/${title}.flac`, title, artist: 'x' }));
+    app.playModes = ['repeat', 'repeat-one', 'shuffle'];
+    app.currentPlayMode = 0;
+    app.engineTrackPath = null;
+    app.failureSkipDelayMs = 30;
+    app.vmContext.MusicToast = {
+        show: opts => { toasts.push(opts); return { close() {}, update() {} }; },
+        dismiss: id => { toasts.push({ dismissed: id }); }
+    };
+    app.toasts = toasts;
+    app.shown = () => toasts.filter(t => t.message);
+    return app;
+}
+const loads = app => app.calls.filter(c => c.startsWith('load:')).map(c => c.slice(5));
+
+test('a track that cannot be loaded offers to skip and moves on by itself', async t => {
+    const app = failingSetup(new Set(['a']));
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, true);
+    const toast = app.shown().at(-1);
+    assert.match(toast.message, /无法播放「a」.*文件不存在/);
+    assert.equal(toast.action.label, '跳过');
+    assert.equal(app.isPlaying, false);
+    assert.deepEqual(loads(app), ['a'], 'does not jump before the notice had its time');
+    await tick(4200); // 提示层在时，兜底定时器比倒计时多等几秒
+    assert.deepEqual(loads(app), ['a', 'b']);
+    assert.equal(app.isPlaying, true);
+    assert.equal(app.failureStreak, 0, 'a track that plays ends the streak');
+});
+
+test('pressing skip on the notice moves on at once, and only once', async t => {
+    const app = failingSetup(new Set(['a']));
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, true);
+    const { action } = app.shown().at(-1);
+    action.run();
+    action.run();
+    await tick(300);
+    assert.deepEqual(loads(app), ['a', 'b']);
+});
+
+test('three unplayable tracks in a row stop playback instead of racing through the list', async t => {
+    const app = failingSetup(new Set(['a', 'b', 'c', 'd', 'e']));
+    delete app.vmContext.MusicToast.show; // 没有提示层时也要能自己跳、自己停
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, true);
+    await tick(600);
+    assert.deepEqual(loads(app), ['a', 'b', 'c'], 'stops after the third failure');
+    assert.equal(app.isPlaying, false);
+    assert.match(app.trackBitrate.textContent, /加载失败/);
+});
+
+test('the stop after three failures is announced', async t => {
+    const app = failingSetup(new Set(['a', 'b', 'c', 'd', 'e']));
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, true);
+    for (let i = 0; i < 2; i++) { app.shown().at(-1).action.run(); await tick(250); }
+    const last = app.shown().at(-1);
+    assert.match(last.message, /连续 3 首无法播放，已停止/);
+    assert.equal(last.action, undefined, 'nothing left to skip to');
+    await tick(300);
+    assert.deepEqual(loads(app), ['a', 'b', 'c']);
+});
+
+test('choosing another track while the skip is counting down cancels the skip', async t => {
+    const app = failingSetup(new Set(['a']));
+    delete app.vmContext.MusicToast.show;
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, true);
+    await app.loadTrack(3, true);
+    await tick(300);
+    assert.deepEqual(loads(app), ['a', 'd'], 'the automatic skip must not pull playback away from the chosen track');
+    assert.ok(app.toasts.some(t => t.dismissed === 'playback-failure'), 'the old notice is taken down');
+});
+
+test('a track that fails while only being restored is reported but nothing is skipped', async t => {
+    const app = failingSetup(new Set(['a']));
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    await app.loadTrack(0, false);
+    await tick(300);
+    assert.deepEqual(loads(app), ['a']);
+    assert.match(app.shown().at(-1).message, /无法播放「a」/);
+    assert.equal(app.shown().at(-1).action, undefined);
+    assert.equal(app.failureStreak, 0);
 });
