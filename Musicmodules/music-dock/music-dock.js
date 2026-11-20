@@ -1524,7 +1524,6 @@
             el.pnl.classList.add('md-sub');
             el.fxScroll.scrollTop = 0;
             el.pnl.scrollTop = 0;
-            document.body.classList.add('music-dock-sheet-open');
             el.fxBack.focus({ preventScroll: true });
         }
         function closeSheet() {
@@ -1532,7 +1531,6 @@
             state.sheetOpen = false;
             el.fx.hidden = true;
             if (!state.subOpen) el.pnl.classList.remove('md-sub');
-            document.body.classList.remove('music-dock-sheet-open');
             if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
         const backFromFx = () => {
@@ -1865,7 +1863,7 @@
                 fluid = null;
                 observers.forEach((observer) => observer.disconnect());
                 cleanups.splice(0).forEach((fn) => fn());
-                document.body.classList.remove('music-dock-on', 'music-dock-sheet-open');
+                document.body.classList.remove('music-dock-on');
                 document.body.style.removeProperty('--music-dock-safe-bottom');
                 host.innerHTML = '';
             }

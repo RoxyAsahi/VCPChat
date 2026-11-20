@@ -1317,27 +1317,8 @@ body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
 #music-dock-root .md-fx-sc .eq-controls-row select,
 #music-dock-root .md-fx-sc .ir-controls select { flex: 0 1 auto; text-align: left; }
 
-/* 开关：细线方框里一个方块，开的时候墨色填满（和舞台调制一样） */
-#music-dock-root .md-fx-sc .switch { width: 30px; height: 16px; transform: none; justify-self: end; }
-#music-dock-root .md-fx-sc .switch .slider {
-  border: 1px solid var(--md-line2);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-#music-dock-root .md-fx-sc .switch .slider::before {
-  top: 2px;
-  left: 2px;
-  bottom: auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 0;
-  background: var(--md-t2);
-  box-shadow: none;
-}
-#music-dock-root .md-fx-sc .switch input:checked + .slider { border-color: var(--md-t1); background: var(--md-t1); }
-#music-dock-root .md-fx-sc .switch input:checked + .slider::before { background: var(--md-menu); transform: translateX(14px); }
-#music-dock-root .md-fx-sc .switch input:focus-visible + .slider { outline: 2px solid var(--md-t1); outline-offset: 3px; }
+/* 开关的样子用音乐窗口共用的那一段（music-skin.css 的 .switch），这里只管它在一行里靠右 */
+#music-dock-root .md-fx-sc .switch { justify-self: end; }
 
 /* 滑条：细线加方形滑块 */
 #music-dock-root .md-fx-sc input[type="range"] {
