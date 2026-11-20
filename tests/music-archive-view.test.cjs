@@ -540,3 +540,22 @@ test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页�
     view.destroy();
     f.close();
 });
+
+test('降低动态读设置里的统一开关；开关不在时按系统设置挂 body 类', () => {
+    // 系统开着减少动态，但用户在设置里选了「关」：档案页照常动
+    let fire = null;
+    const f = fixture({
+        setup: (w) => {
+            w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+            w.MusicMotion = { reduced: () => false, onChange: (fn) => { fire = fn; return () => { fire = null; }; } };
+        }
+    });
+    assert.ok(!f.w.document.body.classList.contains('music-reduce-motion'));
+    assert.equal(typeof fire, 'function');
+    f.close();
+    assert.equal(fire, null); // 关窗时取消订阅
+    // 没有统一开关：跟随系统
+    const g = fixture({ setup: (w) => { w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} }); } });
+    assert.ok(g.w.document.body.classList.contains('music-reduce-motion'));
+    g.close();
+});

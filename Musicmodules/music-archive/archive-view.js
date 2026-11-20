@@ -62,8 +62,16 @@
         root.querySelectorAll('[data-ref]').forEach((el) => { refs[el.dataset.ref] = el; });
         const returnBtn = document.getElementById('music-archive-return');
 
+        // 降低动态：读设置里的统一开关（跟随系统 / 开 / 关）；没有那个模块时退回系统设置
         const reducedQuery = global.matchMedia ? global.matchMedia('(prefers-reduced-motion: reduce)') : null;
-        const reducedMotion = () => Boolean(reducedQuery && reducedQuery.matches);
+        const reducedMotion = () => {
+            const m = global.MusicMotion;
+            if (m && typeof m.reduced === 'function') return Boolean(m.reduced());
+            return Boolean(reducedQuery && reducedQuery.matches);
+        };
+        // 样式只认 body.music-reduce-motion；统一开关不在时由这里按系统设置挂上
+        const syncMotionClass = () => { if (!global.MusicMotion) document.body.classList.toggle('music-reduce-motion', reducedMotion()); };
+        syncMotionClass();
         const stageConfig = global.MusicStageConfig;
         const quality = () => (stageConfig && stageConfig.get && stageConfig.get().quality) || 'standard';
 
@@ -1003,7 +1011,14 @@
         });
         bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
         const unsubscribeQuality = stageConfig && stageConfig.subscribe ? stageConfig.subscribe(() => { if (isShown()) { ensureScene(); kick(); } }) : null;
-        reducedQuery?.addEventListener?.('change', () => kick());
+        const onMotion = () => {
+            syncMotionClass();
+            if (reducedMotion()) stopInertia();
+            state.scene?.touch();
+            kick();
+        };
+        reducedQuery?.addEventListener?.('change', onMotion);
+        const offMotion = global.MusicMotion && typeof global.MusicMotion.onChange === 'function' ? global.MusicMotion.onChange(onMotion) : null;
 
         const clockTimer = setInterval(() => {
             refs.clock.textContent = new Date().toTimeString().slice(0, 8);
@@ -1027,6 +1042,8 @@
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
             if (typeof unsubscribeQuality === 'function') unsubscribeQuality();
+            if (typeof offMotion === 'function') offMotion();
+            reducedQuery?.removeEventListener?.('change', onMotion);
             state.scene?.dispose();
             state.scene = null;
             if (originalCreateAmbient) app.createAmbientPixi = originalCreateAmbient;
