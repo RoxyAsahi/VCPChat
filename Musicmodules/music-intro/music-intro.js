@@ -83,11 +83,12 @@
         n.innerA = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.innerB = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.dots = [0, 1].map(() => el('circle', { r: 2.6, class: 'mi-block' }, n.scanRings));
-        // 环收拢到位后，在环里画出记号的七条测地线：扫描环就是记号的圆周。
-        n.scanGeo = Array.from({ length: 7 }, () => el('path', { class: 'mi-stroke', 'stroke-width': 1, opacity: '.4', pathLength: 1, 'stroke-dasharray': '0 1' }, n.scanRings));
+
         n.cap = el('circle', { r: 3, class: 'mi-block' }, n.scanRings);
-        // 核心点放在字的上方，不压字。
-        n.core = el('circle', { cx: CX, cy: CY - 30, r: 0, class: 'mi-block' }, n.scan);
+        // 扫描收尾：环收到记号大小，字退场，环里画出记号；扫描环就是记号的圆周。
+        n.scanMark = el('g', {}, n.scan);
+        n.scanMarkParts = buildMark(n.scanMark, CX, CY, 46, 2.2);
+        n.scanMarkParts.ring.style.display = 'none';
         n.scanText = el('text', { x: CX, y: CY + 6, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 600 }, n.scan);
         n.scanSub = el('text', { x: CX, y: CY + 30, 'text-anchor': 'middle', 'font-size': 9, 'letter-spacing': '2.4', class: 'mi-muted' }, n.scan);
 
@@ -102,7 +103,7 @@
         n.welcomeRule = el('rect', { x: CX - 128, y: 330, width: 0, height: 2, class: 'mi-block' }, n.welcomeInner);
         n.welcomeSub = el('text', { x: CX, y: 352, 'text-anchor': 'middle', 'font-size': 10, 'letter-spacing': '2.6', class: 'mi-muted' }, n.welcomeInner);
         n.welcomeMark = el('g', {}, n.welcomeInner);
-        buildMark(n.welcomeMark, CX, 394, 17.5, 1.6);
+        drawMark(buildMark(n.welcomeMark, CX, 394, 17.5, 1.6), 99, 0);
 
         // 进出舞台：档案号
         n.file = el('g', { opacity: 0 }, svg);
@@ -131,16 +132,34 @@
         const p2 = `${(cx + R * Math.cos(b)).toFixed(2)},${(cy + R * Math.sin(b)).toFixed(2)}`;
         return `M${p1}A${r.toFixed(2)},${r.toFixed(2)} 0 0 0 ${p2}`;
     };
+    // 记号只取圆盘中间交织的那一片：测地线画在一个比可见圆周大 1.53 倍的圆盘上，再裁进可见圆周里，
+    // 外圈不留空白。R 是可见圆周的半径。
+    let clipSeq = 0;
+    const DISK = 1.533;
     const buildMark = (parent, cx, cy, R, width) => {
         const step = Math.PI * 2 / 7, off = -Math.PI / 2;
-        const ring = el('circle', { cx, cy, r: R, class: 'mi-stroke', 'stroke-width': width, pathLength: 1, transform: `rotate(-90 ${cx} ${cy})` }, parent);
+        const id = `mi-mark-clip-${++clipSeq}`;
+        const defs = el('defs', {}, parent);
+        el('circle', { cx, cy, r: R }, el('clipPath', { id }, defs));
+        const body = el('g', { 'clip-path': `url(#${id})` }, parent);
+        const line = (d, w, op) => el('path', { d, class: 'mi-stroke', 'stroke-width': w.toFixed(2), opacity: op, pathLength: 1, 'stroke-dasharray': '0 1' }, body);
+        const D = R * DISK;
         const outer = [], inner = [];
         for (let k = 0; k < 7; k++) {
-            outer.push(el('path', { d: geodesic(cx, cy, R, off + k * step, off + (k + 2) * step), class: 'mi-stroke', 'stroke-width': (width * 0.62).toFixed(2), pathLength: 1 }, parent));
-            inner.push(el('path', { d: geodesic(cx, cy, R * 0.52, off + (k + 1) * step, off + (k + 3) * step), class: 'mi-stroke', 'stroke-width': (width * 0.45).toFixed(2), opacity: '.55', pathLength: 1 }, parent));
+            outer.push(line(geodesic(cx, cy, D, off + k * step, off + (k + 2) * step), width * 0.62, '1'));
+            inner.push(line(geodesic(cx, cy, D * 0.52, off + (k + 1) * step, off + (k + 3) * step), width * 0.45, '.6'));
         }
-        const core = el('circle', { cx, cy, r: width * 1.5, class: 'mi-block' }, parent);
+        const ring = el('circle', { cx, cy, r: R, class: 'mi-stroke', 'stroke-width': width, pathLength: 1, 'stroke-dasharray': '0 1', transform: `rotate(-90 ${cx} ${cy})` }, parent);
+        const core = el('circle', { cx, cy, r: width * 1.5, class: 'mi-block', opacity: '0' }, parent);
         return { ring, outer, inner, core };
+    };
+    // 按顺序画出记号：圆周 → 七条测地线 → 内圈 → 中心点。k 把整段时长按比例压缩。
+    const drawMark = (mp, t, t0, k = 1) => {
+        const at = (a, b) => easeOut(progress(t, t0 + a * k, t0 + b * k));
+        drawStroke(mp.ring, at(0, 0.55));
+        mp.outer.forEach((path, i) => drawStroke(path, at(0.4 + i * 0.07, 0.75 + i * 0.07)));
+        mp.inner.forEach((path, i) => drawStroke(path, at(0.8 + i * 0.04, 1.1 + i * 0.04)));
+        mp.core.setAttribute('opacity', t >= t0 + 1.1 * k ? '1' : '0');
     };
     const drawStroke = (node, p) => node.setAttribute('stroke-dasharray', `${p.toFixed(4)} ${(1 - p + 0.0001).toFixed(4)}`);
 
@@ -148,7 +167,8 @@
     // local 是扫描段内的秒数；speed 把同一条轨迹压快（短版 1.5 倍）。
     const renderScan = (n, local, { speed = 1, count = 0, label = 'INDEXING', sub = '' } = {}) => {
         const t = local * speed;
-        const r = keys([[0, 1500], [0.2, 900], [0.4, 520], [0.6, 330], [0.8, 274], [1.0, 258], [1.9, 246]], t);
+        const collapse = smooth(progress(t, 1.12, 1.38));
+        const r = keys([[0, 1500], [0.2, 900], [0.4, 520], [0.6, 330], [0.8, 274], [1.0, 258], [1.9, 246]], t) * (1 - collapse) + 46 * collapse;
         const outerStart = keys([[0, 470], [0.4, 230], [0.8, 20], [1.2, -70], [1.9, -90]], t) * DEG;
         const outerSweep = keys([[0, 30], [0.4, 190], [0.8, 300], [1.2, 352], [1.6, 360]], t) * DEG;
         const whiteStart = keys([[0, -100], [0.5, 120], [1.0, 230], [1.9, 270]], t) * DEG;
@@ -165,12 +185,9 @@
             dot.setAttribute('cx', (CX + Math.cos(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
             dot.setAttribute('cy', (CY + Math.sin(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
         });
-        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
-        n.scanGeo.forEach((path, i) => {
-            const p = easeOut(progress(t, 1.05 + i * 0.05, 1.4 + i * 0.05));
-            path.setAttribute('d', p > 0 ? geodesic(CX, CY, r, off + i * step, off + (i + 2) * step) : '');
-            drawStroke(path, p);
-        });
+        // 收拢时辅助弧和轨道点退掉，只剩外环
+        for (const node of [n.white, n.innerA, n.innerB, ...n.dots]) node.style.opacity = String(1 - collapse);
+        drawMark(n.scanMarkParts, t, 1.2, 0.26);
         const capA = outerStart + outerSweep;
         n.cap.setAttribute('cx', (CX + Math.cos(capA) * r).toFixed(2));
         n.cap.setAttribute('cy', (CY + Math.sin(capA) * r).toFixed(2));
@@ -186,10 +203,10 @@
         const tracking = keys([[0, 26], [0.2, 12], [0.4, 5], [0.6, 1.6], [0.8, 0]], t);
         n.scanText.setAttribute('letter-spacing', tracking.toFixed(2));
         n.scanText.textContent = `${label} ${pad4(count)} FILES`;
-        n.scanText.style.opacity = String(keys([[0, 0], [0.16, 1]], t));
+        const textOut = 1 - smooth(progress(t, 1.02, 1.18));
+        n.scanText.style.opacity = String(keys([[0, 0], [0.16, 1]], t) * textOut);
         n.scanSub.textContent = sub;
-        n.scanSub.style.opacity = String(progress(t, 0.5, 0.7));
-        n.core.setAttribute('r', String(keys([[1.2, 0], [1.35, 5], [1.5, 3.2]], t)));
+        n.scanSub.style.opacity = String(progress(t, 0.5, 0.7) * textOut);
     };
 
     // ---------- 开场 ----------
@@ -206,12 +223,8 @@
 
         // 记号描线、音轨竖条升起、文字
         n.mark.style.opacity = t >= 2.2 && t < FULL.scan ? '1' : '0';
-        // 先画圆周（无穷远），再一条一条画出七条测地线，最后内层和中心点
-        const mp = n.markParts;
-        drawStroke(mp.ring, easeOut(progress(t, 2.2, 2.75)));
-        mp.outer.forEach((path, i) => drawStroke(path, easeOut(progress(t, 2.6 + i * 0.07, 2.95 + i * 0.07))));
-        mp.inner.forEach((path, i) => drawStroke(path, easeOut(progress(t, 3.0 + i * 0.04, 3.3 + i * 0.04))));
-        mp.core.setAttribute('opacity', t >= 3.3 ? '1' : '0');
+        // 先画圆周（无穷远），再一条一条画出七条测地线，然后内圈、外圈编织带和中心点
+        drawMark(n.markParts, t, 2.2);
         n.markWord.textContent = typed('VCP · MUSIC', t, 3.0, 3.45);
         n.brand.forEach((line, i) => {
             const p = easeOut(progress(t, 3.3 + i * 0.08, 3.85 + i * 0.08));
