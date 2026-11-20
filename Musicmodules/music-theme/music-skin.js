@@ -157,6 +157,7 @@
             describe();
         }
 
+        window.setupMusicClassicList?.(app);
         setupStageSkin();
     };
 

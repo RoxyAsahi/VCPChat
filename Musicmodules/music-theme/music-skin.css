@@ -1029,3 +1029,106 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
     background: transparent;
     border-bottom-color: transparent;
 }
+
+/* ---------- 经典列表：标题 / 歌手 / 时长三列，表头排序 ---------- */
+.music-list-head {
+    display: grid;
+    /* 第一格对齐行号那一列，放「添加时间」排序；后三格和每行的三列对齐 */
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, .8fr) 52px;
+    align-items: end;
+    column-gap: 12px;
+    padding: 6px 16px 6px 16px;
+    border-bottom: 1px solid var(--ar-hairline);
+    font-family: var(--mt-font-label);
+}
+
+.music-list-sort.is-added {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.music-list-sort.is-title { grid-column: 2; grid-row: 1; }
+.music-list-sort.is-artist { grid-column: 3; grid-row: 1; }
+.music-list-sort.is-duration { grid-column: 4; grid-row: 1; }
+
+.music-list-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--ar-muted);
+    font: 500 10px/1.2 var(--mt-font-label);
+    letter-spacing: .08em;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.music-list-sort span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.music-list-sort.is-duration {
+    justify-content: flex-end;
+}
+
+.music-list-sort:hover,
+.music-list-sort.is-on {
+    color: var(--ar-ink);
+}
+
+.music-list-sort.is-on {
+    font-weight: 700;
+}
+
+.music-list-sort i {
+    font-style: normal;
+    font-family: var(--mt-font-mono);
+}
+
+.music-list-sort:focus-visible {
+    outline: 1px solid var(--ar-ink);
+    outline-offset: 2px;
+}
+
+.left-sidebar:has(#playlist[style*="none"]) .music-list-head {
+    display: none;
+}
+
+.sidebar-playlist li[data-cols="1"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) 52px;
+    column-gap: 12px;
+    align-items: center;
+}
+
+.sidebar-playlist li[data-cols="1"] > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.sidebar-playlist .cl-artist {
+    font-size: 12px;
+    color: var(--ar-muted);
+    font-weight: 400;
+}
+
+.sidebar-playlist .cl-duration {
+    text-align: right;
+    font-family: var(--mt-font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ar-muted);
+    font-weight: 400;
+}
+
+.sidebar-playlist li.active .cl-artist,
+.sidebar-playlist li.active .cl-duration {
+    color: var(--ar-ink-2);
+}
