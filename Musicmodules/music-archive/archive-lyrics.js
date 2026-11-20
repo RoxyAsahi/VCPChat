@@ -30,9 +30,9 @@
     };
 
     const TEMPLATE = `
-        <div class="archive-lyrics-head"><span>LYRICS</span><i>／</i><b data-y="title"></b></div>
+        <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
-        <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i>FETCH LYRICS →</i></button></div>`;
+        <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
     /*
      * opts: { host, app, reducedMotion(), onChange(shown) }

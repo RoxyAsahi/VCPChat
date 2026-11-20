@@ -112,6 +112,8 @@ function setupSidebar(app) {
             const rect = app.contextMenu.getBoundingClientRect();
             if (rect.right > window.innerWidth) app.contextMenu.style.left = `${window.innerWidth - rect.width - 10}px`;
             if (rect.bottom > window.innerHeight) app.contextMenu.style.top = `${window.innerHeight - rect.height - 10}px`;
+            // 从按下右键的那一点长出来
+            window.MusicFluid?.bud(app.contextMenu, { x, y });
         });
     };
 

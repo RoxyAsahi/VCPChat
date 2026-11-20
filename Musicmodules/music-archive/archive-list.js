@@ -31,15 +31,15 @@
             <span class="archive-key" aria-hidden="true">/</span>
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
-            ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="${zh}（${en}）">${zh}</button>`).join('')}
+            ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="按${zh === '全部' ? '曲名' : zh}浏览">${zh}</button>`).join('')}
             <span class="archive-list-sort">
                 <button type="button" data-l="sortBtn" aria-haspopup="menu" aria-expanded="false" title="排序方式（阵列跟着重排）"><span class="archive-glyph-sort" aria-hidden="true"></span><span data-l="sortName">标题</span></button>
                 <span class="archive-list-sort-menu" role="menu" data-l="sortMenu" hidden>
-                    ${SORTS.map(([k, zh, en]) => `<button type="button" role="menuitemradio" data-sort="${k}" aria-checked="false"><span>${zh}</span><i>${en}</i></button>`).join('')}
+                    ${SORTS.map(([k, zh, en]) => `<button type="button" role="menuitemradio" data-sort="${k}" aria-checked="false"><span>${zh}</span></button>`).join('')}
                 </span>
             </span>
         </div>
-        <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单 <i>NEW PLAYLIST</i></button></div>
+        <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单</button></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
             <div class="archive-list-spacer" data-l="spacer"></div>
@@ -210,7 +210,7 @@
                     : state.kind === 'playlist' ? [out.rows.length ? '歌单里还没有歌' : '还没有歌单', '在曲目上右键 → 加入歌单']
                     : state.kind === 'recent' ? ['还没有播放记录', '播放过的歌会排在这里']
                     : ['这里还没有曲目', ''];
-                r.empty.innerHTML = `<b>NO DATA</b><span>${esc(line)}</span>${hint ? `<i>${esc(hint)}</i>` : ''}`;
+                r.empty.innerHTML = `<span>${esc(line)}</span>${hint ? `<i>${esc(hint)}</i>` : ''}`;
             }
             manage.confirm = null;
             r.newPl.hidden = state.kind !== 'playlist' || Boolean(state.query.trim());
@@ -261,12 +261,12 @@
                     + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
             }
             const t = tracks()[row.i] || {};
-            const meta = [t.artist, t.album].filter(Boolean).join(' · ') || 'UNKNOWN ARTIST';
+            const meta = [t.artist, t.album].filter(Boolean).join(' · ') || '未知歌手';
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             const time = durationOf(t, row.i);
             return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
                 + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
-                + `<span class="rt"><i>${esc(opts.fileNumber(t, row.i))}</i>${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
+                + `<span class="rt">${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
 
         /*
@@ -915,18 +915,19 @@
             menu.className = 'archive-batch-menu';
             menu.setAttribute('role', 'menu');
             menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
-            menu.innerHTML = `<header>已选 ${indices.length} 首 <i>SELECTED</i></header>`
-                + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放', 'PLAY NEXT') : '')
-                + (typeof app.queueAdd === 'function' ? item('queue', '加入队列', 'ADD TO QUEUE') : '')
+            menu.innerHTML = `<header>已选 ${indices.length} 首</header>`
+                + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
+                + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
                 + playlists().map((p, order) => item('pl', '加入「' + (p.name || '未命名歌单') + '」', '', ` data-id="${esc(p.id ?? order)}"`)).join('')
-                + item('pl-new', '新建歌单并加入', 'NEW PLAYLIST')
+                + item('pl-new', '新建歌单并加入')
                 + '<hr>'
-                + item('remove', scope ? '从歌单「' + scope.name + '」移除' : '从曲库列表移除', 'REMOVE');
+                + item('remove', scope ? '从歌单「' + scope.name + '」移除' : '从曲库列表移除');
             document.body.appendChild(menu);
             const w = menu.offsetWidth || 240, h = menu.offsetHeight || 300;
             menu.style.left = Math.max(8, Math.min(x, (global.innerWidth || 1600) - w - 10)) + 'px';
             menu.style.top = Math.max(8, Math.min(y, (global.innerHeight || 900) - h - 10)) + 'px';
+            global.MusicFluid?.bud(menu, { x, y });
             const items = () => [...menu.querySelectorAll('[data-batch]')];
             const run = (b) => {
                 const act = b.dataset.batch;
@@ -969,7 +970,7 @@
         // 拖到歌单上
         const dragIndices = (row) => pickedIndices(row);
         const openShelf = () => {
-            r.shelf.innerHTML = '<b>拖到歌单上 <i>DROP ON A PLAYLIST</i></b>'
+            r.shelf.innerHTML = '<b>拖到歌单上</b>'
                 + playlists().map((p, order) => `<button type="button" data-drop="${esc(p.id ?? order)}">${esc(p.name || '未命名歌单')}</button>`).join('')
                 + '<button type="button" data-drop-new>＋ 新建歌单</button>';
             r.shelf.hidden = false;
@@ -1118,6 +1119,7 @@
             paintSort();
             r.sortMenu.hidden = false;
             r.sortBtn.setAttribute('aria-expanded', 'true');
+            global.MusicFluid?.bud(r.sortMenu, r.sortBtn);
             document.addEventListener('pointerdown', outside, true);
             (r.sortMenu.querySelector('[aria-checked="true"]') || r.sortMenu.querySelector('[data-sort]')).focus();
         };

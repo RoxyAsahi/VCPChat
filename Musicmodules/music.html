@@ -25,6 +25,11 @@
     <!-- /music-intro -->
     <!-- Phantom audio element to enable Media Session API -->
     <audio id="phantom-audio" loop style="display:none;"></audio>
+    <!-- 音频引擎没有启动时的提示，内容由 music.js 根据引擎状态填写 -->
+    <div id="audio-engine-notice" class="audio-engine-notice" role="alert" hidden>
+        <span class="audio-engine-notice-title">音频引擎没有启动，暂时无法播放</span>
+        <span class="audio-engine-notice-detail"></span>
+    </div>
     <!-- Custom Title Bar -->
     <div id="custom-title-bar">
         <div class="title">VCP - 音乐播放器</div>
@@ -938,6 +943,7 @@
     <!-- music-archive -->
     <!-- 流体落点标记：档案页和底栏都用，要排在两者之前 -->
     <script src="music-dock/music-fluid-marker.js"></script>
+    <script src="music-dock/music-fluid-kit.js"></script>
     <script src="music-archive/archive-model.js"></script>
     <script src="music-archive/archive-scene.js"></script>
     <script src="music-archive/archive-index.js"></script>
@@ -949,6 +955,7 @@
 
     <!-- music-dock -->
     <link rel="stylesheet" href="music-dock/music-dock.css">
+    <link rel="stylesheet" href="music-dock/music-fluid-kit.css">
     <div id="music-dock-root"></div>
     <script src="music-dock/music-dock-icons.js"></script>
     <script src="music-dock/music-toast.js"></script>

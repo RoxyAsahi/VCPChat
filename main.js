@@ -198,6 +198,8 @@ const docxHandlers = {
 };
 const loomManagerModule = require('./modules/loom/VCPLoomManager');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
+const audioEngineEndpoint = require('./modules/services/audioEngineEndpoint');
+const { launchAudioEngine, describeExit: describeAudioEngineExit } = require('./modules/services/audioEngineLauncher');
 const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
 const { SenderTaskRegistry } = require('./modules/services/senderTaskRegistry');
 const { ChatDataServiceFacade } = require('./modules/services/chatDataService');
@@ -603,14 +605,19 @@ function toggleDevToolsForWindow(focusedWindow) {
 
 // --- Audio Engine Management ---
 // Now uses the Rust native audio engine instead of Python
+let audioEngineStartPromise = null;
+
 function startAudioEngine() {
-    return new Promise((resolve, reject) => {
-        // --- Uniqueness Check ---
-        if (audioEngineProcess && !audioEngineProcess.killed) {
-            console.log('[Main] Audio Engine process is already running.');
-            resolve(); // Already running, so we can consider it "ready"
-            return;
-        }
+    // --- Uniqueness Check ---
+    if (audioEngineProcess && !audioEngineProcess.killed && audioEngineEndpoint.getStatus().state === 'ready') {
+        console.log('[Main] Audio Engine process is already running.');
+        return Promise.resolve();
+    }
+    // 预热和打开音乐窗口可能同时调用，共用同一次启动。
+    if (audioEngineStartPromise) return audioEngineStartPromise;
+
+    audioEngineStartPromise = (async () => {
+        if (audioEngineStopPromise) await audioEngineStopPromise.catch(() => {});
 
         // Use the Rust audio server binary (moved to audio_engine directory)
         const binaryName = process.platform === 'win32' ? 'audio_server.exe' : 'audio_server';
@@ -630,54 +637,51 @@ function startAudioEngine() {
         if (!fs.existsSync(rustBinaryPath)) {
             const errorMsg = `Rust audio engine binary not found at: ${rustBinaryPath}. Please run 'cargo build --release' in rust_audio_engine directory.`;
             console.error(`[Main] ${errorMsg}`);
-            reject(new Error(errorMsg));
-            return;
+            audioEngineEndpoint.markFailed(`找不到音频引擎程序：${rustBinaryPath}`);
+            throw new Error(errorMsg);
         }
 
         audioEngineStopPromise = null;
         isAudioEngineStopping = false;
 
-        const args = ['--port', '63789'];
-        audioEngineProcess = spawn(rustBinaryPath, args);
-
-        const readyTimeout = setTimeout(() => {
-            console.error('[Main] Audio Engine failed to start within 10 seconds.');
-            reject(new Error('Audio Engine timed out.'));
-        }, 10000); // 10-second timeout (Rust starts faster)
-
-        audioEngineProcess.stdout.on('data', (data) => {
-            const output = data.toString().trim();
-            console.log(`[AudioEngine STDOUT]: ${output}`);
-            // Check for our ready signal from Rust server
-            if (output.includes('RUST_AUDIO_ENGINE_READY')) {
-                console.log('[Main] Rust Audio Engine is ready.');
-                clearTimeout(readyTimeout);
-                resolve();
-            }
+        const { port } = await launchAudioEngine({
+            binaryPath: rustBinaryPath,
+            spawnProcess: spawn,
+            onStdout: (text) => console.log(`[AudioEngine STDOUT]: ${text.trim()}`),
+            onProcess: (child, attemptPort) => {
+                audioEngineProcess = child;
+                child.stderr.on('data', (data) => {
+                    const logLine = data.toString().trim();
+                    if (logLine && !logLine.includes('GET /state HTTP/1.1')) {
+                        const logMethod = isAudioEngineStopping ? console.warn : console.error;
+                        logMethod(`[AudioEngine STDERR]: ${logLine}`);
+                    }
+                });
+                child.on('close', (code, signal) => {
+                    console.log(`[Main] Audio Engine process on port ${attemptPort} exited with code ${code}`);
+                    if (audioEngineProcess !== child) return;
+                    const wasReady = audioEngineEndpoint.getStatus().state === 'ready';
+                    const wasStopping = isAudioEngineStopping;
+                    audioEngineProcess = null;
+                    audioEngineStopPromise = null;
+                    isAudioEngineStopping = false;
+                    if (wasStopping) {
+                        audioEngineEndpoint.markStopped();
+                    } else if (wasReady) {
+                        audioEngineEndpoint.markFailed(`音频引擎意外退出（${describeAudioEngineExit(code, signal)}），重新打开音乐窗口会再启动一次。`);
+                    }
+                });
+                child.on('error', (err) => {
+                    console.error('[Main] Failed to start Audio Engine process.', err);
+                });
+            },
         });
-
-        audioEngineProcess.stderr.on('data', (data) => {
-            const logLine = data.toString().trim();
-            if (logLine && !logLine.includes('GET /state HTTP/1.1')) {
-                const logMethod = isAudioEngineStopping ? console.warn : console.error;
-                logMethod(`[AudioEngine STDERR]: ${logLine}`);
-            }
-        });
-
-        audioEngineProcess.on('close', (code) => {
-            console.log(`[Main] Audio Engine process exited with code ${code}`);
-            clearTimeout(readyTimeout);
-            audioEngineProcess = null;
-            audioEngineStopPromise = null;
-            isAudioEngineStopping = false;
-        });
-
-        audioEngineProcess.on('error', (err) => {
-            console.error('[Main] Failed to start Audio Engine process.', err);
-            clearTimeout(readyTimeout);
-            reject(err);
-        });
+        console.log(`[Main] Rust Audio Engine is ready on port ${port}.`);
+    })().finally(() => {
+        audioEngineStartPromise = null;
     });
+
+    return audioEngineStartPromise;
 }
 
 async function stopAudioEngine() {
@@ -701,7 +705,7 @@ async function stopAudioEngine() {
             const controller = new AbortController();
             const shutdownTimer = setTimeout(() => controller.abort(), 2000);
             try {
-                await fetch('http://127.0.0.1:63789/shutdown', {
+                await fetch(`${audioEngineEndpoint.getBaseUrl()}/shutdown`, {
                     method: 'POST',
                     signal: controller.signal
                 });
