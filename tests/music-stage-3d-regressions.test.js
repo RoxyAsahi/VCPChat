@@ -229,3 +229,29 @@ test('3D stages step down pixels, then a tier, and only get pixels back on their
     assert.equal(scale.steps, 0);
     assert.equal(scale.quality('ultimate'), 'ultimate');
 });
+
+test('the canvas shaders for a lens-less tier are compiled in the background before the drop', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const compiled = [];
+    const renderer = (parallel) => ({
+        extensions: { has: (name) => parallel && name === 'KHR_parallel_shader_compile' },
+        getRenderTarget: () => null,
+        setRenderTarget(target) { this.target = target; },
+        compileAsync(scene) { compiled.push([scene, this.target]); return Promise.resolve(); },
+        getContext: () => null,
+        info: { programs: [] }
+    });
+    const T = { WebGLRenderTarget: class { dispose() {} }, HalfFloatType: 1 };
+    const scene = {}, camera = {};
+    // Not on the way down yet: nothing to do.
+    assert.equal(U.warmLensless(T, renderer(true), scene, camera, { steps: 0 }, 'standard'), false);
+    // Standard keeps its lens until the drop to the saving tier, which draws to the canvas.
+    assert.equal(U.warmLensless(T, renderer(true), scene, camera, { steps: 1 }, 'standard'), true);
+    assert.deepEqual(compiled, [[scene, null]]);
+    // The top tier drops to standard, which still has its lens: wait for the next rung.
+    assert.equal(U.warmLensless(T, renderer(true), scene, camera, { steps: 1 }, 'ultimate'), false);
+    // Without background compiling it would only move the stall, so it is skipped (and marked done).
+    assert.equal(U.warmLensless(T, renderer(false), scene, camera, { steps: 1 }, 'standard'), true);
+    assert.equal(compiled.length, 1);
+});

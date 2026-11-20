@@ -57,6 +57,7 @@
             U.updateWords(Array.from(fallbackLine.children), frame.wordStates || []);
         };
         const renderScale = U.createRenderScale();
+        let lenslessWarm = false;
         const resize = () => {
             width = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             height = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
@@ -78,6 +79,7 @@
             renderer?.forceContextLoss();
             renderer?.domElement.remove();
             renderer = camera = scene = null;
+            lenslessWarm = false;
             initialized = false;
             dirty = true;
             // A rebuilt stage starts with empty layers: compile the journey into them again.
@@ -257,6 +259,7 @@
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
             if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(drawn().quality))) resize();
+            if (!lenslessWarm) lenslessWarm = U.warmLensless(T, renderer, scene, camera, renderScale, drawn().quality);
             renderer.info.reset();
             world.renderReflection(renderer, camera);
             // By day the paper-white sky is brighter than the lens's usual
@@ -315,6 +318,8 @@
                 world.prepareEnvironment?.(renderer);
                 // The lens draws the scene offscreen; without it only the water pass does.
                 await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
+                if (mode.destroyed || !renderer) return;
+                if (!canvasSmoothing) await optics?.precompile?.(renderer);
                 if (mode.destroyed || !renderer) return;
                 initialized = true;
                 dirty = true;

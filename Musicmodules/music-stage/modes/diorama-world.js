@@ -182,12 +182,18 @@
         };
         const wood = grained(false), permanentWay = grained(true);
         // Shore rocks: a scanned pile, lit as stone in the palette's colour.
+        // It starts with a plain white texel in both slots, so the warm-up
+        // compiles the shader it will finally draw with: the scan arriving only
+        // swaps the picture, instead of linking a new program mid-song.
         const rockMaterial = material(new T.MeshStandardMaterial({ color: '#444852', roughness: 0.92 }));
+        const blankRock = new T.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+        blankRock.needsUpdate = true;
+        scans.push(blankRock);
+        rockMaterial.map = rockMaterial.bumpMap = blankRock;
+        rockMaterial.bumpScale = 0.4;
         scan('coast-rock.webp', texture => {
             texture.flipY = false;
             rockMaterial.map = rockMaterial.bumpMap = texture;
-            rockMaterial.bumpScale = 0.4;
-            rockMaterial.needsUpdate = true;
         });
         // Several boxes fused into one shape, so a profile still costs one instance.
         const fused = parts => {
@@ -901,6 +907,13 @@
         sleepers.layers.set(1);
         // The rock pile is a data script of its own, fetched once the stage is up.
         let rocks = null, rocksArrived = false;
+        // Until the pile arrives an empty stand-in carries its material, so the
+        // warm-up still compiles the rocks' shader.
+        const rockShape = geometry(new T.BufferGeometry());
+        rockShape.setAttribute('position', new T.BufferAttribute(new Float32Array(0), 3));
+        rockShape.setAttribute('normal', new T.BufferAttribute(new Float32Array(0), 3));
+        rockShape.setAttribute('uv', new T.BufferAttribute(new Float32Array(0), 2));
+        let rockStandIn = instances(rockMaterial, 1, rockShape);
         // The camera's path past each address, worked out once per journey.
         let passing = new Map(), passingTrack = null;
         const raiseRocks = () => {
@@ -916,6 +929,8 @@
             shape.setAttribute('normal', new T.BufferAttribute(new Int8Array(bytes(data.normal).buffer), 3, true));
             shape.setAttribute('uv', new T.BufferAttribute(new Uint16Array(bytes(data.uv).buffer), 2, true));
             shape.setIndex(new T.BufferAttribute(new Uint16Array(bytes(data.index).buffer), 1));
+            rockStandIn?.removeFromParent();
+            rockStandIn = null;
             rocks = instances(rockMaterial, 40, shape);
             rocks.name = 'rocks';
             sceneryPools.push(rocks);
@@ -950,9 +965,9 @@
                 bx, -2, bz, bx, elevation(b), bz, ax, elevation(a), az);
         }
         /*
-         * The far shore is a long coastline. Off it lies a small island: a wooded
-         * table of land, its lighthouse tower standing on top, joined to
-         * the shore by a long bridge. Beyond and to the right, a snow-capped peak. They
+         * The far shore is the Shonan coast. Off it lies Enoshima: a wooded
+         * table of an island, its lighthouse tower standing on top, joined to
+         * the land by a long bridge. Beyond and to the right, Mount Fuji. They
          * are part of the same silhouette as the ridge, a tone apart: the
          * island nearer and darker, the mountain hazed and capped with snow.
          */
@@ -985,7 +1000,7 @@
                 };
                 split(wide0, wide1);
             });
-        const peakCrest = u => {
+        const fujiCrest = u => {
             const flank = Math.pow(Math.max(0, 1 - Math.abs(u)), 1.75);
             return PEAK.height * Math.min(flank, 0.93 + 0.02 * Math.sin(u * 90)) / 0.93;
         };
@@ -993,7 +1008,7 @@
         for (let i = 0; i < 64; i++) {
             const u0 = i / 32 - 1, u1 = (i + 1) / 32 - 1;
             const a0 = PEAK.bearing + u0 * PEAK.reach, a1 = PEAK.bearing + u1 * PEAK.reach;
-            const h0 = peakCrest(u0), h1 = peakCrest(u1), s0 = Math.min(h0, snowLine(u0)), s1 = Math.min(h1, snowLine(u1));
+            const h0 = fujiCrest(u0), h1 = fujiCrest(u1), s0 = Math.min(h0, snowLine(u0)), s1 = Math.min(h1, snowLine(u1));
             facet(a0, a1, PEAK.radius, -2, s0, -2, s1, 1.22);
             if (h0 > s0 || h1 > s1) facet(a0, a1, PEAK.radius, s0, h0, s1, h1, 2.3);
         }
@@ -1028,7 +1043,7 @@
         const headlight = new T.PointLight('#ffe9c4', 0, 16, 2);
         root.add(headlight);
         /*
-         * The train is drawn after a classic seaside electric railcar:
+         * The train is drawn after the Enoshima Electric Railway's 300 series:
          * short two-car articulated sets in a two-tone livery, a folded front
          * of three panes with a lamp on the roof, deep sash windows, one
          * lozenge pantograph to a set. From the cab it is all around the camera
@@ -2427,20 +2442,16 @@
                 shape.dispose();
             };
             const boxAt = (sx, sy, sz, x, y, z, paint) => add(new T.BoxGeometry(sx, sy, sz).translate(x, y, z), paint);
-            // Fewer steps round the edges where they would not show: four for the
-            // cab's fittings, a plain box where the radius is a few millimetres.
-            let edgeSteps = 6;
-            const roundedPanel = (width, height, length, radius, steps = edgeSteps) => {
-                if (steps < 4 || radius < 0.014 && steps < 6) return new T.BoxGeometry(width, height, length);
-                const panel = new T.BoxGeometry(width, height, length, steps, steps, steps);
+            const roundedPanel = (width, height, length, radius) => {
+                const panel = new T.BoxGeometry(width, height, length, 6, 6, 6);
                 const points = panel.attributes.position, surface = panel.attributes.normal;
                 const half = [width / 2, height / 2, length / 2];
-                const offsets = steps === 6 ? [0, 0.38, 1, 0, 1, 0.38, 0] : [0, 1, 0, 1, 0];
+                const offsets = [0, 0.38, 1, 0, 1, 0.38, 0];
                 const normal = new T.Vector3();
                 for (let i = 0; i < points.count; i++) {
                     const mapAxis = (value, limit) => {
-                        const middle = steps / 2, step = Math.round((value / limit + 1) * middle);
-                        return step === middle ? 0 : Math.sign(step - middle) * (limit - radius * offsets[step]);
+                        const step = Math.round((value / limit + 1) * 3);
+                        return step === 3 ? 0 : Math.sign(step - 3) * (limit - radius * offsets[step]);
                     };
                     const x = mapAxis(points.getX(i), half[0]), y = mapAxis(points.getY(i), half[1]);
                     const z = mapAxis(points.getZ(i), half[2]);
@@ -2455,14 +2466,14 @@
             };
             const moulded = (sx, sy, sz, radius, x, y, z, paint) =>
                 add(roundedPanel(sx, sy, sz, radius).translate(x, y, z), paint);
-            const sashRim = (width, height, rail, r, depth, curve = 4) => {
+            const sashRim = (width, height, rail, r, depth) => {
                 const outline = new T.Shape(), opening = new T.Path();
                 roundedOutline(outline, width, height, r);
                 roundedOutline(opening, width - 2 * rail, height - 2 * rail, r - rail * 0.7);
                 outline.holes.push(opening);
                 return new T.ExtrudeGeometry(outline, {
                     depth, bevelEnabled: true, bevelThickness: 0.003,
-                    bevelSize: 0.003, bevelSegments: 1, curveSegments: curve
+                    bevelSize: 0.003, bevelSegments: 1, curveSegments: 4
                 }).translate(0, 0, -depth / 2);
             };
             const F = CAR.floor, WALL = CAR.half - 0.04, END = CAR.length / 2, TOP = CABIN.ceiling, SILL = 2.2, HEAD = 3.06;
@@ -2687,7 +2698,6 @@
             boxAt(0.22, 0.17, 0.32, -(WALL - 0.17), 3.2, 0.4, 11);
             boxAt(0.22, 0.14, 0.3, WALL - 0.17, 3.18, -2.6, 10);
             coarse = true;
-            edgeSteps = 4;
             // Cab bulkhead and the front of the cab: a glazed door or pane in the middle, one either side.
             for (const [z, post, paint] of [[BULKHEAD, 0.12, 0], [FRONT, 0.09, 21]]) {
                 boxAt(2.6, SILL - F, 0.06, 0, (SILL + F) / 2, z, 1);
@@ -2701,8 +2711,8 @@
             moulded(0.033, 0.153, 0.032, 0.014, 0.36, F + 0.72, BULKHEAD + 0.065, 4);
             for (const x of [-0.81, 0, 0.81]) {
                 const span = x === 0 ? 0.828 : 0.594;
-                add(sashRim(span, 0.819, 0.026, 0.091, 0.024, 2).translate(x, 2.628, BULKHEAD + 0.048), 13);
-                add(sashRim(span - 0.02, 0.798, 0.014, 0.081, 0.012, 2).translate(x, 2.628, BULKHEAD + 0.064), 4);
+                add(sashRim(span, 0.819, 0.026, 0.091, 0.024).translate(x, 2.628, BULKHEAD + 0.048), 13);
+                add(sashRim(span - 0.02, 0.798, 0.014, 0.081, 0.012).translate(x, 2.628, BULKHEAD + 0.064), 4);
             }
             // The driver's desk on the left: a console under the windscreen, an
             // instrument hood leaning back towards the glass with two gauges and a
