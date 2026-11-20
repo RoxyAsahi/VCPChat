@@ -305,9 +305,10 @@
     // 进：第一帧还是档案页（舞台被按住不显示），圆环收拢、打出档案号。圆环收拢后停在「闸门」上，
     //     舞台加载好（3D 场景着色器预热完、第一帧画出来）才往下走：白场到不透明，这一刻放开舞台，白场退去时下面已经是舞台。
     //     加载慢时圆环在原地转，标签换成 LOADING STAGE，不会露出空白画面。
-    // 退：圆环在舞台上收拢，白场到不透明时放开舞台；舞台要等 0.38 秒后自己拆掉 3D 场景，拆完了白场才退，档案页从白场后面出来。
+    // 退：舞台还在演的时候圆环先收拢、纸色底盖严，盖严后才真正退出舞台；舞台拆完 3D 场景、档案页恢复好，再闪一下白场揭开。
     // 换模式（舞台里切到 3D 模式或从 3D 切走）：纸色底盖住舞台，等新模式加载好再揭开。
-    const TRANSIT = { enter: 1.1, exit: 0.9, switch: 0.7, enterGate: 0.44, enterRelease: 0.58, exitRelease: 0.42, switchGate: 0.2 };
+    // 顺序很要紧：过场先画上屏，重活（建 3D 场景、拆场景、档案页恢复渲染）都排在盖住之后才开始，卡顿只会发生在盖住的时候。
+    const TRANSIT = { enter: 1.1, exit: 0.85, switch: 0.7, enterGate: 0.44, enterRelease: 0.58, exitGate: 0.3, exitRelease: 0.3, switchGate: 0.2 };
     const TRANSIT_KINDS = ['enter', 'exit', 'switch'];
     const GATE_MAX = 12; // 最多等 12 秒；再慢也揭开，不把界面挡死
     const renderTransit = (n, t, ctx) => {
@@ -317,7 +318,7 @@
         n.innerA.setAttribute('d', ''); n.innerB.setAttribute('d', '');
         // 等加载时圆环一直转
         const spin = (ctx.wait || 0) * 200 * DEG;
-        const loading = ctx.waiting ? 'LOADING STAGE' + '.'.repeat(1 + (Math.floor((ctx.wait || 0) * 3) % 3)) : '';
+        const loading = ctx.waiting && ctx.loadingLabel !== false ? 'LOADING STAGE' + '.'.repeat(1 + (Math.floor((ctx.wait || 0) * 3) % 3)) : '';
         let r, sweep, start;
         if (kind === 'enter') {
             n.veil.setAttribute('opacity', String(0.38 * smooth(progress(t, 0, 0.15))));
@@ -333,28 +334,29 @@
             // 白场盖严之后，遮罩和圆环一起撤掉，白场退去时只剩舞台。
             if (t >= releaseAt) { n.veil.setAttribute('opacity', '0'); n.scan.style.opacity = '0'; }
         } else if (kind === 'exit') {
-            // 先在舞台上收拢圆环，0.24 起白场升起，0.42 盖严时放开舞台；之后白场约 0.3 秒退去，圆环在档案页上张开。
-            n.flash.style.opacity = String(smooth(progress(t, 0.24, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.01, releaseAt + 0.3))));
-            n.veil.setAttribute('opacity', String(t < releaseAt ? 0.3 * smooth(progress(t, 0, 0.15)) : 0.3 * (1 - smooth(progress(t, releaseAt + 0.18, releaseAt + 0.45)))));
-            if (t < releaseAt) {
-                r = keys([[0, 640], [0.2, 300], [0.38, 168]], t);
-                sweep = keys([[0, 30], [0.32, 360]], t) * DEG;
-                start = keys([[0, 200], [0.38, -90]], t) * DEG + spin;
+            // 0.28 秒内纸色底盖严、圆环收拢；闸门（0.3）之后白场 0.1 秒升起，纸色底在白场后面撤掉，白场退去露出档案页。
+            const gate = TRANSIT.exitGate;
+            n.flash.style.opacity = String(smooth(progress(t, gate, gate + 0.1)) * (1 - smooth(progress(t, gate + 0.11, gate + 0.42))));
+            n.veil.setAttribute('opacity', String(t < gate + 0.1 ? smooth(progress(t, 0.04, 0.28)) : 0));
+            if (t < gate + 0.1) {
+                r = keys([[0, 640], [0.18, 300], [0.3, 168]], t);
+                sweep = keys([[0, 30], [0.26, 360]], t) * DEG;
+                start = keys([[0, 200], [0.3, -90]], t) * DEG + spin;
                 n.scan.style.opacity = String(smooth(progress(t, 0, 0.08)));
             } else {
-                r = keys([[releaseAt, 160], [releaseAt + 0.2, 520]], t);
-                sweep = keys([[releaseAt, 360], [releaseAt + 0.2, 40]], t) * DEG;
-                start = keys([[releaseAt, -90], [releaseAt + 0.2, 160]], t) * DEG + spin;
-                n.scan.style.opacity = String(1 - smooth(progress(t, releaseAt, releaseAt + 0.28)));
+                r = keys([[gate + 0.1, 160], [gate + 0.3, 520]], t);
+                sweep = keys([[gate + 0.1, 360], [gate + 0.3, 40]], t) * DEG;
+                start = keys([[gate + 0.1, -90], [gate + 0.3, 160]], t) * DEG + spin;
+                n.scan.style.opacity = String(1 - smooth(progress(t, gate + 0.1, gate + 0.38)));
             }
-            n.white.setAttribute('d', '');
+            n.white.setAttribute('d', t < gate + 0.1 ? arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG) : '');
             n.fileLabel.textContent = loading || 'RETURN';
             n.fileText.textContent = typed('ARCHIVE', t, 0.04, 0.2);
         } else {
-            // 换模式：纸色底 0.18 秒盖严，等新模式加载好后 0.4 秒揭开
+            // 换模式：舞台在点击 0.17 秒后才开始建新模式，纸色底 0.14 秒就盖严；等新模式加载好后揭开
             const gate = TRANSIT.switchGate;
             n.flash.style.opacity = '0';
-            n.veil.setAttribute('opacity', String(smooth(progress(t, 0, 0.18)) * (1 - smooth(progress(t, gate + 0.05, TRANSIT.switch)))));
+            n.veil.setAttribute('opacity', String(smooth(progress(t, 0, 0.14)) * (1 - smooth(progress(t, gate + 0.05, TRANSIT.switch)))));
             r = keys([[0, 400], [0.18, 168], [gate + 0.05, 160], [TRANSIT.switch, 420]], t);
             sweep = keys([[0, 60], [0.18, 360], [gate + 0.05, 360], [TRANSIT.switch, 40]], t) * DEG;
             start = keys([[0, 120], [0.18, -90]], t) * DEG + spin;
@@ -409,6 +411,7 @@
             if (!current) return;
             const run = current;
             current = null;
+            run.flush?.();
             releaseStage();
             cancelAnimationFrame(run.raf);
             run.detach();
@@ -434,7 +437,7 @@
             document.body.appendChild(root);
             if (!transit) dropCover();
             const nodes = buildScene(root);
-            const ctx = { name: userName, count, flashPeak: flashPeak(), direction: kind, file: extra.file || '', release: extra.release || releaseStage, released: false, wait: extra.wait || 0, waiting: Boolean(extra.wait) };
+            const ctx = { name: userName, count, flashPeak: flashPeak(), direction: kind, file: extra.file || '', release: extra.release || releaseStage, released: false, wait: extra.wait || 0, waiting: Boolean(extra.wait), loadingLabel: extra.loadingLabel };
             const render = kind === 'full' ? renderFull : kind === 'short' ? renderShort : renderTransit;
             const length = kind === 'full' ? FULL.end : kind === 'short' ? SHORT.end : TRANSIT[kind];
 
@@ -449,6 +452,14 @@
                 root,
                 raf: 0,
                 done: extra.done,
+                // 闸门上还没做的事（真正进出舞台）无论如何都要做：过场被打断、窗口在后台不出帧时由这里补上
+                flush: () => {
+                    const g = extra.gate;
+                    if (!g?.action || g.acted) return;
+                    g.acted = true;
+                    clearTimeout(run.actionTimer);
+                    try { g.action(); } catch (e) { console.warn('[MusicIntro]', e); }
+                },
                 detach: () => {
                     global.removeEventListener('keydown', onKey, true);
                     root.removeEventListener('pointerdown', onPointer);
@@ -473,7 +484,13 @@
                     if (gate && !gate.passed) clock = Math.min(clock, gate.at);
                 }
                 let t = fixed ?? clock;
-                if (fixed == null && gate && !gate.passed && t >= gate.at) {
+                if (fixed == null && gate && !gate.passed && t >= gate.at && gate.action && !gate.acted) {
+                    // 闸门这一帧先画上屏（等两帧确认），再开始重活；卡顿出现时屏幕上已经是盖好的画面
+                    gate.frames = (gate.frames || 0) + 1;
+                    ctx.waiting = true;
+                    t = gate.at;
+                    if (gate.frames >= 3) run.flush();
+                } else if (fixed == null && gate && !gate.passed && t >= gate.at) {
                     if (!waitStart) waitStart = now;
                     const waited = (now - waitStart) / 1000;
                     let ok = true;
@@ -485,7 +502,7 @@
                         gate.passed = true;
                         ctx.waiting = false;
                     } else {
-                        ctx.waiting = waited > 0.12;
+                        ctx.waiting = true;
                         ctx.wait = waited;
                         t = gate.at;
                     }
@@ -493,11 +510,12 @@
                 root.toggleAttribute('data-waiting', Boolean(ctx.waiting));
                 const opacity = render(nodes, t, ctx);
                 root.style.opacity = String(opacity);
-                if (fixed == null && t >= length) { current = null; releaseStage(); run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
+                if (fixed == null && t >= length) { current = null; run.flush(); releaseStage(); run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
                 run.raf = requestAnimationFrame(tick);
             };
             run.raf = requestAnimationFrame(tick);
             if (fixed != null) tick(t0);
+            else if (gate?.action) run.actionTimer = setTimeout(run.flush, 1500);
             return run;
         };
 
@@ -544,21 +562,35 @@
 
         let wasStage = document.body.classList.contains('music-stage-active');
         let lastMode = app?.stageHost?.modeId || null;
+        // 舞台宿主原来的 enter / exit（接管之后存在这里）；action 里调它们才是真正进出舞台。
+        let hostEnter = null, hostExit = null;
+        const canCover = () => !reducedMotion() && !document.hidden
+            && !(current && !current.root.classList.contains('is-transit')); // 开场还没放完就不叠过场
+
+        // direction: enter / exit / switch。extra.deferred = true 表示舞台还没动，由过场在盖好之后去调宿主；
+        // 否则是舞台已经自己动了（别处直接改了状态），过场只能跟在后面盖，用「按住舞台」的办法补救。
         const transit = (direction, extra = {}) => {
-            if (reducedMotion()) return null;
-            if (current && !current.root.classList.contains('is-transit')) return null; // 开场还没放完就不叠过场
+            if (!canCover()) return null;
             if (direction === 'enter') {
-                // 档案页据此把选中卡抬起来并继续画；舞台照常加载，只是先不露出来，直到过场放完。
+                // 档案页据此把选中卡抬起来并继续画；舞台先不露出来，直到过场放完。
                 document.body.classList.add('music-stage-entering');
                 const track = app?.playlist?.[app.currentTrackIndex];
                 const file = global.MusicTrackSpecs?.fileNumber?.(track) || 'TRK-0000';
+                const hold = () => {
+                    document.body.classList.remove('mi-stage-hold-exit');
+                    document.body.classList.add('mi-stage-hold-enter');
+                };
                 const run = start('enter', {
                     file: `FILE NUMBER: ${file}`,
-                    gate: { at: TRANSIT.enterGate, ready: stageModeReady },
+                    loadingLabel: SCENE_3D.includes(app?.stageHost?.modeId),
+                    gate: {
+                        at: TRANSIT.enterGate,
+                        ready: stageModeReady,
+                        action: extra.deferred ? () => { hold(); wasStage = true; hostEnter(); lastMode = app?.stageHost?.modeId || lastMode; } : null
+                    },
                     done: () => document.body.classList.remove('music-stage-entering')
                 });
-                document.body.classList.remove('mi-stage-hold-exit');
-                document.body.classList.add('mi-stage-hold-enter');
+                if (!extra.deferred) hold();
                 return run;
             }
             if (direction === 'switch') {
@@ -569,13 +601,89 @@
                 });
             }
             document.body.classList.remove('music-stage-entering');
-            const run = start('exit', { gate: { at: TRANSIT.exitRelease, ready: stageGone } });
-            document.body.classList.remove('mi-stage-hold-enter');
-            document.body.classList.add('mi-stage-hold-exit');
+            const run = start('exit', {
+                loadingLabel: false,
+                gate: {
+                    at: TRANSIT.exitGate,
+                    ready: stageGone,
+                    action: extra.deferred ? () => {
+                        // 纸色底已经盖严：舞台不用再淡出，直接撤
+                        document.body.classList.add('mi-stage-snap');
+                        wasStage = false;
+                        hostExit();
+                        requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('mi-stage-snap')));
+                    } : null
+                }
+            });
+            if (!extra.deferred) {
+                document.body.classList.remove('mi-stage-hold-enter');
+                document.body.classList.add('mi-stage-hold-exit');
+            }
             return run;
         };
-        // 舞台的 enter()/exit() 是同步改 body 类的；MutationObserver 在同一轮里、首帧绘制之前回调，
-        // 所以在这里按住舞台，第一帧画出来的仍是档案页（退场时仍是舞台）。
+
+        // ---------- 接管进出舞台的入口 ----------
+        // 以前是舞台先动、过场跟着盖：退出时档案页一恢复渲染、舞台一拆场景就卡，过场的第一帧反而排在卡顿后面。
+        // 现在把入口接过来：先放过场，盖好了（闸门那一帧已经上屏）再调宿主原来的 enter / exit。
+        const pendingKind = () => (current && current.root.classList.contains('is-transit') ? current.root.dataset.intro : null);
+        const requestEnter = () => {
+            const host = app?.stageHost;
+            if (!host || host.active || pendingKind() === 'enter') return;
+            if (pendingKind() === 'exit') { stop(true); if (host.active) return; }
+            if (!transit('enter', { deferred: true })) hostEnter();
+        };
+        const requestExit = () => {
+            const host = app?.stageHost;
+            if (!host || pendingKind() === 'exit') return;
+            if (pendingKind() === 'enter') stop(true); // 还在进场就反悔：先把进场走完，再退
+            if (!host.active) return;
+            if (!transit('exit', { deferred: true })) hostExit();
+        };
+        const requestToggle = () => {
+            const host = app?.stageHost;
+            if (!host) return;
+            const kind = pendingKind();
+            if (kind === 'enter' || kind === 'exit') return; // 过场中再点不理，免得来回抖
+            if (host.active) requestExit(); else requestEnter();
+        };
+        // 自动化测试（webdriver）里舞台保持同步进出，脚本调完 enter() 立刻就能查状态；要测接管就带 ?introCover=1。
+        let adoptAllowed = true;
+        try { adoptAllowed = !global.navigator?.webdriver || new URLSearchParams(global.location.search).get('introCover') === '1'; } catch (e) { /* 照常接管 */ }
+        const adoptHost = () => {
+            if (!adoptAllowed) return false;
+            const host = app?.stageHost;
+            if (!host || hostEnter || typeof host.enter !== 'function' || typeof host.exit !== 'function') return Boolean(hostEnter);
+            hostEnter = host.enter;
+            hostExit = host.exit;
+            host.enter = requestEnter;
+            host.exit = requestExit;
+            host.toggle = requestToggle;
+            lastMode = host.modeId || lastMode;
+            return true;
+        };
+        // 标题栏的舞台按钮和 Esc 是宿主自己绑的，不经过上面的接口，在它前面拦一道。
+        const onToggleClick = (event) => {
+            if (!event.target.closest?.('#stage-toggle-btn') || !adoptHost()) return;
+            event.stopPropagation();
+            requestToggle();
+        };
+        document.addEventListener('click', onToggleClick, true);
+        const onEscape = (event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented || !adoptHost() || !app.stageHost.active) return;
+            if (document.querySelector('.music-stage-settings.is-open')) return; // 先关设置，交给宿主
+            event.preventDefault();
+            event.stopPropagation();
+            requestExit();
+        };
+        // 冒泡阶段挂在 document 上：底栏面板、搜索框先各自处理 Esc 并拦住，轮到这里才是「退出舞台」；宿主绑在 window 上，排在后面。
+        document.addEventListener('keydown', onEscape);
+        if (adoptAllowed && !adoptHost()) {
+            // 舞台宿主一般先于这里初始化；万一还没有，等它出现
+            let tries = 0;
+            const wait = setInterval(() => { if (adoptHost() || ++tries > 50) clearInterval(wait); }, 200);
+        }
+
+        // 兜底：没走上面入口、舞台自己变了（比如宿主内部直接退出），MutationObserver 在首帧绘制之前回调，按住舞台再盖。
         const onBody = () => {
             const isStage = document.body.classList.contains('music-stage-active');
             if (isStage === wasStage) return;
