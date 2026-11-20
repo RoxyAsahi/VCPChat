@@ -64,6 +64,77 @@
         return `<span class="${text.length > 1 ? 'wide' : ''}">${esc(text)}</span>`;
     };
 
+
+    /*
+     * 右键菜单的键盘操作。菜单本身是播放器的 #track-context-menu（几行 div），这里在档案页打开它之后接管按键：
+     * ↑ ↓ Home End 移动，Enter / 空格执行，→ 打开「加入歌单」子菜单、← 收回，Esc / Tab 关闭并把焦点还回去。
+     * 菜单关掉（visible 类没了）就自动撤掉这些处理。
+     */
+    const menuKeyboard = (app, { restore = null } = {}) => {
+        const menu = app.contextMenu || document.getElementById('track-context-menu');
+        if (!menu || !menu.classList.contains('visible')) return null;
+        const shown = (el) => !el.hidden && el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
+        const topItems = () => [...menu.querySelectorAll(':scope > .context-menu-item')].filter(shown);
+        let sub = null; // 打开着的子菜单所在的那一项
+        const subItems = () => (sub ? [...sub.querySelectorAll('.submenu-item')] : []);
+        const items = () => (sub ? subItems() : topItems());
+        const prep = (el) => { el.setAttribute('role', 'menuitem'); el.tabIndex = -1; };
+        menu.setAttribute('role', 'menu');
+        topItems().forEach(prep);
+        const focusAt = (k) => { const list = items(); if (list.length) list[(k + list.length) % list.length].focus({ preventScroll: true }); };
+        const openSub = (item) => {
+            if (!subItemsOf(item).length) return;
+            sub = item;
+            item.classList.add('archive-kbd-sub');
+            subItems().forEach(prep);
+            focusAt(0);
+        };
+        const subItemsOf = (item) => [...item.querySelectorAll('.submenu-item')];
+        const closeSub = () => { if (!sub) return; const item = sub; sub = null; item.classList.remove('archive-kbd-sub'); item.focus({ preventScroll: true }); };
+        let done = false;
+        const finish = ({ focusBack = true } = {}) => {
+            if (done) return;
+            done = true;
+            document.removeEventListener('keydown', onKey, true);
+            observer.disconnect();
+            menu.querySelectorAll('.archive-kbd-sub').forEach((el) => el.classList.remove('archive-kbd-sub'));
+            if (focusBack && restore && restore.isConnected) restore.focus({ preventScroll: true });
+        };
+        const close = () => { menu.classList.remove('visible'); finish(); };
+        const onKey = (e) => {
+            if (!menu.classList.contains('visible')) { finish({ focusBack: false }); return; }
+            const list = items();
+            const at = list.indexOf(document.activeElement);
+            switch (e.key) {
+                case 'ArrowDown': focusAt(at + 1); break;
+                case 'ArrowUp': focusAt(at < 0 ? -1 : at - 1); break;
+                case 'Home': focusAt(0); break;
+                case 'End': focusAt(-1); break;
+                case 'ArrowRight': if (!sub && at >= 0 && list[at].classList.contains('has-submenu')) openSub(list[at]); break;
+                case 'ArrowLeft': closeSub(); break;
+                case 'Enter': case ' ': {
+                    const el = list[at];
+                    if (!el) break;
+                    if (!sub && el.classList.contains('has-submenu')) { openSub(el); break; }
+                    el.click();
+                    if (menu.classList.contains('visible')) menu.classList.remove('visible');
+                    finish();
+                    break;
+                }
+                case 'Escape': if (sub) closeSub(); else close(); break;
+                case 'Tab': close(); break;
+                default: return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        };
+        const observer = new MutationObserver(() => { if (!menu.classList.contains('visible')) finish({ focusBack: false }); });
+        observer.observe(menu, { attributes: true, attributeFilter: ['class'] });
+        document.addEventListener('keydown', onKey, true);
+        focusAt(0);
+        return { close };
+    };
+
     const create = (opts) => {
         const { host, app, Index } = opts;
         const el = document.createElement('section');
@@ -344,6 +415,12 @@
                     e.preventDefault();
                     if (inInput && r.input.value) { r.input.value = ''; flushQuery(); } else { e.target.blur(); }
                     break;
+                case 'ContextMenu': case 'F10': {
+                    if (e.key === 'F10' && !e.shiftKey) return;
+                    e.preventDefault();
+                    openMenuForRow(state.selectedRow);
+                    break;
+                }
                 case 'Tab':
                     if (!inInput) return;
                     e.preventDefault();
@@ -367,6 +444,12 @@
             const row = node && state.rows[Number(node.dataset.k)];
             if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
         });
+        /* 歌单分类里的行：右键菜单的「移除」只从这个歌单里移除；其他行按曲库处理 */
+        const scopeOf = (row) => {
+            const m = /^playlist:(.+)$/.exec(String(row.ctx || ''));
+            const pl = m && (app.customPlaylists || []).find((p) => String(p.id) === m[1]);
+            return pl ? { type: 'playlist', id: pl.id, name: pl.name } : null;
+        };
         r.viewport.addEventListener('contextmenu', (e) => {
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
@@ -374,8 +457,25 @@
             e.preventDefault();
             pickRow(Number(node.dataset.k));
             app.contextMenuTrackIndex = row.i;
+            app.contextMenuScopeHint = scopeOf(row);
             app.showContextMenu?.(e.clientX, e.clientY);
         });
+        /*
+         * 键盘打开右键菜单（Shift+F10、菜单键）：在选中那一行上发一次 contextmenu，走和鼠标右键完全一样的路
+         * （播放器据此知道菜单是从档案页打开的），菜单出现后接管方向键，关掉后焦点回到目录
+         */
+        const openMenuForRow = (k) => {
+            const row = state.rows[k];
+            if (!row || row.type !== 'track') return;
+            scrollToRow(k);
+            render();
+            const node = state.rendered.get(k);
+            if (!node) return;
+            const rect = node.getBoundingClientRect();
+            const back = document.activeElement;
+            node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 40, clientY: rect.top + rect.height / 2 }));
+            menuKeyboard(app, { restore: back && back !== document.body ? back : r.viewport });
+        };
         el.querySelector('[data-l="kinds"]').addEventListener('click', (e) => {
             const b = e.target.closest('[data-kind]');
             if (b) setKind(b.dataset.kind);
@@ -479,5 +579,5 @@
         };
     };
 
-    global.MusicArchiveList = Object.freeze({ create, KINDS, SORTS });
+    global.MusicArchiveList = Object.freeze({ create, KINDS, SORTS, menuKeyboard });
 })(window);
