@@ -232,19 +232,34 @@
                     vec3 alb = wallTone(seed + floor(fl / 40.0));
                     if (kind > 4.5 && kind < 5.5) alb = vec3(0.25, 0.25, 0.26);
                     if (kind > 6.5) alb = vec3(0.10, 0.11, 0.13);
+                    // 大块水渍：从楼顶和每层楼板往下挂的深色长条，宽窄不一。
                     float grime = kwFbm(vec2(u * 0.6, v * 0.12) + seed * 30.0);
+                    float stainCol = kwNoise(vec2(u * 0.9 + seed * 17.0, 3.0));
+                    float stain = smoothstep(0.45, 0.85, stainCol) * (0.4 + 0.6 * kwFbm(vec2(u * 1.7, v * 0.05) + seed * 3.0));
                     float streak = kwNoise(vec2(u * 2.3 + seed * 9.0, v * 0.04)) * smoothstep(0.0, 1.0, 1.0 - cell.y);
-                    alb *= 0.62 + 0.55 * grime;
-                    alb *= 1.0 - 0.35 * streak * uDetail;
-                    // 瓷砖：细格子。
+                    // 批荡上的补丁：一块块颜色略不同的新补的灰。
+                    vec2 patchCell = floor(vec2(u / 1.7, v / 1.3));
+                    float patchy = step(0.8, kwHash(patchCell + seed * 41.0));
+                    alb *= 0.55 + 0.6 * grime;
+                    alb *= 1.0 - (0.45 * stain + 0.3 * streak) * uDetail;
+                    alb = mix(alb, alb * vec3(1.18, 1.14, 1.08), patchy * 0.6 * uDetail);
+                    // 墙面细裂纹和颗粒：近处看不是一块平板。
+                    float grain = kwNoise(vec2(u, v) * 9.0 + seed);
+                    alb *= 0.9 + 0.2 * grain * uDetail;
+                    // 瓷砖：细格子，个别掉了露出灰底。
                     if (fract(seed * 7.13) > 0.55 && fract(seed * 7.13) < 0.82 && kind < 1.5) {
-                        vec2 tile = fract(vec2(u, v) * 6.0);
-                        float grout = max(step(tile.x, 0.08), step(tile.y, 0.08));
-                        alb *= 1.0 - grout * 0.25 * uDetail;
+                        vec2 tc = vec2(u, v) * 6.0;
+                        vec2 tile = fract(tc);
+                        vec2 tfw = fwidth(tc) * 1.2;
+                        float grout = max(1.0 - smoothstep(0.0, 0.08 + tfw.x, tile.x), 1.0 - smoothstep(0.0, 0.08 + tfw.y, tile.y));
+                        float lost = step(0.93, kwHash(floor(tc) + seed));
+                        alb *= 1.0 - grout * 0.25 * uDetail * (1.0 - min(1.0, length(tfw) * 2.0));
+                        alb = mix(alb, vec3(0.2, 0.2, 0.19), lost * 0.7 * uDetail);
                     }
-                    // 楼板线。
-                    float slab = smoothstep(0.0, 0.04, cell.y) * (1.0 - smoothstep(0.07, 0.1, cell.y));
-                    alb *= 1.0 - (1.0 - slab) * 0.0 + slab * 0.18;
+                    // 楼板线：一道凸出的混凝土檐，顶面亮、底下一道阴影。
+                    float slabTop = 1.0 - smoothstep(0.0, 0.035, cell.y);
+                    float slabShadow = smoothstep(0.92, 1.0, cell.y);
+                    alb *= 1.0 + slabTop * 0.22 - slabShadow * 0.35;
                     // 空调滴水留下的锈痕。
                     float rust = step(0.86, kwHash(vec2(col_ * 5.0 + seed, floor(v / uFloor / 2.0)))) * smoothstep(0.55, 0.0, cell.y) * step(abs(cell.x - 0.5), 0.12);
                     alb = mix(alb, vec3(0.30, 0.17, 0.09), rust * 0.6 * uDetail);
@@ -303,10 +318,17 @@
                             max(1.0 - smoothstep(0.0, 0.07 + fwc.y, wc.y), smoothstep(0.93 - fwc.y, 1.0, wc.y)));
                         float mull = (1.0 - smoothstep(0.02, 0.03 + fwc.x, abs(wc.x - 0.5))) + (1.0 - smoothstep(0.02, 0.03 + fwc.y, abs(wc.y - 0.62))) * step(0.5, type);
                         frame = clamp(max(frame, mull) * uDetail, 0.0, 1.0);
+                        // 窗洞有进深：靠边一圈是墙的侧面，顶上一道阴影。
+                        float reveal = min(min(wc.x, 1.0 - wc.x) * bay * (wMax.x - wMin.x), min(wc.y, 1.0 - wc.y) * uFloor * (wMax.y - wMin.y));
+                        float ao = smoothstep(0.0, 0.18, reveal) * (1.0 - 0.35 * smoothstep(0.75, 1.0, wc.y));
+                        win *= 0.55 + 0.45 * ao;
                         win = mix(win, kwLight(vWorld, n, vec3(0.45, 0.46, 0.44), 0.5), frame);
                         col = mix(col, win, inWin);
                     }
-                    // 窗台下方一点点被窗灯照到。
+                    // 窗台：窗下一道浅色的台，台下有水痕。
+                    float sill = hasWindow * step(wMin.x - 0.03, cell.x) * step(cell.x, wMax.x + 0.03)
+                        * smoothstep(wMin.y - 0.06, wMin.y - 0.045, cell.y) * (1.0 - smoothstep(wMin.y - 0.005, wMin.y, cell.y));
+                    col = mix(col, kwLight(vWorld, n, vec3(0.42, 0.41, 0.38), 0.6), sill * 0.8 * uDetail);
                     gl_FragColor = vec4(col, 1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>

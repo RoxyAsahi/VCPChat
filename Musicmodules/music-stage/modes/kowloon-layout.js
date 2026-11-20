@@ -257,12 +257,13 @@
     // 外街对面和东西两侧的低矮外圈楼，只做剪影和窗灯。
     const buildOuter = (r) => {
         const out = [];
-        const row = (axis, fixed, dir, from, to) => {
+        // 南面外街对面是主镜头的前景，压低到三到七层，免得挡住城寨正面。
+        const row = (axis, fixed, dir, from, to, low = false) => {
             let s = from;
             while (s < to) {
                 const w = 6 + r() * 10;
                 const depth = 10 + r() * 8;
-                const h = (5 + Math.floor(r() * 9)) * FLOOR;
+                const h = (low ? 3 + Math.floor(r() * 5) : 5 + Math.floor(r() * 9)) * FLOOR;
                 const a = fixed + dir * 0.0, b = fixed + dir * depth;
                 const box = axis === 'x'
                     ? { x0: s, x1: Math.min(to, s + w), z0: Math.min(a, b), z1: Math.max(a, b) }
@@ -271,7 +272,7 @@
                 s += w + 0.6 + r() * 1.5;
             }
         };
-        row('x', STREET.south.z1, 1, -150, 150);
+        row('x', STREET.south.z1, 1, -150, 150, true);
         row('z', STREET.east.x1, 1, -110, STREET.south.z1);
         row('z', STREET.west.x0, -1, -110, STREET.south.z1);
         row('x', STREET.north.z0, -1, -150, 150);
@@ -308,7 +309,7 @@
 
     const CAMERA = Object.freeze({
         iso: { position: [78, 62, 128], target: [6, 20, 46], fov: 38, orbit: 22 },
-        street: { from: [-40, 2.2, 67], to: [55, 4.5, 67], target: [10, 18, 60], fov: 50 },
+        street: { from: [-34, 2.4, 70.5], to: [50, 5.5, 70.5], target: [10, 13, 60], fov: 62 },
         roof: { from: [-90, 56, 40], to: [60, 50, -40], fov: 55 },
         screen: { position: [10, 22, 80], target: [10, 24, 60], fov: 40 }
     });

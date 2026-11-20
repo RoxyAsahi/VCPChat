@@ -32,7 +32,7 @@
                 const dir = seed < 0.5 ? 1 : -1;
                 const k = dir > 0 ? t : 1 - t;
                 const p = lerp3(C.street.from, C.street.to, 0.15 + k * 0.7);
-                const look = [screen.center[0] + (p[0] - screen.center[0]) * 0.25, screen.center[1] - 2, screen.center[2]];
+                const look = [screen.center[0] + (p[0] - screen.center[0]) * 0.45, C.street.target[1], screen.center[2]];
                 return { position: p, look, fov: C.street.fov };
             },
             screen: (t) => {

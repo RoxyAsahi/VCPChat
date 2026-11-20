@@ -23,7 +23,7 @@
         uGround: { value: new T.Color(0x4a3330) },
         // 城市本身的光污染：越近地面越暖。
         uGlow: { value: new T.Color(0xff8a52) },
-        uGlowStrength: { value: 0.55 }
+        uGlowStrength: { value: 0.35 }
     });
 
     // 把各模块 lights() 的结果按与相机的距离挑最近、最亮的写进 uniform。
