@@ -350,6 +350,64 @@
         let T, scene, camera, renderer, layout, city, signs, alley, optics, director, shared, placeholderLights = [];
         let initialized = false, fallbackMode = false, initializing = null;
         let latest = null, lastTime = null, width = 1, height = 1, shotId = '';
+        /*
+         * 取景避让：机位是按 16:9、画面中心构图的，但窗口底部有播放条、顶上有标题栏、右边
+         * 可能开着抽屉。每半秒量一次这些浮层占掉的边，把画面的光学中心挪到剩下那块安全区
+         * 的中间（离轴投影，不动机位），窗口比 16:9 窄时把视角放宽，保住横向取景。
+         */
+        const frame2d = { top: 0, right: 0, bottom: 0, left: 0, measuredAt: -1e9, cur: { x: 0, y: 0, widen: 1 } };
+        const OVERLAYS = [
+            ['.music-stage-top-chrome', 'top'], ['.music-stage-transport', 'bottom'],
+            ['.md-dock', 'bottom'], ['.md-pnl.md-open', 'right'], ['.music-stage-settings-panel.is-open', 'right']
+        ];
+        const measureInsets = (now) => {
+            if (now - frame2d.measuredAt < 500) return;
+            frame2d.measuredAt = now;
+            const doc = mode.root.ownerDocument;
+            const box = mode.root.getBoundingClientRect();
+            const next = { top: 0, right: 0, bottom: 0, left: 0 };
+            OVERLAYS.forEach(([selector, side]) => {
+                doc.querySelectorAll(selector).forEach(el => {
+                    const style = global.getComputedStyle?.(el);
+                    if (!style || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) < 0.05) return;
+                    const r = el.getBoundingClientRect();
+                    if (r.width < 4 || r.height < 4) return;
+                    if (side === 'top') next.top = Math.max(next.top, r.bottom - box.top);
+                    if (side === 'bottom') next.bottom = Math.max(next.bottom, box.bottom - r.top);
+                    if (side === 'right' && r.left > box.left + box.width * 0.4) next.right = Math.max(next.right, box.right - r.left);
+                });
+            });
+            const dock = parseFloat(global.getComputedStyle?.(doc.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
+            next.bottom = Math.max(next.bottom, dock);
+            // 浮层再大也只让出画面的一部分，免得构图被挤没。
+            frame2d.top = Math.min(next.top, height * 0.2);
+            frame2d.bottom = Math.min(next.bottom, height * 0.3);
+            frame2d.right = Math.min(next.right, width * 0.45);
+        };
+        const DESIGN_ASPECT = 16 / 9;
+        const applyFraming = (pose, dt) => {
+            measureInsets(performance.now());
+            const safeW = Math.max(1, width - frame2d.right - frame2d.left), safeH = Math.max(1, height - frame2d.top - frame2d.bottom);
+            const target = {
+                x: (frame2d.right - frame2d.left) / 2, y: (frame2d.bottom - frame2d.top) / 2,
+                // 安全区比设计画幅窄多少，就把视角放宽多少（上限 1.9 倍）；被上下浮层吃掉的高度补一半。
+                widen: Math.min(1.9, Math.max(1, DESIGN_ASPECT / (safeW / height)) * (1 + (1 - safeH / height) * 0.5))
+            };
+            const k = dt > 0 ? Math.min(1, dt * 4) : 1;
+            const cur = frame2d.cur;
+            cur.x += (target.x - cur.x) * k; cur.y += (target.y - cur.y) * k; cur.widen += (target.widen - cur.widen) * k;
+            const fov = Math.min(100, 2 * Math.atan(Math.tan(pose.fov * Math.PI / 360) * cur.widen) * 180 / Math.PI);
+            const ox = Math.round(cur.x), oy = Math.round(cur.y);
+            const view = camera.view;
+            const changed = Math.abs(camera.fov - fov) > 1e-3 || (view?.offsetX || 0) !== ox || (view?.offsetY || 0) !== oy
+                || (view && (view.fullWidth !== width || view.fullHeight !== height));
+            if (!changed) return;
+            camera.fov = fov;
+            if (ox || oy) camera.setViewOffset(width, height, ox, oy, width, height);
+            else if (view?.enabled) camera.clearViewOffset();
+            camera.updateProjectionMatrix();
+        };
+
         let dirty = true, lastWall = 0;
         const orbit = createOrbit();
         const cap = U.createFrameCap();
@@ -435,7 +493,7 @@
             if (pose.id !== shotId) shotId = pose.id;
             camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
             camera.lookAt(pose.look[0], pose.look[1], pose.look[2]);
-            if (camera.fov !== pose.fov) { camera.fov = pose.fov; camera.updateProjectionMatrix(); }
+            applyFraming(pose, dt);
             camera.updateMatrixWorld();
 
             const state = {
@@ -558,7 +616,7 @@
         const resume = mode.resume;
         mode.resume = () => { resume(); cap.reset(); if (latest) update(latest, true); };
         mode.getDebugSnapshot = () => ({
-            initialized, fallbackMode, shot: shotId,
+            initialized, fallbackMode, shot: shotId, framing: { ...frame2d.cur, top: frame2d.top, right: frame2d.right, bottom: frame2d.bottom, fov: camera?.fov },
             camera: camera?.position.toArray(),
             drawCalls: renderer?.info.render.calls, triangles: renderer?.info.render.triangles,
             geometries: renderer?.info.memory.geometries, textures: renderer?.info.memory.textures,
