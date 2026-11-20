@@ -4262,6 +4262,11 @@
         let canvasSmoothing = null;
         let builtQuality = null;
         const cap = U.createFrameCap();
+        // Song handover (host: songHandover): the flight goes on with the old
+        // song's words put away while the host waits for the new lyrics; the
+        // new song then starts under the last of that picture, dissolving.
+        const veil = U.createHandoverVeil(mode.root);
+        let leaving = null, revealPending = false;
         const wantsCanvasSmoothing = () => !(global.MusicStageDioramaOptics?.active(mode.config, {}) ?? false);
         // The settings as drawn: the chosen tier, less what the frame rate made it drop.
         const drawn = () => renderScale.config(mode.config);
@@ -4371,6 +4376,7 @@
                 identity = nextIdentity;
                 compiledDuration = nextDuration;
                 lastTime = null;
+                if (leaving) { leaving = null; revealPending = true; }
                 world?.reset?.(frame.lines || [], identity, nextDuration);
             }
 
@@ -4412,6 +4418,9 @@
                 optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(),
                     { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
             } else renderer.render(scene, camera);
+            // Read back now: once this task ends the drawing buffer is gone.
+            if (leaving) veil.capture(renderer.domElement);
+            else if (revealPending) { revealPending = false; veil.reveal(1000); }
             lastTime = time;
         };
 
@@ -4474,7 +4483,12 @@
             return initializing;
         };
 
-        mode.updateFrame = (frame) => update(frame);
+        mode.updateFrame = (frame) => {
+            // The host went back to the song on screen (skipped back): just carry on.
+            if (leaving && frame?.lines === source
+                && (frame.track?.path || frame.track?.title || 'tunnel-track') === identity) leaving = null;
+            update(frame);
+        };
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
         mode.updateConfig = (config) => {
@@ -4498,6 +4512,17 @@
         mode.resume = () => { resume(); lastTime = null; cap.reset(); if (latest) update(latest, true); };
         // For the settings: how far below the chosen tier it is drawing (cheap, polled).
         mode.getDegrade = () => ({ steps: renderScale.steps, quality: drawn().quality });
+        mode.beginSongHandover = () => {
+            if (!initialized || !latest || lastTime === null) return false;
+            if (!leaving) leaving = { since: performance.now(), frame: latest, time: lastTime };
+            return true;
+        };
+        mode.holdFrame = (frame) => {
+            if (!leaving || !initialized) return;
+            const elapsed = (performance.now() - leaving.since) / 1000;
+            update({ ...leaving.frame, activeLine: null, wordStates: [], audio: frame.audio,
+                isPlaying: true, playbackTime: leaving.time + elapsed });
+        };
         mode.getDebugSnapshot = () => ({
             initialized,
             fallbackMode,
@@ -4512,7 +4537,7 @@
             cameraPos: camera?.position?.toArray() || null,
             activeLine: latest?.activeLine?.fullText || null
         });
-        mode.scope.add(() => { global.clearTimeout(contextTimer); disposeGraphics(); latest = source = null; });
+        mode.scope.add(() => { veil.destroy(); global.clearTimeout(contextTimer); disposeGraphics(); latest = source = null; });
 
         resize();
         void initialize();

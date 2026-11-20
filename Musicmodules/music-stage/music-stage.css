@@ -3330,3 +3330,7 @@ body.music-stage-active #custom-title-bar,
     color: var(--stage-muted, currentColor);
     opacity: 0.78;
 }
+
+.music-stage-mode-tunnel > .stage-handover-veil {
+    z-index: 1;
+}
