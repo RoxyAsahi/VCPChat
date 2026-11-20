@@ -102,3 +102,57 @@ body.music-reduce-motion .context-menu { transition: opacity .12s linear; transf
 body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box { transform: none; filter: none; opacity: 1; transition: none; }
 body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box::after { display: none; }
 body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd:not(.md-open) .md-cmd-box { opacity: 0; }
+
+/* ───────── 弹窗和里面的按钮组 ─────────
+ * 弹窗是给手用的：同一层玻璃、大圆角；正文照常清楚，不做任何糊化。
+ * 按钮是胶囊：确认是实心墨色，次要是一层淡玻璃，取消只换字色；输入框是一道浅浅的凹槽。 */
+:is(.music-modal-overlay, .dialog-overlay) :is(.music-modal, .dialog) {
+  background:
+    radial-gradient(120% 50% at 50% 112%, color-mix(in srgb, var(--mf-tint) 14%, transparent), transparent 60%),
+    var(--mf-fill);
+  border: 0;
+  border-radius: 26px;
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+  backdrop-filter: blur(26px) saturate(1.2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+}
+body.music-fl-low :is(.music-modal-overlay, .dialog-overlay) :is(.music-modal, .dialog) { backdrop-filter: none; -webkit-backdrop-filter: none; }
+:is(.music-modal-overlay, .dialog-overlay) :is(.music-modal-header, .music-modal-footer, .lyrics-fetch-footer) { border-color: var(--mf-rule); }
+.dialog-btn,
+body.light-theme .dialog-btn {
+  border: 0;
+  border-radius: 9999px;
+  padding-left: 18px;
+  padding-right: 18px;
+  background: var(--mf-hover);
+  color: var(--mf-ink);
+  transition: background-color .15s, transform .18s cubic-bezier(.2, .8, .2, 1);
+}
+.dialog-btn:hover { background: color-mix(in srgb, var(--mf-ink) 12%, transparent); border: 0; }
+.dialog-btn:active { transform: scale(.96); }
+.dialog-btn.confirm,
+body.light-theme .dialog-btn.confirm { background: var(--mf-ink); color: #1c1b19; }
+body.light-theme .dialog-btn.confirm { color: #fcfcfd; }
+.dialog-btn.confirm:hover { background: color-mix(in srgb, var(--mf-ink) 86%, var(--mf-tint)); }
+.dialog-btn.cancel,
+body.light-theme .dialog-btn.cancel { background: transparent; color: var(--ar-danger, #dc3c3c); }
+.dialog-btn.cancel:hover { background: color-mix(in srgb, var(--ar-danger, #dc3c3c) 10%, transparent); }
+body .dialog-btn:disabled,
+body .dialog-btn.confirm:disabled,
+body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); color: var(--mf-ink2); opacity: 1; cursor: default; }
+:is(.dialog, .music-modal) input:is([type="text"], [type="url"], [type="password"], :not([type])) {
+  border: 0;
+  border-radius: 14px;
+  padding-left: 12px;
+  padding-right: 12px;
+  background: var(--mf-hover);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+  color: var(--mf-ink);
+}
+.music-modal-close-btn { border-radius: 9999px; }
+.music-modal-close-btn:hover { background: var(--mf-hover); }
+/* 新建歌单这类小对话框：外层的面板样式把内边距清掉了，这里补回来 */
+.dialog-overlay .dialog.glass-panel { padding: 22px 22px 18px; width: 340px; }
+.dialog-overlay .dialog h3 { margin: 0 0 16px; }
+.dialog-overlay .dialog-actions { gap: 10px; margin-top: 18px; }
