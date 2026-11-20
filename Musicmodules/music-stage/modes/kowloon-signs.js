@@ -1056,12 +1056,13 @@
         }
         // The gate's name board: four characters of neon in the frame the alley builds.
         const gate = gateOf(layout);
-        const plaqueSlot = { pos: [gate.x, 6.9, gate.z + 0.2], normal: [0, 0, 1], tangent: [1, 0, 0], kind: 'flat', use: 'sign', floor: 2, width: 4.5, _gate: true };
+        const plaque = gate.plaque || { center: [gate.x, 5.05, gate.z + 0.26], width: 2.6, height: 0.9 };
+        const plaqueSlot = { pos: vec(plaque.center), normal: vec(plaque.normal || [0, 0, 1]), tangent: [1, 0, 0], kind: 'flat', use: 'sign', floor: 1, width: plaque.width, _gate: true };
         const specs = [plaqueSlot].concat(chosen.slice(0, MAX_SIGNS - 1)).map((slot, i) => {
             if (slot._gate) {
                 const base = designSign({ ...slot, kind: 'flat' }, i, random, { vertical: [], horizontal: [], roof: [] });
                 return { ...base, kind: 'flat', text: '城寨夜市', caption: 'NIGHT MARKET', vertical: false, style: 'neon', font: 'brush',
-                    color: '#ff3fae', border: '#2ef2ff', width: 4.3, height: 1.1, depth: 0.16, dead: [], broken: 0, bulbs: false, tilt: 0, rise: 0,
+                    color: '#ff3fae', border: '#2ef2ff', width: plaque.width * 0.94, height: plaque.height * 0.9, depth: 0.1, dead: [], broken: 0, bulbs: false, tilt: 0, rise: 0,
                     gain: 1.45 / (0.55 + lum(hexRgb('#ff3fae')) * 0.9), slot };
             }
             const spec = designSign(slot, i, random, pools);
