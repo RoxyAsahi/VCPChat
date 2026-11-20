@@ -585,6 +585,8 @@
         };
 
         function renderBody() {
+            const oldScroller = state.tab === '播放列表' ? el.body.querySelector('.md-ql') : null;
+            const keepScroll = oldScroller ? oldScroller.scrollTop : null;
             const tab = state.tab;
             let html = '';
             if (tab === '控制') {
@@ -615,10 +617,11 @@
                     html += `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`;
                 }
             } else if (tab === '播放列表') {
-                const list = activeList();
-                html += `<div class="md-qh"><b>播放队列</b><span>${list.length}</span><span class="md-g"></span>`
+                const rows = buildQueueRows();
+                const upcoming = rows.filter((r) => r.type === 'manual' || r.type === 'ctx').length;
+                html += `<div class="md-qh"><b>播放队列</b><span>${upcoming}</span><span class="md-g"></span>`
                     + `<button class="md-ib md-s${playMode() === 'shuffle' ? ' md-lit' : ''}" type="button" data-act="shuffle" aria-label="随机播放" title="随机播放">${icon('shuffle', 15)}</button></div>`
-                    + (list.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${list.length * QUEUE_ROW_H}px"></div></div>` : '<p class="md-empty">还没有歌曲，用左侧“本地”添加音乐文件夹。</p>');
+                    + (rows.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${rows.total}px"></div></div>` : '<p class="md-empty">还没有歌曲，用左侧“本地”添加音乐文件夹。</p>');
             } else if (tab === '封面') {
                 const cover = coverUrl(currentTrack());
                 html += cover
@@ -642,30 +645,175 @@
                 state.queueLength = state.queueSource.length;
                 const scroller = el.body.querySelector('.md-ql');
                 if (scroller) {
-                    const pos = state.queueSource.indexOf(currentTrack());
-                    scroller.scrollTop = Math.max(0, pos * QUEUE_ROW_H - 150 + QUEUE_ROW_H / 2);
+                    // 重画时保住滚动位置；第一次打开时从正在放的那首开始。
+                    scroller.scrollTop = keepScroll != null ? keepScroll : 0;
                     renderQueueWindow(scroller);
                     scroller.addEventListener('scroll', () => renderQueueWindow(scroller), { passive: true });
+                    scroller.addEventListener('pointerdown', onQueuePointerDown);
                 }
             }
             if (tab === '歌词') syncLyricHighlight(true);
         }
 
-        // 播放列表可能有上千首：只画看得见的那几行。
-        function renderQueueWindow(scroller) {
-            const list = state.queueSource || [];
-            const first = Math.max(0, Math.floor(scroller.scrollTop / QUEUE_ROW_H) - 4);
-            const last = Math.min(list.length, Math.ceil((scroller.scrollTop + scroller.clientHeight) / QUEUE_ROW_H) + 4);
-            const key = `${first}:${last}:${app.currentTrackIndex}`;
-            if (scroller.dataset.window === key) return;
+        // ───────── 播放队列页 ─────────
+        // 一张表里三段：正在播放 → 手动队列（可拖动排序、移除、清空）→ 接下来会放的上下文
+        // （随机时就是洗好的真实顺序）。上下文可能有上千首：只画看得见的那几行。
+        const QUEUE_HEAD_H = 36;
+        function buildQueueRows() {
+            const current = currentTrack();
+            const up = typeof app.getUpNext === 'function'
+                ? app.getUpNext(2000)
+                : { manual: [], context: activeList().filter((t) => t !== current) };
+            const rows = [];
+            let y = 0;
+            const push = (row, h) => { row.top = y; row.h = h; y += h; rows.push(row); };
+            if (current) push({ type: 'now', track: current }, QUEUE_ROW_H);
+            if (up.manual.length) {
+                push({ type: 'head', label: '接下来播放', count: up.manual.length, clear: true }, QUEUE_HEAD_H);
+                up.manual.forEach((track, i) => push({ type: 'manual', i, track }, QUEUE_ROW_H));
+            }
+            if (up.context.length) {
+                const mode = playMode();
+                const name = app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
+                const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
+                push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
+                up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
+            }
+            rows.total = y;
+            state.queueRows = rows;
+            return rows;
+        }
+
+        const queueRowHtml = (row, k, current) => {
+            const style = `top:${row.top}px;height:${row.h - 2}px`;
+            if (row.type === 'head') {
+                return `<div class="md-qhd" role="presentation" style="${style}"><span>${escapeHtml(row.label)}</span><em>${row.count}</em>`
+                    + (row.clear ? '<span class="md-g"></span><button class="md-qclr" type="button" data-qact="clear">清空</button>' : '') + '</div>';
+            }
+            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`;
+            if (row.type === 'now') {
+                return `<div class="md-qi md-cur md-now" role="listitem" style="${style}">${text}<span class="md-g"></span><span class="md-qtag">正在播放</span></div>`;
+            }
+            if (row.type === 'manual') {
+                return `<div class="md-qi md-man" role="listitem" data-k="${k}" data-qi="${row.i}" style="${style}">`
+                    + `<span class="md-qgrip" title="拖动排序" aria-hidden="true">${icon('grip-vertical', 14)}</span>`
+                    + `<button class="md-qplay" type="button" data-qact="play" aria-label="现在播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
+                    + `<button class="md-qx" type="button" data-qact="remove" aria-label="从队列移除" title="从队列移除">${icon('x', 14)}</button></div>`;
+            }
+            return `<div class="md-qi${row.track === current ? ' md-cur' : ''}" role="listitem" data-k="${k}" style="${style}">`
+                + `<button class="md-qplay" type="button" data-qact="play" aria-label="播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
+                + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
+        };
+
+        function renderQueueWindow(scroller, force = false) {
+            if (state.queueDrag?.active) return; // 拖动时别重建行
+            const rows = state.queueRows || [];
+            const top = scroller.scrollTop - QUEUE_ROW_H * 4;
+            const bottom = scroller.scrollTop + (scroller.clientHeight || 300) + QUEUE_ROW_H * 4;
+            let first = 0;
+            while (first < rows.length && rows[first].top + rows[first].h < top) first++;
+            let last = first;
+            while (last < rows.length && rows[last].top < bottom) last++;
+            const key = `${first}:${last}:${app.currentTrackIndex}:${rows.length}`;
+            if (!force && scroller.dataset.window === key) return;
             scroller.dataset.window = key;
             const current = currentTrack();
-            const sizer = scroller.firstElementChild;
-            sizer.innerHTML = list.slice(first, last).map((track, offset) => {
-                const index = first + offset;
-                return `<button class="md-qi${track === current ? ' md-cur' : ''}" type="button" role="listitem" data-q="${index}" style="top:${index * QUEUE_ROW_H}px">`
-                    + `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(track))}</b><span>${escapeHtml(trackArtist(track))}</span></span></button>`;
-            }).join('');
+            // 手动队列的行总是全画出来，拖动排序时才有地方让位。
+            const keep = new Set();
+            for (let k = first; k < last; k++) keep.add(k);
+            rows.forEach((row, k) => { if (row.type === 'manual' && rows.length < 400) keep.add(k); });
+            scroller.firstElementChild.innerHTML = [...keep].sort((a, b) => a - b).map((k) => queueRowHtml(rows[k], k, current)).join('');
+        }
+
+        function rerenderQueue() {
+            if (!state.panelOpen || state.tab !== '播放列表' || state.queueDrag?.active) return;
+            renderBody();
+        }
+
+        // 拖动排序：按住超过 4px 才算拖；其他行 140ms 让位；靠近上下边 32px 自动滚动。
+        function onQueuePointerDown(event) {
+            const rowEl = event.target.closest('.md-man');
+            if (!rowEl || event.button !== 0 || event.target.closest('.md-qx')) return;
+            const scroller = event.currentTarget;
+            const from = Number(rowEl.dataset.qi);
+            const manualEls = [...scroller.querySelectorAll('.md-man')];
+            state.queueDrag = { from, to: from, startY: event.clientY, startScroll: scroller.scrollTop, y: event.clientY, active: false, rowEl, manualEls, scroller, raf: 0, moved: false };
+            const move = (e) => {
+                const d = state.queueDrag;
+                if (!d) return;
+                d.y = e.clientY;
+                if (!d.active && Math.abs(e.clientY - d.startY) < 4) return;
+                if (!d.active) {
+                    d.active = true;
+                    d.moved = true;
+                    rowEl.classList.add('md-qdrag');
+                    scroller.classList.add('md-qdragging');
+                    const loop = () => {
+                        const r = scroller.getBoundingClientRect();
+                        if (d.y < r.top + 32) scroller.scrollTop -= 6;
+                        else if (d.y > r.bottom - 32) scroller.scrollTop += 6;
+                        layoutDrag();
+                        d.raf = requestAnimationFrame(loop);
+                    };
+                    d.raf = requestAnimationFrame(loop);
+                }
+                layoutDrag();
+            };
+            const layoutDrag = () => {
+                const d = state.queueDrag;
+                if (!d?.active) return;
+                const dy = (d.y - d.startY) + (scroller.scrollTop - d.startScroll);
+                const n = d.manualEls.length;
+                d.to = Math.max(0, Math.min(n - 1, d.from + Math.round(dy / QUEUE_ROW_H)));
+                d.rowEl.style.transform = `translateY(${dy}px)`;
+                for (const node of d.manualEls) {
+                    if (node === d.rowEl) continue;
+                    const i = Number(node.dataset.qi);
+                    let shift = 0;
+                    if (d.from < d.to && i > d.from && i <= d.to) shift = -QUEUE_ROW_H;
+                    if (d.from > d.to && i < d.from && i >= d.to) shift = QUEUE_ROW_H;
+                    node.style.transform = shift ? `translateY(${shift}px)` : '';
+                }
+            };
+            const up = () => {
+                document.removeEventListener('pointermove', move, true);
+                document.removeEventListener('pointerup', up, true);
+                document.removeEventListener('pointercancel', up, true);
+                const d = state.queueDrag;
+                if (!d) return;
+                cancelAnimationFrame(d.raf);
+                const { active, from: f, to } = d;
+                state.queueDrag = active ? { active: false, suppressClick: true } : null;
+                scroller.classList.remove('md-qdragging');
+                if (active) {
+                    if (f !== to) app.queueMove?.(f, to);
+                    rerenderQueue();
+                    setTimeout(() => { if (state.queueDrag?.suppressClick) state.queueDrag = null; }, 0);
+                }
+            };
+            document.addEventListener('pointermove', move, true);
+            document.addEventListener('pointerup', up, true);
+            document.addEventListener('pointercancel', up, true);
+        }
+
+        function onQueueAction(target) {
+            if (state.queueDrag?.suppressClick) { state.queueDrag = null; return; }
+            const act = target.dataset.qact;
+            if (act === 'clear') { app.queueClear?.(); return; }
+            const rowEl = target.closest('[data-k]');
+            const row = rowEl && state.queueRows?.[Number(rowEl.dataset.k)];
+            if (!row) return;
+            const index = app.playlist.indexOf(row.track);
+            if (act === 'remove' && row.type === 'manual') { app.queueRemove?.(row.i); return; }
+            if (act === 'next') {
+                if (app.queuePlayNext?.(row.track)) global.MusicToast?.show({ id: 'queue', kind: 'success', message: `下一首播放：${trackTitle(row.track)}` });
+                return;
+            }
+            if (act === 'play' && index !== -1) {
+                // 点手动队列里的歌：现在就放它，并把它从队列里拿掉。
+                if (row.type === 'manual') app.queueRemove?.(row.i);
+                app.loadTrack?.(index);
+            }
         }
 
         function syncLyricHighlight(force = false) {
@@ -706,7 +854,7 @@
         });
 
         listen(el.body, 'click', (event) => {
-            const target = event.target.closest('[data-act], [data-q], .md-lyrl p, .md-seg button');
+            const target = event.target.closest('[data-qact], [data-act], [data-q], .md-lyrl p, .md-seg button');
             if (!target) return;
             const seg = target.closest('.md-seg[data-act="theme"]');
             if (seg && target.matches('button[data-i]')) {
@@ -721,12 +869,7 @@
                 if (Number.isFinite(time)) { app.seekTo?.(Math.max(0, time)); kickProgress(); }
                 return;
             }
-            if (target.dataset.q !== undefined) {
-                const track = (state.queueSource || [])[Number(target.dataset.q)];
-                const index = track ? app.playlist.indexOf(track) : -1;
-                if (index !== -1) app.loadTrack?.(index);
-                return;
-            }
+            if (target.dataset.qact !== undefined) { onQueueAction(target); return; }
             const act = target.dataset.act;
             if (act === 'mode') { cycleMode(); }
             else if (act === 'stage') { toggleStage(); }
@@ -915,16 +1058,14 @@
         // 列表增删、筛选、换歌后，打开着的播放列表页跟着重画。
         observe(app.playlistEl, { childList: true }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;
-            if (state.queueSource !== activeList() || state.queueLength !== activeList().length) renderBody();
-            else {
-                const scroller = el.body.querySelector('.md-ql');
-                if (scroller) { scroller.dataset.window = ''; renderQueueWindow(scroller); }
-            }
+            rerenderQueue();
         });
+        // 手动队列增删、排序后跟着重画。
+        listen(document, 'music-queue-change', rerenderQueue);
         observe(app.playlistEl, { subtree: true, attributes: true, attributeFilter: ['class'] }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;
             const scroller = el.body.querySelector('.md-ql');
-            if (scroller) renderQueueWindow(scroller);
+            if (scroller) renderQueueWindow(scroller, true);
         });
         listen(document, 'visibilitychange', () => { if (!document.hidden) kickProgress(); });
         listen(global, 'resize', () => {

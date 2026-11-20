@@ -620,6 +620,49 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 .md-qi-tx { min-width: 0; }
 .md-qi b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; font-weight: 600; }
 .md-qi-tx > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--md-t3); }
+/* 队列页：分段标题、手动队列行（拖动排序）、上下文行 */
+.md-qhd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: .04em;
+  color: var(--md-t3);
+}
+.md-qhd span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-qhd em { font-style: normal; font-variant-numeric: tabular-nums; }
+#music-dock-root .md-qclr { font-size: 12px; color: var(--md-t2); padding: 0 6px; border-radius: 6px; line-height: 20px; }
+#music-dock-root .md-qclr:hover { color: var(--md-t1); background: var(--md-fill); }
+#music-dock-root .md-qi { padding: 0 6px 0 12px; gap: 4px; }
+#music-dock-root .md-qi.md-man { padding-left: 2px; touch-action: none; transition: background-color .12s, transform 140ms var(--mt-ease, ease-out); }
+#music-dock-root .md-qplay { flex: 1; min-width: 0; display: flex; align-items: center; height: 100%; text-align: left; }
+.md-qgrip { flex-shrink: 0; display: inline-flex; width: 20px; justify-content: center; color: var(--md-t3); cursor: grab; opacity: .55; }
+.md-qi.md-man:hover .md-qgrip { opacity: 1; }
+#music-dock-root .md-qx {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--md-t3);
+  opacity: 0;
+  transition: opacity .12s, background-color .12s;
+}
+#music-dock-root .md-qi:hover .md-qx,
+#music-dock-root .md-qx:focus-visible { opacity: 1; }
+#music-dock-root .md-qx:hover { color: var(--md-t1); background: var(--md-fill2); }
+.md-qtag { flex-shrink: 0; font-size: 11px; color: var(--md-t3); }
+.md-ql.md-qdragging { cursor: grabbing; }
+.md-ql.md-qdragging .md-qi { pointer-events: none; }
+#music-dock-root .md-qi.md-qdrag { z-index: 2; transition: background-color .12s; background: var(--md-fill2); box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+@media (hover: none) { #music-dock-root .md-qx { opacity: 1; } }
 .md-empty { padding: 24px 8px; font-size: 13px; line-height: 20px; color: var(--md-t3); text-align: center; }
 
 /* 封面、歌词、音质 */
