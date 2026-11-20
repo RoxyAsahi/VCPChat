@@ -809,6 +809,8 @@ function setupPlayer(app) {
             time: sessionTime(),
             context,
             source: app.filteredPlaylistSource ? { ...app.filteredPlaylistSource } : null,
+            // 上下文是从哪儿点播的（经典列表、档案页）：恢复后那边换排序，播放顺序还能跟着变。
+            origin: app.contextFrom?.(app.playbackContext?.origin) ? app.playbackContext.origin : null,
             manual: pathsOf(app.manualQueue),
             shuffle: shuffled ? { size: activeList.length, order: Array.from(app.shuffleQueue) } : null,
             savedAt: Date.now()
@@ -845,6 +847,9 @@ function setupPlayer(app) {
                 app.filteredPlaylistSource = session.source && typeof session.source === 'object' ? session.source : null;
                 try { app.renderPlaylist?.(list); } catch (error) { /* 旧列表只是同步显示 */ }
             }
+        }
+        if (typeof session.origin === 'string' && session.origin) {
+            app.playbackContext = { origin: session.origin, list: app.currentFilteredTracks, source: app.filteredPlaylistSource };
         }
         // 随机顺序：只有上下文列表和存的时候一样长（没有歌被删掉）才接着用，否则让它重洗。
         const activeList = app.currentFilteredTracks || app.playlist;

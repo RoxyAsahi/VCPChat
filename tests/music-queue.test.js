@@ -457,3 +457,18 @@ test('undoing a queue add puts back tracks that were already queued instead of d
     app.queueRevert(one, before);
     assert.deepEqual(names(), ['t1', 't2', 't3', 't4']);
 });
+
+test('session restart: the context keeps the origin it was played from, so a later re-sort there still applies', () => {
+    const prev = setup();
+    prev.app.renderPlaylist = () => {};
+    prev.app.playFromContext([prev.playlist[0], prev.playlist[1], prev.playlist[2]], 1, { origin: 'classic', render: false });
+    prev.app.saveSession();
+    assert.equal(JSON.parse(prev.context.localStorage.getItem('musicSession')).origin, 'classic');
+
+    const next = restart(prev);
+    assert.equal(next.app.contextFrom('classic'), true);
+    const [a, b, c] = next.app.currentFilteredTracks;
+    assert.equal(next.app.reorderContext([c, b, a], 'classic'), true);
+    assert.deepEqual(titles(next.app.currentFilteredTracks), ['t2', 't1', 't0']);
+    assert.equal(next.app.reorderContext([a, b, c], 'archive'), false, 'another origin still does not own it');
+});
