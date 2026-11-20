@@ -92,11 +92,11 @@
         const selectedTrack = () => tracks()[selectedIndex()] || null;
         const playlistsSig = () => (app.customPlaylists || []).map((p) => (p && p.id) + ':' + (p && p.tracks ? p.tracks.length : 0) + ':' + (p && p.name)).join('|');
 
-        const rebuild = ({ keep = true } = {}) => {
+        const rebuild = ({ keep = true, track = -1 } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
-            const keepIndex = keep ? selectedIndex() : -1;
+            const keepIndex = keep ? selectedIndex() : track;
             rebuildIndex();
             const columns = buildColumns();
             state.columns = columns;
@@ -110,7 +110,7 @@
                 const r = keepIndex >= 0 ? columns[byId].items.indexOf(keepIndex) : -1;
                 row = r !== -1 ? r : Math.min(state.row, Math.max(0, columns[byId].items.length - 1));
             } else {
-                const at = Model.locate(columns, keep && keepIndex >= 0 ? keepIndex : app.currentTrackIndex, 0);
+                const at = Model.locate(columns, keepIndex >= 0 ? keepIndex : app.currentTrackIndex, 0);
                 if (at) { lane = at.lane; row = at.row; }
             }
             state.lane = lane;
@@ -138,10 +138,11 @@
             const base = Model.buildColumns(tracks(), app.customPlaylists);
             letterOf = null;
             // 「全部曲目」用全局顺序（和目录一致），不用扫描顺序
-            if (IndexLib && searchIndex) base[0].items = IndexLib.sortedIndices(searchIndex, base[0].items);
+            const spec = sortSpec();
+            if (spec) base[0].items = IndexLib.sortedIndices(searchIndex, base[0].items, spec);
             const n = tracks().length;
-            if (n < LETTER_SPLIT_MIN || !IndexLib || !searchIndex) return base;
-            const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE });
+            if (n < LETTER_SPLIT_MIN || !spec) return base;
+            const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE, spec });
             letterOf = new Map();
             for (const c of letters) for (const g of c.groups) letterOf.set(g, c.id);
             const front = [];
@@ -407,6 +408,22 @@
         };
         let searchIndex = null;
         const rebuildIndex = () => { searchIndex = IndexLib ? IndexLib.createIndex(tracks(), { pinyin: pinyinOf() }) : null; };
+
+        /* 排序方式（标题、歌手、时长、添加时间）：阵列的列、目录、队列都跟着它；记在本机 */
+        const SORT_KEY = 'musicArchiveSort';
+        let sortMode = 'title';
+        try { sortMode = localStorage.getItem(SORT_KEY) || 'title'; } catch (e) { sortMode = 'title'; }
+        if (!IndexLib || !IndexLib.SORTS || !IndexLib.SORTS.includes(sortMode)) sortMode = 'title';
+        const sortSpec = () => (IndexLib && searchIndex && IndexLib.sortSpec
+            ? IndexLib.sortSpec(searchIndex, { mode: sortMode, tracks: tracks(), durationOf: (t) => durationOf(t) }) : null);
+        const setSort = (mode) => {
+            if (!IndexLib || !IndexLib.SORTS.includes(mode) || mode === sortMode) return;
+            sortMode = mode;
+            try { localStorage.setItem(SORT_KEY, mode); } catch (e) { /* 只是记住 */ }
+            // 按新顺序重排：选中的那首留在选中，换到它在新排法里的那一列
+            const keepIndex = selectedIndex();
+            rebuild({ keep: false, track: keepIndex });
+        };
         // 拼音表按需加载（项目已有的依赖），加载好之后重建索引，汉字才能按拼音检索和分组
         const loadPinyin = () => {
             if (global.pinyinPro || options.pinyinSrc === false) return;
@@ -922,6 +939,9 @@
                 app,
                 Index: IndexLib,
                 getIndex: () => searchIndex,
+                getSpec: sortSpec,
+                getSort: () => sortMode,
+                onSort: setSort,
                 getRecent: recentIndices, durationOf,
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
@@ -945,6 +965,8 @@
             playSelected,
             openSearch,
             setListOpen,
+            setSort,
+            get sort() { return sortMode; },
             raise,
             setThemeWave: () => applyTheme({ wave: true }),
             get list() { return list; },

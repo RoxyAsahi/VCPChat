@@ -118,3 +118,21 @@ test('组内按数值自然排序', () => {
     const idx = Index.createIndex(t);
     assert.deepEqual(Index.groupColumns(idx, [0, 1, 2])[0].items, [2, 1, 0]);
 });
+
+test('排序方式：歌手按歌手首字母分组、时长按时长段、添加时间新的在前', () => {
+    const tracks = TRACKS.map((t, i) => ({ ...t, duration: [200, 0, 260, 150, 500, 230][i] }));
+    const idx = Index.createIndex(tracks, { pinyin });
+    const all = tracks.map((_, i) => i);
+    const byArtist = Index.groupColumns(idx, all, { spec: Index.sortSpec(idx, { mode: 'artist', tracks }) });
+    assert.deepEqual(byArtist.map((c) => c.id), ['sort-artist:A', 'sort-artist:T', 'sort-artist:Y', 'sort-artist:Z', 'sort-artist:あ']);
+    assert.deepEqual(byArtist.find((c) => c.id === 'sort-artist:Z').items, [0, 5]); // 同一歌手内按标题拼音：qingtian 在 yequ 前
+    const byLen = Index.sortSpec(idx, { mode: 'duration', tracks, durationOf: () => 0 });
+    const cols = Index.groupColumns(idx, all, { spec: byLen });
+    assert.deepEqual(cols.map((c) => c.name), ['3 分钟以内', '3–4 分钟', '4–5 分钟', '7 分钟以上', '时长未知']);
+    assert.deepEqual(Index.sortedIndices(idx, all, byLen), [3, 0, 5, 2, 4, 1]);
+    const added = Index.sortedIndices(idx, all, Index.sortSpec(idx, { mode: 'added', tracks }));
+    assert.deepEqual(added, [5, 4, 3, 2, 1, 0]);
+    const rows = Index.listRows({ tracks, index: idx, spec: byLen });
+    assert.deepEqual(rows.rows.filter((r) => r.type === 'head').map((r) => r.key), ['sort:d0', 'sort:d3', 'sort:d4', 'sort:d7', 'sort:d?']);
+    assert.deepEqual(Index.SORTS, ['title', 'artist', 'duration', 'added']);
+});

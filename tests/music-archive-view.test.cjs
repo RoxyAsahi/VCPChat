@@ -381,3 +381,35 @@ test('每一列记住上次停在第几首，换列回来回到那一首', () =>
     assert.equal(f.view.debug().selected, inPlaylist);
     f.close();
 });
+
+test('目录排序菜单：换成按歌手排，阵列按歌手首字母重排，选中的歌不变，并记住', () => {
+    const f = fixture({ n: 60 });
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown'); // Song 3（Aki）
+    const before = f.view.debug().selected;
+    doc.querySelector('[data-l="sortBtn"]').click();
+    const menu = doc.querySelector('[data-l="sortMenu"]');
+    assert.equal(menu.hidden, false);
+    menu.querySelector('[data-sort="artist"]').click();
+    assert.equal(menu.hidden, true);
+    assert.equal(f.view.sort, 'artist');
+    assert.equal(doc.querySelector('[data-l="sortName"]').textContent, '歌手');
+    const ids = f.view.debug().columns.map((c) => c.id);
+    assert.ok(ids.includes('sort-artist:A') && ids.includes('sort-artist:R'), ids.join());
+    assert.equal(f.view.debug().selected, before);
+    assert.equal(f.text('cat'), 'A');
+    assert.equal(f.w.localStorage.getItem('musicArchiveSort'), 'artist');
+    // 目录的首字母组也按歌手
+    f.view.list.el.querySelector('[data-l="viewport"]').scrollTop = 0;
+    f.view.list.rebuild();
+    const letters = [...doc.querySelectorAll('.archive-list-letter span')].map((s) => s.textContent);
+    assert.equal(letters[0], 'A');
+    // 键盘：菜单里上下选、回车确定
+    doc.querySelector('[data-l="sortBtn"]').click();
+    const kd = (k) => doc.activeElement.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    kd('ArrowDown'); kd('Enter');
+    assert.equal(f.view.sort, 'duration');
+    assert.equal(f.text('cat'), '时长未知');
+    f.close();
+});

@@ -239,10 +239,24 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-search:focus-within .archive-key { opacity: 0; }
 
 .archive-list-kinds { display: flex; align-items: baseline; margin: 16px 0 10px var(--gutter); font-size: 12px; letter-spacing: 1.3px; white-space: nowrap; }
-.archive-list-kinds button { color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
-.archive-list-kinds button + button::before { content: "／"; display: inline-block; margin: 0 10px; color: var(--ar-muted); font-weight: 400; opacity: .7; }
-.archive-list-kinds button:hover { color: var(--ar-ink); }
-.archive-list-kinds button.on { color: var(--ar-ink); font-weight: 700; }
+.archive-list-kinds > button { color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
+.archive-list-kinds > button + button::before { content: "／"; display: inline-block; margin: 0 10px; color: var(--ar-muted); font-weight: 400; opacity: .7; }
+.archive-list-kinds > button:hover { color: var(--ar-ink); }
+.archive-list-kinds > button.on { color: var(--ar-ink); font-weight: 700; }
+
+/* 排序：筛选行最右边一个小按钮，点开是四项的小菜单（阵列跟着重排） */
+.archive-list-sort { position: relative; margin-left: auto; padding-left: 14px; }
+.archive-list-sort > button { display: inline-flex; align-items: center; gap: 7px; color: var(--ar-muted); padding: 2px 0; letter-spacing: 1.3px; transition: color .2s; }
+.archive-list-sort > button:hover, .archive-list-sort > button[aria-expanded="true"] { color: var(--ar-ink); }
+.archive-list-sort > button.on { color: var(--ar-ink); font-weight: 700; }
+.archive-glyph-sort { width: 12px; height: 10px; display: block; background: linear-gradient(currentColor, currentColor) 0 0 / 100% 1.5px no-repeat, linear-gradient(currentColor, currentColor) 0 4px / 70% 1.5px no-repeat, linear-gradient(currentColor, currentColor) 0 8px / 40% 1.5px no-repeat; }
+.archive-list-sort-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 5; display: grid; min-width: 168px; padding: 6px 0; background: rgba(var(--ar-paper-rgb), .97); border-top: 2px solid var(--ar-ink); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
+.archive-list-sort-menu[hidden] { display: none; }
+.archive-list-sort-menu button { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 8px 14px 8px 26px; text-align: left; color: var(--ar-ink); font-size: 13px; letter-spacing: .6px; outline: none; }
+.archive-list-sort-menu button i { font-style: normal; font-size: 10px; letter-spacing: 1.2px; color: var(--ar-muted); }
+.archive-list-sort-menu button:hover, .archive-list-sort-menu button:focus-visible { background: rgba(var(--ar-ink-rgb, 128, 128, 128), .08); }
+.archive-list-sort-menu button[aria-checked="true"] { font-weight: 700; }
+.archive-list-sort-menu button[aria-checked="true"]::before { content: ""; position: absolute; left: 12px; top: 50%; width: 6px; height: 6px; margin-top: -3px; background: var(--ar-square); }
 
 .archive-list-viewport {
     position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; outline: none; overscroll-behavior: contain; scrollbar-width: none;

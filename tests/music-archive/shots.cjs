@@ -30,7 +30,9 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     await page.goto(base + '?' + qs.toString());
     await page.waitForFunction(() => window.__ready);
     await page.waitForTimeout(400);
-    if (name.includes('nolist') || name.includes('narrow-list')) await page.keyboard.press('l');
+    if (name.includes('nolist') || name.includes('narrow-list')) await page.evaluate(() => document.querySelector('[data-act="list"]').click());
+    if (name.includes('sortmenu')) { await page.evaluate(() => document.querySelector('[data-l="sortBtn"]').click()); await page.waitForTimeout(2600); await page.screenshot({ path: path.join(OUT, name + '.png') }); await page.close(); continue; }
+    if (name.includes('sortartist')) { await page.evaluate(() => document.querySelector('[data-l="sortBtn"]').click()); await page.evaluate(() => document.querySelector('[data-sort="artist"]').click()); }
     if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
