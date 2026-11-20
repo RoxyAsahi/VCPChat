@@ -400,6 +400,9 @@
                     vec3 alb = mix(vec3(0.11, 0.13, 0.13), vec3(0.2, 0.12, 0.07), smoothstep(0.55, 0.8, g));
                     alb *= 0.75 + 0.25 * step(0.04, fract(vWorld.x / 2.0));
                     alb *= 1.0 - uWet * 0.3;
+                    // 桥底背光，压得很暗，只留一点被街灯扫到的边。
+                    alb *= n.y < -0.5 ? 0.22 : 0.6;
+                    kwGlowScale = 0.3;
                     vec3 col = kwLight(vWorld, n, alb, 0.7);
                     gl_FragColor = vec4(col, 1.0);
                     #include <tonemapping_fragment>

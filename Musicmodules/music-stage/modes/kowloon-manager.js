@@ -206,7 +206,7 @@
             if (plan && planKey === key) return plan;
             const phases = planPhases(lines, frame.duration || frame.track?.duration || 0);
             const shots = planShots(phases, lines);
-            let last = null;
+            let last = null, before = null;
             const seenPhase = {};
             shots.forEach(shot => {
                 const pool = poolFor(shot.phase);
@@ -217,11 +217,12 @@
                 let id = pool[(seenPhase[shot.phase] - 1) % pool.length];
                 if (shot.first && shot.phase === 'chorus') id = seenPhase.chorus % 2 ? 'sweep' : 'hero';
                 else if (!shot.first) {
-                    const rest = pool.filter((r, i) => r !== last && pool.indexOf(r) === i);
+                    const fresh = pool.filter((r, i) => r !== last && r !== before && pool.indexOf(r) === i);
+                    const rest = fresh.length ? fresh : pool.filter(r => r !== last);
                     id = rest.length ? rest[Math.floor(seed * rest.length)] : pool[0];
                 }
                 shot.id = id; shot.seed = seed;
-                last = id;
+                before = last; last = id;
             });
             plan = { phases, shots }; planKey = key;
             return plan;
