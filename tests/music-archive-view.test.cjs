@@ -487,3 +487,56 @@ test('没有记录时：播放器晚一点恢复上次那首，选中直接落�
     assert.equal(f.view.debug().selected, 21);
     f.close();
 });
+
+test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页盖住时一帧不画', () => {
+    // 假场景：记录 step 次数；idle 由「距上次操作」决定，和真场景一致
+    let now = 0;
+    let lastInput = 0;
+    let steps = 0;
+    const canvas = { addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1, height: 1 }), style: {} };
+    const fake = {
+        create: () => ({
+            canvas, tier: { fps: 60, idleFps: 12 }, target: { lane: 0, row: 0 }, dirty: false,
+            step: () => { steps++; return { moving: false, idle: now - lastInput > 2000, animated: true }; },
+            select: () => { lastInput = now; }, jump() {}, resize() {}, setTheme() {}, setPlaying() {}, setHover() {}, setPointer() {},
+            touch: () => { lastInput = now; }, raise() {}, setLabeler() {}, setLabelMask() {}, refreshLabels() {}, dispose() {}, pick: () => null, debug: () => ({})
+        })
+    };
+    const queue = [];
+    const f = fixture({
+        setup: (w) => {
+            w.requestAnimationFrame = (cb) => { queue.push(cb); return queue.length; };
+            w.cancelAnimationFrame = () => {};
+            w.HTMLElement.prototype.insertBefore = function (n) { return n; };
+        }
+    });
+    // 换成假场景重新初始化
+    f.view.destroy();
+    f.app.archiveView = null;
+    const w = f.w;
+    w.document.getElementById('music-archive-view').innerHTML = '';
+    const view = w.MusicArchive.init(f.app, { sceneLib: fake, pinyinSrc: false });
+    const run = (ms) => {
+        const start = steps;
+        const end = now + ms;
+        while (now < end) {
+            now += 1000 / 60;
+            const cbs = queue.splice(0);
+            for (const cb of cbs) cb(now);
+        }
+        return steps - start;
+    };
+    w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    lastInput = now;
+    const active = run(1000);
+    run(1500);
+    const idle = run(2000) / 2;
+    w.document.body.classList.add('music-stage-active');
+    run(50);
+    const covered = run(2000);
+    assert.ok(active >= 55, 'active ' + active);
+    assert.ok(idle >= 11 && idle <= 13, 'idle ' + idle);
+    assert.equal(covered, 0);
+    view.destroy();
+    f.close();
+});

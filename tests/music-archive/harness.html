@@ -25,6 +25,7 @@
   if (q.has('light')) document.body.classList.add('light-theme');
   if (q.has('dock')) document.body.style.setProperty('--music-dock-safe-bottom', q.get('dock') + 'px');
   try { localStorage.clear(); } catch (e) {}
+  if (q.has('place')) localStorage.setItem('musicArchivePlace', q.get('place'));
   const n = q.has('empty') ? 0 : Number(q.get('n') || 60);
   const W1 = ['清晨的','黄昏','空车厢','潮汐','雨后的','末班','远处的','水面','玻璃','安静的','夏日','微光的'];
   const W2 = ['站台','信号','回声','海风','长椅','倒影','灯塔','车窗','来信','航线','月台','旧磁带'];
@@ -55,6 +56,12 @@
     stageHost: { active: false, enter() { app.calls.push(['stageEnter']); this.active = true; app.isStageActive = true; document.body.classList.add('music-stage-active'); },
                  exit() { this.active = false; app.isStageActive = false; document.body.classList.remove('music-stage-active'); } }
   };
+  // ?late：像真实窗口一样，曲库启动后才读进来，播放器再晚一点恢复上次那首（不播放）
+  if (q.has('late')) {
+    app.playlist = [];
+    setTimeout(() => { app.playlist = playlist; }, 300);
+    setTimeout(() => { app.currentTrackIndex = Number(q.get('late') || 137) % Math.max(1, n); }, 700);
+  }
   window.MusicArchive.init(app);
   window.__ready = true;
 })();

@@ -115,3 +115,15 @@ test('位置条：比例换算成列里的第几首', () => {
     assert.equal(M.rowAtFraction(-1, 10), 0);
     assert.equal(M.rowAtFraction(0.3, 0), 0);
 });
+
+test('画质档位：静止后三档都降到 12 帧，像素比最高 1.5', () => {
+    const vm = require('node:vm');
+    const ctx = { window: {} };
+    vm.runInNewContext(require('node:fs').readFileSync('Musicmodules/music-archive/archive-scene.js', 'utf8'), ctx);
+    const S = ctx.window.MusicArchiveScene;
+    assert.equal(S.IDLE_AFTER, 2000);
+    for (const tier of Object.values(S.TIERS)) {
+        assert.equal(tier.idleFps, 12);
+        assert.ok(tier.maxDpr <= 1.5);
+    }
+});

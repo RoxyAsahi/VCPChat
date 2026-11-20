@@ -714,7 +714,7 @@
             const keepTarget = prev ? prev.target : { lane: state.lane, row: state.row };
             if (prev) prev.dispose();
             try {
-                state.scene = SceneLib.create({ host: root, quality: quality(), reducedMotion });
+                state.scene = (options.sceneLib || SceneLib).create({ host: root, quality: quality(), reducedMotion });
             } catch (e) {
                 console.warn('[MusicArchive] 3D 场景创建失败，只显示文字：', e);
                 state.scene = null;
@@ -770,9 +770,10 @@
             state.raf = 0;
             if (!shouldRender()) return;
             const tier = state.scene.tier;
+            // 静止 2 秒后降到 12 帧；一有新输入（场景被标脏）这一帧立刻画，不等下一个 12 帧的格
             const fps = state.activity.idle && !state.activity.moving ? tier.idleFps : tier.fps;
             const aim = fps ? 1000 / fps : 0;
-            if (!aim || now - state.lastDraw >= aim - 3) {
+            if (!aim || state.scene.dirty || now - state.lastDraw >= aim - 3) {
                 state.lastDraw = now;
                 state.activity = state.scene.step(now);
             }

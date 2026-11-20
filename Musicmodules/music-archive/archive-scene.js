@@ -21,11 +21,16 @@
     const YAW = 59 * Math.PI / 180;
     const ELEV = 19 * Math.PI / 180;
 
-    /* 画质档位，和歌词舞台的三档对齐：帧率上限、阴影、抗锯齿、像素比上限。 */
+    /*
+     * 画质档位，和歌词舞台的三档对齐：帧率上限、阴影、抗锯齿、像素比上限。
+     * 静止（2 秒没有操作、相机停稳）后只剩待机起伏和正在播放的轻跳，三档都降到 12 帧；
+     * 像素比最高 1.5（高分屏上 2 倍像素要多画 78% 的像素，卡片边缘看不出区别）。
+     */
+    const IDLE_AFTER = 2000;
     const TIERS = Object.freeze({
-        'energy-saving': Object.freeze({ fps: 30, idleFps: 15, shadows: false, shadowSize: 0, antialias: false, maxDpr: 1 }),
-        standard: Object.freeze({ fps: 60, idleFps: 30, shadows: true, shadowSize: 1024, antialias: true, maxDpr: 1.5 }),
-        ultimate: Object.freeze({ fps: 0, idleFps: 60, shadows: true, shadowSize: 2048, antialias: true, maxDpr: 2 })
+        'energy-saving': Object.freeze({ fps: 30, idleFps: 12, shadows: false, shadowSize: 0, antialias: false, maxDpr: 1 }),
+        standard: Object.freeze({ fps: 60, idleFps: 12, shadows: true, shadowSize: 1024, antialias: true, maxDpr: 1.5 }),
+        ultimate: Object.freeze({ fps: 0, idleFps: 12, shadows: true, shadowSize: 2048, antialias: true, maxDpr: 1.5 })
     });
     const tierOf = (quality) => TIERS[quality] || TIERS.standard;
 
@@ -458,6 +463,8 @@
         let isPlaying = false;
         let idleGain = 0;
         let lastInput = performance.now();
+        let lastPointer = 0;          // 鼠标移动带视差，也算没静止（但不打断待机起伏）
+        let frames = 0;
         const pointer = { x: 0, y: 0 };
         const cellAt = new Int32Array(POOL * 2);
         const dummy = new THREE.Object3D();
@@ -573,13 +580,14 @@
             placeLabels();
             renderer.render(scene, camera);
             dirty = false;
+            frames++;
 
             const settled = Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
                 && Math.abs(lift.v - liftGoal) < 0.001 && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
             return {
                 moving: !settled,
-                idle: now - lastInput > 8000,
+                idle: now - Math.max(lastInput, lastPointer) > IDLE_AFTER,
                 animated: !settled || idleGain > 0.001 || (isPlaying && playing && !reduced)
             };
         };
@@ -615,7 +623,7 @@
             hovered = reducedMotion() ? null : k;
             invalidate();
         };
-        const setPointer = (x, y) => { pointer.x = x; pointer.y = y; if (!reducedMotion()) invalidate(); };
+        const setPointer = (x, y) => { pointer.x = x; pointer.y = y; lastPointer = performance.now(); if (!reducedMotion()) invalidate(); };
         const setPlaying = (cell, playingNow) => {
             const same = (cell && playing && cell.lane === playing.lane && cell.row === playing.row) || (!cell && !playing);
             if (same && playingNow === isPlaying) return;
@@ -651,10 +659,10 @@
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 
-    const api = Object.freeze({ create, TIERS, tierOf, POOL, settlingWave, selectionWave });
+    const api = Object.freeze({ create, TIERS, IDLE_AFTER, tierOf, POOL, settlingWave, selectionWave });
     global.MusicArchiveScene = api;
 })(typeof window !== 'undefined' ? window : globalThis);
