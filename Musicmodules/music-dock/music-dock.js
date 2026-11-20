@@ -499,6 +499,8 @@
             el.pCover.style.backgroundImage = coverCss;
             if (key !== state.trackKey) {
                 state.trackKey = key;
+                // 换了歌，上一首的加载失败提示就不用再留着了。
+                if (state.noticeTrackKey && state.noticeTrackKey !== key) { global.MusicToast?.dismiss('playback'); state.noticeTrackKey = ''; }
                 state.lyricIndex = -2;
                 if (state.panelOpen) renderBody();
             }
@@ -939,6 +941,54 @@
             })
             : null;
 
+        // ───────── 提示层：播放失败、扫描进度 ─────────
+        // 原来这些只写在经典视图的码率字段里，档案页和舞台里看不到；现在同时走全窗口提示层。
+        const toast = global.MusicToast;
+        if (toast) {
+            const baseNotice = app.showPlaybackNotice;
+            if (typeof baseNotice === 'function') {
+                app.showPlaybackNotice = (message) => {
+                    baseNotice(message);
+                    if (state.destroyed) return;
+                    const text = String(message || '');
+                    const failedIndex = app.currentTrackIndex;
+                    const list = app.currentFilteredTracks || app.playlist || [];
+                    const canSkip = /^加载(失败|超时)/.test(text) && list.length > 1;
+                    state.noticeTrackKey = state.trackKey;
+                    toast.show({
+                        id: 'playback',
+                        kind: 'error',
+                        message: text,
+                        action: canSkip ? {
+                            label: '跳过',
+                            countdown: 5,
+                            // 倒计时期间用户自己换了歌或又放起来了，就别再跳。
+                            run: () => { if (app.currentTrackIndex === failedIndex && !app.isPlaying && !app.playIntent) app.nextTrack(); }
+                        } : null
+                    });
+                };
+                cleanups.push(() => { if (app.showPlaybackNotice !== baseNotice) app.showPlaybackNotice = baseNotice; });
+            }
+            const bridge = app.api;
+            if (bridge?.onMusicScanProgress) {
+                bridge.onMusicScanStart?.(() => {
+                    if (!state.destroyed) toast.show({ id: 'scan', kind: 'progress', message: '正在扫描音乐文件夹…', delay: 300 });
+                });
+                bridge.onMusicScanProgress((data) => {
+                    if (state.destroyed) return;
+                    const total = Number(data?.total) || 0;
+                    const current = Number(data?.current) || 0;
+                    toast.show({ id: 'scan', kind: 'progress', message: total ? `正在扫描 ${current} / ${total}` : '正在扫描音乐文件夹…', progress: total ? current / total : undefined });
+                });
+                bridge.onMusicScanComplete?.((data) => {
+                    if (state.destroyed) return;
+                    const count = Array.isArray(data) ? data.length : (Array.isArray(data?.tracks) ? data.tracks.length : 0);
+                    toast.dismiss('scan');
+                    toast.show({ kind: 'success', message: count ? `扫描完成，这个文件夹里有 ${count} 首` : '扫描完成，没有找到音乐文件' });
+                });
+            }
+        }
+
         // ───────── 首次渲染 ─────────
         renderTrack();
         renderPlay();
@@ -968,6 +1018,7 @@
                 state.destroyed = true;
                 closeSheet();
                 palette?.destroy();
+                global.MusicToast?.clear();
                 for (const id of timers) clearTimeout(id);
                 timers.clear();
                 if (springFrame) cancelAnimationFrame(springFrame);

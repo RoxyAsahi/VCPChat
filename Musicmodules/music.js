@@ -1035,9 +1035,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const action = item.dataset.action; if (!action || action === 'add-to-playlist') return;
                 if (action === 'play') app.loadTrack(app.contextMenuTrackIndex);
                 else if (action === 'get-lyrics') app.openLyricsFetchModal(app.contextMenuTrackIndex);
-                else if (action === 'play-next') {
+                else if (action === 'play-next' || action === 'add-to-queue') {
+                    // 进播放器的手动队列；引擎的预载槽由队列自己去填，不在这里直接写。
                     const t = app.playlist[app.contextMenuTrackIndex];
-                    if (app.api?.queueNextMusicTrack) app.api.queueNextMusicTrack({ path: t.path, username: t.username, password: t.password });
+                    const next = action === 'play-next';
+                    const queued = next ? app.queuePlayNext?.(t) : app.queueAdd?.(t);
+                    if (queued) {
+                        const name = app.stripAudioExtension ? app.stripAudioExtension(queued.title || '') : (queued.title || '');
+                        try {
+                            window.MusicToast?.show({ id: 'queue', kind: 'success', message: `${next ? '下一首播放' : '已加入队列'}：${name}`,
+                                action: { label: '撤销', run: () => { const i = app.manualQueue.indexOf(queued); if (i !== -1) app.queueRemove(i); } } });
+                        } catch (err) { /* 没有提示层也不影响入队 */ }
+                    }
                 } else if (action === 'create-playlist-add') {
                     app.showPlaylistDialog((name) => {
                         const id = Date.now().toString(), track = app.playlist[app.contextMenuTrackIndex];

@@ -373,6 +373,129 @@ function setupPlayer(app) {
         if (playHistory.length > 200) playHistory.shift();
     };
 
+    // ───────── 播放队列 ─────────
+    // 两层：手动层（「下一首播放」插到最前，「加入队列」排到最后）先放完，再回到上下文层
+    // （当前列表按播放模式走）。自动预载只读队列，不往队列里写。
+    // 放手动层的歌时记下进队列前上下文放到哪一首，放完从那里接着走，而不是从手动的那首往后数。
+    app.manualQueue = [];
+    app.queueAnchor = null; // { from: 上下文里最后放的那首, playing: 正在放的手动曲目 }
+    app.preloadIssuedFor = null;
+
+    const contextCurrent = () => {
+        const current = app.playlist[app.currentTrackIndex];
+        const anchor = app.queueAnchor;
+        return anchor && anchor.playing === current && app.playlist.includes(anchor.from) ? anchor.from : current;
+    };
+    const manualHead = () => {
+        while (app.manualQueue.length && !app.playlist.includes(app.manualQueue[0])) app.manualQueue.shift();
+        return app.playModes?.[app.currentPlayMode] === 'repeat-one' ? null : (app.manualQueue[0] || null);
+    };
+    const beginManual = (track) => {
+        const from = contextCurrent();
+        app.manualQueue.shift();
+        app.queueAnchor = { from, playing: track };
+        // 这首在随机这一轮里也算放过了，不然之后还会再随到它。
+        const activeList = app.currentFilteredTracks || app.playlist;
+        if (app.lastShuffleList === activeList && Array.isArray(app.shuffleQueue)) {
+            const at = app.shuffleQueue.indexOf(activeList.indexOf(track));
+            if (at !== -1) app.shuffleQueue.splice(at, 1);
+        }
+        announceQueue();
+    };
+    const announceQueue = () => {
+        try { document.dispatchEvent(new CustomEvent('music-queue-change')); } catch (error) { /* 没有 DOM 时忽略 */ }
+    };
+    // 引擎的预载槽已经按旧队列填过了，就按新队列重填一次。
+    const refreshPreload = () => {
+        const current = app.playlist[app.currentTrackIndex];
+        if (!current || app.preloadIssuedFor !== current.path) return;
+        if (app.isPreloadingNext) { setTimeout(refreshPreload, 600); return; }
+        app.handleNeedsPreload();
+    };
+    const queueChanged = () => { announceQueue(); refreshPreload(); };
+    const resolveTrack = (ref) => {
+        if (ref == null) return null;
+        if (typeof ref === 'number') return app.playlist[ref] || null;
+        if (typeof ref === 'string') {
+            const want = app.normalizePathForCompare ? app.normalizePathForCompare(ref) : ref;
+            return app.playlist.find(t => (app.normalizePathForCompare ? app.normalizePathForCompare(t.path) : t.path) === want) || null;
+        }
+        return app.playlist.includes(ref) ? ref : (app.playlist.find(t => t.path === ref.path) || null);
+    };
+    const enqueue = (ref, atFront) => {
+        const track = resolveTrack(ref);
+        if (!track) return null;
+        const at = app.manualQueue.indexOf(track);
+        if (at !== -1) app.manualQueue.splice(at, 1); // 已经在队列里就挪过去，不重复
+        if (atFront) app.manualQueue.unshift(track); else app.manualQueue.push(track);
+        queueChanged();
+        return track;
+    };
+    app.queuePlayNext = (ref) => enqueue(ref, true);
+    app.queueAdd = (ref) => enqueue(ref, false);
+    app.queueRemove = (index) => {
+        if (index < 0 || index >= app.manualQueue.length) return null;
+        const [track] = app.manualQueue.splice(index, 1);
+        queueChanged();
+        return track;
+    };
+    app.queueMove = (from, to) => {
+        const n = app.manualQueue.length;
+        if (from < 0 || from >= n || to < 0 || to >= n || from === to) return;
+        const [track] = app.manualQueue.splice(from, 1);
+        app.manualQueue.splice(to, 0, track);
+        queueChanged();
+    };
+    app.queueClear = () => {
+        if (!app.manualQueue.length) return;
+        app.manualQueue = [];
+        queueChanged();
+    };
+
+    // 随机顺序只在这里生成：预载和「下一首」用同一份，列表换了就重洗。
+    const ensureShuffleQueue = (activeList) => {
+        if (app.lastShuffleList !== activeList) {
+            app.shuffleQueue = [];
+            app.lastShuffleList = activeList;
+        }
+        if (app.shuffleQueue.length === 0) {
+            app.shuffleQueue = Array.from({ length: activeList.length }, (_, i) => i);
+            for (let i = app.shuffleQueue.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [app.shuffleQueue[i], app.shuffleQueue[j]] = [app.shuffleQueue[j], app.shuffleQueue[i]];
+            }
+            // 别一开始就是正在放的这首
+            if (app.shuffleQueue.length > 1 && app.playlist.indexOf(activeList[app.shuffleQueue[0]]) === app.currentTrackIndex) {
+                app.shuffleQueue.push(app.shuffleQueue.shift());
+            }
+        }
+    };
+
+    // 接下来会放什么：手动层 + 上下文层的真实顺序（随机时就是洗好的顺序）。
+    app.getUpNext = (limit = 200) => {
+        const activeList = app.currentFilteredTracks || app.playlist;
+        const mode = app.playModes[app.currentPlayMode];
+        manualHead();
+        const manual = app.manualQueue.filter(t => app.playlist.includes(t));
+        const context = [];
+        if (mode === 'repeat-one') {
+            const current = app.playlist[app.currentTrackIndex];
+            if (current) context.push(current);
+        } else if (mode === 'shuffle') {
+            if (activeList.length) ensureShuffleQueue(activeList);
+            for (const i of app.shuffleQueue) {
+                if (context.length >= limit) break;
+                const track = activeList[i];
+                if (track && track !== app.playlist[app.currentTrackIndex]) context.push(track);
+            }
+        } else {
+            const pos = activeList.indexOf(contextCurrent());
+            const count = pos === -1 ? activeList.length : activeList.length - 1;
+            for (let k = 0; k < count && context.length < limit; k++) context.push(activeList[(pos + 1 + k) % activeList.length]);
+        }
+        return { manual, context };
+    };
+
     app.prevTrack = () => {
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;
@@ -402,6 +525,13 @@ function setupPlayer(app) {
             app.lastShuffleList = activeList;
         }
 
+        const queued = manualHead();
+        if (queued) {
+            beginManual(queued);
+            app.loadTrack(app.playlist.indexOf(queued));
+            return;
+        }
+
         if (activeList.length <= 1) {
             if (activeList.length === 1) {
                 const idx = app.playlist.indexOf(activeList[0]);
@@ -414,7 +544,7 @@ function setupPlayer(app) {
 
         switch (app.playModes[app.currentPlayMode]) {
             case 'repeat':
-                const currentTrack = app.playlist[app.currentTrackIndex];
+                const currentTrack = contextCurrent();
                 const currentPos = activeList.indexOf(currentTrack);
                 if (currentPos !== -1) {
                     const nextPos = (currentPos + 1) % activeList.length;
@@ -425,16 +555,7 @@ function setupPlayer(app) {
                 break;
             case 'repeat-one': break;
             case 'shuffle':
-                if (app.shuffleQueue.length === 0) {
-                    app.shuffleQueue = Array.from({ length: activeList.length }, (_, i) => i);
-                    for (let i = app.shuffleQueue.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [app.shuffleQueue[i], app.shuffleQueue[j]] = [app.shuffleQueue[j], app.shuffleQueue[i]];
-                    }
-                    if (app.shuffleQueue.length > 1 && app.playlist.indexOf(activeList[app.shuffleQueue[0]]) === app.currentTrackIndex) {
-                        app.shuffleQueue.push(app.shuffleQueue.shift());
-                    }
-                }
+                ensureShuffleQueue(activeList);
                 const nextIdx = app.shuffleQueue.shift();
                 app.currentTrackIndex = app.playlist.indexOf(activeList[nextIdx]);
                 break;
@@ -463,10 +584,10 @@ function setupPlayer(app) {
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;
 
-        let nextTrackToPreload = null;
-        switch (app.playModes[app.currentPlayMode]) {
+        let nextTrackToPreload = manualHead();
+        if (!nextTrackToPreload) switch (app.playModes[app.currentPlayMode]) {
             case 'repeat':
-                const currentTrack = app.playlist[app.currentTrackIndex];
+                const currentTrack = contextCurrent();
                 const currentPos = activeList.indexOf(currentTrack);
                 nextTrackToPreload = activeList[currentPos !== -1 ? (currentPos + 1) % activeList.length : 0];
                 break;
@@ -474,19 +595,7 @@ function setupPlayer(app) {
                 nextTrackToPreload = app.playlist[app.currentTrackIndex];
                 break;
             case 'shuffle':
-                if (app.shuffleQueue.length === 0) {
-                    // Generate a new shuffle queue if empty
-                    app.shuffleQueue = Array.from({ length: activeList.length }, (_, i) => i);
-                    for (let i = app.shuffleQueue.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [app.shuffleQueue[i], app.shuffleQueue[j]] = [app.shuffleQueue[j], app.shuffleQueue[i]];
-                    }
-                    // Avoid starting with the current track
-                    if (app.shuffleQueue.length > 1 && app.playlist.indexOf(activeList[app.shuffleQueue[0]]) === app.currentTrackIndex) {
-                        app.shuffleQueue.push(app.shuffleQueue.shift());
-                    }
-                }
-                
+                ensureShuffleQueue(activeList);
                 if (app.shuffleQueue.length > 0) {
                     nextTrackToPreload = activeList[app.shuffleQueue[0]];
                 }
@@ -497,11 +606,12 @@ function setupPlayer(app) {
             // If we are in repeat-one mode and there's only one track,
             // we still want to preload it for gapless looping.
             // But if we are NOT in repeat-one and there's only one track, we don't need to preload.
-            if (activeList.length <= 1 && app.playModes[app.currentPlayMode] !== 'repeat-one') {
+            if (activeList.length <= 1 && app.playModes[app.currentPlayMode] !== 'repeat-one' && nextTrackToPreload !== app.manualQueue[0]) {
                 return;
             }
 
             app.isPreloadingNext = true;
+            app.preloadIssuedFor = app.playlist[app.currentTrackIndex]?.path || null;
             try {
                 await app.api.queueNextMusicTrack({
                     path: nextTrackToPreload.path,
@@ -644,6 +754,9 @@ function setupPlayer(app) {
 
     const syncTrackIndexByPath = app.syncTrackIndexByPath;
     app.syncTrackIndexByPath = (path) => {
+        // 无缝切进了队列里的下一首：在当前索引变之前把它从手动层取出来，记下上下文位置。
+        const queued = manualHead();
+        if (queued && path && app.normalizePathForCompare(queued.path) === app.normalizePathForCompare(path)) beginManual(queued);
         syncTrackIndexByPath(path);
         app.publishCapsuleState();
     };
