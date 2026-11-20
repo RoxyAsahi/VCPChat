@@ -355,10 +355,22 @@ test('music stage keeps one mode instance and releases canvases across switches'
     assert.equal(app.isStageActive, true);
     assert.equal(app.stageHost.getDebugSnapshot().modeRootChildren, 1);
 
+    // A switch builds the new mode behind the old one and keeps both for one
+    // soft-focus crossfade; drive frames until only the new one is left.
+    const settleSwitch = async (time) => {
+        for (let i = 0; i < 40; i++) {
+            app.stageHost.updateFrame(time);
+            if (!app.stageHost.getDebugSnapshot().switching) return;
+            await wait(dom.window, 100);
+        }
+        assert.fail('mode switch never finished');
+    };
+
     for (const mode of ['tempera', 'sonnet', 'diorama', 'fume', 'partita', 'cadenza', 'luminous', 'fume']) {
         app.stageHost.setMode(mode);
-        await wait(dom.window, 210);
-        app.stageHost.updateFrame(1000);
+        const during = app.stageHost.getDebugSnapshot();
+        assert.ok(during.modeRootChildren <= 2, 'at most the old and the new mode at once');
+        await settleSwitch(1000);
         const snapshot = app.stageHost.getDebugSnapshot();
         assert.equal(snapshot.modeId, mode);
         assert.equal(snapshot.modeRootChildren, 1);
@@ -372,8 +384,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     }
 
     app.stageHost.setMode('starborn');
-    await wait(dom.window, 210);
-    app.stageHost.updateFrame(1200);
+    await settleSwitch(1200);
     const starborn = app.stageHost.getDebugSnapshot();
     assert.equal(starborn.modeId, 'starborn');
     assert.equal(starborn.mode.excludesWebGLModes, true);
@@ -382,7 +393,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     assert.equal(starborn.mode.candidateModes.includes('sonnet'), true);
 
     app.stageHost.setMode('luminous');
-    await wait(dom.window, 210);
+    await settleSwitch(1300);
     const afterFume = app.stageHost.getDebugSnapshot();
     assert.equal(afterFume.canvasCount, 0);
     assert.equal(afterFume.modeRootChildren, 1);

@@ -353,6 +353,48 @@ body.music-stage-active #player-background {
     overflow: hidden;
 }
 
+/*
+ * Soft-focus switch between modes (host: softSwitch). The new mode is built
+ * unseen while the old one keeps performing; once the new one has drawn, the
+ * old drifts forward and blurs away and the new one comes out of the same
+ * blur. Both stay at or above full size, so no edge ever shows.
+ */
+.music-stage-mode-root > .music-stage-mode.is-soft-arriving {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-settling {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-arriving:not(.is-soft-settling) {
+    transition: none;
+}
+
+.music-stage-mode-root > .music-stage-mode:not(.is-soft-arriving):not(.is-soft-settling) {
+    transition: opacity 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+        filter 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+        transform 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s;
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-leaving-wait {
+    pointer-events: none;
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-leaving {
+    z-index: 1;
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+    pointer-events: none;
+    transition: opacity 0.36s cubic-bezier(0.4, 0, 1, 1),
+        filter 0.36s cubic-bezier(0.4, 0, 1, 1),
+        transform 0.36s cubic-bezier(0.4, 0, 1, 1);
+}
+
 .music-stage-top-chrome {
     position: absolute;
     top: 56px;
