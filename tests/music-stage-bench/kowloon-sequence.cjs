@@ -18,7 +18,11 @@ const [W, H] = (args.size || '640x360').split('x').map(Number);
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
     page.on('pageerror', e => console.log('[pageerror]', e.message));
     await page.goto(`${origin}/blank.html`);
-    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('musicStageMode', 'kowloon'); });
+    // --mode=sandbox 看沙盒截面在各段落的样子；默认看分镜运镜。
+    await page.evaluate((cameraMode) => {
+        localStorage.clear(); localStorage.setItem('musicStageMode', 'kowloon');
+        localStorage.setItem('musicStageConfig', JSON.stringify({ modes: { kowloon: { cameraMode } } }));
+    }, args.mode || 'auto');
     await page.goto(`${origin}/Musicmodules/harness.html?lyrics=song&duration=215&t=1`);
     await page.waitForTimeout(400);
     await page.evaluate(() => __h.app.stageHost.enter());

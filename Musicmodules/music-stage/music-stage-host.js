@@ -265,7 +265,7 @@
                 { key: 'avoidRepeat', label: '避免重复', type: 'toggle' }
             ],
             kowloon: [
-                { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
+                { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
                 { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
                 { key: 'lightning', label: '副歌闪电', type: 'toggle' },
                 { key: 'reflections', label: '积水倒影（节能档关闭）', type: 'toggle' },

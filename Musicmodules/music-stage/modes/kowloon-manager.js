@@ -229,6 +229,37 @@
             plan = { phases, shots }; planKey = key;
             return plan;
         };
+        /*
+         * 沙盒截面：把切出来的那块城寨当桌上的模型看。平行投影、斜俯视，镜头不切，
+         * 只跟着段落慢慢换角度和远近：主歌看整块，预副歌凑近东面的剖面，
+         * 副歌正对歌词屏，间奏转到西面。
+         */
+        const SANDBOX_VIEWS = {
+            intro: { az: 40, el: 40, size: 66, target: [4, 12, 40] },
+            verse: { az: 40, el: 30, size: 50, target: [4, 15, 40] },
+            prechorus: { az: 60, el: 26, size: 40, target: [22, 15, 42] },
+            chorus: { az: 20, el: 23, size: 37, target: [8, 17, 52] },
+            interlude: { az: -38, el: 31, size: 50, target: [4, 15, 40] },
+            outro: { az: 46, el: 36, size: 70, target: [4, 10, 40] }
+        };
+        const sandboxNow = { az: 40, el: 30, size: 54, target: [4, 13, 40], at: null };
+        const sandboxPose = (phase, time) => {
+            const goal = SANDBOX_VIEWS[phase] || SANDBOX_VIEWS.verse;
+            const dt = sandboxNow.at === null ? Infinity : time - sandboxNow.at;
+            sandboxNow.at = time;
+            // 拖进度条或刚进来：直接到位；平时用几秒钟慢慢靠过去。
+            const k = dt < 0 || dt > 1.5 ? 1 : 1 - Math.exp(-dt * 0.55);
+            ['az', 'el', 'size'].forEach(key => { sandboxNow[key] += (goal[key] - sandboxNow[key]) * k; });
+            sandboxNow.target = lerp3(sandboxNow.target, goal.target, k);
+            const az = (sandboxNow.az + Math.sin(time * 0.071) * 7) * Math.PI / 180;
+            const el = (sandboxNow.el + Math.sin(time * 0.053 + 1.1) * 1.5) * Math.PI / 180;
+            const FOV = 30, distance = sandboxNow.size / Math.tan(FOV * Math.PI / 360);
+            const t = sandboxNow.target;
+            return {
+                position: [t[0] + Math.sin(az) * Math.cos(el) * distance, t[1] + Math.sin(el) * distance, t[2] + Math.cos(az) * Math.cos(el) * distance],
+                look: [t[0], t[1], t[2]], fov: FOV, ortho: true
+            };
+        };
         const shotAt = (shots, time) => {
             for (let i = shots.length - 1; i >= 0; i -= 1) if (time >= shots[i].start) return shots[i];
             return shots[0];
@@ -241,6 +272,7 @@
             phaseAt(frame, time) { return shotAt(ensurePlan(frame).shots, time).phase; },
             pose(frame, time) {
                 const phase = director.phaseAt(frame, time);
+                if (director.mode === 'sandbox' && !director.force) return { id: 'sandbox', phase, ...sandboxPose(phase, time) };
                 if (director.mode === 'diorama' && !director.force) return { id: 'diorama', phase, ...rigs.diorama(0, 0, time) };
                 if (director.force?.position) return { id: 'custom', phase, fov: 60, ...director.force };
                 if (director.force) {
@@ -271,7 +303,7 @@
                 }
                 return { id: current.id, phase, ...now };
             },
-            reset() { current = previous = null; plan = null; }
+            reset() { current = previous = null; plan = null; sandboxNow.at = null; }
         };
         return director;
     };
@@ -347,7 +379,7 @@
         fallback.append(fallbackLine, translation);
         mode.root.append(fallback);
         const reduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
-        let T, scene, camera, renderer, layout, city, signs, alley, optics, director, shared, placeholderLights = [];
+        let T, scene, camera, renderer, layout, city, signs, alley, optics, sandbox, director, shared, placeholderLights = [];
         let initialized = false, fallbackMode = false, initializing = null;
         let latest = null, lastTime = null, width = 1, height = 1, shotId = '';
         /*
@@ -408,6 +440,27 @@
             camera.updateProjectionMatrix();
         };
 
+        // 沙盒截面用平行投影：画面高度取「机位到注视点的距离 × 视角」，所以拖拽推拉、
+        // 窄窗放宽、让开浮层这些照常起作用；相机本身退到固定的远处，不会钻进楼里。
+        const SANDBOX_FOG = 0.035, ORTHO_DISTANCE = 300;
+        let wasOrtho = false, wasBoxed = false, skyKeep = null, skyLift = null;
+        const applyOrtho = (pose) => {
+            if (!pose.ortho) {
+                if (wasOrtho) { wasOrtho = false; camera.updateProjectionMatrix(); }
+                return;
+            }
+            wasOrtho = true;
+            const dx = pose.position[0] - pose.look[0], dy = pose.position[1] - pose.look[1], dz = pose.position[2] - pose.look[2];
+            const distance = Math.hypot(dx, dy, dz) || 1;
+            const halfH = distance * Math.tan(camera.fov * Math.PI / 360), halfW = halfH * width / height;
+            const k = ORTHO_DISTANCE / distance;
+            camera.position.set(pose.look[0] + dx * k, pose.look[1] + dy * k, pose.look[2] + dz * k);
+            camera.lookAt(pose.look[0], pose.look[1], pose.look[2]);
+            const sx = Math.round(frame2d.cur.x) / width * 2 * halfW, sy = Math.round(frame2d.cur.y) / height * 2 * halfH;
+            camera.projectionMatrix.makeOrthographic(-halfW + sx, halfW + sx, halfH - sy, -halfH - sy, 1, 900);
+            camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        };
+
         let dirty = true, lastWall = 0;
         const orbit = createOrbit();
         const cap = U.createFrameCap();
@@ -441,7 +494,8 @@
         const disposeGraphics = () => {
             modules().forEach(m => { try { m.dispose(); } catch (error) { console.warn('[MusicStage:Kowloon] dispose', error); } });
             optics?.destroy();
-            city = signs = alley = optics = null;
+            try { sandbox?.dispose(); } catch (error) { console.warn('[MusicStage:Kowloon] dispose', error); }
+            city = signs = alley = optics = sandbox = null;
             renderer?.dispose();
             renderer?.forceContextLoss();
             renderer?.domElement.remove();
@@ -485,7 +539,7 @@
             audio.vocal = R.clamp(frame.audio?.vocal) * gain;
 
             const settings = options();
-            director.mode = settings.cameraMode === 'diorama' ? 'diorama' : 'auto';
+            director.mode = ['diorama', 'sandbox'].includes(settings.cameraMode) && (settings.cameraMode !== 'sandbox' || sandbox) ? settings.cameraMode : 'auto';
             // 看景时导演不换机位，免得手里的画面被切走。
             director.hold = orbit.active;
             const pose = orbit.apply(director.pose(frame, time), performance.now() / 1000 - (lastWall || performance.now() / 1000));
@@ -494,6 +548,7 @@
             camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
             camera.lookAt(pose.look[0], pose.look[1], pose.look[2]);
             applyFraming(pose, dt);
+            applyOrtho(pose);
             camera.updateMatrixWorld();
 
             const state = {
@@ -504,9 +559,23 @@
             };
             state.song = state.track;
             shared.uTime.value = state.time;
+            // 沙盒截面：告诉各模块现在看的是哪一块、焦点在哪（雨、近景细节跟着焦点走，不跟远处的相机）。
+            const boxed = Boolean(pose.ortho && sandbox);
+            state.sandbox = boxed ? sandbox.box : null;
+            state.focus = boxed ? pose.look : null;
+            if (boxed !== wasBoxed) { wasBoxed = boxed; modules().forEach(m => m.setSandbox?.(boxed ? sandbox.box : null)); }
             // 渲染顺序：巷道先（它要画积水反射），再楼体、招牌。
             modules().forEach(m => m.update(state));
-            global.MusicStageKowloonShared.gatherLights(shared, modules().map(m => m.lights?.()).concat([signs ? [] : placeholderLights]), camera);
+            sandbox?.update(boxed, camera, state);
+            // 沙盒里相机在两百多米外，灯按离焦点的远近挑；雾也只算盒子里这一段。
+            const viewer = boxed ? { position: { x: pose.look[0], y: pose.look[1] + 4, z: pose.look[2] + 14 } } : camera;
+            global.MusicStageKowloonShared.gatherLights(shared, modules().map(m => m.lights?.()).concat([signs ? [] : placeholderLights]), viewer);
+            const fogDensity = scene.fog?.density;
+            if (boxed && scene.fog) scene.fog.density = fogDensity * SANDBOX_FOG;
+            // 从上往下看，屋顶占了大半画面：给一层偏冷的天光，天台上的东西才看得清。
+            // 街上那层暖光收一半，墙面才不会整块发橙。
+            const glowKeep = shared.uGlowStrength.value;
+            if (boxed) { skyKeep.copy(shared.uSky.value); shared.uSky.value.multiplyScalar(1.6).add(skyLift); shared.uGlowStrength.value = glowKeep * 0.5; }
 
             if (showCaption()) { fallback.hidden = false; renderFallback(frame); }
             else fallback.hidden = true;
@@ -516,6 +585,8 @@
             const lens = { ...tuned, threshold: tuned.threshold ?? 0.95, glow: tuned.glow ?? 1.1, grain: tuned.grain ?? 0.06, vignette: tuned.vignette ?? 0.28 };
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config, lens);
             else renderer.render(scene, camera);
+            if (boxed && scene.fog) scene.fog.density = fogDensity;
+            if (boxed) { shared.uSky.value.copy(skyKeep); shared.uGlowStrength.value = glowKeep; }
             lastTime = time;
         };
 
@@ -554,6 +625,7 @@
                 });
                 layout = global.MusicStageKowloonLayout.build('kowloon');
                 shared = global.MusicStageKowloonShared.createLightUniforms(T);
+                skyKeep = new T.Color(); skyLift = new T.Color(0.035, 0.05, 0.075);
                 const tier = { name: mode.config.quality || 'standard', ...U.tier(mode.config.quality) };
                 const ctx = { scene, renderer, camera, layout, palette: palette(), tier, options: options(), lightUniforms: shared, rand: s => global.MusicStageKowloonLayout.rng(s) };
                 // 巷道先建：它定雾、天空和湿度。
@@ -576,6 +648,11 @@
                         color: [[1, 0.2, 0.55], [0.2, 0.9, 1], [1, 0.55, 0.15], [0.4, 1, 0.5], [0.7, 0.3, 1]][i % 5],
                         intensity: 1.6, radius: 9
                     }));
+                if (global.MusicStageKowloonSandbox?.create) {
+                    sandbox = global.MusicStageKowloonSandbox.create(T, ctx);
+                    sandbox.setPalette(palette());
+                    sandbox.scan();
+                }
                 director = createDirector(layout);
                 director.setExtraRigs(alley?.cameraRigs?.());
                 modules().forEach(m => m.setTier?.(tier));
@@ -610,7 +687,7 @@
             if (latest) update(latest, true);
         };
         mode.updateTheme = () => {
-            if (initialized) modules().forEach(m => m.setPalette?.(palette()));
+            if (initialized) { modules().forEach(m => m.setPalette?.(palette())); sandbox?.setPalette(palette()); }
             if (latest) update(latest, true);
         };
         const resume = mode.resume;
@@ -622,7 +699,7 @@
             geometries: renderer?.info.memory.geometries, textures: renderer?.info.memory.textures,
             programs: renderer?.info.programs?.length,
             lights: shared?.uLightCount.value,
-            ...(initialized ? Object.assign({}, ...modules().map(m => m.stats?.() || {})) : null)
+            ...(initialized ? Object.assign({}, ...modules().map(m => m.stats?.() || {}), sandbox?.stats() || {}) : null)
         });
         // harness 用：固定机位截图。
         mode.debugScene = () => ({ scene, camera, renderer, T });

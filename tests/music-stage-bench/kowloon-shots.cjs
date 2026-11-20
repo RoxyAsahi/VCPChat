@@ -10,7 +10,7 @@ const args = Object.fromEntries(process.argv.slice(2).filter(a => a.startsWith('
 const ROOT = path.resolve(path.join(__dirname, '..', '..'));
 const OUT = path.resolve(args.out || path.join(ROOT, 'artifacts', 'kowloon'));
 const [W, H] = (args.size || '1600x900').split('x').map(Number);
-const SHOTS = (args.shots || 'iso,street,screen,roof').split(/;|,(?=[a-z])/);
+const SHOTS = (args.shots || 'iso,street,screen,roof').split(/;|,(?=[a-z])/);  // sbx: 机位里有逗号，用分号隔开
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
     const server = await require('./serve.cjs')(ROOT);
@@ -43,6 +43,23 @@ const SHOTS = (args.shots || 'iso,street,screen,roof').split(/;|,(?=[a-z])/);
             continue;
         }
         const [id, tt] = shot.split('@');
+        // sandbox@秒：不固定机位，把进度拖到那一秒，看沙盒截面在那个段落的样子。
+        // sbx:方位角,仰角,画面半高,x,y,z：沙盒截面里自定角度。
+        if (id === 'sandbox' || id.startsWith('sbx:')) {
+            await page.evaluate(({ id, tt }) => {
+                const m = MusicStageKowloonManager.debugInstance();
+                if (id === 'sandbox') { m.debugSetShot(null); __h.seek(Number(tt || 30)); return; }
+                const [az, el, size, x = 4, y = 13, z = 40] = id.slice(4).split(',').map(Number);
+                const a = az * Math.PI / 180, e = el * Math.PI / 180, d = size / Math.tan(15 * Math.PI / 180);
+                m.debugSetShot({ position: [x + Math.sin(a) * Math.cos(e) * d, y + Math.sin(e) * d, z + Math.cos(a) * Math.cos(e) * d], look: [x, y, z], fov: 30, ortho: true });
+            }, { id, tt });
+            await page.waitForTimeout(900);
+            const file = path.join(OUT, `${shot.replace(/[@:,]/g, '-')}.png`);
+            await page.screenshot({ path: file });
+            const snap = await page.evaluate(() => __h.snap().mode);
+            console.log(shot, file, JSON.stringify({ draws: snap.drawCalls, tris: snap.triangles, programs: snap.programs, lights: snap.lights, shot: snap.shot, sandbox: snap.sandbox, fallback: snap.fallbackMode }));
+            continue;
+        }
         if (args.time) await page.evaluate((t) => MusicStageKowloonManager.debugInstance().debugTime(t), Number(args.time));
         await page.evaluate(({ id, tt }) => MusicStageKowloonManager.debugInstance().debugSetShot(id, tt === undefined ? 0.5 : Number(tt)), { id, tt });
         await page.waitForTimeout(600);
