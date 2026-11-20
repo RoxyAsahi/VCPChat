@@ -316,6 +316,7 @@
             }
             host.classList.toggle('md-fl-on', Boolean(fluid));
             host.classList.toggle('md-fl-low', !fluid);
+            host.classList.toggle('md-q-ultimate', global.MusicStageConfig?.get?.()?.quality === 'ultimate');
             if (fluid) {
                 fluid.layout();
                 lastRange = '';
