@@ -580,3 +580,21 @@ test('a track that fails while only being restored is reported but nothing is sk
     assert.equal(app.shown().at(-1).action, undefined);
     assert.equal(app.failureStreak, 0);
 });
+
+test('a play echo that arrives very late, after we already paused again, is not taken for a key press', async t => {
+    const app = failingSetup(new Set(['a']));
+    app.failureSkipDelayMs = 60000;
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip(); });
+    // 机器很卡：占位音频的事件过了几秒才派发
+    app.phantomAudio.play = function () { this.paused = false; return Promise.resolve(); };
+    app.phantomAudio.pause = function () { this.paused = true; };
+    await app.loadTrack(0, true);
+    assert.deepEqual(loads(app), ['a']);
+    assert.equal(app.phantomAudio.paused, true);
+    app.setNow(Date.now() + 5000);
+    app.phantomAudio.onplay();
+    app.phantomAudio.onpause();
+    await tick(50);
+    assert.deepEqual(loads(app), ['a'], 'the failed track must not be loaded again by a stale event');
+    assert.equal(app.failureStreak, 1);
+});
