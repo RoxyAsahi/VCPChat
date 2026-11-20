@@ -715,3 +715,20 @@ test('右侧歌词：经典视图和播放页里不显示，暂停时不走表',
     assert.ok(el.hidden);
     f.close();
 });
+
+test('onMotion：换选中时回调方向、速度和在这一列里的位置，可取消', () => {
+    const f = fixture();
+    const got = [];
+    const off = f.view.onMotion((m) => got.push(m));
+    f.key('ArrowDown'); f.key('ArrowDown');
+    f.key('ArrowRight');
+    assert.equal(got.length, 3);
+    assert.equal(got[0].axis, 'row');
+    assert.ok(got[1].velocity > 0);
+    assert.equal(got[2].axis, 'lane');
+    assert.ok(got[0].fraction > 0 && got[0].fraction <= 1);
+    off();
+    f.key('ArrowDown');
+    assert.equal(got.length, 3);
+    f.close();
+});
