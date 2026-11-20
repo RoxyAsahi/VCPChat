@@ -211,7 +211,7 @@
         // 舞台的「性能档位」选节能时不跑流体层，播放条退成不透明的实色。
         const SCENE_GLOW = {
             light: { base: ['#f29a63', '#f7d9c6', '#ffffff'], diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'], tunnel: ['#4fa597', '#cfe9e2', '#ffffff'] },
-            dark: { base: ['#c8693a', '#4a3a32', '#2b2927'], diorama: ['#d0602c', '#4d362b', '#2a2725'], tunnel: ['#3d8f82', '#2f4440', '#262a29'] }
+            dark: { base: ['#d9773f', '#6b4c3b', '#46403b'], diorama: ['#e06a30', '#6e4733', '#45403b'], tunnel: ['#46a593', '#3c5853', '#3d4441'] }
         };
         const lowQuality = () => global.MusicStageConfig?.get?.()?.quality === 'energy-saving';
         let fluid = null;
