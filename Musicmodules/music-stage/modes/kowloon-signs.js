@@ -483,8 +483,13 @@
     // ---------- geometry ----------------------------------------------------
 
     const createBuilder = () => {
-        const pos = [], nor = [], uv = [], info = [], idx = [];
+        const pos = [], nor = [], uv = [], info = [], idx = [], tags = [];
+        // Each quad remembers who it belongs to, so the sandbox view can drop
+        // whole pieces: 0 always drawn, n > 0 sign n-1, -1 not in the sandbox,
+        // -2 only in the sandbox.
+        let tag = 0;
         const quad = (p0, p1, p2, p3, n, uvr, inf) => {
+            tags.push(tag);
             // p0 bottom-left, p1 bottom-right, p2 top-right, p3 top-left; uvr = [u0,v0,u1,v1].
             const base = pos.length / 3;
             [p0, p1, p2, p3].forEach(p => pos.push(p[0], p[1], p[2]));
@@ -521,9 +526,10 @@
             g.setAttribute('info', new T.Float32BufferAttribute(info, 4));
             g.setIndex(idx);
             g.computeBoundingSphere();
+            g.userData.tags = tags.slice(); g.userData.fullIndex = idx.slice();
             return g;
         };
-        return { quad, box, bar, geometry, get triangles() { return idx.length / 3; } };
+        return { quad, box, bar, geometry, setTag(t) { tag = t; }, get triangles() { return idx.length / 3; } };
     };
 
     // ---------- shaders -----------------------------------------------------
@@ -774,7 +780,7 @@
 
     // The canvas is half the layout's size: the boards have fewer lamps than that.
     const LYRIC_SCALE = 0.5;
-    const paintLyric = (g, lyric, song) => {
+    const paintLyric = (g, lyric, song, big = false) => {
         g.save();
         g.setTransform(LYRIC_SCALE, 0, 0, LYRIC_SCALE, 0, 0);
         g.globalCompositeOperation = 'source-over';
@@ -784,7 +790,8 @@
         const words = lyric?.line ? wordsOf(lyric) : [];
         const n = Math.max(1, words.length);
         const main = REGIONS.main;
-        const translation = String(lyric?.translation || '').trim();
+        // Seen small from far off (the sandbox view), the line alone, as big and heavy as fits.
+        const translation = big ? '' : String(lyric?.translation || '').trim();
         const transH = translation ? 120 : 0;
         // Main board: biggest size that fits in at most three rows.
         if (words.length) {
@@ -793,7 +800,7 @@
             for (; px > 70; px -= 10) {
                 rows = layoutRows(g, words, `900 ${px}px ${FONTS.lyric}`, maxW, 3);
                 const tooWide = rows.some(r => r.width > maxW);
-                if (!tooWide && rows.length * px * 1.18 <= main.h - transH - 60) break;
+                if (!tooWide && rows.length * px * 1.18 <= main.h - transH - (big ? 20 : 60)) break;
             }
             g.font = `900 ${px}px ${FONTS.lyric}`;
             const lineH = px * 1.18;
@@ -811,6 +818,7 @@
                     g.fillRect(Math.round(x0 + cell.x), y - lineH / 2, Math.max(1, Math.round(x0 + cell.x + cell.w) - Math.round(x0 + cell.x)), lineH);
                     g.fillStyle = '#ff0000';
                     g.fillText(cell.text, x0 + cell.x, y);
+                    if (big) { g.strokeStyle = '#ff0000'; g.lineWidth = px * 0.04; g.lineJoin = 'round'; g.strokeText(cell.text, x0 + cell.x, y); }
                 });
             });
             if (translation) {
@@ -1188,6 +1196,7 @@
             // Shop fascias sit above the awnings and shutters (street level is the alley's).
             if (slot.kind === 'shop') p = [p[0], Math.max(p[1], 2.9 + spec.height / 2), p[2]];
             const info = [spec.index, spec.gain, 0, spec.beat];
+            hw.setTag(spec.index + 1); glow.setTag(spec.index + 1);
             const faceUv = uvOf(spec.rect);
             let c, r, u, f;
             // Up may lean a touch on a few old signs.
@@ -1348,6 +1357,7 @@
             hw.box(add(add(centre, r, -w / 2 - bez / 2), n, 0.04), r, UP, n, bez / 2, h / 2, 0.1, metalUv, metalUv, hInfo);
             screenList.push({ role, centre, normal: n, width: w, height: h });
         };
+        hw.setTag(0); glow.setTag(0);
         const screens = (layout.SCREENS || layout.screens || []).concat(adScreens);
         screens.forEach(s => {
             const kind = String(s.role || s.kind || s.id || '');
@@ -1400,10 +1410,23 @@
         };
         // Every roof banner (the roof pass sees several at once), two off the walls.
         const lyricBanners = new Set([...holoAds.filter(a => a.roof).sort((a, b) => toPath(a) - toPath(b)), ...holoAds.filter(a => !a.roof).slice(0, 2)]);
-        holoAds.forEach((a, i) => {
+        // The sandbox view cuts out one block (x -30..38, z 8..72) and frames it
+        // to about 60 m: banners that tower past that, or that a cut would slice,
+        // sit that view out, and one lyric banner stands by the block's south-east
+        // corner in their place.
+        const SBX = { x0: -30, x1: 38, z0: 8, z1: 72, top: 60 };
+        const cutBy = (lo, hi, at) => lo < at && hi > at;
+        const sbAds = [{ sandboxOnly: true, roof: false, lyric: true, normal: norm([0.64, 0, 0.77]), right: norm(cross(UP, norm([0.64, 0, 0.77]))),
+            centre: [33.8, 33, 63.5], width: 7, height: 42, bottom: 12, seed: 0.37, foot: [33.8, 0, 63.5] }];
+        holoAds.concat(sbAds).forEach((a, i) => {
+            const e = a.width / 2;
+            const sliced = cutBy(a.centre[0] - e, a.centre[0] + e, SBX.x0) || cutBy(a.centre[0] - e, a.centre[0] + e, SBX.x1) || cutBy(a.centre[2] - e, a.centre[2] + e, SBX.z0) || cutBy(a.centre[2] - e, a.centre[2] + e, SBX.z1);
+            a.sbHidden = !a.sandboxOnly && (a.bottom + a.height > SBX.top || sliced);
+            const t = a.sandboxOnly ? -2 : a.sbHidden ? -1 : 0;
+            ab.setTag(t); hw.setTag(a.sandboxOnly ? 0 : t);
             const n = a.normal, r = a.right;
             const P = (sx, sy) => add(add(a.centre, r, sx * a.width / 2), UP, sy * a.height / 2);
-            const inf = [(lyricBanners.has(a) ? 20 : 0) + i % 4, a.seed + (i % 2) * 10, a.width, a.height];
+            const inf = [(a.lyric || lyricBanners.has(a) ? 20 : 0) + i % 4, a.seed + (i % 2) * 10, a.width, a.height];
             ab.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), n, [0, 0, 1, 1], inf);
             // The light fans up from the lens to the sheet's foot.
             const lens = add(a.centre, UP, -a.height / 2 - (a.roof ? 4 : 2.6));
@@ -1414,6 +1437,7 @@
                 ab.quad(add(lens, dir, -e), add(lens, dir, e), fan(1, dir), fan(-1, dir), cross(dir, UP), [0, 0, 1, 1], beamInf);
             });
             // Hardware: the projector, and what holds it up.
+            if (a.sandboxOnly) return;
             hw.box(add(lens, UP, -0.25), r, UP, n, 0.35, 0.25, 0.35, darkUv, metalUv, [0, 0, 0, 0]);
             if (a.roof) {
                 const top = add(lens, UP, -0.5);
@@ -1426,6 +1450,7 @@
                 hw.bar(add(wallAt, UP, -1.8), add(lens, UP, -0.5), 0.07, metalUv, [0, 0, 0, 0]);
             }
         });
+        ab.setTag(0); hw.setTag(0);
         // Rebuild the hardware mesh now that screen housings are in it.
         meshes.forEach(m => { if (m.name === 'Signs/hardware') { group.remove(m); m.geometry.dispose(); } });
         meshes.splice(meshes.findIndex(m => m.name === 'Signs/hardware'), 1);
@@ -1690,6 +1715,28 @@
         const igniteAt = specs.map(() => 0.15 + random() * 2.4);
         const tubeSeed = Array.from({ length: 16 }, () => random() * 100);
         let palette = ctx.palette || {};
+        // Sandbox view: drop what the cuts would slice, swap the banners.
+        let sandboxBox = null;
+        const sbHiddenSigns = new Set();
+        const applySandbox = box => {
+            sandboxBox = box || null;
+            sbHiddenSigns.clear();
+            if (box) specs.forEach(spec => {
+                const b = spec._box || boxOf(spec);
+                if (cutBy(b.min[0], b.max[0], box.x0) || cutBy(b.min[0], b.max[0], box.x1) || cutBy(b.min[2], b.max[2], box.z0) || cutBy(b.min[2], b.max[2], box.z1)) sbHiddenSigns.add(spec.index);
+            });
+            meshes.forEach(mesh => {
+                const g = mesh.geometry, tags = g.userData.tags, full = g.userData.fullIndex;
+                if (!tags) return;
+                const out = [];
+                for (let q = 0; q < tags.length; q += 1) {
+                    const t = tags[q];
+                    const show = t === 0 ? true : t > 0 ? !(box && sbHiddenSigns.has(t - 1)) : t === -1 ? !box : !!box;
+                    if (show) for (let k = 0; k < 6; k += 1) out.push(full[q * 6 + k]);
+                }
+                g.setIndex(out);
+            });
+        };
         let started = null, lyricKey = null, changedAt = -9, song = {}, glyphs = 1, tickerPos = 0;
         let night = 1, chorusGlow = 0, awake = 0, lastWall = 0, held = null, firstFrame = true;
         const setPalette = p => {
@@ -1813,7 +1860,7 @@
             if (state.song || state.track) song = state.song || state.track;
             if (key !== lyricKey) {
                 lyricKey = key;
-                glyphs = paintLyric(lyricCtx, lyric, song).glyphCount;
+                glyphs = paintLyric(lyricCtx, lyric, song, !!sandboxBox).glyphCount;
                 lyricTex.needsUpdate = true;
                 // The switch plays out on the wall clock, so a paused song still shows its line.
                 changedAt = wall;
@@ -1881,7 +1928,8 @@
             });
             // The nearer banners wash the walls round them in their cold light.
             // Kept low and short so the walls keep their own colour; cyan and magenta take turns.
-            holoAds.forEach((a, i) => {
+            holoAds.concat(sbAds).forEach((a, i) => {
+                if (sandboxBox ? a.sbHidden : a.sandboxOnly) return;
                 const c = i % 2 ? [1, 0.3, 0.8] : [0.25, 0.85, 1];
                 out.push({ position: add(a.centre, UP, -a.height * 0.25), color: c, intensity: holoAdMat.uniforms.level.value * (a.roof ? 0.9 : 0.6),
                     radius: Math.min(14, a.height * 0.45), flicker: 1, flickerValue: 1, halo: false });
@@ -1889,6 +1937,7 @@
             const ranked = lightSources.map(l => ({ l, v: l.base * (levels[l.spec.index] || 0) })).sort((a, b) => b.v - a.v);
             for (const { l } of ranked) {
                 if (out.length >= 32) break;
+                if (sandboxBox && sbHiddenSigns.has(l.spec.index)) continue;
                 const k = levels[l.spec.index] || 0;
                 // Enough to colour the wall round a sign, not the whole face of the block.
                 out.push({ position: l.position, color: l.color, intensity: k * Math.min(4, Math.sqrt(l.spec.width * l.spec.height)) * (l.spec.style === 'box' ? 0.4 : 0.6),
@@ -1903,6 +1952,7 @@
             screenMat.uniforms.subpixel.value = tier.name === 'ultimate' ? 1 : 0;
         };
         setTier(tier);
+        applySandbox(null);
 
         return {
             group,
@@ -1910,6 +1960,7 @@
             setPalette,
             setTier,
             setOptions(o) { options = { ...options, ...(o || {}) }; },
+            setSandbox(box) { applySandbox(box); lyricKey = null; },
             lights,
             materials: [hardwareMat, glowMat, screenMat, holoMat, holoAdMat],
             dispose() {
