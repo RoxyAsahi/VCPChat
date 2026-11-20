@@ -198,6 +198,7 @@ body.music-archive-off:not(.music-stage-active) .archive-return { display: block
 .archive-nav > button[aria-pressed="true"] { color: var(--ar-accent); }
 .archive-list {
     --gutter: 59px;
+    --glow: .92;   /* 深色下卡片纹理偏亮，柔光实一些 */
     position: absolute;
     left: 0;
     top: 265px;
@@ -215,13 +216,14 @@ body.music-archive-off:not(.music-stage-active) .archive-return { display: block
     position: absolute;
     left: 0; top: -60px; bottom: -40px;
     width: calc(100% + 120px);
-    background: linear-gradient(to right, rgba(var(--ar-paper-rgb), .85) 0, rgba(var(--ar-paper-rgb), .78) 55%, rgba(var(--ar-paper-rgb), 0) 100%);
+    background: linear-gradient(to right, rgba(var(--ar-paper-rgb), var(--glow)) 0, rgba(var(--ar-paper-rgb), calc(var(--glow) - .07)) 55%, rgba(var(--ar-paper-rgb), 0) 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60px, #000 calc(100% - 40px), transparent 100%);
     mask-image: linear-gradient(to bottom, transparent 0, #000 60px, #000 calc(100% - 40px), transparent 100%);
     pointer-events: none;
     z-index: -1;
 }
 .archive-list[hidden] { display: none; }
+body.light-theme .archive-list { --glow: .85; }
 .archive-hud.list-open .archive-counter { display: none; }
 
 .archive-list-search { display: flex; align-items: center; gap: 14px; margin-left: var(--gutter); border-bottom: 1px solid var(--ar-rule); padding: 0 0 9px; cursor: text; }
@@ -239,8 +241,8 @@ body.music-archive-off:not(.music-stage-active) .archive-return { display: block
 
 .archive-list-viewport {
     position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; outline: none; overscroll-behavior: contain; scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 36px), transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 36px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 16px, #000 64px, #000 calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 16px, #000 64px, #000 calc(100% - 36px), transparent 100%);
 }
 .archive-list-viewport::-webkit-scrollbar { display: none; }
 .archive-list-spacer { position: relative; width: 100%; }
