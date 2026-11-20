@@ -379,7 +379,9 @@
         });
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button, .md-trk')) return;
+            // 舞台里点胶囊就在要去的地方，这一下改成打开命令面板。
             if (!stageActive()) app.stageHost?.enter?.();
+            else if (palette) palette.open();
             else openPanel();
         });
 
@@ -397,13 +399,13 @@
             el.quickGroup.innerHTML = items.map((item) => (
                 `<button class="md-qb${item.on ? ' md-on' : ''}" type="button" data-q="${item.id}" title="${item.label}" aria-label="${item.label}"${item.on ? ' aria-pressed="true"' : ''}>${icon(item.icon, 16)}</button>`
             )).join('') + '<span class="md-qsep" aria-hidden="true"></span>'
-                + `<button class="md-qb" type="button" data-q="panel" title="打开面板" aria-label="打开面板">${icon('command', 16)}</button>`;
+                + `<button class="md-qb" type="button" data-q="panel" title="命令面板（Ctrl+K）" aria-label="命令面板">${icon('command', 16)}</button>`;
         };
         listen(el.quickGroup, 'click', (event) => {
             const button = event.target.closest('[data-q]');
             if (!button) return;
             event.stopPropagation();
-            if (button.dataset.q === 'panel') { togglePanel(); return; }
+            if (button.dataset.q === 'panel') { if (palette) palette.toggle(); else togglePanel(); return; }
             quickItems().find((item) => item.id === button.dataset.q)?.run();
         });
 
@@ -607,6 +609,9 @@
                 html += `<div class="md-nrow"><span class="md-lb">${light ? '日光素白' : '午夜墨染'}</span><span class="md-r">`
                     + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
                     + '</span></div>';
+                if (typeof global.MusicIntro?.replay === 'function') {
+                    html += `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`;
+                }
             } else if (tab === '播放列表') {
                 const list = activeList();
                 html += `<div class="md-qh"><b>播放队列</b><span>${list.length}</span><span class="md-g"></span>`
@@ -724,6 +729,7 @@
             if (act === 'mode') { cycleMode(); }
             else if (act === 'stage') { toggleStage(); }
             else if (act === 'fx') { openSheet(); }
+            else if (act === 'intro') { closePanel(); global.MusicIntro?.replay?.(); }
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
                 const v = readVolume();
@@ -859,6 +865,7 @@
 
         listen(document, 'pointerdown', (event) => {
             const t = event.target;
+            if (t.closest?.('.md-cmd')) return;
             if (state.popOpen && !el.pop.contains(t) && !t.closest?.('[data-act="scene-pick"]')) closePop();
             if (state.sheetOpen && !el.sheet.contains(t) && !t.closest?.('[data-act="fx"], [data-q="fx"]')
                 && !t.closest?.('.custom-select-dropdown, select, option')) closeSheet();
@@ -866,7 +873,7 @@
                 && !el.sheet.contains(t) && !el.quick.contains(t) && !t.closest?.('.md-cap')) closePanel();
         }, true);
         listen(document, 'keydown', (event) => {
-            if (event.key !== 'Escape') return;
+            if (event.key !== 'Escape' || event.target?.closest?.('.md-cmd') || palette?.isOpen) return;
             if (state.popOpen) { closePop(); renderBody(); event.stopPropagation(); }
             else if (state.sheetOpen) { closeSheet(); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
@@ -923,6 +930,15 @@
             if (state.panelOpen) placeMarks(el.pnl);
         });
 
+        // ───────── 命令面板 ─────────
+        const palette = typeof global.createMusicDockPalette === 'function'
+            ? global.createMusicDockPalette(app, {
+                host, icon, escapeHtml, trackTitle, trackArtist,
+                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume,
+                closeOthers: () => { closePop(); setQuick(false); }
+            })
+            : null;
+
         // ───────── 首次渲染 ─────────
         renderTrack();
         renderPlay();
@@ -943,12 +959,15 @@
             closePanel,
             openSheet,
             closeSheet,
+            openPalette: (text) => palette?.open(text),
+            closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
             destroy() {
                 if (state.destroyed) return;
                 state.destroyed = true;
                 closeSheet();
+                palette?.destroy();
                 for (const id of timers) clearTimeout(id);
                 timers.clear();
                 if (springFrame) cancelAnimationFrame(springFrame);
