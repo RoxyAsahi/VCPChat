@@ -1328,6 +1328,7 @@
             stopInertia();
             lyrics?.destroy();
             tickMarker?.destroy();
+            list?.closeBatchMenu?.();
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
@@ -1360,6 +1361,7 @@
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
+                onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });

@@ -47,7 +47,7 @@
         </div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
-            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span>
+            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em>
         </div>`;
 
     /*
@@ -221,6 +221,15 @@
             paintSort();
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
+            if (multi.size) {
+                // 重排后还在的才留着
+                const alive = new Set(state.rows.filter((row) => row.type === 'track').map(keyOf));
+                for (const key of [...multi]) if (!alive.has(key)) multi.delete(key);
+                multiAnchor = -1;
+                r.multiNote.hidden = multi.size < 2;
+                r.multiNote.textContent = multi.size < 2 ? '' : `已选 ${multi.size} 首 · 右键批量操作 · ESC 取消`;
+                el.classList.toggle('has-multi', multi.size > 1);
+            }
             state.selectedRow = findRow(state.selected, state.preferCtx);
             // 重排后（比如拼音表加载好、分组变了）选中行可能跑到视野外，拉回来
             if (steady) {
@@ -259,6 +268,50 @@
                 + `<span class="rt"><i>${esc(opts.fileNumber(t, row.i))}</i>${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
 
+        /*
+         * 多选：Ctrl（⌘）点一行加进或拿出，Shift 点选一段，Ctrl+A 全选，Esc 取消；普通单击回到单选。
+         * 选中多首时右键（或菜单键）打开批量菜单：下一首播放、加入队列、加入歌单、移除。拖动其中一行就是拖这几首。
+         */
+        const multi = new Set();
+        let multiAnchor = -1;
+        const keyOf = (row) => row.i + '|' + (row.ctx || '');
+        const pickedRows = () => state.rows.filter((row) => row.type === 'track' && multi.has(keyOf(row)));
+        const pickedIndices = (row) => {
+            if (multi.size > 1 && (!row || multi.has(keyOf(row)))) return [...new Set(pickedRows().map((x) => x.i))];
+            return row ? [row.i] : [];
+        };
+        const paintMulti = () => {
+            const n = multi.size;
+            r.multiNote.hidden = n < 2;
+            r.multiNote.textContent = n < 2 ? '' : `已选 ${n} 首 · 右键批量操作 · ESC 取消`;
+            el.classList.toggle('has-multi', n > 1);
+            for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k);
+        };
+        const clearMulti = () => { if (!multi.size) return false; multi.clear(); paintMulti(); return true; };
+        const clickRow = (k, e) => {
+            const row = state.rows[k];
+            if (!row || row.type !== 'track') return;
+            if (e.shiftKey) {
+                const from = multiAnchor >= 0 && multiAnchor < state.rows.length ? multiAnchor : (state.selectedRow >= 0 ? state.selectedRow : k);
+                if (!(e.ctrlKey || e.metaKey)) multi.clear();
+                for (let j = Math.min(from, k); j <= Math.max(from, k); j++) if (state.rows[j].type === 'track') multi.add(keyOf(state.rows[j]));
+                paintMulti();
+                return;
+            }
+            if (e.ctrlKey || e.metaKey) {
+                // 第一次按住 Ctrl 点别的行：原来单选的那一行也算在内
+                if (!multi.size && state.selectedRow >= 0 && state.selectedRow !== k) multi.add(keyOf(state.rows[state.selectedRow]));
+                const key = keyOf(row);
+                if (multi.has(key)) multi.delete(key); else multi.add(key);
+                multiAnchor = k;
+                paintMulti();
+                return;
+            }
+            multiAnchor = k;
+            clearMulti();
+            pickRow(k);
+        };
+
         const paintRow = (node, row, k) => {
             const on = k === state.selectedRow;
             node.classList.toggle('on', on);
@@ -266,7 +319,11 @@
             node.classList.toggle('current', current);
             node.classList.toggle('playing', current && Boolean(app.isPlaying));
             if (row.type === 'head') node.classList.toggle('stuck', k === state.stuck);
-            if (row.type === 'track') node.setAttribute('aria-selected', String(on));
+            if (row.type === 'track') {
+                const picked = multi.size > 0 && multi.has(keyOf(row));
+                node.classList.toggle('picked', picked);
+                node.setAttribute('aria-selected', String(on || picked));
+            }
         };
 
         const render = () => {
@@ -486,14 +543,25 @@
                     if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
+                case 'a': case 'A':
+                    if (inInput || !(e.ctrlKey || e.metaKey)) return;
+                    e.preventDefault();
+                    multi.clear();
+                    for (const row of state.rows) if (row.type === 'track') multi.add(keyOf(row));
+                    paintMulti();
+                    break;
                 case 'Escape':
                     e.preventDefault();
+                    if (!inInput && clearMulti()) break;
                     if (inInput && r.input.value) { r.input.value = ''; flushQuery(); } else { e.target.blur(); }
                     break;
                 case 'ContextMenu': case 'F10': {
                     if (e.key === 'F10' && !e.shiftKey) return;
                     e.preventDefault();
-                    openMenuForRow(state.selectedRow);
+                    if (multi.size > 1) {
+                        const box = r.viewport.getBoundingClientRect();
+                        openBatchMenu(box.left + 80, box.top + 80, { keyboard: true });
+                    } else openMenuForRow(state.selectedRow);
                     break;
                 }
                 case 'Tab':
@@ -512,7 +580,7 @@
         r.viewport.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
         r.viewport.addEventListener('click', (e) => {
             const node = e.target.closest('.archive-list-row');
-            if (node) pickRow(Number(node.dataset.k));
+            if (node) clickRow(Number(node.dataset.k), e);
         });
         r.viewport.addEventListener('dblclick', (e) => {
             const node = e.target.closest('.archive-list-row');
@@ -530,6 +598,8 @@
             const row = node && state.rows[Number(node.dataset.k)];
             if (!row || row.type !== 'track') return;
             e.preventDefault();
+            if (multi.size > 1 && multi.has(keyOf(row))) { openBatchMenu(e.clientX, e.clientY); return; }
+            clearMulti();
             pickRow(Number(node.dataset.k));
             app.contextMenuTrackIndex = row.i;
             app.contextMenuScopeHint = scopeOf(row);
@@ -671,8 +741,136 @@
             }
         });
 
+        // ---------- 批量菜单 ----------
+        let batchMenu = null;
+        const closeBatchMenu = ({ focus = false } = {}) => {
+            if (!batchMenu) return;
+            batchMenu.remove();
+            batchMenu = null;
+            document.removeEventListener('pointerdown', batchOutside, true);
+            if (focus) r.viewport.focus?.();
+        };
+        const batchOutside = (e) => { if (batchMenu && !batchMenu.contains(e.target)) closeBatchMenu(); };
+        /* 选中的行都在同一个歌单里：移除就是从这个歌单移除；否则是从曲库列表移除 */
+        const batchScope = () => {
+            const rows = pickedRows();
+            const first = rows[0] && scopeOf(rows[0]);
+            return first && rows.every((row) => row.ctx === rows[0].ctx) ? first : null;
+        };
+        const queueBatch = (indices, next) => {
+            const fn = next ? app.queuePlayNext : app.queueAdd;
+            if (typeof fn !== 'function') return;
+            const list = indices.map((i) => tracks()[i]).filter(Boolean);
+            // 「下一首播放」是插到队首：倒着插，听的时候才是选中的顺序
+            const queued = (next ? list.slice().reverse() : list).map((t) => fn(t)).filter(Boolean);
+            if (!queued.length) return;
+            toast(`${next ? '下一首播放' : '已加入队列'}：${queued.length} 首`, { label: '撤销', run: () => {
+                for (const t of queued) { const at = (app.manualQueue || []).indexOf(t); if (at !== -1) app.queueRemove?.(at); }
+            } });
+        };
+        const removeFromPlaylistBatch = (scope, indices) => {
+            const pl = playlists().find((p) => p.id === scope.id);
+            if (!pl) return;
+            const paths = new Set(indices.map((i) => (tracks()[i] || {}).path));
+            const before = pl.tracks.slice();
+            pl.tracks = pl.tracks.filter((p) => !paths.has(p));
+            const n = before.length - pl.tracks.length;
+            if (!n) return;
+            commitPlaylists();
+            toast(`已从歌单「${pl.name}」移除 ${n} 首`, { label: '撤销', run: () => { pl.tracks = before; commitPlaylists(); } });
+        };
+        /* 从曲库列表移除（磁盘上的文件不动）。正在放的那首不移除，免得打断播放 */
+        const removeFromLibraryBatch = (indices) => {
+            const lib = app.playlist;
+            if (!Array.isArray(lib)) return;
+            const current = lib[app.currentTrackIndex];
+            const victims = new Set(indices.map((i) => lib[i]).filter((t) => t && t !== current));
+            if (!victims.size) { toast('正在播放的这首没有移除'); return; }
+            const before = lib.slice();
+            const beforeFiltered = app.currentFilteredTracks;
+            for (let i = lib.length - 1; i >= 0; i--) if (victims.has(lib[i])) lib.splice(i, 1);
+            if (current) app.currentTrackIndex = Math.max(0, lib.indexOf(current));
+            if (Array.isArray(app.currentFilteredTracks)) app.currentFilteredTracks = app.currentFilteredTracks.filter((t) => !victims.has(t));
+            for (const t of victims) { const at = (app.manualQueue || []).indexOf(t); if (at !== -1) app.queueRemove?.(at); }
+            const after = () => {
+                if (app.playlistViewSource && Array.isArray(app.currentFilteredTracks)) app.renderPlaylist?.(app.currentFilteredTracks); else app.renderPlaylist?.();
+                app.api?.saveMusicPlaylist?.(app.playlist);
+                if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
+            };
+            after();
+            const skipped = indices.length - victims.size;
+            toast(`已从曲库列表移除 ${victims.size} 首` + (skipped ? '（正在播放的那首留着）' : ''), { label: '撤销', run: () => {
+                if (app.playlist !== lib) return;
+                const playing = lib[app.currentTrackIndex];
+                lib.splice(0, lib.length, ...before);
+                if (playing) app.currentTrackIndex = Math.max(0, lib.indexOf(playing));
+                app.currentFilteredTracks = beforeFiltered;
+                after();
+            } });
+        };
+        const openBatchMenu = (x, y, { keyboard = false } = {}) => {
+            closeBatchMenu();
+            const indices = pickedIndices(null);
+            if (indices.length < 2) return;
+            const scope = batchScope();
+            const item = (act, zh, en, extra = '') => `<button type="button" role="menuitem" data-batch="${act}"${extra}><span>${esc(zh)}</span>${en ? `<i>${en}</i>` : ''}</button>`;
+            const menu = batchMenu = document.createElement('div');
+            menu.className = 'archive-batch-menu';
+            menu.setAttribute('role', 'menu');
+            menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
+            menu.innerHTML = `<header>已选 ${indices.length} 首 <i>SELECTED</i></header>`
+                + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放', 'PLAY NEXT') : '')
+                + (typeof app.queueAdd === 'function' ? item('queue', '加入队列', 'ADD TO QUEUE') : '')
+                + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
+                + playlists().map((p, order) => item('pl', '加入「' + (p.name || '未命名歌单') + '」', '', ` data-id="${esc(p.id ?? order)}"`)).join('')
+                + item('pl-new', '新建歌单并加入', 'NEW PLAYLIST')
+                + '<hr>'
+                + item('remove', scope ? '从歌单「' + scope.name + '」移除' : '从曲库列表移除', 'REMOVE');
+            document.body.appendChild(menu);
+            const w = menu.offsetWidth || 240, h = menu.offsetHeight || 300;
+            menu.style.left = Math.max(8, Math.min(x, (global.innerWidth || 1600) - w - 10)) + 'px';
+            menu.style.top = Math.max(8, Math.min(y, (global.innerHeight || 900) - h - 10)) + 'px';
+            const items = () => [...menu.querySelectorAll('[data-batch]')];
+            const run = (b) => {
+                const act = b.dataset.batch;
+                if (act === 'remove' && !scope && !b.dataset.sure) {
+                    // 从曲库移除要再点一次
+                    b.dataset.sure = '1';
+                    b.querySelector('span').textContent = `再点一次，移除这 ${indices.length} 首`;
+                    return;
+                }
+                closeBatchMenu({ focus: true });
+                if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
+                else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
+                else if (act === 'pl-new') {
+                    const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
+                    if (pl) toast(`已新建歌单「${pl.name}」：${pl.tracks.length} 首`);
+                } else if (act === 'remove') {
+                    if (scope) removeFromPlaylistBatch(scope, indices); else removeFromLibraryBatch(indices);
+                    clearMulti();
+                }
+            };
+            menu.addEventListener('click', (e) => { const b = e.target.closest('[data-batch]'); if (b) run(b); });
+            menu.addEventListener('contextmenu', (e) => e.preventDefault());
+            menu.addEventListener('keydown', (e) => {
+                const list = items();
+                const at = list.indexOf(document.activeElement);
+                if (e.key === 'ArrowDown') list[(at + 1) % list.length].focus();
+                else if (e.key === 'ArrowUp') list[(at + list.length - 1) % list.length].focus();
+                else if (e.key === 'Home') list[0].focus();
+                else if (e.key === 'End') list[list.length - 1].focus();
+                else if (e.key === 'Escape' || e.key === 'Tab') closeBatchMenu({ focus: true });
+                else if (e.key === 'Enter' || e.key === ' ') { if (at >= 0) run(list[at]); }
+                else return;
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            document.addEventListener('pointerdown', batchOutside, true);
+            if (keyboard) items()[0]?.focus();
+        };
+
         // 拖到歌单上
-        const dragIndices = (row) => (typeof pickedIndices === 'function' ? pickedIndices(row) : [row.i]);
+        const dragIndices = (row) => pickedIndices(row);
         const openShelf = () => {
             r.shelf.innerHTML = '<b>拖到歌单上 <i>DROP ON A PLAYLIST</i></b>'
                 + playlists().map((p, order) => `<button type="button" data-drop="${esc(p.id ?? order)}">${esc(p.name || '未命名歌单')}</button>`).join('')
@@ -812,6 +1010,8 @@
             setKind,
             render: schedule,
             focusSearch: () => { r.input.focus(); r.input.select(); },
+            clearMulti, closeBatchMenu,
+            get picked() { return pickedIndices(null); },
             destroyDrop: () => { drop?.destroy(); drop = null; dropAt = null; },
             /* 在档案页直接打字：聚焦检索框并带入这个字（替换掉原来的检索词） */
             typeInto: (text) => {

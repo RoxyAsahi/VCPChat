@@ -1039,3 +1039,124 @@ test('把歌拖到歌单上：拖起一行时目录下方出现歌单架，松�
     assert.equal(ev('dragover', head).defaultPrevented, true);
     f.close();
 });
+
+test('目录多选：Ctrl 点选、Shift 选一段、Ctrl+A、Esc；多选时右键是批量菜单：加入队列、下一首播放、加入歌单', () => {
+    const toasts = [];
+    const queue = [];
+    const f = fixture({ setup: (w, app) => {
+        app.saveCustomPlaylists = () => {};
+        app.manualQueue = queue;
+        app.queueAdd = (t) => { queue.push(t); return t; };
+        app.queuePlayNext = (t) => { queue.unshift(t); return t; };
+        app.queueRemove = (i) => { queue.splice(i, 1); };
+        w.MusicToast = { show: (t) => toasts.push(t) };
+    } });
+    const el = f.view.list.el;
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
+    const click = (title, mods = {}) => rowOf(title).dispatchEvent(new f.w.MouseEvent('click', { bubbles: true, ...mods }));
+    const picked = () => Array.from(f.view.list.picked, (i) => f.app.playlist[i].title);
+    const menu = () => doc.querySelector('.archive-batch-menu');
+    const rightClick = (title) => rowOf(title).dispatchEvent(new f.w.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 }));
+
+    click('Song 2');
+    const selectedBefore = f.view.debug().selected;
+    click('Song 4', { ctrlKey: true });
+    assert.deepEqual(picked(), ['Song 2', 'Song 4'], '原来单选的那行也算在内');
+    assert.equal(f.view.debug().selected, selectedBefore, 'Ctrl 点选不带着阵列跑');
+    assert.ok(rowOf('Song 4').classList.contains('picked'));
+    click('Song 6', { shiftKey: true });
+    assert.deepEqual(picked(), ['Song 4', 'Song 5', 'Song 6'], 'Shift 从上一次点的那行选到这一行');
+    click('Song 2', { ctrlKey: true });
+    assert.equal(picked().length, 4);
+    assert.match(el.querySelector('[data-l="multiNote"]').textContent, /已选 4 首/);
+
+    // 批量菜单
+    rightClick('Song 5');
+    assert.ok(menu(), '多选里的行右键是批量菜单');
+    assert.equal(f.calls.some((c) => c[0] === 'ctx'), false, '不是播放器的单曲菜单');
+    assert.match(menu().textContent, /已选 4 首/);
+    menu().querySelector('[data-batch="queue"]').click();
+    assert.equal(menu(), null);
+    assert.deepEqual(queue.map((t) => t.title), ['Song 2', 'Song 4', 'Song 5', 'Song 6']);
+    toasts[toasts.length - 1].action.run();
+    assert.equal(queue.length, 0, '撤销');
+    rightClick('Song 5');
+    menu().querySelector('[data-batch="next"]').click();
+    assert.deepEqual(queue.map((t) => t.title), ['Song 2', 'Song 4', 'Song 5', 'Song 6'], '下一首播放保持选中的顺序');
+    // 加入歌单（Song 5 已经在里面，不重复）
+    rightClick('Song 4');
+    menu().querySelector('[data-batch="pl"][data-id="p"]').click();
+    assert.equal(f.app.customPlaylists[0].tracks.join(), '/m/5,/m/7,/m/9,/m/2,/m/4,/m/6');
+    assert.match(toasts[toasts.length - 1].message, /3 首/);
+    // 新建歌单并加入
+    assert.equal(picked().length, 4, '加完选择还在');
+    rightClick('Song 4');
+    menu().querySelector('[data-batch="pl-new"]').click();
+    assert.equal(f.app.customPlaylists[1].tracks.length, 4);
+    // 没选中的行右键：回到单曲菜单
+    rightClick('Song 9');
+    assert.equal(menu(), null);
+    assert.ok(f.calls.some((c) => c[0] === 'ctx'));
+    assert.equal(f.view.list.picked.length, 0);
+    // Ctrl+A、Esc
+    const vp = el.querySelector('[data-l="viewport"]');
+    vp.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
+    assert.equal(f.view.list.picked.length, 30);
+    vp.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(f.view.list.picked.length, 0);
+    // 拖多选里的一行 = 拖这几首
+    click('Song 10'); click('Song 12', { shiftKey: true });
+    rowOf('Song 11').dispatchEvent(new f.w.Event('dragstart', { bubbles: true }));
+    el.querySelector('[data-drop="p"]').dispatchEvent(new f.w.Event('drop', { bubbles: true, cancelable: true }));
+    assert.ok(['/m/10', '/m/11', '/m/12'].every((p) => f.app.customPlaylists[0].tracks.includes(p)));
+    f.close();
+});
+
+test('批量移除：歌单里只从这个歌单移除；曲库里要再点一次确认，正在放的那首留着，都能撤销', () => {
+    const toasts = [];
+    let savedLib = 0;
+    const f = fixture({ setup: (w, app) => { app.saveCustomPlaylists = () => {}; app.api = { saveMusicPlaylist: () => { savedLib++; } }; w.MusicToast = { show: (t) => toasts.push(t) }; } });
+    const el = f.view.list.el;
+    const doc = f.w.document;
+    f.view.setListOpen(true);
+    const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
+    const click = (title, mods = {}) => rowOf(title).dispatchEvent(new f.w.MouseEvent('click', { bubbles: true, ...mods }));
+    const menu = () => doc.querySelector('.archive-batch-menu');
+    const rightClick = (title) => rowOf(title).dispatchEvent(new f.w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    // 歌单分类里
+    el.querySelector('[data-kind="playlist"]').click();
+    click('Song 5'); click('Song 7', { ctrlKey: true });
+    rightClick('Song 7');
+    assert.match(menu().querySelector('[data-batch="remove"]').textContent, /从歌单「夜间散步」移除/);
+    menu().querySelector('[data-batch="remove"]').click();
+    assert.equal(f.app.customPlaylists[0].tracks.join(), '/m/9');
+    assert.equal(f.app.playlist.length, 30, '曲库不动');
+    toasts[toasts.length - 1].action.run();
+    assert.equal(f.app.customPlaylists[0].tracks.join(), '/m/5,/m/7,/m/9');
+    // 曲库里：正在放的是第 0 首
+    el.querySelector('[data-kind="all"]').click();
+    const playing = f.app.playlist[0];
+    click('Song 0'); click('Song 3', { ctrlKey: true }); click('Song 4', { ctrlKey: true });
+    rightClick('Song 3');
+    const rm = menu().querySelector('[data-batch="remove"]');
+    assert.match(rm.textContent, /从曲库列表移除/);
+    rm.click();
+    assert.ok(menu(), '第一下只是问');
+    assert.equal(f.app.playlist.length, 30);
+    assert.match(rm.textContent, /再点一次/);
+    rm.click();
+    assert.equal(menu(), null);
+    assert.equal(f.app.playlist.length, 28);
+    assert.equal(f.app.playlist[f.app.currentTrackIndex], playing, '正在放的那首留着，下标跟着对上');
+    assert.equal(f.app.playlist.some((t) => t.title === 'Song 3' || t.title === 'Song 4'), false);
+    assert.equal(Number(f.text('files')), 28);
+    assert.equal(savedLib, 1);
+    assert.match(toasts[toasts.length - 1].message, /移除 2 首（正在播放的那首留着）/);
+    toasts[toasts.length - 1].action.run();
+    assert.equal(f.app.playlist.length, 30);
+    assert.equal(f.app.playlist[3].title, 'Song 3');
+    assert.equal(Number(f.text('files')), 30);
+    f.close();
+});

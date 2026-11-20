@@ -301,6 +301,21 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-group span { overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; }
 .archive-list-group i { font-style: normal; font-size: 11px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
+/* 多选：选中的行左边一条细竖线，底部写已选几首；批量菜单挂在 body 上（HUD 整体缩放过，挂里面坐标对不上） */
+.archive-list-row.picked::before { content: ""; position: absolute; left: 4px; top: 12px; bottom: 12px; width: 2px; background: var(--ar-accent); }
+.archive-list-row.picked b { color: var(--ar-ink); }
+.archive-list-foot em { margin-left: auto; align-self: center; font-style: normal; font-size: 11px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; }
+.archive-list-foot em[hidden] { display: none; }
+.archive-batch-menu { position: fixed; z-index: 900; min-width: 232px; max-width: 320px; max-height: min(520px, calc(100vh - 20px)); overflow-y: auto; padding: 6px 0; display: grid; background: rgba(var(--ar-paper-rgb), .97); border-top: 2px solid var(--ar-ink); box-shadow: 0 10px 30px rgba(0, 0, 0, .28); font-family: var(--mt-font-archive, inherit); scrollbar-width: none; }
+.archive-batch-menu header { padding: 8px 14px 9px; font-size: 12px; font-weight: 600; letter-spacing: .4px; color: var(--ar-ink); }
+.archive-batch-menu header i, .archive-batch-menu button i { font-style: normal; font-weight: 400; font-size: 10px; letter-spacing: 1.2px; color: var(--ar-muted); }
+.archive-batch-menu header i { margin-left: 8px; }
+.archive-batch-menu hr { margin: 5px 14px; border: 0; border-top: 1px solid var(--ar-rule); opacity: .6; }
+.archive-batch-menu button { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 8px 14px; background: none; border: 0; text-align: left; font: inherit; font-size: 13px; letter-spacing: .5px; color: var(--ar-ink); cursor: pointer; outline: none; }
+.archive-batch-menu button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-batch-menu button:hover, .archive-batch-menu button:focus-visible { background: rgba(128, 128, 128, .14); }
+.archive-batch-menu button[data-sure] span { color: var(--ar-accent); font-weight: 600; }
+
 /* 歌单管理：标题右边的重命名、删除（移上去或聚焦时才显出来），就地输入名字，拖歌时目录下方的歌单架 */
 .archive-list-group .acts { margin-left: auto; padding-right: 2px; display: flex; gap: 14px; opacity: 0; transition: opacity .15s; overflow: visible; }
 .archive-list-group:hover .acts, .archive-list-group:focus-within .acts { opacity: 1; }
