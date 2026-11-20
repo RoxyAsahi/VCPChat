@@ -76,3 +76,32 @@ test('a selection marker flows to its new place: the leading edge arrives first,
     assert.equal(parseFloat(fresh.style.left), 200);
     assert.equal(parseFloat(fresh.style.width), 40);
 });
+
+test('a dialog opened anywhere grows out of the last press, without the opening code knowing', async () => {
+    const dom = new JSDOM(`<!doctype html><body><div class="dialog-overlay"><div class="dialog"></div></div></body>`, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const { window } = dom;
+    const frames = [];
+    let now = 0;
+    window.performance.now = () => now;
+    window.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+    window.cancelAnimationFrame = () => {};
+    window.eval(fs.readFileSync(path.join(ROOT, 'Musicmodules/music-dock/music-fluid-kit.js'), 'utf8'));
+    const doc = window.document;
+    if (doc.readyState === 'loading') await new Promise((r) => doc.addEventListener('DOMContentLoaded', r, { once: true }));
+    const panel = doc.querySelector('.dialog');
+    panel.getBoundingClientRect = () => ({ left: 400, top: 200, width: 340, height: 180, right: 740, bottom: 380 });
+    doc.body.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, clientX: 90, clientY: 600 }));
+    doc.querySelector('.dialog-overlay').classList.add('visible');
+    await new Promise((r) => setTimeout(r, 0)); // 等 MutationObserver
+    frames.splice(0).forEach((fn) => fn());
+    const goo = doc.querySelector('svg.mf-goo');
+    assert.ok(goo, 'liquid drawn for the dialog');
+    assert.equal(goo.querySelector('circle').getAttribute('cx'), '90.0');
+    // 关掉再开，又会长一次；没关的时候改别的类不会重来
+    for (let i = 0; i < 40; i++) { now += 50; frames.splice(0).forEach((fn) => fn()); }
+    assert.equal(doc.querySelector('svg.mf-goo'), null);
+    doc.querySelector('.dialog-overlay').classList.add('other');
+    await new Promise((r) => setTimeout(r, 0));
+    frames.splice(0).forEach((fn) => fn());
+    assert.equal(doc.querySelector('svg.mf-goo'), null, 'no regrowth while it stays open');
+});
