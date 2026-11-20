@@ -964,10 +964,11 @@ body.music-dock-cmd-open .md-hdl { opacity: 0; pointer-events: none; }
 /* 挂在 body 上、独立于底栏，比底栏层高一级，弹窗（1000 起）仍然盖在它上面。 */
 .mtst-layer {
   position: fixed;
-  left: 50%;
+  left: var(--md-toast-x, 50%);
   bottom: calc(var(--music-dock-safe-bottom, 96px) + 4px);
   z-index: calc(var(--mt-z-dock-layer, 850) + 1);
-  width: min(32rem, calc(100vw - 32px));
+  width: min(32rem, var(--md-toast-max, calc(100vw - 32px)), calc(100vw - 32px));
+  transition: left .52s cubic-bezier(.32, .72, 0, 1);
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -1615,15 +1616,21 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { color: var(-
 body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open .md-sw .md-i { filter: none; }
 
 /* ───────── 抽屉磨砂的面积按画质档位收放 ─────────
- * 背景模糊的开销跟面积走，跟模糊半径几乎无关（实测）。标准档只糊内容那一条（460px），半径也小一些，舞台不会被糊成一片；
+ * 背景模糊的开销跟面积走，跟模糊半径几乎无关（实测）。标准档只糊内容那一条（480px，左边 80px 是淡出），半径也小一些，舞台不会被糊成一片；
  * 极致档才铺满 680px；节能档不糊（上面的 .md-fl-low）。渐隐的比例跟着宽度调，左缘始终是淡出去的。 */
 #music-dock-root:not(.md-q-ultimate) .md-drbg {
-  width: min(460px, 100vw);
-  --md-dr-solid: 74%;
-  --md-dr-tint: 70%;
+  width: min(480px, 100vw);
+  --md-dr-solid: 84%;
+  --md-dr-tint: 82%;
   backdrop-filter: blur(12px) saturate(1.15);
   -webkit-backdrop-filter: blur(12px) saturate(1.15);
 }
 #music-dock-root.md-fl-low .md-drbg { backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* 浅色主题下白色焦点圈看不见，换成墨色 */
 body.light-theme #music-dock-root.md-fl-on .md-hdl button:focus-visible { outline-color: var(--md-t1); }
+
+/* ───────── 窗口不够宽、抽屉又开着：播放条收窄让位（宽度由 music-dock.js 写进 --md-bar-w），内容按紧凑档收 ───────── */
+#music-dock-root.md-squeeze .md-nx { visibility: hidden; flex-basis: 0; }
+#music-dock-root.md-squeeze .md-slot[data-md="mode"] { display: none; }
+#music-dock-root.md-squeeze .md-ttl { flex: 1 1 auto; }
+body.music-reduce-motion .mtst-layer { transition: none; }

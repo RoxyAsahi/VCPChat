@@ -1314,12 +1314,31 @@
         const DRAWER_W = 400;
         const syncShift = () => {
             const vw = global.innerWidth || 0;
-            const barW = el.cap.offsetWidth || 0;
-            const room = vw - DRAWER_W - 24;
-            const right = vw / 2 + barW / 2;
-            const shift = state.panelOpen && vw >= COMPACT_BELOW && barW ? Math.min(0, room - right) : 0;
+            const natural = Math.min(640, Math.max(0, vw - 32)); // 和 CSS 的 --md-bar-w 同一个算式
+            const open = state.panelOpen && vw >= COMPACT_BELOW;
+            const room = vw - DRAWER_W - 24;                     // 播放条右缘最远能到这里
+            // 窗口不够宽、让位以后会被挤出左边：把播放条收窄（最窄 280），内容按紧凑档收掉「下一首」。
+            const squeezed = open && natural > room - 12;
+            const barW = squeezed ? Math.max(280, room - 12) : natural;
+            const was = host.classList.contains('md-squeeze') ? host.style.getPropertyValue('--md-bar-w') : '';
+            const now = squeezed ? `${Math.round(barW)}px` : '';
+            if (was !== now) {
+                if (squeezed) host.style.setProperty('--md-bar-w', now); else host.style.removeProperty('--md-bar-w');
+                host.classList.toggle('md-squeeze', squeezed);
+                fluid?.layout();
+            }
+            // 左缘至少留 12px；实在放不下（窗口很窄）就让抽屉盖住右端，不往左边挤出去。
+            const shift = open && barW ? Math.max(12 - (vw / 2 - barW / 2), Math.min(0, room - (vw / 2 + barW / 2))) : 0;
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
+            // 提示层挂在 body 上：跟着播放条的中心走，宽度不伸进抽屉。
+            const cx = vw / 2 + shift;
+            const rightLimit = (open ? vw - DRAWER_W : vw) - 8;
+            const maxW = Math.max(200, 2 * Math.min(cx - 8, rightLimit - cx));
+            if (vw > 0) {
+                document.body.style.setProperty('--md-toast-x', `${Math.round(cx)}px`);
+                document.body.style.setProperty('--md-toast-max', `${Math.round(maxW)}px`);
+            }
         };
         let panelReturn = null;
         function openPanel(tab) {
