@@ -308,7 +308,7 @@
                 rebuild();
                 // 有检索词时第一条就是最可能的结果，直接选中，回车即可播放
                 if (state.query.trim()) edgeRow(false);
-            }, 80);
+            }, 30); // 570 首时一次检索约 5–15ms，去抖只为合并连续按键，不再让人等
         });
         const flushQuery = () => {
             if (r.input.value === state.query) return;
