@@ -143,10 +143,12 @@
                 const k = ease(t);
                 return { position: [sc[0] + side * (30 - k * 16), 52 - k * 27, 108 - k * 24], look: [sc[0], sc[1] + 2 - k * 2, sc[2]], fov: 46 };
             },
-            // 副歌：贴地仰拍，主屏在上方，越过楼顶是巨构和天。
+            // 副歌：从牌楼前的人群平视起，镜头一边横移一边抬头，摇到主屏和它上面的天。
             hero: (t, seed) => {
-                const side = seed < 0.5 ? 1 : -1;
-                return { position: [sc[0] + side * (15 - t * 7), 1.8 + t * 1.6, 68.2 - t * 1.4], look: [sc[0] - side * 2, sc[1] + 2 + t * 5, sc[2] - 6], fov: 72 };
+                const G = layout.GATE || { x: sc[0] - 24, z: 61 };
+                const k = ease(Math.min(1, t * 1.25));
+                const from = [G.x, 3.2, G.z - 4], to = [sc[0], sc[1] + 3, sc[2] - 4];
+                return { position: [G.x + 5 + ease(t) * (sc[0] - 1 - G.x - 5), 1.75 + k * 0.5, 67.4 + k * 1.2], look: lerp3(from, to, k), fov: 66 };
             },
             // 副歌：大全景环绕，城寨、全息幅、巨构、烟囱都在画面里。
             sweep: (t, seed) => {
