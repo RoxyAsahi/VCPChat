@@ -1160,3 +1160,40 @@ test('批量移除：歌单里只从这个歌单移除；曲库里要再点一�
     assert.equal(Number(f.text('files')), 30);
     f.close();
 });
+
+test('批量移除后撤销：只把移除的插回原位，期间新扫进来的歌留着；手动队列里拿掉的也回到原来的位置', () => {
+    const toasts = [];
+    const queue = [];
+    const f = fixture({ setup: (w, app) => {
+        app.saveCustomPlaylists = () => {}; app.api = { saveMusicPlaylist() {} };
+        app.manualQueue = queue;
+        app.queueAdd = (t) => { queue.push(t); return t; };
+        app.queueRemove = (i) => { queue.splice(i, 1); };
+        app.queueMove = (from, to) => { const [t] = queue.splice(from, 1); queue.splice(to, 0, t); };
+        w.MusicToast = { show: (t) => toasts.push(t) };
+    } });
+    const el = f.view.list.el;
+    f.view.setListOpen(true);
+    const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
+    const click = (title, mods = {}) => rowOf(title).dispatchEvent(new f.w.MouseEvent('click', { bubbles: true, ...mods }));
+    const lib = f.app.playlist;
+    queue.push(lib[8], lib[3], lib[9], lib[5]);
+    click('Song 3'); click('Song 4', { ctrlKey: true }); click('Song 5', { ctrlKey: true });
+    rowOf('Song 4').dispatchEvent(new f.w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const rm = f.w.document.querySelector('.archive-batch-menu [data-batch="remove"]');
+    rm.click(); rm.click();
+    assert.equal(f.app.playlist.length, 27);
+    assert.equal(queue.map((t) => t.title).join(), 'Song 8,Song 9');
+    // 期间扫描追加了两首（播放器换了一个新数组），又少了一首
+    f.app.playlist = f.app.playlist.filter((t) => t.title !== 'Song 2').concat([{ path: '/m/n1', title: 'New 1' }, { path: '/m/n2', title: 'New 2' }]);
+    f.view.refresh();
+    toasts[toasts.length - 1].action.run();
+    const titles = f.app.playlist.map((t) => t.title);
+    assert.equal(titles.length, 31);
+    assert.deepEqual(titles.slice(0, 7), ['Song 0', 'Song 1', 'Song 3', 'Song 4', 'Song 5', 'Song 6', 'Song 7'], '前一首不在了就接在更前面还在的那首后面，三首相对顺序不变');
+    assert.deepEqual(titles.slice(-2), ['New 1', 'New 2'], '新增的还在');
+    assert.equal(f.app.playlist[f.app.currentTrackIndex].title, 'Song 0');
+    assert.equal(queue.map((t) => t.title).join(), 'Song 8,Song 3,Song 9,Song 5', '队列回到原样');
+    assert.equal(Number(f.text('files')), 31);
+    f.close();
+});

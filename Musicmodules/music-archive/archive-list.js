@@ -787,7 +787,9 @@
             const victims = new Set(indices.map((i) => lib[i]).filter((t) => t && t !== current));
             if (!victims.size) { toast('正在播放的这首没有移除'); return; }
             const before = lib.slice();
-            const beforeFiltered = app.currentFilteredTracks;
+            const beforeFiltered = Array.isArray(app.currentFilteredTracks) ? app.currentFilteredTracks.slice() : null;
+            // 手动队列里有这些歌的话一并拿掉，记下原来排第几，撤销时放回去
+            const queued = (app.manualQueue || []).map((t, at) => ({ t, at })).filter((q) => victims.has(q.t));
             for (let i = lib.length - 1; i >= 0; i--) if (victims.has(lib[i])) lib.splice(i, 1);
             if (current) app.currentTrackIndex = Math.max(0, lib.indexOf(current));
             if (Array.isArray(app.currentFilteredTracks)) app.currentFilteredTracks = app.currentFilteredTracks.filter((t) => !victims.has(t));
@@ -798,13 +800,36 @@
                 if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
             };
             after();
+            /*
+             * 撤销：只把移除的那些插回去，各自回到原来排在它前面、现在还在的最近一首后面，
+             * 期间曲库里新增的歌（比如扫描还在进行）原样留着。
+             */
+            const putBack = (target, original) => {
+                let prev = null;
+                original.forEach((t) => {
+                    // prev：原来排在它前面、现在还在的最近一首
+                    if (!victims.has(t)) { if (target.includes(t)) prev = t; return; }
+                    if (!target.includes(t) && !target.some((x) => x && x.path === t.path)) target.splice(prev ? target.indexOf(prev) + 1 : 0, 0, t);
+                    if (target.includes(t)) prev = t;
+                });
+            };
             const skipped = indices.length - victims.size;
             toast(`已从曲库列表移除 ${victims.size} 首` + (skipped ? '（正在播放的那首留着）' : ''), { label: '撤销', run: () => {
-                if (app.playlist !== lib) return;
-                const playing = lib[app.currentTrackIndex];
-                lib.splice(0, lib.length, ...before);
-                if (playing) app.currentTrackIndex = Math.max(0, lib.indexOf(playing));
-                app.currentFilteredTracks = beforeFiltered;
+                const now = app.playlist;
+                if (!Array.isArray(now)) return;
+                const playing = now[app.currentTrackIndex];
+                putBack(now, before);
+                if (playing) app.currentTrackIndex = Math.max(0, now.indexOf(playing));
+                if (beforeFiltered && Array.isArray(app.currentFilteredTracks)) {
+                    const list = app.currentFilteredTracks.slice();
+                    putBack(list, beforeFiltered);
+                    app.currentFilteredTracks = list;
+                }
+                for (const q of queued) {
+                    if (typeof app.queueAdd !== 'function' || (app.manualQueue || []).includes(q.t) || !app.queueAdd(q.t)) continue;
+                    const last = app.manualQueue.indexOf(q.t);
+                    if (last !== -1 && last !== q.at && typeof app.queueMove === 'function') app.queueMove(last, Math.min(q.at, app.manualQueue.length - 1));
+                }
                 after();
             } });
         };
