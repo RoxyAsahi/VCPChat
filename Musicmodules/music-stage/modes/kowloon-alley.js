@@ -196,13 +196,14 @@
             uniform float fogDensity;
             #endif
             vec4 kwHaze(vec3 p){
-                vec3 d=p-cameraPosition;float ds=length(d)/6.0;
+                // Nothing within a few metres of the lens: the walls beside the camera keep their dark.
+                vec3 d=p-cameraPosition;float L=length(d),ds=L/6.0;
                 float tau=0.0;vec3 acc=vec3(0.0);
                 for(int i=0;i<6;i++){
                     float y=cameraPosition.y+d.y*((float(i)+0.5)/6.0);
                     float g=kwHazeShape.x*exp(-max(y,0.0)/kwHazeShape.y);
                     float hi=kwHazeShape.w*smoothstep(25.0,120.0,y)*(1.0-smoothstep(260.0,420.0,y));
-                    float sg=(g+kwHazeShape.z+hi)*fogDensity*ds;
+                    float sg=(g+kwHazeShape.z+hi)*fogDensity*ds*smoothstep(1.5,6.0,L*(float(i)+0.5)/6.0);
                     vec3 c=mix(kwHazeLow,kwHazeMid,smoothstep(4.0,32.0,y));
                     c=mix(c,kwHazeHigh,smoothstep(24.0,120.0,y));
                     acc+=c*exp(-tau)*(1.0-exp(-sg));
