@@ -372,6 +372,12 @@ test('window keymap: space without repeat, seek, track and volume keys, help, in
         assert.deepEqual(later, ['ArrowRight']);
         key('ArrowRight', { shiftKey: true });
         assert.equal(calls.pop(), 'next', 'shift+arrow still switches tracks on the archive page');
+        later.length = 0;
+        assert.equal(key('m'), false); assert.equal(key('?'), false);
+        assert.equal(calls.length, 0, 'typing on the archive page goes to its search, not mute or help');
+        assert.deepEqual(later, ['m', '?']);
+        assert.equal(doc.querySelector('.md-keys'), null);
+        app.archiveView = { mode: 'classic' };
 
         const field = doc.createElement('input');
         doc.body.appendChild(field);
