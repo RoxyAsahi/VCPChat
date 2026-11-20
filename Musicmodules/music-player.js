@@ -140,6 +140,59 @@ function setupPlayer(app) {
         app.trackBitrate.textContent = message;
     };
 
+    // 一首歌放不了（文件不在了、解码失败、引擎没回应）时：
+    // 提示条给「跳过」，几秒后自己跳到下一首；连着几首都放不了就停下来说明，
+    // 不会把整张列表一路刷过去。只有本来就要播放时才自动跳，启动时恢复上次那首失败只提示。
+    const FAILURE_STOP_AFTER = 3;
+    const FAILURE_TOAST_ID = 'playback-failure';
+    app.failureSkipDelayMs = 3000;
+    app.failureStreak = 0;
+    let failureSkipTimer = null;
+    let failureSkip = null;
+    const failureToast = (opts) => {
+        try { return globalThis.MusicToast?.show?.({ id: FAILURE_TOAST_ID, kind: 'error', ...opts }) || null; } catch (error) { return null; }
+    };
+    app.cancelFailureSkip = () => {
+        clearTimeout(failureSkipTimer);
+        failureSkipTimer = null;
+        failureSkip = null;
+    };
+    const clearFailureNotice = () => {
+        app.cancelFailureSkip();
+        try { globalThis.MusicToast?.dismiss?.(FAILURE_TOAST_ID); } catch (error) {}
+    };
+    const handleLoadFailure = (track, reason, requestId, wanted) => {
+        const name = app.stripAudioExtension(track?.title) || '这首歌';
+        app.showPlaybackNotice(reason);
+        if (!wanted) {
+            failureToast({ message: `无法播放「${name}」：${reason}` });
+            return;
+        }
+        app.failureStreak += 1;
+        if (app.failureStreak >= FAILURE_STOP_AFTER) {
+            const count = app.failureStreak;
+            app.failureStreak = 0;
+            app.cancelFailureSkip();
+            failureToast({ message: `连续 ${count} 首无法播放，已停止。请检查文件是否还在原位置`, duration: 8000 });
+            return;
+        }
+        const skip = () => {
+            if (failureSkip !== skip) return; // 已经跳过，或用户自己换了歌
+            app.cancelFailureSkip();
+            if (requestId !== app.pendingLoadRequestId) return;
+            app.nextTrack();
+        };
+        app.cancelFailureSkip();
+        failureSkip = skip;
+        const seconds = Math.max(1, Math.round(app.failureSkipDelayMs / 1000));
+        const toast = failureToast({
+            message: `无法播放「${name}」：${reason}`,
+            action: { label: '跳过', run: skip, countdown: seconds }
+        });
+        // 提示层在时由它的倒计时触发；不在时（或倒计时被悬停拖住）由这个定时器兜底。
+        failureSkipTimer = setTimeout(skip, toast ? app.failureSkipDelayMs + 4000 : app.failureSkipDelayMs);
+    };
+
     // 引擎通过 WebSocket 推送的加载事件，用来立刻结束等待，而不是轮询到超时。
     app.handleEngineLoadEvent = (message) => {
         if (message.type === 'load_error') {
@@ -161,6 +214,7 @@ function setupPlayer(app) {
         const loadErrorSeq = app.engineLoadErrorSeq;
         app.controlEpoch++;
         app.playIntent = andPlay === true;
+        clearFailureNotice();
         // 切歌意图一出现就作废旧歌词，不能等取消预加载返回后才作废。
         app.resetLyrics();
         app.isPreloadingNext = false;
@@ -285,22 +339,25 @@ function setupPlayer(app) {
             if (requestId !== app.pendingLoadRequestId) return;
             app.isTrackLoading = false;
             if (outcome === 'ready') {
+                app.failureStreak = 0;
                 app.engineTrackPath = track.path;
                 app.publishCapsuleState();
                 if (app.playIntent) app.playTrack();
                 return;
             }
+            const wanted = app.playIntent === true;
             app.playIntent = false;
             app.applyPlayingUi(false);
-            app.showPlaybackNotice(outcome === 'error'
+            handleLoadFailure(track, outcome === 'error'
                 ? `加载失败：${app.engineLoadError}`
-                : '加载超时，请重试或换一首');
+                : '加载超时，请重试或换一首', requestId, wanted);
         } else {
             if (requestId !== app.pendingLoadRequestId) return;
+            const wanted = app.playIntent === true;
             app.isTrackLoading = false;
             app.playIntent = false;
             app.applyPlayingUi(false);
-            app.showPlaybackNotice(`加载失败：${result?.message || '音频引擎没有响应'}`);
+            handleLoadFailure(track, `加载失败：${result?.message || '音频引擎没有响应'}`, requestId, wanted);
         }
     };
 
