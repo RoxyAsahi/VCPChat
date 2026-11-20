@@ -156,3 +156,66 @@ body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); col
 .dialog-overlay .dialog.glass-panel { padding: 22px 22px 18px; width: 340px; }
 .dialog-overlay .dialog h3 { margin: 0 0 16px; }
 .dialog-overlay .dialog-actions { gap: 10px; margin-top: 18px; }
+
+/* ───────── 搜索框：平时是一道线，点进去凝成一汪玻璃 ─────────
+ * 关注决定凝固：不用的时候它只是档案里的一道细线（结构不变）；聚焦时那道线从底下鼓起来，
+ * 凝成一块圆角的奶白玻璃托住文字；离开时再化开、塌回那道线。文字始终在玻璃上面，不糊。 */
+.archive-list-search,
+.sidebar-actions .search-wrapper { position: relative; isolation: isolate; }
+.archive-list-search::after,
+.sidebar-actions .search-wrapper::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -12px;
+  right: -12px;
+  top: -8px;
+  bottom: -2px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(120% 90% at 50% 120%, color-mix(in srgb, var(--mf-tint) 18%, transparent), transparent 64%),
+    var(--mf-fill);
+  box-shadow: var(--mf-glow);
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 50% 100%;
+  transform: scale(.98, .04);
+  filter: blur(6px);
+  transition: transform .34s cubic-bezier(.32, .72, 0, 1), opacity .22s ease, filter .3s ease;
+}
+.archive-list-search:focus-within::after,
+.sidebar-actions .search-wrapper:focus-within::after {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition: transform .46s cubic-bezier(.34, 1.4, .5, 1), opacity .16s ease, filter .2s ease;
+}
+.sidebar-actions .search-wrapper::after { top: -2px; bottom: -2px; left: -8px; right: -8px; }
+.archive-list-search:focus-within { border-bottom-color: transparent; }
+/* 玻璃本身就是聚焦提示，里面的输入框不再另画一圈焦点框 */
+/* 要压过全局 :focus-visible:not(#messageInput)… 那条，所以同样带上 :not(#messageInput) */
+.archive-list-search:focus-within input:is(:focus, :focus-visible):not(#messageInput) { outline: none; box-shadow: none; }
+body .sidebar-actions .search-wrapper:focus-within #search-input,
+#left-sidebar .sidebar-actions .search-wrapper:focus-within #search-input:is(:focus, :focus-visible) { border-bottom-color: transparent; }
+.archive-list-search:focus-within input,
+.sidebar-actions .search-wrapper:focus-within #search-input { color: var(--mf-ink); }
+.archive-list-search,
+.sidebar-actions #search-input { transition: border-color .2s ease; }
+body.music-reduce-motion :is(.archive-list-search, .sidebar-actions .search-wrapper)::after { transition: opacity .12s linear; transform: none; filter: none; }
+
+/* ───────── 提示条：同一层玻璃 ─────────
+ * 长出来、停留时慢慢化雾的动作还是原来的（music-dock.css 里的 mtst-bud / mtst-mist），这里只换成同一套材质：
+ * 没有描边，四周柔光，颜色从里面透出来。错误提示的那团光是暖红，不再整条变色。 */
+.mtst { border: 0; box-shadow: var(--mf-glow); color: var(--mf-ink); }
+.mtst::after {
+  background:
+    radial-gradient(90% 140% at 0% 50%, color-mix(in srgb, var(--mf-tint) 22%, transparent), transparent 62%),
+    var(--mf-fill);
+}
+.mtst.mtst-error::after {
+  background:
+    radial-gradient(90% 140% at 0% 50%, color-mix(in srgb, var(--ar-danger, #dc3c3c) 24%, transparent), transparent 62%),
+    var(--mf-fill);
+}
+.mtst .mtst-act { border-radius: 9999px; }
+body.music-fl-low .mtst { backdrop-filter: none; -webkit-backdrop-filter: none; }
