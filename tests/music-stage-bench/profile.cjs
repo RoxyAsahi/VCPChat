@@ -38,7 +38,11 @@ const SCENARIOS = [
     { name: 'tunnel rings', mode: 'tunnel', t: 46 },
     { name: 'tunnel rings, energy-saving', mode: 'tunnel', t: 46, config: { quality: 'energy-saving' } },
     { name: 'tunnel rings, ultimate', mode: 'tunnel', t: 46, config: { quality: 'ultimate' } },
-    { name: 'tunnel rings, no bodies', mode: 'tunnel', t: 46, config: { modes: { tunnel: tunnelBare } } }
+    { name: 'tunnel rings, no bodies', mode: 'tunnel', t: 46, config: { modes: { tunnel: tunnelBare } } },
+    { name: 'kowloon verse', mode: 'kowloon', t: 30 },
+    { name: 'kowloon chorus', mode: 'kowloon', t: 56 },
+    { name: 'kowloon chorus, energy-saving', mode: 'kowloon', t: 56, config: { quality: 'energy-saving' } },
+    { name: 'kowloon chorus, ultimate', mode: 'kowloon', t: 56, config: { quality: 'ultimate' } }
 ];
 
 // Runs in the page before any script: counts what reaches WebGL.
