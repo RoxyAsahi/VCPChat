@@ -314,6 +314,8 @@
                 scene.background = new T.Color(0x0b1018);
                 scene.fog = new T.FogExp2(0x101822, 0.0042);
                 camera = new T.PerspectiveCamera(32, 1, 0.3, 2400);
+                // 第 3 层：只给主相机、不进倒影的东西（屋顶杂物、雨丝等）。
+                camera.layers.enable(3);
                 const lensOn = global.MusicStageDioramaOptics?.active(mode.config, mode.config.modes?.kowloon || {}) ?? false;
                 renderer = new T.WebGLRenderer({ antialias: !lensOn, alpha: false, powerPreference: 'high-performance' });
                 renderer.debug.checkShaderErrors = false;
