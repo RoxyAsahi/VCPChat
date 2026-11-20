@@ -74,7 +74,7 @@ const perSecond = (before, after, seconds) => Object.fromEntries(Object.keys(aft
         const errors = [];
         page.on('pageerror', (e) => errors.push(String(e).slice(0, 160)));
         await page.addInitScript(FAKE, { n });
-        await page.goto(url, { timeout: 120000 });
+        await page.goto(url, { timeout: 120000, waitUntil: 'commit' }); // software rendering can hold the load event for a long time
         await page.waitForFunction(() => window.__bench.marks.ready, null, { timeout: 120000 });
         await page.waitForTimeout(4000); // intro animation and first paints settle
         const start = await page.evaluate(() => ({
