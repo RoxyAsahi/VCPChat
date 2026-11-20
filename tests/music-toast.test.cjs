@@ -129,14 +129,19 @@ test('the dock routes playback failures and scan progress through the toast laye
     };
     const dock = window.initMusicDock(app);
     try {
-        app.showPlaybackNotice('加载失败：解码错误');
-        assert.deepEqual(notices, ['加载失败：解码错误'], 'old notice still runs');
+        app.showPlaybackNotice('播放失败：音频引擎没有响应');
+        assert.deepEqual(notices, ['播放失败：音频引擎没有响应'], 'old notice still runs');
         clock.advance(20);
         const err = doc.querySelector('.mtst-error');
         assert.ok(err);
-        assert.equal(err.querySelector('.mtst-act').textContent, '跳过 5');
-        clock.advance(5100);
-        assert.deepEqual(calls, ['next']);
+        assert.equal(err.querySelector('.mtst-msg').textContent, '播放失败：音频引擎没有响应');
+        // 加载失败的提示（带「跳过」）由播放器自己出，底栏不再补第二条。
+        app.cancelFailureSkip = () => {};
+        app.showPlaybackNotice('加载失败：解码错误');
+        clock.advance(20);
+        assert.equal(doc.querySelectorAll('.mtst-error').length, 1);
+        assert.equal(doc.querySelector('.mtst-error .mtst-msg').textContent, '播放失败：音频引擎没有响应');
+        assert.deepEqual(calls, []);
 
         scan.start();
         scan.progress({ current: 3, total: 12 });

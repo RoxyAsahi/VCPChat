@@ -164,8 +164,9 @@ function setupPlayer(app) {
     const handleLoadFailure = (track, reason, requestId, wanted) => {
         const name = app.stripAudioExtension(track?.title) || '这首歌';
         app.showPlaybackNotice(reason);
+        const detail = String(reason).replace(/^加载失败：/, '');
         if (!wanted) {
-            failureToast({ message: `无法播放「${name}」：${reason}` });
+            failureToast({ message: `无法播放「${name}」：${detail}` });
             return;
         }
         app.failureStreak += 1;
@@ -186,7 +187,7 @@ function setupPlayer(app) {
         failureSkip = skip;
         const seconds = Math.max(1, Math.round(app.failureSkipDelayMs / 1000));
         const toast = failureToast({
-            message: `无法播放「${name}」：${reason}`,
+            message: `无法播放「${name}」：${detail}`,
             action: { label: '跳过', run: skip, countdown: seconds }
         });
         // 提示层在时由它的倒计时触发；不在时（或倒计时被悬停拖住）由这个定时器兜底。
