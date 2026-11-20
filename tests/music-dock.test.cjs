@@ -608,3 +608,137 @@ test('fluid colours follow the theme accent, keep scene colours on themed stages
         assert.ok(doc.getElementById('music-dock-root').style.getPropertyValue('--md-fl-low-fill'), 'low tier fill is tinted');
     } finally { dock.destroy(); }
 });
+
+test('fluid layer schedules no animation frames once it is at rest, when hidden, or when the window is unfocused', () => {
+    const dom = new JSDOM('<!doctype html><body><div id="host"><div class="md-dock"><div class="md-cap" id="bar"></div></div><div id="ring"></div></div></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
+    const { window } = dom;
+    window.eval(read('Musicmodules/music-dock/music-dock-fluid.js'));
+    // 模拟时钟：rAF 只进队列，由测试一帧一帧推；数一共排了多少帧。
+    let now = 1000;
+    let queue = [];
+    let scheduled = 0;
+    window.performance.now = () => now;
+    window.requestAnimationFrame = (cb) => { scheduled += 1; queue.push(cb); return scheduled; };
+    window.cancelAnimationFrame = () => { queue = []; };
+    const run = (ms) => {
+        for (let t = 0; t < ms; t += 16) {
+            now += 16;
+            const batch = queue; queue = [];
+            for (const cb of batch) cb(now);
+        }
+    };
+    const bar = window.document.getElementById('bar');
+    bar.getBoundingClientRect = () => ({ left: 300, right: 900, top: 620, bottom: 684, width: 600, height: 64 });
+    const fluid = window.createMusicDockFluid({ host: window.document.getElementById('host'), bar, ring: window.document.getElementById('ring') });
+    try {
+        fluid.layout();
+        fluid.setRingMode('playhead');
+        fluid.setPlaying(true);
+        fluid.setSolid(true);
+        fluid.pointer(500);
+        run(300);
+        assert.ok(scheduled > 0, 'a state change does animate');
+        // 指针离开、暂停：动画收尾以后就该彻底停下。
+        fluid.pointer(null);
+        fluid.setPlaying(false);
+        fluid.setSolid(false);
+        run(4000);
+        assert.equal(queue.length, 0, 'the loop has ended');
+        assert.equal(fluid.animating, false);
+        const settled = scheduled;
+        run(2000);
+        assert.equal(scheduled, settled, 'no frames in 2 s of rest');
+
+        // 播放中：进度没走满一个像素不动；走满了也只是直接落位，不起动画帧。
+        fluid.setPlaying(true);
+        fluid.setSolid(true);
+        run(4000);
+        const playing = scheduled;
+        const mask = () => window.document.querySelector('linearGradient stop:nth-child(2)').getAttribute('offset');
+        fluid.setProgress(0.5);           // 大跳（相当于拖动）：走动画
+        run(4000);
+        assert.equal(fluid.animating, false);
+        const before = mask();
+        const afterJump = scheduled;
+        fluid.setProgress(0.5 + 0.4 / 600);   // 不到一个像素
+        assert.equal(mask(), before, 'sub-pixel progress leaves the mask alone');
+        fluid.setProgress(0.5 + 2.5 / 528);   // 两个多像素（进度区间宽 600 × 0.88）
+        assert.notEqual(mask(), before, 'a whole pixel moves the mask');
+        run(2000);
+        assert.equal(scheduled, afterJump, 'steady playback needs no animation frames');
+        assert.ok(playing >= settled);
+
+        // 失焦：状态变化直接落位，不排帧。
+        fluid.setSuspended(true);
+        const suspended = scheduled;
+        fluid.pointer(520); fluid.setVolumeOpen(true); fluid.setSolid(false);
+        run(2000);
+        assert.equal(scheduled, suspended, 'no frames while the window is unfocused');
+        assert.equal(fluid.volumeOpen, true);
+        fluid.setSuspended(false);
+
+        // 不可见：什么都不画，回来时一次到位。
+        fluid.setHidden(true);
+        const hiddenMask = mask();
+        fluid.setProgress(0.9); fluid.setVolumeOpen(false); fluid.split();
+        run(2000);
+        assert.equal(scheduled, suspended, 'no frames while hidden');
+        assert.equal(mask(), hiddenMask, 'nothing is repainted while hidden');
+        fluid.setHidden(false);
+        assert.notEqual(mask(), hiddenMask, 'coming back paints the current progress once');
+        run(2000);
+        assert.equal(scheduled, suspended, 'and returning needs no animation either');
+    } finally { fluid.destroy(); }
+});
+
+test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, the playhead seeks and is described', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const handle = doc.querySelector('[data-md="handle"]');
+        const key = (node, k, extra = {}) => node.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+
+        // 播放头：有说明文字，方向键跳转
+        assert.equal(handle.getAttribute('aria-describedby'), 'music-dock-playhead-tip');
+        assert.match(doc.getElementById('music-dock-playhead-tip').textContent, /\d+:\d+ \/ \d+:\d+/);
+        app.lastKnownCurrentTime = 50;
+        app.lastStateUpdateTime = Date.now();
+        handle.focus();
+        key(handle, 'ArrowRight');
+        assert.deepEqual(calls.pop(), ['seek', 55]);
+        key(handle, 'ArrowLeft');
+        assert.deepEqual(calls.pop(), ['seek', 45]);
+
+        // 打开：焦点进抽屉，落在选中的页签上；页签是 tablist，只有选中的那个能 Tab 到
+        const play = doc.querySelector('[data-md="play"]');
+        play.focus();
+        dock.openPanel('控制');
+        const tabs = () => [...doc.querySelectorAll('[data-md="tabs"] [role="tab"]')];
+        assert.equal(doc.querySelector('[data-md="tabs"]').getAttribute('aria-label'), '面板页签');
+        assert.equal(doc.activeElement.textContent, '控制');
+        assert.deepEqual(tabs().map((t) => t.tabIndex), [-1, -1, 0, -1, -1]);
+        assert.equal(handle.hasAttribute('aria-describedby'), false, 'as the close button it is no longer described as a playhead');
+        key(doc.activeElement, 'ArrowRight');
+        assert.equal(doc.activeElement.textContent, '播放列表');
+        assert.equal(doc.activeElement.getAttribute('aria-selected'), 'true');
+        key(doc.activeElement, 'Home');
+        assert.equal(doc.activeElement.textContent, '封面');
+        key(doc.activeElement, 'ArrowLeft');
+        assert.equal(doc.activeElement.textContent, '音质', 'wraps around');
+        assert.equal(doc.getElementById('music-dock-panel-body').getAttribute('role'), 'tabpanel');
+
+        // 子页的返回按钮有名字，进子页时焦点在它上面
+        dock.openStageSettings();
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '返回控制页');
+        assert.ok(doc.querySelector('[data-md="fx-back"]').getAttribute('aria-label'));
+
+        // 关闭：焦点回到打开前的地方
+        dock.closePanel();
+        assert.equal(doc.activeElement, play);
+        // 焦点不在抽屉里时关闭不抢焦点
+        handle.focus();
+        dock.openPanel();
+        app.volumeSlider.focus();
+        dock.closePanel();
+        assert.equal(doc.activeElement, app.volumeSlider);
+    } finally { dock.destroy(); }
+});
