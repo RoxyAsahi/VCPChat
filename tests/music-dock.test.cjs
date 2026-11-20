@@ -512,3 +512,49 @@ test('fluid bar: up-next titles on the bar, volume drop rail, ring docking and t
         assert.equal(doc.querySelector('.md-fluid'), null, 'destroy removes the svg layer');
     } finally { dock.destroy(); }
 });
+
+test('stage settings live in the dock panel: the drawer content is moved in, opened from the control row, and moved back on destroy', () => {
+    const { window, doc, app, dock, calls } = setup();
+    dock.destroy();
+    const stage = doc.createElement('div');
+    stage.id = 'music-stage';
+    stage.innerHTML = `<aside class="music-stage-settings"><button class="music-stage-settings-toggle"></button>
+        <section class="music-stage-settings-card" hidden><div class="music-stage-settings-body"><div class="music-stage-mode-options"><input type="checkbox" data-stage-config-mode="partita"></div></div>
+        <div class="music-stage-settings-footer"><button class="music-stage-settings-reset">恢复出厂编排</button></div></section></aside>`;
+    doc.body.appendChild(stage);
+    const body = stage.querySelector('.music-stage-settings-body');
+    let changes = 0;
+    body.addEventListener('change', () => { changes += 1; });
+    const again = window.initMusicDock(app);
+    try {
+        assert.ok(doc.querySelector('[data-md="stagepage"] .music-stage-settings-body') === body, 'moved, not rebuilt');
+        assert.ok(doc.querySelector('[data-md="stagepage"] .music-stage-settings-reset'));
+        assert.ok(doc.body.classList.contains('music-dock-stage-settings'), 'old drawer is hidden by css');
+
+        again.openPanel('控制');
+        doc.querySelector('[data-act="scene-pick"]').click();
+        assert.equal(again.stageSettingsOpen, true);
+        assert.equal(doc.querySelector('[data-md="stagepage"]').hidden, false);
+        assert.equal(doc.querySelector('[data-md="sp-cur"]').textContent, '流光');
+        doc.querySelector('[data-md="sp-modes"] [data-mode="partita"]').click();
+        assert.deepEqual(calls.pop(), ['mode', 'partita']);
+
+        // 搬进来的控件上原有的事件还在
+        body.querySelector('input').dispatchEvent(new window.Event('change', { bubbles: true }));
+        assert.equal(changes, 1);
+
+        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(again.stageSettingsOpen, false, 'Esc goes back to the control page first');
+        assert.equal(again.panelOpen, true);
+        again.openStageSettings();
+        doc.querySelector('[data-md="sp-back"]').click();
+        assert.equal(again.stageSettingsOpen, false);
+        again.openStageSettings();
+        again.openPanel('播放列表');
+        assert.equal(again.stageSettingsOpen, false, 'switching tabs leaves the subpage');
+    } finally {
+        again.destroy();
+    }
+    assert.ok(stage.querySelector('.music-stage-settings-card > .music-stage-settings-body') === body, 'moved back home');
+    assert.ok(!doc.body.classList.contains('music-dock-stage-settings'));
+});
