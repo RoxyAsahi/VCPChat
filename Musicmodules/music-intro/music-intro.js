@@ -372,6 +372,20 @@
         return 1;
     };
 
+    // 降低动态：不放过场，但加载中的画面也不能露出来。直接盖一层纸色底，加载好了直接撤，没有任何动画；
+    // 等得久（超过 0.4 秒）才在中间写一行 LOADING STAGE。
+    const renderStill = (n, t, ctx) => {
+        const releaseAt = ctx.direction === 'enter' ? 0.001 : 0;
+        if (!ctx.released && t >= releaseAt) { ctx.released = true; ctx.release?.(); }
+        n.veil.setAttribute('opacity', '1');
+        n.flash.style.opacity = '0';
+        n.scan.style.opacity = '0';
+        n.fileLabel.textContent = 'LOADING STAGE';
+        n.fileText.textContent = ctx.file || '';
+        n.file.style.opacity = ctx.waiting && ctx.wait > 0.4 ? '1' : '0';
+        return 1;
+    };
+
     // music.html 里一开始就有一层底色盖着，等脚本接手；接手后把它换掉。
     const dropCover = () => document.getElementById('music-intro-cover')?.remove();
 
@@ -438,8 +452,9 @@
             if (!transit) dropCover();
             const nodes = buildScene(root);
             const ctx = { name: userName, count, flashPeak: flashPeak(), direction: kind, file: extra.file || '', release: extra.release || releaseStage, released: false, wait: extra.wait || 0, waiting: Boolean(extra.wait), loadingLabel: extra.loadingLabel };
-            const render = kind === 'full' ? renderFull : kind === 'short' ? renderShort : renderTransit;
-            const length = kind === 'full' ? FULL.end : kind === 'short' ? SHORT.end : TRANSIT[kind];
+            const render = extra.still ? renderStill : kind === 'full' ? renderFull : kind === 'short' ? renderShort : renderTransit;
+            const length = extra.still ? 0.02 : kind === 'full' ? FULL.end : kind === 'short' ? SHORT.end : TRANSIT[kind];
+            if (extra.still) root.dataset.still = '1';
 
             const onKey = (event) => { event.preventDefault(); event.stopPropagation(); stop(); };
             const onPointer = (event) => { event.stopPropagation(); stop(); };
@@ -451,6 +466,7 @@
             const run = {
                 root,
                 raf: 0,
+                gate: extra.gate,
                 done: extra.done,
                 // 闸门上还没做的事（真正进出舞台）无论如何都要做：过场被打断、窗口在后台不出帧时由这里补上
                 flush: () => {
@@ -519,7 +535,7 @@
             return run;
         };
 
-        // 减少动态：开场只是一层底色淡出；舞台进出不加过场。
+        // 减少动态：开场只是一层底色淡出（进出舞台另有一层不动的纸色底，见 renderStill）。
         const fadeOnly = () => {
             const root = document.createElement('div');
             root.className = 'music-intro';
@@ -564,13 +580,15 @@
         let lastMode = app?.stageHost?.modeId || null;
         // 舞台宿主原来的 enter / exit（接管之后存在这里）；action 里调它们才是真正进出舞台。
         let hostEnter = null, hostExit = null;
-        const canCover = () => !reducedMotion() && !document.hidden
+        const canCover = () => !document.hidden
             && !(current && !current.root.classList.contains('is-transit')); // 开场还没放完就不叠过场
 
         // direction: enter / exit / switch。extra.deferred = true 表示舞台还没动，由过场在盖好之后去调宿主；
         // 否则是舞台已经自己动了（别处直接改了状态），过场只能跟在后面盖，用「按住舞台」的办法补救。
         const transit = (direction, extra = {}) => {
             if (!canCover()) return null;
+            // 降低动态：同样先盖后做，只是盖的是一层不动的纸色底
+            const still = reducedMotion();
             if (direction === 'enter') {
                 // 档案页据此把选中卡抬起来并继续画；舞台先不露出来，直到过场放完。
                 document.body.classList.add('music-stage-entering');
@@ -581,10 +599,11 @@
                     document.body.classList.add('mi-stage-hold-enter');
                 };
                 const run = start('enter', {
-                    file: `FILE NUMBER: ${file}`,
+                    file: still ? '' : `FILE NUMBER: ${file}`,
+                    still,
                     loadingLabel: SCENE_3D.includes(app?.stageHost?.modeId),
                     gate: {
-                        at: TRANSIT.enterGate,
+                        at: still ? 0 : TRANSIT.enterGate,
                         ready: stageModeReady,
                         action: extra.deferred ? () => { hold(); wasStage = true; hostEnter(); lastMode = app?.stageHost?.modeId || lastMode; } : null
                     },
@@ -596,15 +615,17 @@
             if (direction === 'switch') {
                 return start('switch', {
                     file: extra.label || '',
-                    gate: { at: TRANSIT.switchGate, ready: stageModeReady },
+                    still,
+                    gate: { at: still ? 0 : TRANSIT.switchGate, ready: stageModeReady },
                     release: () => {}
                 });
             }
             document.body.classList.remove('music-stage-entering');
             const run = start('exit', {
                 loadingLabel: false,
+                still,
                 gate: {
-                    at: TRANSIT.exitGate,
+                    at: still ? 0 : TRANSIT.exitGate,
                     ready: stageGone,
                     action: extra.deferred ? () => {
                         // 纸色底已经盖严：舞台不用再淡出，直接撤
@@ -626,25 +647,42 @@
         // 以前是舞台先动、过场跟着盖：退出时档案页一恢复渲染、舞台一拆场景就卡，过场的第一帧反而排在卡顿后面。
         // 现在把入口接过来：先放过场，盖好了（闸门那一帧已经上屏）再调宿主原来的 enter / exit。
         const pendingKind = () => (current && current.root.classList.contains('is-transit') ? current.root.dataset.intro : null);
+        // 过场还没走到闸门（还没真正进出）就反悔：这次进出作废，盖着的东西淡掉，舞台状态原样不动。
+        const cancelPending = () => {
+            const gate = current?.gate;
+            if (!gate?.action || gate.acted) return false;
+            gate.acted = true;
+            clearTimeout(current.actionTimer);
+            stop();
+            return true;
+        };
         const requestEnter = () => {
             const host = app?.stageHost;
-            if (!host || host.active || pendingKind() === 'enter') return;
-            if (pendingKind() === 'exit') { stop(true); if (host.active) return; }
+            if (!host || pendingKind() === 'enter') return;
+            if (pendingKind() === 'exit') {
+                if (cancelPending()) return; // 还没退出去：留在舞台
+                stop(true);                 // 已经退了：收掉退场，下面重新进
+            }
+            if (host.active) return;
             if (!transit('enter', { deferred: true })) hostEnter();
         };
         const requestExit = () => {
             const host = app?.stageHost;
             if (!host || pendingKind() === 'exit') return;
-            if (pendingKind() === 'enter') stop(true); // 还在进场就反悔：先把进场走完，再退
+            if (pendingKind() === 'enter') {
+                if (cancelPending()) return; // 还没进去：留在原处
+                stop(true);                 // 已经进了：收掉进场，下面再退
+            }
             if (!host.active) return;
             if (!transit('exit', { deferred: true })) hostExit();
         };
+        // 按的是「切换」：以最后想去的那一边为准（过场中再按就是反悔）。
         const requestToggle = () => {
             const host = app?.stageHost;
             if (!host) return;
             const kind = pendingKind();
-            if (kind === 'enter' || kind === 'exit') return; // 过场中再点不理，免得来回抖
-            if (host.active) requestExit(); else requestEnter();
+            const heading = kind === 'enter' ? true : kind === 'exit' ? false : host.active;
+            if (heading) requestExit(); else requestEnter();
         };
         // 自动化测试（webdriver）里舞台保持同步进出，脚本调完 enter() 立刻就能查状态；要测接管就带 ?introCover=1。
         let adoptAllowed = true;
