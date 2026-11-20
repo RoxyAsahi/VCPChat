@@ -15,6 +15,7 @@
     const VIEW_KEY = 'musicArchiveView';
     const DESIGN_W = 1920, DESIGN_H = 1080;
     const TICKS = 12;
+    const SCRIPT_BASE = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
     const fileUrl = (p) => (p ? 'file://' + String(p).replace(/\\/g, '/').replace(/#/g, '%23') : '');
@@ -24,15 +25,11 @@
         <div class="archive-hud" data-ref="hud">
             <header class="archive-brand" aria-hidden="true"><h1>VCP MUSIC</h1><div>ACOUSTIC INFORMATION</div><p><span>ARCHIVE</span><b>OS</b></p></header>
             <nav class="archive-nav">
+                <button type="button" data-act="list" data-ref="listBtn" title="档案目录（L）" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST <span class="archive-key">L</span></button>
                 <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
                 <button type="button" data-act="now" title="回到正在播放（Home）" aria-label="回到正在播放"><span class="archive-glyph-now">◷</span></button>
             </nav>
-            <div class="archive-search" data-ref="search">
-                <label for="music-archive-search-input">INDEX QUERY</label>
-                <input id="music-archive-search-input" type="search" data-ref="searchInput" placeholder="标题、歌手或专辑" autocomplete="off" spellcheck="false">
-                <output data-ref="searchCount"></output>
-            </div>
             <div class="archive-callout">
                 <div class="archive-eyebrow">TRACK DATABASE <span>／</span> <span data-ref="cat"></span></div>
                 <button type="button" class="archive-file-title" data-act="access">FILE NUMBER: <span data-ref="fno"></span><span class="archive-file-open">↗</span></button>
@@ -51,7 +48,7 @@
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
                 <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
-                <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索</div>
+                <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索 <span>／</span> L 目录</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
                 <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
@@ -75,9 +72,6 @@
             sig: '',
             lane: 0,
             row: 0,
-            searchOpen: false,
-            searchQuery: '',
-            beforeSearch: null,      // { id, row }
             playedLane: 0,           // 最近一次从哪一列开始播放
             mode: 'archive',
             scene: null,
@@ -103,8 +97,7 @@
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : -1;
-            let columns = Model.buildColumns(tracks(), app.customPlaylists);
-            if (state.searchOpen && state.searchQuery) columns = [Model.searchColumn(tracks(), state.searchQuery), ...columns];
+            const columns = Model.buildColumns(tracks(), app.customPlaylists);
             state.columns = columns;
             state.sig = Model.signature(columns);
             state.dataRefs = { playlist: app.playlist, length: tracks().length, playlists: app.customPlaylists, plSig: playlistsSig() };
@@ -125,8 +118,11 @@
             root.classList.toggle('is-empty', tracks().length === 0);
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
+            rebuildIndex();
             renderHud(true);
             updatePlaying(true);
+            list?.rebuild();
+            syncList();
         };
 
         const dataChanged = () => {
@@ -238,10 +234,11 @@
             state.row = row;
             state.scene?.select(lane, row, { pulse });
             renderHud();
+            syncList();
             kick();
         };
 
-        const playSelected = () => {
+        const playSelected = ({ stage = true } = {}) => {
             const col = column();
             const index = selectedIndex();
             if (!col || index < 0) return;
@@ -256,7 +253,7 @@
                 state.playedLane = state.lane;
                 app.loadTrack(index, true);
             }
-            if (app.stageHost && !app.stageHost.active) app.stageHost.enter();
+            if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
         };
 
         const goToPlaying = () => {
@@ -281,79 +278,149 @@
                 cell = { lane: at.lane + n * Math.round((state.lane - at.lane) / n), row: at.row + m * Math.round((state.row - at.row) / m) };
             }
             state.scene?.setPlaying(cell, app.isPlaying);
+            list?.setPlaying(app.currentTrackIndex);
+            if (recordRecent() && list && list.kind === 'recent') list.rebuild();
             refs.access.classList.toggle('is-playing', selectedIndex() === app.currentTrackIndex && app.isPlaying);
             kick();
         };
 
-        // ---------- 检索 ----------
-        let searchTimer = 0;
+        // ---------- 目录列表与检索索引 ----------
+        const IndexLib = global.MusicArchiveIndex;
+        const ListLib = global.MusicArchiveList;
+        const pinyinCache = new Map();
+        const pinyinOf = () => {
+            const lib = global.pinyinPro;
+            if (!lib || typeof lib.pinyin !== 'function') return null;
+            return (c) => {
+                if (!pinyinCache.has(c)) {
+                    let p = '';
+                    try { p = lib.pinyin(c, { toneType: 'none' }); } catch (e) { p = ''; }
+                    pinyinCache.set(c, p);
+                }
+                return pinyinCache.get(c);
+            };
+        };
+        let searchIndex = null;
+        const rebuildIndex = () => { searchIndex = IndexLib ? IndexLib.createIndex(tracks(), { pinyin: pinyinOf() }) : null; };
+        // 拼音表按需加载（项目已有的依赖），加载好之后重建索引，汉字才能按拼音检索和分组
+        const loadPinyin = () => {
+            if (global.pinyinPro || options.pinyinSrc === false) return;
+            const src = options.pinyinSrc || (SCRIPT_BASE ? new URL('../../node_modules/pinyin-pro/dist/index.js', SCRIPT_BASE).href : '');
+            if (!src) return;
+            const tag = document.createElement('script');
+            tag.src = src;
+            tag.async = true;
+            tag.onload = () => { if (state.destroyed) return; rebuildIndex(); list?.rebuild(); syncList(); };
+            tag.onerror = () => { /* 没有拼音表就只按原文检索 */ };
+            document.head.appendChild(tag);
+        };
+
+        // 最近播放：记路径，最多 60 首，存在本机
+        const RECENT_KEY = 'musicArchiveRecent';
+        let recentPaths = [];
+        try { recentPaths = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter((p) => typeof p === 'string'); } catch (e) { recentPaths = []; }
+        const recentIndices = () => {
+            const byPath = new Map();
+            tracks().forEach((t, i) => { if (t && t.path && !byPath.has(t.path)) byPath.set(t.path, i); });
+            return recentPaths.map((p) => byPath.get(p)).filter((i) => i !== undefined);
+        };
+        let lastRecorded = null;
+        const recordRecent = () => {
+            const t = tracks()[app.currentTrackIndex];
+            if (!t || !t.path || !app.isPlaying || t.path === lastRecorded) return false;
+            lastRecorded = t.path;
+            recentPaths = [t.path, ...recentPaths.filter((p) => p !== t.path)].slice(0, 60);
+            try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentPaths)); } catch (e) { /* 只是方便 */ }
+            return true;
+        };
+
+        // 曲目没带时长时，播放过一次就记下来（按路径，存在本机），目录里能显示
+        const DURATION_KEY = 'musicArchiveDurations';
+        let durations = {};
+        try { durations = JSON.parse(localStorage.getItem(DURATION_KEY) || '{}') || {}; } catch (e) { durations = {}; }
+        const durationOf = (t) => (t && t.path && durations[t.path]) || 0;
+        const recordDuration = () => {
+            const t = tracks()[app.currentTrackIndex];
+            const d = Number(app.lastKnownDuration);
+            if (!t || !t.path || Number(t.duration) > 0 || !(d > 0) || Math.abs((durations[t.path] || 0) - d) < 1) return;
+            durations[t.path] = Math.round(d);
+            const keys = Object.keys(durations);
+            if (keys.length > 4000) for (const k of keys.slice(0, keys.length - 4000)) delete durations[k];
+            try { localStorage.setItem(DURATION_KEY, JSON.stringify(durations)); } catch (e) { /* 只是方便 */ }
+            list?.rebuild();
+        };
+
+        let list = null;
+        const LIST_KEY = 'musicArchiveList';
+        let listPref = null;
+        try { listPref = localStorage.getItem(LIST_KEY); } catch (e) { listPref = null; }
+        const isNarrow = () => refs.hud.classList.contains('narrow');
+        const listOpen = () => refs.hud.classList.contains('list-open');
+        const setListOpen = (open, { persist = true } = {}) => {
+            if (!list) return;
+            refs.hud.classList.toggle('list-open', open);
+            list.el.hidden = !open;
+            refs.listBtn?.setAttribute('aria-pressed', String(open));
+            if (persist) { listPref = open ? '1' : '0'; try { localStorage.setItem(LIST_KEY, listPref); } catch (e) { /* 只是记住 */ } }
+            if (open) { list.render(); syncList(); }
+        };
+        const applyListDefault = () => {
+            // 宽窗口默认打开，窄窗口默认收起（用户手动开过就按记住的）
+            if (listPref === '1' || listPref === '0') setListOpen(listPref === '1', { persist: false });
+            else setListOpen(!isNarrow(), { persist: false });
+        };
+
+        /* 列表选中某首：在对应的列里找到它，相机飞过去 */
+        const goToTrack = (i, ctx, { pulse = true } = {}) => {
+            const n = state.columns.length;
+            if (!n || i < 0) return;
+            let lane = ctx ? state.columns.findIndex((c) => c.id === ctx) : -1;
+            let row = lane >= 0 ? state.columns[lane].items.indexOf(i) : -1;
+            if (row < 0) {
+                const at = Model.locate(state.columns, i, Model.wrap(state.lane, n));
+                if (!at) return;
+                lane = at.lane; row = at.row;
+            }
+            const m = state.columns[lane].items.length;
+            const nearLane = lane + n * Math.round((state.lane - lane) / n);
+            const nearRow = row + m * Math.round((state.row - row) / m);
+            fromList = true;
+            select(nearLane, nearRow, { pulse });
+            fromList = false;
+        };
+        let fromList = false;
+        const syncList = () => {
+            if (!list || fromList || !listOpen()) return;
+            const col = column();
+            list.reveal(selectedIndex(), col ? col.id : null);
+        };
+
+        const playIndex = (i, ctx, { stage }) => {
+            goToTrack(i, ctx, { pulse: false });
+            if (selectedIndex() !== i) return;
+            playSelected({ stage });
+        };
+
         const openSearch = () => {
-            if (state.searchOpen) { refs.searchInput.focus(); return; }
-            state.searchOpen = true;
-            state.beforeSearch = column() ? { id: column().id, row: state.row } : null;
-            refs.search.classList.add('open');
-            refs.searchInput.value = state.searchQuery;
-            refs.searchInput.focus();
-            refs.searchInput.select();
+            if (!list) return;
+            if (!listOpen()) setListOpen(true);
+            list.focusSearch();
         };
-        const closeSearch = () => {
-            if (!state.searchOpen) return;
-            state.searchOpen = false;
-            state.searchQuery = '';
-            refs.search.classList.remove('open');
-            refs.searchCount.textContent = '';
-            refs.searchInput.blur();
-            const back = state.beforeSearch;
-            state.beforeSearch = null;
-            const keepIndex = selectedIndex();
-            let columns = Model.buildColumns(tracks(), app.customPlaylists);
-            state.columns = columns;
-            state.sig = Model.signature(columns);
-            const byId = back ? columns.findIndex((c) => c.id === back.id) : -1;
-            let lane = Math.max(0, byId), row = back && byId !== -1 ? back.row : 0;
-            // 在检索结果里换过选中：回到「全部曲目」里那首歌
-            if (keepIndex >= 0 && Model.cellTrack(columns, lane, row) !== keepIndex) {
-                const at = Model.locate(columns, keepIndex, lane);
-                if (at) { lane = at.lane; row = at.row; }
-            }
-            state.lane = lane; state.row = row;
-            state.scene?.jump(lane, row);
-            renderHud(true);
-            updatePlaying(true);
-            kick();
-        };
-        const runSearch = () => {
-            state.searchQuery = refs.searchInput.value.trim();
-            const base = Model.buildColumns(tracks(), app.customPlaylists);
-            state.columns = state.searchQuery ? [Model.searchColumn(tracks(), state.searchQuery), ...base] : base;
-            state.sig = Model.signature(state.columns);
-            const hits = state.searchQuery ? state.columns[0].items.length : 0;
-            refs.searchCount.textContent = state.searchQuery ? pad(hits) + ' HIT' : '';
-            if (state.searchQuery) {
-                state.lane = 0; state.row = 0;
-                state.scene?.jump(0, 0);
-            } else {
-                const at = state.beforeSearch ? state.columns.findIndex((c) => c.id === state.beforeSearch.id) : 0;
-                state.lane = Math.max(0, at); state.row = state.beforeSearch ? state.beforeSearch.row : 0;
-                state.scene?.jump(state.lane, state.row);
-            }
-            renderHud(true);
-            updatePlaying(true);
-            kick();
-        };
-        refs.searchInput.addEventListener('input', () => {
-            clearTimeout(searchTimer);
-            searchTimer = setTimeout(runSearch, 120);
-        });
-        refs.searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSearch(); }
-            else if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); runSearch(); refs.searchInput.blur(); if (e.ctrlKey || e.metaKey) playSelected(); }
-            else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); clearTimeout(searchTimer); if (refs.searchInput.value.trim() !== state.searchQuery) runSearch(); refs.searchInput.blur(); select(state.lane, state.row + (e.key === 'ArrowDown' ? 1 : -1)); }
-        });
+
 
         // ---------- 视图切换（档案页 / 经典视图） ----------
         const isShown = () => state.mode === 'archive';
-        const shouldRender = () => isShown() && !state.destroyed && !document.hidden && !document.body.classList.contains('music-stage-active') && state.scene;
+        // 进播放页的过场里（music-stage-entering，最多 1.1 秒）舞台还没盖上来，继续画让选中卡的上浮看得见；
+        // 开场动画（music-intro-playing）是一层不透明全屏层，期间不画
+        let enteringSince = 0;
+        const renderAllowed = () => {
+            if (!isShown() || state.destroyed || document.hidden) return false;
+            const body = document.body.classList;
+            if (body.contains('music-intro-playing')) return false;
+            if (!body.contains('music-stage-active')) return true;
+            return body.contains('music-stage-entering') && performance.now() - enteringSince < 1100;
+        };
+        const shouldRender = () => Boolean(state.scene) && renderAllowed();
 
         const setMode = (mode, { persist = true } = {}) => {
             state.mode = mode === 'classic' ? 'classic' : 'archive';
@@ -371,7 +438,6 @@
                 updatePlaying(true);
                 kick();
             } else {
-                closeSearch();
                 if (!app.isStageActive) originalCreateAmbient?.();
                 app.visualizerCanvas && (app.visualizerCanvas.width = app.visualizerCanvas.clientWidth);
             }
@@ -399,11 +465,19 @@
                 dark: !document.body.classList.contains('light-theme')
             };
         };
-        const applyTheme = () => {
+        /* wave: true 时从当前选中格起一圈圈翻色（运行中切主题用）；第一次建场景直接换 */
+        const applyTheme = ({ wave = false } = {}) => {
             if (!state.scene) return;
             const th = readTheme();
-            state.scene.setTheme(th.colors, th.dark);
+            state.scene.setTheme(th.colors, th.dark, wave && isShown() ? { wave: { lane: state.lane, row: state.row } } : {});
             kick();
+        };
+        /* 进播放页的过场期间（body.music-stage-entering）选中卡多抬一点；外部也可以直接调 raise(高度) */
+        const raise = (amount) => { state.scene?.raise(amount); kick(); };
+        const syncEntering = () => {
+            const on = document.body.classList.contains('music-stage-entering');
+            if (on) enteringSince = performance.now();
+            raise(on ? 0.9 : undefined);
         };
 
         let sceneQuality = null;
@@ -434,7 +508,9 @@
             const sc = h / DESIGN_H;
             refs.hud.style.width = (w / sc) + 'px';
             refs.hud.style.transform = `scale(${sc})`;
+            const wasNarrow = refs.hud.classList.contains('narrow');
             refs.hud.classList.toggle('narrow', w / sc < 1500);
+            if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
@@ -520,7 +596,8 @@
                     case 'down': select(state.lane, state.row + 1); break;
                     case 'left': select(state.lane - 1, state.row); break;
                     case 'right': select(state.lane + 1, state.row); break;
-                    case 'search': state.searchOpen ? closeSearch() : openSearch(); break;
+                    case 'search': openSearch(); break;
+                    case 'list': setListOpen(!listOpen()); break;
                     case 'now': goToPlaying(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
@@ -563,7 +640,7 @@
                 e.preventDefault(); playSelected(); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
-            if (e.key === 'Escape' && state.searchOpen) { e.preventDefault(); closeSearch(); return; }
+            if (e.key === 'l' || e.key === 'L') { e.preventDefault(); setListOpen(!listOpen()); return; }
             if (e.key === 'Home') { e.preventDefault(); goToPlaying(); return; }
             if (e.code === 'Space' && tag !== 'BUTTON') {
                 e.preventDefault();
@@ -583,13 +660,15 @@
             const cls = document.body.className;
             const themeChanged = cls.includes('light-theme') !== lastBodyClass.includes('light-theme');
             const stageChanged = cls.includes('music-stage-active') !== lastBodyClass.includes('music-stage-active');
+            const enteringChanged = cls.includes('music-stage-entering') !== lastBodyClass.includes('music-stage-entering');
             lastBodyClass = cls;
-            if (themeChanged) applyTheme();
+            if (themeChanged) applyTheme({ wave: true });
+            if (enteringChanged) syncEntering();
             if (stageChanged && !cls.includes('music-stage-active') && isShown()) {
                 // 从播放页回来：旧界面的背景声纹不要重新起来
                 app.destroyAmbientPixi?.();
                 updatePlaying(true);
-                if (!state.searchOpen) goToPlaying();
+                goToPlaying();
             }
             resize();
             kick();
@@ -603,6 +682,7 @@
             if (!isShown()) return;
             if (dataChanged()) rebuild();
             updatePlaying();
+            recordDuration();
         }, 1000);
 
         const destroy = () => {
@@ -610,7 +690,6 @@
             state.destroyed = true;
             clearInterval(clockTimer);
             clearTimeout(state.coverTimer);
-            clearTimeout(searchTimer);
             if (state.raf) cancelAnimationFrame(state.raf);
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);
@@ -623,10 +702,26 @@
         };
         global.addEventListener('beforeunload', destroy, { once: true });
 
+        if (ListLib && IndexLib) {
+            list = ListLib.create({
+                host: refs.hud,
+                app,
+                Index: IndexLib,
+                getIndex: () => searchIndex,
+                getRecent: recentIndices, durationOf,
+                columnOfGroup: null,
+                fileNumber: (t, i) => fileNumber(t, i),
+                onPick: (i, ctx) => goToTrack(i, ctx),
+                onPlay: (i, ctx, o) => playIndex(i, ctx, o)
+            });
+        }
+        loadPinyin();
+
         let initialMode = 'archive';
         try { initialMode = localStorage.getItem(VIEW_KEY) || 'archive'; } catch (e) { /* 默认档案页 */ }
         rebuild({ keep: false });
         setMode(initialMode, { persist: false });
+        applyListDefault();
 
         const api = {
             show: () => setMode('archive'),
@@ -635,12 +730,15 @@
             select,
             playSelected,
             openSearch,
-            closeSearch,
+            setListOpen,
+            raise,
+            setThemeWave: () => applyTheme({ wave: true }),
+            get list() { return list; },
             destroy,
             get mode() { return state.mode; },
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), scene: state.scene?.debug() || null
+                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null
             })
         };
         app.archiveView = api;

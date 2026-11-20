@@ -9,7 +9,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/
 const ROOT = path.resolve(__dirname, '..', '..');
 const OUT = path.resolve(args.out || path.join(require('node:os').tmpdir(), 'music-archive-shots'));
 const [W, H] = (args.size || '1600x900').split('x').map(Number);
-const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,dark-search,light-empty').split(',');
+const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-list,dark-search,light-pinyin,dark-nolist,light-empty').split(',');
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const server = await require('../music-stage-bench/serve.cjs')(ROOT);
@@ -29,7 +29,9 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,dark-search,ligh
     await page.goto(base + '?' + qs.toString());
     await page.waitForFunction(() => window.__ready);
     await page.waitForTimeout(400);
+    if (name.includes('nolist') || name.includes('narrow-list')) await page.keyboard.press('l');
     if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
+    else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
     await page.waitForTimeout(2600);
     await page.screenshot({ path: path.join(OUT, name + '.png') });
