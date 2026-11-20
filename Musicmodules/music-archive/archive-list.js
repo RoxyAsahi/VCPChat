@@ -1045,7 +1045,7 @@
             const rect = cap.getBoundingClientRect();
             if (!(rect.width > 0)) return;
             capDrop = document.createElement('div');
-            capDrop.className = 'archive-cap-drop';
+            capDrop.className = 'archive-cap-drop mf-glass'; // 和底栏、菜单同一块玻璃
             capDrop.setAttribute('aria-hidden', 'true');
             capDrop.innerHTML = '<span data-cap-q="next">下一首播放</span><span data-cap-q="last">加入队列</span>';
             Object.assign(capDrop.style, { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px' });
