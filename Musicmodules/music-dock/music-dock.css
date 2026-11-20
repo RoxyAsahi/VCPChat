@@ -346,6 +346,7 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 #music-dock-root .md-slot:hover { opacity: 1; background: var(--md-slot-hover); }
 #music-dock-root .md-slot.md-on { opacity: 1; background: var(--md-slot-on-bg); color: var(--md-slot-on-fg); }
 #music-dock-root .md-slot:active { transform: scale(.9); }
+#music-dock-root .md-vslot.md-vshow { opacity: 1; }
 .md-cap-e > .md-prow { grid-column: 2; grid-row: 2; padding: 0 8px; }
 
 /* ───────── 右下：面板把手 ───────── */
@@ -792,6 +793,8 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
   .md-zone { width: 28px; }
   .md-txt > div { left: 28px; right: 28px; }
   .md-slots { gap: 0; }
+  /* 窄窗口里胶囊放不下第三个按钮，留给歌名；滚轮和 M 键照样能调 */
+  #music-dock-root .md-vslot { display: none; }
   .md-cap-e > .md-prow { padding: 0; gap: 8px; }
   .md-cap-c { padding: 0 4px 0 12px; }
   .md-hdl { right: calc(var(--md-cap-right) + 8px); bottom: 21px; width: 40px; height: 40px; z-index: calc(var(--mt-z-dock, 60) + 1); }

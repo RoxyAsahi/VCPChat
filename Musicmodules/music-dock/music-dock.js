@@ -88,6 +88,7 @@
       <div class="md-slots">
         <button class="md-slot" type="button" data-md="mode"></button>
         <button class="md-slot" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 18)}</button>
+        <button class="md-slot md-vslot" type="button" data-md="vol" aria-label="静音"></button>
       </div>
       <div class="md-prow"><span class="md-tm" data-md="t1"></span><div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div><span class="md-tm md-r" data-md="t2"></span></div>
     </div>
@@ -134,6 +135,7 @@
             preview: $('[data-md="preview"]'),
             modeSlot: $('[data-md="mode"]'),
             stageSlot: $('[data-md="stage"]'),
+            volSlot: $('[data-md="vol"]'),
             tracks: $$('.md-trk'),
             t1: $$('[data-md="t1"]'),
             t2: $$('[data-md="t2"]'),
@@ -467,6 +469,34 @@
 
         const toggleStage = () => app.stageHost?.toggle?.();
         listen(el.stageSlot, 'click', (event) => { event.stopPropagation(); toggleStage(); });
+        // 胶囊右侧的音量：悬停时滚轮调（一格 5%，触控板按累计距离算），单击静音 / 恢复。
+        let wheelAcc = 0;
+        let vtipTimer = null;
+        // 调的时候在歌名那一行借位显示「音量 55%」，停手 0.9 秒后换回歌名（胶囊会裁掉外面的气泡）。
+        const flashVolume = () => {
+            const v = readVolume();
+            el.volSlot.classList.add('md-vshow');
+            el.preview.textContent = v > 0.001 ? `音量 ${Math.round(v * 100)}%` : '已静音';
+            el.tnav.classList.add('md-previewing');
+            clearTimeout(vtipTimer);
+            vtipTimer = setTimeout(() => {
+                el.volSlot.classList.remove('md-vshow');
+                el.tnav.classList.remove('md-previewing');
+            }, 900);
+            timers.add(vtipTimer);
+        };
+        listen(el.volSlot, 'click', (event) => { event.stopPropagation(); toggleMute(); flashVolume(); });
+        listen(el.volSlot, 'wheel', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+            wheelAcc += (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
+            const steps = Math.trunc(wheelAcc / 100); // 鼠标滚轮一格约 100px
+            if (!steps) return;
+            wheelAcc -= steps * 100;
+            setVolume(Math.round((readVolume() - steps * 0.05) * 100) / 100);
+            flashVolume();
+        }, { passive: false });
         listen(el.np, 'click', () => app.stageHost?.enter?.());
 
         const renderStage = () => {
@@ -517,7 +547,19 @@
         function volumeIcon(v = readVolume()) {
             return v <= 0.001 ? 'volume-x' : v < 0.5 ? 'volume-1' : 'volume-2';
         }
-        let volumeBeforeMute = 1;
+        // 静音前的音量记下来（也存一份，重启后再点也能恢复到原来的大小）。
+        const MUTE_KEY = 'musicDockVolumeBeforeMute';
+        let volumeBeforeMute = (() => {
+            try { const v = parseFloat(global.localStorage.getItem(MUTE_KEY)); return v > 0.001 && v <= 1 ? v : 1; } catch (error) { return 1; }
+        })();
+        const toggleMute = () => {
+            const v = readVolume();
+            if (v > 0.001) {
+                volumeBeforeMute = v;
+                try { global.localStorage.setItem(MUTE_KEY, String(v)); } catch (error) {}
+                setVolume(0);
+            } else setVolume(volumeBeforeMute || 1);
+        };
         const setVolume = (value) => {
             const slider = app.volumeSlider;
             if (!slider) return;
@@ -538,6 +580,16 @@
                 const btn = row.querySelector('[data-act="mute"]');
                 const name = volumeIcon(v);
                 if (btn.dataset.icon !== name) { btn.dataset.icon = name; btn.innerHTML = icon(name, 17); }
+            }
+            if (el.volSlot) {
+                const name = volumeIcon(v);
+                const pct = Math.round(v * 100);
+                if (el.volSlot.dataset.icon !== name) {
+                    el.volSlot.dataset.icon = name;
+                    el.volSlot.innerHTML = icon(name, 18);
+                }
+                el.volSlot.setAttribute('aria-label', v > 0.001 ? `静音（音量 ${pct}%）` : '取消静音');
+                el.volSlot.title = v > 0.001 ? `音量 ${pct}%：滚轮调节，点一下静音（M）` : '已静音：点一下恢复（M）';
             }
             const qb = el.quickGroup.querySelector('[data-q="volume"]');
             if (qb) {
@@ -878,8 +930,7 @@
             else if (act === 'intro') { closePanel(); global.MusicIntro?.replay?.(); }
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
-                const v = readVolume();
-                if (v > 0.001) { volumeBeforeMute = v; setVolume(0); } else setVolume(volumeBeforeMute || 1);
+                toggleMute();
             } else if (act === 'scene-step') {
                 const modes = stageModes();
                 const cur = modes.indexOf(currentStageMode());
@@ -1074,11 +1125,22 @@
             if (state.panelOpen) placeMarks(el.pnl);
         });
 
+        // M：静音 / 恢复（输入框里打字时不算）。
+        const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')) && !(t.type === 'range' || t.type === 'checkbox' || t.type === 'button'));
+        listen(document, 'keydown', (event) => {
+            if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+            if ((event.key === 'm' || event.key === 'M') && !typingTarget(event.target)) {
+                event.preventDefault();
+                toggleMute();
+                if (state.expanded || el.cap.classList.contains('md-ex')) flashVolume();
+            }
+        });
+
         // ───────── 命令面板 ─────────
         const palette = typeof global.createMusicDockPalette === 'function'
             ? global.createMusicDockPalette(app, {
                 host, icon, escapeHtml, trackTitle, trackArtist,
-                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume,
+                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute,
                 closeOthers: () => { closePop(); setQuick(false); }
             })
             : null;

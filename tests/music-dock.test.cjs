@@ -281,3 +281,31 @@ test('palette groups songs, playlists and commands; shift/ctrl+enter queue; piny
         window.close();
     }
 });
+
+test('capsule volume slot: wheel adjusts, click and M mute and restore', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const slot = doc.querySelector('[data-md="vol"]');
+        assert.ok(slot);
+        const wheel = (deltaY) => slot.dispatchEvent(new window.WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+        wheel(-100);
+        assert.deepEqual(calls.pop(), ['volume', '0.55']);
+        wheel(40); wheel(40);
+        assert.equal(calls.filter((c) => c[0] === 'volume').length, 0, 'small trackpad deltas accumulate first');
+        wheel(40);
+        assert.deepEqual(calls.pop(), ['volume', '0.5']);
+        slot.click();
+        assert.deepEqual(calls.pop(), ['volume', '0']);
+        assert.equal(slot.getAttribute('aria-label'), '取消静音');
+        doc.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+        assert.deepEqual(calls.pop(), ['volume', '0.5'], 'M restores the volume from before muting');
+        const field = doc.createElement('input');
+        doc.body.appendChild(field);
+        field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+        assert.equal(calls.filter((c) => c[0] === 'volume').length, 0, 'typing m in a text field does nothing');
+        assert.equal(app.volumeSlider.value, '0.5');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});
