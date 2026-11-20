@@ -4263,9 +4263,11 @@
         let builtQuality = null;
         const cap = U.createFrameCap();
         const wantsCanvasSmoothing = () => !(global.MusicStageDioramaOptics?.active(mode.config, {}) ?? false);
+        // The settings as drawn: the chosen tier, less what the frame rate made it drop.
+        const drawn = () => renderScale.config(mode.config);
         const applyQuality = () => {
-            if (!world || builtQuality === mode.config.quality) return;
-            builtQuality = mode.config.quality;
+            if (!world || builtQuality === drawn().quality) return;
+            builtQuality = drawn().quality;
             world.setQuality?.(builtQuality);
         };
 
@@ -4273,7 +4275,7 @@
             ...(mode.config.modes?.tunnel || {}),
             animationIntensity: mode.config.animationIntensity ?? 1,
             reducedMotion: Boolean(reduced?.matches),
-            quality: mode.config.quality
+            quality: drawn().quality
         });
 
         const renderFallback = (frame) => {
@@ -4360,7 +4362,7 @@
             // the GPU can rest. Playing: no more often than the tier's rate.
             const still = !frame.isPlaying && lastTime !== null
                 && finiteNumber(frame.playbackTime, 0) === lastTime;
-            if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), mode.config.quality))) return;
+            if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             applyQuality();
 
@@ -4403,11 +4405,11 @@
             }, camera);
 
             fallback.hidden = true;
-            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(mode.config.quality))) resize();
+            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(drawn().quality))) { resize(); applyQuality(); }
             renderer.info.reset();
             // The same lens as the diorama: the sun, the lamps and the lyric glow through it.
             if (optics) {
-                optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config,
+                optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(),
                     { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
             } else renderer.render(scene, camera);
             lastTime = time;
@@ -4476,6 +4478,8 @@
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
         mode.updateConfig = (config) => {
+            // A tier picked by hand starts the automatic stepping down afresh.
+            if (config?.quality !== mode.config.quality) renderScale.reset();
             baseConfig(config);
             // The canvas is antialiased only when the lens is off; that is fixed
             // when the context is made, so a change of tier rebuilds it.
@@ -4492,10 +4496,13 @@
         mode.updateTheme = () => { if (latest && initialized) update(latest, true); };
         const resume = mode.resume;
         mode.resume = () => { resume(); lastTime = null; cap.reset(); if (latest) update(latest, true); };
+        // For the settings: how far below the chosen tier it is drawing (cheap, polled).
+        mode.getDegrade = () => ({ steps: renderScale.steps, quality: drawn().quality });
         mode.getDebugSnapshot = () => ({
             initialized,
             fallbackMode,
             pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
+            degradeSteps: renderScale.steps, drawnQuality: drawn().quality,
             drawCalls: renderer?.info.render.calls,
             triangles: renderer?.info.render.triangles,
             programs: renderer?.info.programs?.length,
