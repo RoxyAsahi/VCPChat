@@ -1,0 +1,65 @@
+/* ───────── 流体玻璃：手碰得到的控件共用的一套外观 ─────────
+ * 结构（档案、列表、细线、黑字）不动；只有弹出来给手用的东西换成这层材质：
+ * 奶白（深色下烟灰）的厚玻璃，颜色是从里面透出来的一团光，四周发柔光而不投硬影，没有描边。
+ * 长出来的动作在 music-fluid-kit.js（MusicFluid.bud）。 */
+:root {
+  --mf-fill: rgba(44, 44, 49, .93);
+  --mf-ink: #f1f0ee;
+  --mf-ink2: rgba(241, 240, 238, .58);
+  --mf-hover: rgba(255, 255, 255, .08);
+  --mf-rule: rgba(255, 255, 255, .08);
+  --mf-tint: var(--ar-accent, #d9773f);
+  --mf-glow: inset 0 0 0 .5px rgba(255, 255, 255, .07), 0 24px 52px -20px rgba(0, 0, 0, .6), 0 0 30px -8px rgba(0, 0, 0, .4);
+  --mf-radius: 18px;
+}
+body.light-theme {
+  --mf-fill: rgba(252, 252, 253, .95);
+  --mf-ink: #1c1b19;
+  --mf-ink2: rgba(28, 27, 25, .5);
+  --mf-hover: rgba(28, 22, 16, .06);
+  --mf-rule: rgba(28, 22, 16, .08);
+  --mf-glow: inset 0 0 0 .5px rgba(40, 28, 16, .06), 0 20px 44px -18px rgba(70, 48, 26, .3), 0 0 26px -8px rgba(70, 48, 26, .18);
+}
+
+.mf-glass,
+.context-menu,
+.context-submenu,
+.archive-batch-menu,
+.archive-list-sort-menu {
+  background:
+    radial-gradient(120% 70% at 50% 115%, color-mix(in srgb, var(--mf-tint) 16%, transparent), transparent 62%),
+    var(--mf-fill);
+  border: 0;
+  border-radius: var(--mf-radius);
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+}
+body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch-menu, .archive-list-sort-menu) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 菜单里的行：圆角、留边，悬停是一层很淡的亮，危险项只换字色 */
+.context-menu, .archive-batch-menu, .archive-list-sort-menu { padding: 6px; }
+.context-submenu { padding: 6px; border-radius: 14px; }
+:is(.context-menu-item, .submenu-item) { border-radius: 11px; color: var(--mf-ink); }
+:is(.context-menu-item, .submenu-item):hover { background: var(--mf-hover); color: var(--mf-ink); }
+.context-menu-item svg { opacity: .62; }
+.context-menu-divider { background: var(--mf-rule); margin-left: 10px; margin-right: 10px; }
+.archive-batch-menu header { padding: 8px 12px 6px; color: var(--mf-ink2); font-weight: 500; }
+.archive-batch-menu hr { margin: 5px 10px; border-top-color: var(--mf-rule); opacity: 1; }
+:is(.archive-batch-menu, .archive-list-sort-menu) button { border-radius: 11px; color: var(--mf-ink); }
+:is(.archive-batch-menu, .archive-list-sort-menu) button:is(:hover, :focus-visible) { background: var(--mf-hover); }
+:is(.archive-batch-menu, .archive-list-sort-menu) button i { color: var(--mf-ink2); }
+.archive-list-sort-menu { top: calc(100% + 10px); }
+
+/* 收起：不是缩小消失，而是像雾一样散开 */
+.context-menu:not(.visible) { transform: scale(1.03); filter: blur(6px); transition: opacity .2s ease, transform .2s ease, filter .2s ease; }
+.context-menu.visible { filter: none; transition: opacity .18s ease, transform .18s ease, filter .18s ease; }
+
+/* 长出来的那一下：液体先画，本体在液体快鼓满时才显现 */
+.mf-goo { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: visible; }
+.mf-budding { opacity: 0 !important; filter: blur(4px); transition: none !important; }
+body.music-reduce-motion .context-menu { transition: opacity .12s linear; transform: none; filter: none; }
