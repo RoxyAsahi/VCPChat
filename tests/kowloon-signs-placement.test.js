@@ -70,3 +70,10 @@ test('hologram banners hang high, apart, and clear of the main screen', () => {
         assert.ok(Math.hypot(a.foot[0] - screen.center[0], a.foot[1] - screen.center[1], a.foot[2] - screen.center[2]) >= 24, 'banner on the main screen');
     });
 });
+
+test('no sign hangs in the gate and market keep-out', () => {
+    const k = (layout.GATE || { keepOut: { x0: -28, x1: -1, z0: 50, z1: 64, y1: 9 } }).keepOut;
+    const picked = chooseSlots(layout, 256, mulberry(11));
+    const inside = picked.filter(s => s.pos[0] > k.x0 && s.pos[0] < k.x1 && s.pos[2] > k.z0 && s.pos[2] < k.z1 && s.pos[1] < k.y1 + 1.5);
+    assert.equal(inside.length, 0);
+});
