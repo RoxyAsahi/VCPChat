@@ -319,6 +319,7 @@
                 fluid.setRingDocked(!state.panelOpen);
                 syncGlow();
                 syncSolid();
+                syncRing();
                 renderProgress();
             }
         };
@@ -345,8 +346,20 @@
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
+        // 小环的角色还在挑：存在 localStorage musicDockRingMode 里（fixed / playhead / hover / drop）。
+        const RING_MODES = ['fixed', 'playhead', 'hover', 'drop'];
+        const readRingMode = () => {
+            try { const v = global.localStorage?.getItem('musicDockRingMode'); return RING_MODES.includes(v) ? v : 'fixed'; } catch (e) { return 'fixed'; }
+        };
+        let ringMode = readRingMode();
+        const syncRing = () => {
+            if (!fluid) return;
+            if (fluid.ringMode !== ringMode) fluid.setRingMode(ringMode);
+            fluid.setRingHover(state.hover || state.dragging !== null);
+        };
         const syncExpanded = () => {
             syncSolid();
+            syncRing();
             const next = shouldExpand();
             if (next === state.expanded) return;
             state.expanded = next;
@@ -752,7 +765,7 @@
             el.pCover.style.backgroundImage = coverCss;
             if (key !== state.trackKey) {
                 // 换歌：上一首像一滴水从右边分裂出去蒸发掉（第一次渲染不算）。
-                if (state.trackKey) fluid?.split();
+                if (state.trackKey) { fluid?.split(); fluid?.dropRing(); }
                 state.trackKey = key;
                 renderNext();
                 // 换了歌，上一首的加载失败提示就不用再留着了。
@@ -1659,6 +1672,12 @@
             get soundSettingsOpen() { return state.sheetOpen; },
             get tab() { return state.tab; },
             get glowColors() { return currentGlow(); },
+            get ringMode() { return ringMode; },
+            setRingMode(mode) {
+                ringMode = RING_MODES.includes(mode) ? mode : 'fixed';
+                try { global.localStorage?.setItem('musicDockRingMode', ringMode); } catch (e) { /* 只是记住选择 */ }
+                syncRing();
+            },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
