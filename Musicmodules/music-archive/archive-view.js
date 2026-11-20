@@ -25,37 +25,64 @@
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
         <div class="archive-hud" data-ref="hud">
-            <header class="archive-brand" aria-hidden="true"><h1>VCP MUSIC</h1><div>ACOUSTIC INFORMATION</div><p><span>ARCHIVE</span><b>OS</b></p></header>
+            <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button></header>
             <nav class="archive-nav">
-                <button type="button" data-act="list" data-ref="listBtn" title="档案目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST</button>
-                <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
-                <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
-                <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="歌词面板（选好歌播放后自动打开，浏览别的歌时收起）" aria-pressed="false">LYRICS</button>
-                <button type="button" data-act="controls" title="声学处理、舞台与播放参数">CONTROL <span aria-hidden="true">↗</span></button>
-                <button type="button" data-act="now" title="定位当前播放（Ctrl+L）" aria-label="定位当前播放"><span class="archive-glyph-now">◷</span></button>
+                <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
+                <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
+                <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
+                <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="歌词面板（选好歌播放后自动打开，浏览别的歌时收起）" aria-pressed="false">歌词</button>
+                <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
+                <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
             <div class="archive-callout">
-                <div class="archive-eyebrow">TRACK DATABASE <span>／</span> <span data-ref="cat"></span></div>
-                <button type="button" class="archive-file-title" data-act="access">FILE NUMBER: <span data-ref="fno"></span><span class="archive-file-open">↗</span></button>
+                <div class="archive-eyebrow"><span data-ref="cat"></span><span data-ref="catPos"></span></div>
+                <button type="button" class="archive-file-title" data-act="open-detail" title="查看曲目详情"><span data-ref="ftitle"></span><span class="archive-file-open" aria-hidden="true">↗</span></button>
                 <div class="archive-rule"><i></i></div>
-                <div class="archive-summary"><span data-ref="ftitle"></span><span data-ref="fmeta"></span></div>
-                <button type="button" class="archive-access" data-act="access" data-ref="access">ACCESS FILE <span>→</span></button>
+                <div class="archive-summary"><span data-ref="fmeta"></span><span data-ref="fspec"></span></div>
+                <div class="archive-callout-acts"><button type="button" class="archive-access" data-act="access" data-ref="access" title="播放并进入歌词舞台（回车）">播放 <span aria-hidden="true">→</span></button><button type="button" class="archive-more" data-act="open-detail">详情 <span aria-hidden="true">↗</span></button></div>
                 <div class="archive-cover" data-ref="cover" aria-hidden="true"></div>
             </div>
+            <section class="archive-detail" data-ref="detail" role="dialog" aria-label="曲目详情" aria-hidden="true" inert>
+                <button type="button" class="archive-detail-back" data-act="detail-close">← 返回曲库 <span class="archive-key">Esc</span></button>
+                <div class="archive-detail-card">
+                    <div class="archive-detail-head"><b data-ref="dNo"></b><span data-ref="dWhere"></span><span data-ref="dSpec" class="archive-detail-spec"></span></div>
+                    <div class="archive-detail-album" data-ref="dAlbum"></div>
+                    <h2 data-ref="dTitle"></h2>
+                    <div class="archive-detail-artist" data-ref="dArtist"></div>
+                    <div class="archive-detail-actions">
+                        <button type="button" class="is-primary" data-act="d-play" data-ref="dPlay"><i aria-hidden="true">▶</i><span data-ref="dPlayText">播放</span></button>
+                        <button type="button" data-act="d-next"><i aria-hidden="true">▷</i>下一首播放</button>
+                        <button type="button" data-act="d-queue"><i aria-hidden="true">＋</i>加入队列</button>
+                        <button type="button" data-act="d-playlist"><i aria-hidden="true">＋</i>加入歌单</button>
+                        <button type="button" data-act="d-artist" data-ref="dArtistBtn"><i aria-hidden="true">↗</i>这位歌手的歌</button>
+                        <button type="button" data-act="d-lyrics"><i aria-hidden="true">≡</i>获取歌词</button>
+                    </div>
+                    <dl class="archive-detail-meta">
+                        <div><dt>专辑</dt><dd data-ref="dAlbum2"></dd></div>
+                        <div><dt>时长</dt><dd data-ref="dDur"></dd></div>
+                        <div><dt>格式</dt><dd data-ref="dFmt"></dd></div>
+                        <div><dt>所在分组</dt><dd data-ref="dGroup"></dd></div>
+                        <div class="wide"><dt>文件位置</dt><dd data-ref="dPath"></dd></div>
+                    </dl>
+                    <div class="archive-detail-more" data-ref="dMoreWrap">
+                        <div class="archive-detail-more-head" data-ref="dMoreHead">同专辑</div>
+                        <ol data-ref="dMore"></ol>
+                    </div>
+                </div>
+            </section>
             <div class="archive-empty" role="status">
-                <h2 data-ref="emptyTitle">ARCHIVE EMPTY</h2>
+                <h2 data-ref="emptyTitle">曲库是空的</h2>
                 <p data-ref="emptyText"></p>
                 <div class="archive-scan-bar" aria-hidden="true"><i data-ref="scanBar"></i></div>
-                <button type="button" data-act="add-local">添加音乐文件夹 <span>ADD LOCAL FOLDER →</span></button>
-                <button type="button" data-act="add-cloud">从云端导入 <span>IMPORT FROM CLOUD →</span></button>
+                <button type="button" data-act="add-local">添加音乐文件夹 <span aria-hidden="true">→</span></button>
+                <button type="button" data-act="add-cloud">从云端导入 <span aria-hidden="true">→</span></button>
             </div>
             <div class="archive-bottom">
-                <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
+                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
                 <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks" role="slider" aria-label="在这一列里的位置（可拖动）"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
-                <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
-                <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> 直接打字检索</div>
-                <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
-                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status">SESSION AUTHORIZED</span></span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
+                <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>分组 <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
+                <div class="archive-hint">← → 切换分组 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> 回车 播放 <span>／</span> 点中间的卡 看详情 <span>／</span> 直接打字检索</div>
+                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
 
@@ -119,8 +146,8 @@
             const holding = preparing || (empty && performance.now() < bootUntil && !root.classList.contains('is-scanning'));
             root.classList.toggle('is-empty', empty && !holding);
             root.classList.toggle('is-loading', holding);
-            if (holding && refs.status && !root.classList.contains('is-scanning')) refs.status.textContent = preparing ? 'LOADING ' + pad(tracks().length, 4) + ' FILES' : 'LOADING';
-            else if (!holding && refs.status && /^LOADING/.test(refs.status.textContent)) refs.status.textContent = 'SESSION AUTHORIZED';
+            if (holding && refs.status && !root.classList.contains('is-scanning')) refs.status.textContent = preparing ? '正在整理 ' + tracks().length + ' 首曲目' : '正在读取曲库';
+            else if (!holding && refs.status && /^正在(读取|整理)/.test(refs.status.textContent)) refs.status.textContent = '';
             clearTimeout(bootTimer);
             if (holding && !preparing) bootTimer = setTimeout(() => { if (!state.destroyed) applyEmpty(); }, Math.max(0, bootUntil - performance.now()) + 20);
         };
@@ -171,8 +198,7 @@
             state.scene?.jump(lane, row);
             state.scene?.refreshLabels?.();
             applyEmpty();
-            refs.files.textContent = pad(tracks().length, 4);
-            refs.savedN.textContent = pad((app.customPlaylists || []).length);
+            refs.files.textContent = String(tracks().length);
             if (firstData && !pendingPlace && !placed) { placeSettled = true; followUntil.t = performance.now() + 4000; }
             renderHud(true);
             updatePlaying(true);
@@ -300,13 +326,13 @@
             const total = scan.total;
             const digits = Math.max(4, String(total).length);
             const progress = total ? pad(scan.current, digits) + ' / ' + pad(total, digits) : '';
-            refs.emptyTitle.textContent = scan.active ? 'SCANNING ARCHIVE' : 'ARCHIVE EMPTY';
+            refs.emptyTitle.textContent = scan.active ? '正在扫描曲库' : '曲库是空的';
             refs.emptyText.textContent = scan.active
                 ? (total ? '正在读取曲目信息 ' + progress + '，读完后这里会排成档案阵列。' : '正在查找音乐文件…')
                 : EMPTY_TEXT;
             refs.scanBar.style.transform = `scaleX(${total ? Math.min(1, scan.current / total) : 0})`;
-            if (scan.active) refs.status.textContent = total ? 'SCANNING ' + progress : 'SCANNING';
-            else if (!scan.timer) refs.status.textContent = 'SESSION AUTHORIZED';
+            if (scan.active) refs.status.textContent = total ? '扫描中 ' + progress : '正在查找音乐文件';
+            else if (!scan.timer) refs.status.textContent = '';
         };
         const setScan = (next) => {
             Object.assign(scan, next);
@@ -317,7 +343,7 @@
             const got = Array.isArray(data) ? data.length : (data && Array.isArray(data.tracks) ? data.tracks.length : 0);
             clearTimeout(scan.timer);
             setScan({ active: false });
-            refs.status.textContent = got ? 'SCAN COMPLETE ／ ' + pad(got, 4) + ' FILES' : 'SCAN COMPLETE ／ NO FILES FOUND';
+            refs.status.textContent = got ? '扫描完成，共 ' + got + ' 首' : '扫描完成，没有找到音乐文件';
             scan.timer = setTimeout(() => { scan.timer = 0; renderScan(); }, 4000);
         };
         let growTimer = 0;
@@ -415,12 +441,18 @@
             const t = tracks()[index];
             state.selPath = t ? t.path : null;
             refs.cat.textContent = col.name;
-            refs.fno.textContent = t ? fileNumber(t, index) : 'TRK-000';
+            refs.catPos.textContent = count ? '第 ' + (r + 1) + ' / ' + count + ' 首' : '';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
             const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
             // 空列：告诉人下一步怎么做
-            const idle = col.kind === 'search' ? 'ESC 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
-            refs.fmeta.textContent = t ? (meta || 'UNKNOWN ARTIST').toUpperCase() : idle;
+            const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
+            refs.fmeta.textContent = t ? (meta || '未知歌手') : idle;
+            refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
+            // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
+            const letterCol = col.kind === 'letter';
+            refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
+            refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+            refs.playCol.disabled = !count;
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -433,6 +465,7 @@
             refs.access.classList.toggle('is-playing', Boolean(t) && index === app.currentTrackIndex && app.isPlaying);
             refs.access.disabled = !t;
             scheduleCover(t, force);
+            renderDetail();
         };
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
@@ -591,22 +624,150 @@
             }
             select(lane, row);
         };
-        /* 展开选中卡：多抬一点，焦点落到 ACCESS FILE；换选中就收回 */
-        let expanded = false;
-        const expandSelected = () => {
-            if (selectedIndex() < 0) return;
-            expanded = true;
-            root.classList.add('is-expanded');
-            if (!document.body.classList.contains('music-stage-entering')) state.scene?.raise(0.7);
-            refs.access.focus({ preventScroll: true });
+        /*
+         * 取出（曲目详情）：点中间那张卡（或标题）把它从列里取出来，镜头推近，卡面显出封面，右侧是资料卡。
+         * 取出时 ↑ ↓ / 滚轮换前后一首（旧卡落回、新卡升起，详情留着），← → 或 Esc、点空白处放回去。
+         */
+        let detailOpen = false;
+        const fmtDur = (sec) => {
+            sec = Math.round(Number(sec) || 0);
+            if (!(sec > 0)) return '';
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60;
+            return (h ? h + ':' + pad(m) : String(m)) + ':' + pad(x);
+        };
+        const trackDuration = (t) => (Number(t && t.duration) > 0 ? Number(t.duration) : durationOf(t));
+        const formatOf = (t) => {
+            if (!t) return '';
+            const m = /\.([a-z0-9]{2,5})$/i.exec(String(t.path || ''));
+            const parts = [];
+            if (m) parts.push(m[1].toUpperCase());
+            const sr = Number(t.sampleRate || t.sample_rate);
+            if (sr > 0) parts.push((sr / 1000).toFixed(sr % 1000 ? 1 : 0) + ' kHz');
+            const bits = Number(t.bitsPerSample || t.bitDepth);
+            if (bits > 0) parts.push(bits + ' bit');
+            const br = Number(t.bitrate);
+            if (br > 0) parts.push(Math.round(br / 1000) + ' kbps');
+            return parts.join(' · ');
+        };
+        const sameAlbum = (t, index) => {
+            if (!t) return { head: '', items: [] };
+            const all = tracks();
+            const pick = (key, value) => {
+                const out = [];
+                for (let i = 0; i < all.length && out.length < 8; i++) if (i !== index && all[i] && all[i][key] === value) out.push(i);
+                return out;
+            };
+            if (t.album) { const items = pick('album', t.album); if (items.length) return { head: '同专辑', items }; }
+            if (t.artist) { const items = pick('artist', t.artist); if (items.length) return { head: '同一歌手', items }; }
+            return { head: '', items: [] };
+        };
+        // 跳到曲库里第 index 首：优先留在当前列，其次是离得近的列
+        const goToIndex = (index) => {
+            const n = state.columns.length;
+            if (!n) return;
+            const at = Model.locate(state.columns, index, Model.wrap(state.lane, n));
+            if (!at) return;
+            const lane = at.lane + n * Math.round((state.lane - at.lane) / n);
+            const m = state.columns[at.lane].items.length;
+            select(lane, at.row + m * Math.round((state.row - at.row) / m));
+        };
+        // 卡面封面：有图就用图，没有（或还没读到、读不出来）就画一张写着曲名的素色卡面
+        const syncDetailCover = () => {
+            if (!detailOpen || !state.scene) return;
+            const t = selectedTrack();
+            if (!t) return;
+            const url = coverOf(t);
+            const entry = url ? state.coverCache.get(url) : null;
+            if (entry && entry.ok) { state.scene.setCover(url, entry.img); kick(); return; }
+            if (entry && entry.ok === null) {
+                entry.img.addEventListener('load', syncDetailCover, { once: true });
+                entry.img.addEventListener('error', syncDetailCover, { once: true });
+                if (state.scene.detail) state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
+                kick();
+                return;
+            }
+            if (url && !entry) preload(url);
+            state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
+            if (url && !entry) { const e2 = state.coverCache.get(url); e2?.img.addEventListener('load', syncDetailCover, { once: true }); }
             kick();
         };
-        const collapse = () => {
-            if (!expanded) return;
-            expanded = false;
-            root.classList.remove('is-expanded');
-            if (!document.body.classList.contains('music-stage-entering')) state.scene?.raise();
+        const renderDetail = () => {
+            if (!detailOpen) return;
+            const index = selectedIndex();
+            const t = tracks()[index];
+            if (!t) { closeDetail(); return; }
+            const col = column();
+            const count = col ? col.items.length : 0;
+            const r = count ? Model.wrap(state.row, count) : 0;
+            refs.dNo.textContent = pad(r + 1, Math.max(2, String(count).length));
+            refs.dWhere.textContent = (col ? col.name : '') + ' · 共 ' + count + ' 首';
+            const spec = formatOf(t);
+            refs.dSpec.textContent = spec ? spec.split(' · ')[0] : '';
+            refs.dSpec.hidden = !spec;
+            refs.dAlbum.textContent = t.album || '';
+            refs.dTitle.textContent = Model.stripExtension(t.title) || '未知标题';
+            refs.dArtist.textContent = t.artist || '未知歌手';
+            refs.dAlbum2.textContent = t.album || '—';
+            refs.dDur.textContent = fmtDur(trackDuration(t)) || '—';
+            refs.dFmt.textContent = spec || '—';
+            refs.dGroup.textContent = col ? col.name + ' · 第 ' + (r + 1) + ' 首' : '—';
+            const remote = /^[a-z][a-z0-9+.-]{2,}:\/\//i.test(String(t.path || ''));
+            refs.dPath.textContent = remote ? '云端曲目' : String(t.path || '—');
+            refs.dPath.title = String(t.path || '');
+            refs.dArtistBtn.disabled = !t.artist;
+            // 没有的信息整格不显示，不放占位横线
+            for (const k of ['dAlbum2', 'dDur', 'dFmt']) refs[k].parentElement.hidden = refs[k].textContent === '—';
+            const playingThis = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
+            refs.dPlayText.textContent = playingThis ? '暂停' : index === app.currentTrackIndex ? '继续播放' : '播放';
+            refs.dPlay.querySelector('i').textContent = playingThis ? '❚❚' : '▶';
+            const more = sameAlbum(t, index);
+            refs.dMoreWrap.hidden = !more.items.length;
+            refs.dMoreHead.textContent = more.head;
+            refs.dMore.innerHTML = '';
+            for (const i of more.items) {
+                const x = tracks()[i];
+                const li = document.createElement('li');
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.dataset.act = 'd-goto';
+                b.dataset.index = String(i);
+                const name = document.createElement('span');
+                name.textContent = Model.stripExtension(x.title) || '未知标题';
+                const dur = document.createElement('small');
+                dur.textContent = fmtDur(trackDuration(x));
+                b.append(name, dur);
+                if (i === app.currentTrackIndex) b.classList.add('is-current');
+                li.appendChild(b);
+                refs.dMore.appendChild(li);
+            }
+            syncDetailCover();
         };
+        const openDetail = () => {
+            if (selectedIndex() < 0) return;
+            if (!detailOpen) {
+                detailOpen = true;
+                root.classList.add('is-detail');
+                refs.detail.removeAttribute('inert');
+                refs.detail.setAttribute('aria-hidden', 'false');
+                state.scene?.setDetail(true);
+                state.scene?.setHover(null);
+            }
+            renderDetail();
+            refs.dPlay.focus({ preventScroll: true });
+            kick();
+        };
+        const closeDetail = () => {
+            if (!detailOpen) return;
+            detailOpen = false;
+            root.classList.remove('is-detail');
+            refs.detail.setAttribute('inert', '');
+            refs.detail.setAttribute('aria-hidden', 'true');
+            state.scene?.setDetail(false);
+            if (refs.detail.contains(document.activeElement)) document.activeElement.blur();
+            kick();
+        };
+        const expandSelected = openDetail;
+        const collapse = () => {};
 
         /* 整个曲库按当前排序的顺序（就是阵列里从左到右、从上到下看到的顺序） */
         const libraryOrder = () => {
@@ -674,6 +835,7 @@
             const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + state.sig;
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
+            renderDetail();
             // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
             const prevPlaying = state.playingIndex;
@@ -945,12 +1107,14 @@
             if ([...e.key].length !== 1 || /\s/.test(e.key) || /[\u0000-\u001f\u007f]/.test(e.key)) return false;
             e.preventDefault();
             stopInertia();
+            closeDetail();
             if (!listOpen()) setListOpen(true, { persist: false });
             list.typeInto(e.key);
             return true;
         };
         const openSearch = () => {
             if (!list) return;
+            closeDetail();
             if (!listOpen()) setListOpen(true);
             list.focusSearch();
         };
@@ -972,6 +1136,7 @@
 
         const setMode = (mode, { persist = true } = {}) => {
             state.mode = mode === 'classic' ? 'classic' : 'archive';
+            if (state.mode !== 'archive') closeDetail();
             const on = state.mode === 'archive';
             root.hidden = !on;
             document.body.classList.toggle('music-archive-on', on);
@@ -1052,7 +1217,7 @@
                 const index = Model.cellTrack(state.columns, lane, row);
                 const t = index >= 0 ? tracks()[index] : null;
                 if (!t) return null;
-                return { key: index + ':' + (t.path || ''), title: Model.stripExtension(t.title) || '未知标题', code: fileNumber(t, index) };
+                return { key: index + ':' + (t.path || ''), title: Model.stripExtension(t.title) || '未知标题', code: fmtDur(trackDuration(t)) };
             });
             applyTheme();
             resize();
@@ -1119,10 +1284,27 @@
         // ---------- 输入 ----------
         let pendingPick = null;
         let pickRaf = 0;
+        let turning = null;
+        let detailMiss = false;
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
                 const rect = canvas.getBoundingClientRect();
                 state.scene?.setPointer((e.clientX - rect.left) / rect.width * 2 - 1, (e.clientY - rect.top) / rect.height * 2 - 1);
+                if (turning) {
+                    const dx = e.clientX - turning.x;
+                    turning.x = e.clientX;
+                    if (Math.abs(e.clientX - turning.x0) > 4) turning.moved = true;
+                    state.scene?.turn(dx * 0.006);
+                    kick();
+                    return;
+                }
+                if (detailOpen) {
+                    const r = state.scene?.detailRect();
+                    const on = r && e.clientX - rect.left >= r.left && e.clientX - rect.left <= r.right && e.clientY - rect.top >= r.top && e.clientY - rect.top <= r.bottom;
+                    canvas.style.cursor = on ? 'grab' : '';
+                    kick();
+                    return;
+                }
                 pendingPick = { x: e.clientX, y: e.clientY, rect };
                 if (!pickRaf) {
                     pickRaf = requestAnimationFrame(() => {
@@ -1136,14 +1318,43 @@
                 kick();
             });
             canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); kick(); });
+            // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
+            const onDetailCard = (e) => {
+                const r = state.scene?.detailRect();
+                const rect = canvas.getBoundingClientRect();
+                return Boolean(r) && e.clientX - rect.left >= r.left && e.clientX - rect.left <= r.right && e.clientY - rect.top >= r.top && e.clientY - rect.top <= r.bottom;
+            };
+            canvas.addEventListener('pointerdown', (e) => {
+                if (!detailOpen || e.button !== 0) return;
+                if (onDetailCard(e)) {
+                    turning = { x: e.clientX, x0: e.clientX, moved: false };
+                    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
+                    canvas.style.cursor = 'grabbing';
+                } else detailMiss = true;
+            });
+            const endTurn = () => {
+                if (!turning) return;
+                turning = null;
+                state.scene?.turn(0, true);
+                canvas.style.cursor = '';
+                kick();
+            };
+            canvas.addEventListener('pointerup', endTurn);
+            canvas.addEventListener('pointercancel', endTurn);
             // 单击侧卡只把它移到中间；再点中间那张才展开（抬高、焦点落到 ACCESS FILE）；双击或回车播放
             canvas.addEventListener('click', (e) => {
+                if (detailOpen) {
+                    if (detailMiss) closeDetail();
+                    detailMiss = false;
+                    return;
+                }
                 const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
                 if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
                 if (c.lane === state.lane && c.row === state.row) expandSelected();
                 else select(c.lane, c.row);
             });
             canvas.addEventListener('dblclick', (e) => {
+                if (detailOpen) return;
                 const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
                 if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
                 if (c.lane !== state.lane || c.row !== state.row) select(c.lane, c.row);
@@ -1243,12 +1454,64 @@
             if (btn) {
                 switch (btn.dataset.act) {
                     case 'access': playSelected(); break;
+                    case 'open-detail': openDetail(); break;
+                    case 'play-col': {
+                        // 从这一组的第一首放起（队列就是这一组，和在阵列里点播同一套规则）
+                        const col = column();
+                        if (!col || !col.items.length) break;
+                        const count = col.items.length;
+                        select(state.lane, state.row - Model.wrap(state.row, count), { pulse: false });
+                        playSelected({ stage: false });
+                        break;
+                    }
+                    case 'detail-close': closeDetail(); break;
+                    case 'd-play': {
+                        const index = selectedIndex();
+                        if (index < 0) break;
+                        if (index === app.currentTrackIndex && (app.isPlaying || app.playIntent)) app.pauseTrack?.();
+                        else if (index === app.currentTrackIndex && app.playTrack) { app.playTrack(); wantLyrics(true); }
+                        else playSelected({ stage: false });
+                        break;
+                    }
+                    case 'd-next': case 'd-queue': {
+                        const t = selectedTrack();
+                        if (!t) break;
+                        const next = btn.dataset.act === 'd-next';
+                        const before = app.queueSnapshot?.() || [];
+                        const queued = next ? app.queuePlayNext?.(t) : app.queueAdd?.(t);
+                        if (queued) {
+                            const name = Model.stripExtension(queued.title || '');
+                            try {
+                                global.MusicToast?.show({ id: 'queue', kind: 'success', message: (next ? '下一首播放：' : '已加入队列：') + name,
+                                    action: { label: '撤销', run: () => app.queueRevert?.([queued], before) } });
+                            } catch (err) { /* 没有提示层也不影响入队 */ }
+                        }
+                        break;
+                    }
+                    case 'd-playlist': case 'd-lyrics': {
+                        const index = selectedIndex();
+                        if (index < 0) break;
+                        if (btn.dataset.act === 'd-lyrics') { app.openLyricsFetchModal?.(index); break; }
+                        const r = btn.getBoundingClientRect();
+                        app.contextMenuTrackIndex = index;
+                        app.showContextMenu?.(r.left, r.bottom + 8);
+                        break;
+                    }
+                    case 'd-artist': {
+                        const t = selectedTrack();
+                        if (!t || !t.artist) break;
+                        closeDetail();
+                        if (!listOpen()) setListOpen(true);
+                        list?.typeInto(t.artist);
+                        break;
+                    }
+                    case 'd-goto': goToIndex(Number(btn.dataset.index)); break;
                     case 'up': select(state.lane, state.row - 1); break;
                     case 'down': select(state.lane, state.row + 1); break;
                     case 'left': stepLane(-1); break;
                     case 'right': stepLane(1); break;
                     case 'search': openSearch(); break;
-                    case 'list': setListOpen(!listOpen()); break;
+                    case 'list': closeDetail(); setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
@@ -1286,12 +1549,12 @@
             if (next) {
                 e.preventDefault();
                 state.scene?.touch();
-                if (next.lane !== state.lane) stepLane(next.lane - state.lane);
+                if (next.lane !== state.lane) { closeDetail(); stepLane(next.lane - state.lane); }
                 else select(next.lane, next.row);
                 return;
             }
             if (e.key === 'Enter') {
-                if (tag === 'BUTTON' && e.target.closest('#music-archive-view') && !e.target.closest('.archive-access, .archive-file-title')) return;
+                if (tag === 'BUTTON' && e.target.closest('#music-archive-view') && !e.target.closest('.archive-access')) return;
                 e.preventDefault(); playSelected(); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
@@ -1311,6 +1574,15 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        // 取出时 Esc 先把卡放回去（抢在检索、舞台等其他 Esc 之前）
+        const onEscCapture = (e) => {
+            if (!detailOpen || e.key !== 'Escape' || !isShown() || modalOpen()) return;
+            if (document.body.classList.contains('music-stage-active')) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            closeDetail();
+        };
+        document.addEventListener('keydown', onEscCapture, true);
 
         // ---------- 外部状态 ----------
         const onResize = () => resize();
@@ -1328,6 +1600,8 @@
             if (themeChanged) applyTheme({ wave: true });
             if (enteringChanged) syncEntering();
             if (stageChanged) savePlace();
+            // 进了播放页再回来，回到浏览状态（卡放回列里）
+            if (stageChanged && !cls.includes('music-stage-active')) closeDetail();
             if (stageChanged && !cls.includes('music-stage-active') && isShown()) {
                 // 从播放页回来：旧界面的背景声纹不要重新起来
                 app.destroyAmbientPixi?.();
@@ -1349,7 +1623,6 @@
         const offMotion = global.MusicMotion && typeof global.MusicMotion.onChange === 'function' ? global.MusicMotion.onChange(onMotion) : null;
 
         const clockTimer = setInterval(() => {
-            refs.clock.textContent = new Date().toTimeString().slice(0, 8);
             if (!isShown()) return;
             if (dataChanged()) rebuildSoon();
             updatePlaying();
@@ -1378,6 +1651,7 @@
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
@@ -1433,6 +1707,10 @@
             refreshSoon: () => rebuildSoon(),
             select,
             playSelected,
+            openDetail,
+            closeDetail,
+            get detailOpen() { return detailOpen; },
+            get scene() { return state.scene; },
             openSearch,
             setListOpen,
             setSort,

@@ -355,11 +355,10 @@
             g.beginPath();
             g.arc(40, 46, 18, 0, Math.PI * 2);
             g.stroke();
-            g.fillStyle = lighting.tagInk;
-            g.font = '600 22px ' + fontStack;
-            g.fillText('VCP · AUDIO', 72, 40);
-            g.font = '500 16px ' + fontStack;
-            g.fillText('ARCHIVE FILE', 72, 66);
+            // 空白标签：两道细线代替文字（卡上的曲名另有贴片，这里不再印无意义的字）
+            g.fillStyle = lighting.tagRing;
+            g.fillRect(72, 36, 140, 3);
+            g.fillRect(72, 56, 96, 3);
             tagTex.needsUpdate = true;
         };
 
@@ -379,11 +378,13 @@
         const NUM_KEYS = ['hemi', 'key', 'fill', 'exposure', 'sheen', 'clearcoat', 'fogNear', 'fogFar'];
         const look = lookOf({ paper: '#11181b', floor: '#192125' }, LIGHTING.dark);
         let lookFade = null;   // { from, to, t0 }
+        const fogBase = { near: look.fogNear, far: look.fogFar };
         scene.background = look.bg.clone();
         scene.fog = new THREE.Fog(look.bg.clone(), DIST + look.fogNear, DIST + look.fogFar);
         const applyLook = (L) => {
             scene.background.copy(L.bg);
             scene.fog.color.copy(L.bg);
+            fogBase.near = L.fogNear; fogBase.far = L.fogFar;
             scene.fog.near = DIST + L.fogNear; scene.fog.far = DIST + L.fogFar;
             floorMat.color.copy(L.floor);
             polymer.sheen = L.sheen; polymer.sheenColor.copy(L.sheenColor); polymer.clearcoat = L.clearcoat;
@@ -452,10 +453,99 @@
             }
         };
 
+        // ---- 取出卡的卡面：封面嵌在卡正面，先是一层模糊的（像隔着磨砂），推近到位后再清晰 ----
+        const COVER_SIZE = 2.9;
+        const coverGeo = new THREE.PlaneGeometry(COVER_SIZE, COVER_SIZE);
+        coverGeo.translate(0.78, 1.86, CARD_D / 2 + 0.024);
+        const frameGeo = new THREE.PlaneGeometry(COVER_SIZE + 0.16, COVER_SIZE + 0.16);
+        frameGeo.translate(0.78, 1.86, CARD_D / 2 + 0.021);
+        const coverMat = (extra) => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra });
+        const frameMat = coverMat({ color: '#000000' });
+        const blurMat = coverMat({});
+        const sharpMat = coverMat({});
+        const coverGroup = new THREE.Group();
+        const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+        const blurMesh = new THREE.Mesh(coverGeo, blurMat);
+        const sharpMesh = new THREE.Mesh(coverGeo, sharpMat);
+        sharpMesh.renderOrder = 2; blurMesh.renderOrder = 1;
+        coverGroup.add(frameMesh, blurMesh, sharpMesh);
+        coverGroup.visible = false;
+        scene.add(coverGroup);
+        const cover = { key: '', sharp: null, blur: null, clarity: 0, ready: false };
+        const blurCanvas = document.createElement('canvas');
+        blurCanvas.width = blurCanvas.height = 20;
+        const freeCoverTex = () => {
+            cover.sharp?.dispose(); cover.blur?.dispose();
+            cover.sharp = cover.blur = null;
+            sharpMat.map = blurMat.map = null;
+            sharpMat.needsUpdate = blurMat.needsUpdate = true;
+        };
+        /*
+         * 换卡面图。source 是加载好的 <img>，或 null（没有封面时画一张素色卡面，写上曲名和歌手）。
+         * key 不变就不重做；换了图清晰度从零开始，重新「解密」。
+         */
+        const setCover = (key, source, info = {}) => {
+            key = String(key || '');
+            if (key === cover.key && cover.ready) return;
+            cover.key = key;
+            freeCoverTex();
+            let img = source;
+            if (!img) {
+                const c = document.createElement('canvas');
+                c.width = c.height = 512;
+                const g = c.getContext('2d');
+                g.fillStyle = lighting.tag;
+                g.fillRect(0, 0, 512, 512);
+                g.strokeStyle = lighting.tagRing;
+                g.lineWidth = 2;
+                g.strokeRect(28, 28, 456, 456);
+                g.fillStyle = lighting.tagInk;
+                g.textBaseline = 'alphabetic';
+                const fit = (text, size, weight, maxW) => {
+                    g.font = `${weight} ${size}px ${fontStack}`;
+                    let s = String(text || '');
+                    if (g.measureText(s).width <= maxW) return s;
+                    while (s.length > 1 && g.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+                    return s + '…';
+                };
+                g.fillText(fit(info.title || '', 46, 700, 420), 52, 400);
+                g.fillText(fit(info.artist || '', 24, 500, 420), 52, 446);
+                g.beginPath(); g.arc(436, 82, 14, 0, Math.PI * 2); g.stroke();
+                img = c;
+            }
+            const sharp = img instanceof HTMLCanvasElement ? new THREE.CanvasTexture(img) : new THREE.Texture(img);
+            sharp.colorSpace = THREE.SRGBColorSpace;
+            sharp.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            sharp.needsUpdate = true;
+            // 磨砂那一层：缩成 20 像素再放大，线性过滤自然就糊了
+            const bg = blurCanvas.getContext('2d');
+            bg.clearRect(0, 0, 20, 20);
+            try { bg.drawImage(img, 0, 0, 20, 20); } catch (e) { /* 跨域图画不进去就只用清晰那层 */ }
+            const blur = new THREE.CanvasTexture(blurCanvas);
+            blur.colorSpace = THREE.SRGBColorSpace;
+            blur.needsUpdate = true;
+            cover.sharp = sharp; cover.blur = blur;
+            sharpMat.map = sharp; blurMat.map = blur;
+            sharpMat.needsUpdate = blurMat.needsUpdate = true;
+            cover.clarity = 0;
+            cover.ready = true;
+            invalidate();
+        };
+
         // ---- 状态 ----
         const target = { lane: 0, row: 0 };
         const camLane = { v: 0, vel: 0 }, camRow = { v: 0, vel: 0 }, shoulder = { v: 0, vel: 0 }, focus = { v: 0, vel: 0 }, lift = { v: 0.4, vel: 0 };
         let liftGoal = 0.4;   // 选中卡抬起的高度；进播放页前会再抬高一些
+        /*
+         * 取出：选中卡从列里抬到 DETAIL_LIFT，镜头推近到它正面、把它放在画面左侧，卡面上显出封面。
+         * 镜头推近的进度直接由抬起高度算（卡升到哪，镜头推到哪），这样中途收回也不会两边脱节。
+         */
+        const DETAIL_LIFT = 4.05;
+        const DETAIL_DIR = new THREE.Vector3(-0.277, 0.238, 0.931).normalize();
+        let detailOn = false;
+        let detailK = 0;               // 0 浏览 → 1 取出（镜头）
+        const inspect = { v: 0, vel: 0, goal: 0 };   // 取出后拖动转卡（绕竖轴），松手转回正面
+        const returning = new Map();   // 'lane:row' → { v, vel }，换选中时旧卡从当时的高度落回去，一格只留一份
         const pulses = [];
         const hoverLifts = new Map();
         let hovered = null;
@@ -489,8 +579,13 @@
         const select = (lane, row, { pulse = true } = {}) => {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
+            // 旧卡抬得明显时（取出中、展开中）从当时的高度落回去，不瞬间掉下
+            if (lift.v > 0.5 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: lift.vel });
+            returning.delete(lane + ':' + row);
             target.lane = lane; target.row = row;
-            lift.v = 0;
+            lift.v = 0; lift.vel = 0;
+            inspect.v = inspect.vel = inspect.goal = 0;
+            cover.clarity = 0;
             lastInput = performance.now();
             idleGain = 0;
             invalidate();
@@ -500,9 +595,85 @@
             target.lane = lane; target.row = row;
             camLane.v = focus.v = lane; camRow.v = shoulder.v = row;
             camLane.vel = camRow.vel = shoulder.vel = focus.vel = 0;
-            lift.v = liftGoal; lift.vel = 0;
+            lift.v = detailOn ? DETAIL_LIFT : liftGoal; lift.vel = 0;
             pulses.length = 0;
+            returning.clear();
             invalidate();
+        };
+
+        const targetPos = new THREE.Vector3();
+        const camDir = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), detailAim = new THREE.Vector3(), camAim = new THREE.Vector3();
+        const WORLD_UP = new THREE.Vector3(0, 1, 0);
+        const lerp = (a, b, k) => a + (b - a) * k;
+        /* 镜头：浏览时是原来的长焦斜俯视；取出时转向卡的正面、拉近，把卡放到画面左侧（右侧留给资料卡） */
+        const placeCamera = (reduced) => {
+            const k = detailK;
+            const aspect = W / H;
+            const baseSpan = lerp(7.33, 6.8, k);
+            const viewSpan = Math.max(baseSpan, baseSpan * (16 / 9) / aspect);
+            const distance = lerp(DIST, 72, k);
+            camDir.copy(view).lerp(DETAIL_DIR, k).normalize();
+            camAim.copy(aim);
+            if (k > 0) {
+                camRight.crossVectors(WORLD_UP, camDir).normalize();
+                camUp.crossVectors(camDir, camRight).normalize();
+                const compact = W < 1100;
+                const anchorX = compact ? 0.27 : 540 / 1920, anchorY = compact ? 0.5 : 600 / 1080;
+                const pixelScale = H / viewSpan;
+                detailAim.copy(targetPos);
+                detailAim.y += CARD_H / 2;
+                detailAim.addScaledVector(camRight, (0.5 - anchorX) * W / pixelScale);
+                detailAim.addScaledVector(camUp, (anchorY - 0.5) * H / pixelScale);
+                camAim.lerp(detailAim, k);
+            }
+            camera.position.copy(camAim).addScaledVector(camDir, distance);
+            if (!reduced) {
+                const par = 0.12 * (1 - 0.75 * k);
+                camera.position.x += pointer.x * par; camera.position.y -= pointer.y * par;
+            }
+            camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(viewSpan / (2 * distance)));
+            camera.updateProjectionMatrix();
+            camera.lookAt(camAim);
+            camera.updateMatrixWorld();
+            scene.fog.near = distance + lerp(fogBase.near, -1, k);
+            scene.fog.far = distance + lerp(fogBase.far, 12, k);
+        };
+        const placeCover = () => {
+            const appear = cover.ready ? smooth((lift.v - 1.2) / 1.6) * (detailOn || cover.clarity > 0 ? 1 : 0) : 0;
+            const show = appear > 0.001;
+            coverGroup.visible = show;
+            if (!show) return;
+            coverGroup.position.copy(targetPos);
+            coverGroup.rotation.set(0, inspect.v, 0);
+            frameMat.opacity = 0.16 * appear;
+            blurMat.opacity = appear * (1 - cover.clarity * 0.999);
+            sharpMat.opacity = appear * smooth(cover.clarity);
+        };
+        const setDetail = (on) => {
+            on = Boolean(on);
+            if (on === detailOn) return;
+            detailOn = on;
+            if (!on) inspect.goal = 0;
+            lastInput = performance.now();
+            idleGain = 0;
+            invalidate();
+        };
+        /* 取出后拖动转卡：delta 是弧度；release 后转回正面 */
+        const turn = (delta, release = false) => {
+            if (!detailOn) return;
+            if (release) inspect.goal = 0;
+            else { inspect.goal = Math.max(-1.2, Math.min(1.2, inspect.goal + delta)); inspect.v = inspect.goal; inspect.vel = 0; }
+            invalidate();
+        };
+        /* 取出的卡在画面上的范围（画布像素），给 HUD 判断点没点在卡上 */
+        const detailRect = () => {
+            if (!detailOn) return null;
+            const pts = [[-CARD_W / 2, 0], [CARD_W / 2, 0], [-CARD_W / 2, CARD_H], [CARD_W / 2, CARD_H]].map(([x, y]) => {
+                projA.set(targetPos.x + x, targetPos.y + y, targetPos.z + CARD_D / 2).project(camera);
+                return [(projA.x + 1) / 2 * W, (1 - projA.y) / 2 * H];
+            });
+            const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+            return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
         };
 
         let lastStep = performance.now();
@@ -517,7 +688,24 @@
             damp(camRow, target.row, rate, dt);
             damp(shoulder, target.row, rate, dt);
             damp(focus, target.lane, rate, dt);
-            damp(lift, liftGoal, reduced ? 40 : 26, dt);
+            // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
+            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 12, dt);
+            for (const [k, r] of returning) {
+                damp(r, 0, reduced ? 40 : 4.2, dt);
+                if (Math.abs(r.v) < 0.002 && Math.abs(r.vel) < 0.01) returning.delete(k);
+            }
+            {
+                // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
+                const fromLift = detailOn ? smooth((lift.v - 0.8) / 2.4) : smooth((lift.v - 0.7) / (DETAIL_LIFT - 0.7));
+                const goal = detailOn ? Math.max(fromLift, Math.min(detailK, 1)) : fromLift;
+                detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 5));
+                if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
+                if (!detailOn && detailK < 0.001) detailK = 0;
+                damp(inspect, inspect.goal, reduced ? 40 : 7, dt);
+                // 封面：抬过一半显出磨砂层，推近到位后约 0.9 秒变清晰
+                if (detailOn && cover.ready && detailK > 0.78 && lift.v > 3.3) cover.clarity = reduced ? 1 : Math.min(1, cover.clarity + dt / 0.9);
+                else if (!detailOn) cover.clarity = Math.max(0, cover.clarity - dt / 0.35);
+            }
             stepTheme(T);
             const tinting = waves.length > 0;
             const tmpC = tinting ? (stepTheme.c || (stepTheme.c = new THREE.Color())) : null;
@@ -548,8 +736,12 @@
                     }
                     const hl = hoverLifts.get(lane + ':' + row) || 0;
                     let y = BASE_Y + f + hl;
-                    if (lane === target.lane && row === target.row) y += lift.v;
+                    const isTarget = lane === target.lane && row === target.row;
+                    if (isTarget) y += lift.v;
+                    else if (returning.size) { const r = returning.get(lane + ':' + row); if (r) y += r.v; }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
+                    dummy.rotation.y = isTarget ? inspect.v : 0;
+                    if (isTarget) { targetPos.copy(dummy.position); }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
                     const dl = lane - target.lane, dr = row - target.row;
                     if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
@@ -575,17 +767,17 @@
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
             if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
 
-            camera.position.copy(aim).addScaledVector(view, DIST);
-            if (!reduced) { camera.position.x += pointer.x * 0.12; camera.position.y -= pointer.y * 0.12; }
-            camera.lookAt(aim);
-            camera.updateMatrixWorld();
+            placeCamera(reduced);
+            placeCover();
             placeLabels();
             renderer.render(scene, camera);
             dirty = false;
             frames++;
 
             const settled = Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
-                && Math.abs(lift.v - liftGoal) < 0.001 && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
+                && Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) < 0.001 && !returning.size
+                && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
+                && (!detailOn || !cover.ready || cover.clarity >= 1) && (detailOn || cover.clarity <= 0) && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
             return {
                 moving: !settled,
@@ -643,7 +835,8 @@
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat]) m.dispose();
+            for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat, frameMat, blurMat, sharpMat]) m.dispose();
+            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             floor.geometry.dispose();
@@ -658,10 +851,12 @@
             canvas,
             tier,
             resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, setLabelMask, refreshLabels, dispose,
+            setDetail, setCover, turn, detailRect,
+            get detail() { return detailOn; },
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, detail: Math.round(detailK * 1000) / 1000, clarity: Math.round(cover.clarity * 100) / 100, returning: returning.size, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 

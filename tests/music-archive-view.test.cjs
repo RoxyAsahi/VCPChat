@@ -42,7 +42,7 @@ test('默认显示档案页，选中正在播放的那首', () => {
     assert.equal(f.view.mode, 'archive');
     assert.equal(f.w.document.getElementById('music-archive-view').hidden, false);
     assert.ok(f.w.document.body.classList.contains('music-archive-on'));
-    assert.equal(f.text('fno'), 'TRK-001');
+    assert.equal(f.text('ftitle'), 'Song 0');
     assert.equal(f.text('cat'), '全部曲目');
     f.close();
 });
@@ -50,8 +50,8 @@ test('默认显示档案页，选中正在播放的那首', () => {
 test('方向键换曲目和歌单，HUD 跟着变', () => {
     const f = fixture();
     f.key('ArrowDown'); f.key('ArrowDown');
-    assert.equal(f.text('fno'), 'TRK-003');
     assert.equal(f.text('ftitle'), 'Song 2');
+    assert.match(f.text('catPos'), /^第 3 \/ \d+ 首$/);
     f.key('ArrowRight');
     assert.equal(f.text('cat'), '夜间散步');
     assert.equal(f.text('selT'), '03');
@@ -210,7 +210,7 @@ test('经典视图隐藏档案页并记住；返回按钮回来', () => {
     assert.ok(f.w.document.body.classList.contains('music-archive-off'));
     assert.equal(f.w.localStorage.getItem('musicArchiveView'), 'classic');
     f.key('ArrowDown');
-    assert.equal(f.text('fno'), 'TRK-001'); // 经典视图里方向键不归档案页
+    assert.equal(f.text('ftitle'), 'Song 0'); // 经典视图里方向键不归档案页
     f.w.document.getElementById('music-archive-return').click();
     assert.equal(f.view.mode, 'archive');
     f.close();
@@ -222,13 +222,13 @@ test('空曲库显示空状态，回车什么也不做；刚打开的一小段�
     const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
     assert.equal(root.classList.contains('is-empty'), false, '刚打开不闪空状态');
     assert.ok(root.classList.contains('is-loading'));
-    assert.equal(f.text('status'), 'LOADING');
+    assert.equal(f.text('status'), '正在读取曲库');
     f.key('Enter');
     assert.deepEqual(f.calls, []);
     await wait(1650);
     assert.ok(root.classList.contains('is-empty'), '等过了还是没有歌才显示');
     assert.equal(root.classList.contains('is-loading'), false);
-    assert.equal(f.text('status'), 'SESSION AUTHORIZED');
+    assert.equal(f.text('status'), '');
     f.close();
 
     const g = fixture({ n: 0, playlists: [] });
@@ -237,7 +237,7 @@ test('空曲库显示空状态，回车什么也不做；刚打开的一小段�
     g.view.refresh();
     assert.equal(groot.classList.contains('is-loading'), false);
     assert.equal(groot.classList.contains('is-empty'), false);
-    assert.equal(g.text('status'), 'SESSION AUTHORIZED');
+    assert.equal(g.text('status'), '');
     g.close();
 });
 
@@ -828,19 +828,19 @@ test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时�
     const api = { onMusicScanStart: (fn) => { fns.start = fn; return () => { fns.start = null; }; }, onMusicScanProgress: (fn) => { fns.progress = fn; }, onMusicScanComplete: (fn) => { fns.complete = fn; } };
     const f = fixture({ n: 0, playlists: [], setup: (w, app) => { app.api = api; } });
     const root = f.w.document.getElementById('music-archive-view');
-    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    assert.equal(f.text('emptyTitle'), '曲库是空的');
     assert.match(root.querySelector('[data-act="add-local"]').textContent, /添加音乐文件夹/);
     fns.start();
     assert.ok(root.classList.contains('is-scanning'));
-    assert.equal(f.text('emptyTitle'), 'SCANNING ARCHIVE');
+    assert.equal(f.text('emptyTitle'), '正在扫描曲库');
     fns.progress({ current: 437, total: 1280 });
     assert.match(f.text('emptyText'), /0437 \/ 1280/);
-    assert.equal(f.text('status'), 'SCANNING 0437 / 1280');
+    assert.equal(f.text('status'), '扫描中 0437 / 1280');
     assert.match(root.querySelector('[data-ref="scanBar"]').style.transform, /scaleX\(0\.34/);
     fns.complete({ tracks: new Array(1280) });
     assert.equal(root.classList.contains('is-scanning'), false);
-    assert.equal(f.text('status'), 'SCAN COMPLETE ／ 1280 FILES');
-    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    assert.equal(f.text('status'), '扫描完成，共 1280 首');
+    assert.equal(f.text('emptyTitle'), '曲库是空的');
     f.close();
     assert.equal(fns.start, null, '关掉时取消订阅');
 });
@@ -936,7 +936,7 @@ test('扫描途中一批批进来：阵列和目录跟着长，选中的还是�
     assert.ok(before);
     fns.start({ total: 200, folderPath: '/s' });
     fns.progress({ current: 100, total: 200 });
-    assert.equal(f.text('status'), 'SCANNING 0100 / 0200');
+    assert.equal(f.text('status'), '扫描中 0100 / 0200');
     // 新来的歌排在前面（标题 A 开头）
     f.app.playlist = f.app.playlist.concat(mk(40, 'A'));
     fns.batch({ tracks: [] });
@@ -1365,5 +1365,53 @@ test('跟着在听：选中停在正在放的那首时，播放器换到下一�
     f.app.currentTrackIndex = (next + 5) % f.app.playlist.length;
     await wait(1150);
     assert.equal(f.view.debug().selected, browsing);
+    f.close();
+});
+
+test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡按钮可用，Esc 放回；左右换分组也放回', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    const root = doc.getElementById('music-archive-view');
+    f.app.queuePlayNext = (t) => { f.calls.push(['next', t.path]); return t; };
+    f.app.queueAdd = (t) => { f.calls.push(['queue', t.path]); return t; };
+    doc.querySelector('.archive-file-title').click();
+    assert.ok(f.view.detailOpen);
+    assert.ok(root.classList.contains('is-detail'));
+    assert.equal(doc.querySelector('.archive-detail').hasAttribute('inert'), false);
+    assert.equal(f.text('dTitle'), 'Song 0');
+    assert.equal(f.text('dArtist'), 'Ren');
+    assert.equal(f.text('dAlbum2'), 'A0');
+    // 同专辑的其他曲目（A0 = 0, 3, 6…），点一首就换过去
+    const more = [...doc.querySelectorAll('[data-act="d-goto"]')];
+    assert.ok(more.length > 0 && more.length <= 8);
+    assert.equal(more[0].querySelector('span').textContent, 'Song 3');
+    f.key('ArrowDown');
+    assert.ok(f.view.detailOpen, '↑↓ 换曲目时详情留着');
+    assert.equal(f.text('dTitle'), 'Song 1');
+    doc.querySelector('[data-act="d-next"]').click();
+    doc.querySelector('[data-act="d-queue"]').click();
+    assert.deepEqual(f.calls.filter((c) => c[0] === 'next' || c[0] === 'queue').map((c) => c.join(':')), ['next:/m/1', 'queue:/m/1']);
+    // 资料卡里的「播放」只播放，不进舞台
+    doc.querySelector('[data-act="d-play"]').click();
+    assert.ok(f.calls.some((c) => c[0] === 'load' && c[1] === 1));
+    assert.ok(!f.calls.some((c) => c[0] === 'stage'));
+    f.key('Escape');
+    assert.equal(f.view.detailOpen, false);
+    assert.equal(root.classList.contains('is-detail'), false);
+    assert.ok(doc.querySelector('.archive-detail').hasAttribute('inert'));
+    f.view.openDetail();
+    f.key('ArrowRight');
+    assert.equal(f.view.detailOpen, false, '换分组时把卡放回');
+    f.close();
+});
+
+test('首页文字：没有装饰用的英文，左上是当前分组名和首数', () => {
+    const f = fixture();
+    const hud = f.w.document.querySelector('.archive-hud').textContent;
+    for (const word of ['SESSION AUTHORIZED', 'ACCESS FILE', 'FILE NUMBER', 'POWERED BY', 'ACOUSTIC', 'COLUMN', 'TRK-', 'ARCHIVE INDEX', 'CLASSIC VIEW']) {
+        assert.ok(!hud.includes(word), word);
+    }
+    assert.equal(f.text('ctxName'), '全部曲目');
+    assert.match(f.text('ctxSub'), /^\d+ 首/);
     f.close();
 });
