@@ -83,11 +83,12 @@
         // 中间层：城寨和巨构之间一圈一两百米高的巨型楼块，压得很暗，只有稀疏的窗，
         // 把近处的城寨和远处的塔楼隔出层次。
         for (let i = 0; i < 16; i += 1) {
+            if (i % 3 === 2) continue;
             const h1 = (Math.sin(i * 12.9898) * 43758.5453) % 1, h2 = (Math.sin(i * 78.233) * 12543.123) % 1;
             const a = Math.PI * (1.02 + (i + Math.abs(h1) * 0.6) / 16 * 0.96);
-            const r = 190 + Math.abs(h2) * 130;
+            const r = 210 + Math.abs(h2) * 130;
             const x = Math.cos(a) * r * 1.5, z = Math.sin(a) * r - 40;
-            const w = 44 + Math.abs(h1) * 46, d = 30 + Math.abs(h2) * 26, h = 95 + Math.abs(h1 * h2) * 4 * 85;
+            const w = 34 + Math.abs(h1) * 30, d = 26 + Math.abs(h2) * 20, h = 70 + Math.abs(h1 * h2) * 4 * 55;
             const block = new T.BoxGeometry(w, h, d);
             block.translate(x, h / 2, z);
             push(block, { x, z, seed: Math.abs(h1) }, 4);
@@ -148,7 +149,7 @@
                         vec2 cell = vec2(fract(around / 4.0), fract(vWorld.y / 4.2));
                         float strip = step(0.25, cell.x) * step(cell.x, 0.75) * step(0.2, cell.y) * step(cell.y, 0.8);
                         float band = step(0.82, h21(vec2(floor(bay / 3.0), seed * 91.0)));
-                        float lit = step(0.9 - band * 0.45 + blocky * 0.06, h21(vec2(bay, fl + seed * 37.0)));
+                        float lit = step(0.9 - band * 0.45 * (1.0 - blocky) + blocky * 0.075, h21(vec2(bay, fl + seed * 37.0)));
                         float cool = step(0.86, h21(vec2(bay * 1.7, fl * 0.3 + seed)));
                         vec3 win = mix(vec3(1.0, 0.62, 0.25), vec3(0.3, 0.9, 1.0), cool);
                         glow += win * strip * lit * mix(1.0, 0.55, blocky) * step(abs(n.y), 0.5);

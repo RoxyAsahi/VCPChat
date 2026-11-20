@@ -134,26 +134,26 @@
             // 主歌：半空贴着正立面横移，主屏从画面一侧滑到另一侧，前景掠过全息幅和电线。
             facade: (t, seed) => {
                 const dir = seed < 0.5 ? 1 : -1;
-                const x = sc[0] + dir * (-34 + t * 68);
-                return { position: [x, 21 + Math.sin(t * Math.PI) * 3, 96], look: [sc[0] + (x - sc[0]) * 0.35, sc[1] - 1, sc[2]], fov: 46 };
+                const x = sc[0] + dir * (-26 + t * 52);
+                return { position: [x, 25 + Math.sin(t * Math.PI) * 2.5, 85], look: [sc[0] + (x - sc[0]) * 0.4, sc[1] - 1.5, sc[2]], fov: 50 };
             },
             // 主歌：从高处降到主屏跟前。
             crane: (t, seed) => {
                 const side = seed < 0.5 ? 1 : -1;
                 const k = ease(t);
-                return { position: [sc[0] + side * (34 - k * 14), 50 - k * 30, 112 - k * 18], look: [sc[0], sc[1] + 2 - k * 2, sc[2]], fov: 44 };
+                return { position: [sc[0] + side * (30 - k * 16), 52 - k * 27, 108 - k * 24], look: [sc[0], sc[1] + 2 - k * 2, sc[2]], fov: 46 };
             },
             // 副歌：贴地仰拍，主屏在上方，越过楼顶是巨构和天。
             hero: (t, seed) => {
                 const side = seed < 0.5 ? 1 : -1;
-                return { position: [sc[0] + side * (16 - t * 6), 2.2 + t * 3, 92 - t * 6], look: [sc[0] - side * 2, sc[1] + 14 + t * 10, sc[2] - 30], fov: 68 };
+                return { position: [sc[0] + side * (15 - t * 7), 1.8 + t * 1.6, 68.2 - t * 1.4], look: [sc[0] - side * 2, sc[1] + 2 + t * 5, sc[2] - 6], fov: 72 };
             },
             // 副歌：大全景环绕，城寨、全息幅、巨构、烟囱都在画面里。
             sweep: (t, seed) => {
                 const dir = seed < 0.5 ? 1 : -1;
                 const az = dir * (-0.55 + ease(t) * 0.8);
-                const target = [0, 46, -10];
-                return { position: orbitAt(target, 205 - t * 20, 58 + t * 26, az), look: target, fov: 48 };
+                const target = [4, 36, 6];
+                return { position: orbitAt(target, 150 - t * 22, 50 + t * 24, az), look: target, fov: 50 };
             },
             // 间奏：掠过屋顶的天线林，朝着远处的巨构飞。
             skim: (t, seed) => {
@@ -207,12 +207,15 @@
             const phases = planPhases(lines, frame.duration || frame.track?.duration || 0);
             const shots = planShots(phases, lines);
             let last = null;
+            const seenPhase = {};
             shots.forEach(shot => {
                 const pool = poolFor(shot.phase);
                 const seed = (L().hash(`shot:${shot.index}:${Math.round(shot.start)}`) % 1000) / 1000;
                 // 段落的第一个镜头固定用这一段的主机位，后面的轮着来，不和上一个重复。
-                let id = pool[0];
-                if (shot.first && shot.phase === 'chorus') id = shot.block % 2 ? 'hero' : 'sweep';
+                // 每段的第一个镜头按这一段第几次出现轮着换，同一段歌再来时不重样。
+                seenPhase[shot.phase] = (seenPhase[shot.phase] || 0) + (shot.first ? 1 : 0);
+                let id = pool[(seenPhase[shot.phase] - 1) % pool.length];
+                if (shot.first && shot.phase === 'chorus') id = seenPhase.chorus % 2 ? 'sweep' : 'hero';
                 else if (!shot.first) {
                     const rest = pool.filter((r, i) => r !== last && pool.indexOf(r) === i);
                     id = rest.length ? rest[Math.floor(seed * rest.length)] : pool[0];
