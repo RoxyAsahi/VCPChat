@@ -14,15 +14,11 @@
     const ICONS = global.MusicDockIcons || {};
 
     // 胶囊尺寸弹簧（刚度 280、阻尼 24、质量 1）和悬停时序（展开 20ms、收起 100ms、快捷行停留 250ms）。
-    const SPRING_K = 280;
-    const SPRING_C = 24;
     const HOVER_EXPAND_MS = 20;
     const HOVER_COLLAPSE_MS = 100;
     const QUICK_DWELL_MS = 250;
-    const CAPSULE_MAX_W = 480;
-    const CAPSULE_H_COLLAPSED = 50;
-    const CAPSULE_H_EXPANDED = 74;
     const PROGRESS_TICK_MS = 250;
+    const PROGRESS_INSET = 0.06;
     const QUEUE_ROW_H = 48;
     const SAFE_BOTTOM_PX = 96;
     const COMPACT_BELOW = 640;
@@ -68,33 +64,27 @@
         const cancel = (id) => { if (id) { clearTimeout(id); timers.delete(id); } };
 
         host.innerHTML = `
-<button class="md-np" type="button" data-md="np" aria-label="进入歌词舞台">
-  <span class="md-np-cv"><span class="md-np-img"></span></span>
-  <span class="md-np-tx"><span class="md-np-k">正在播放</span><span class="md-np-t"></span><span class="md-np-a"></span></span>
-</button>
 <div class="md-dock"><div class="md-dock-in">
   <div class="md-quick"><div class="md-quick-in"><div class="md-quick-g" role="toolbar" aria-label="快捷操作"></div></div></div>
   <div class="md-cap" title="点一下进入歌词舞台">
-    <div class="md-cap-c">
-      <div class="md-prow"><span class="md-tm" data-md="t1"></span><div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div><span class="md-tm md-r" data-md="t2"></span></div>
-    </div>
-    <div class="md-cap-e">
-      <button class="md-pb" type="button" data-md="play" aria-label="播放"></button>
-      <div class="md-ttl"><div class="md-tnav">
-        <div class="md-zone md-l"><button class="md-arw" type="button" data-md="prev" aria-label="上一首">${icon('chevron-left', 16, { strokeWidth: 2.4 })}</button></div>
-        <div class="md-zone md-r"><button class="md-arw" type="button" data-md="next" aria-label="下一首">${icon('chevron-right', 16, { strokeWidth: 2.4 })}</button></div>
-        <div class="md-txt"><div class="md-cur"><span data-md="title"></span></div><div class="md-pv"><span data-md="preview"></span></div></div>
-      </div></div>
-      <div class="md-slots">
-        <button class="md-slot" type="button" data-md="mode"></button>
-        <button class="md-slot" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 18)}</button>
-        <button class="md-slot md-vslot" type="button" data-md="vol" aria-label="静音"></button>
-      </div>
-      <div class="md-prow"><span class="md-tm" data-md="t1"></span><div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div><span class="md-tm md-r" data-md="t2"></span></div>
+    <div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div>
+    <button class="md-pb" type="button" data-md="play" aria-label="播放"></button>
+    <div class="md-ttl"><div class="md-tnav">
+      <div class="md-zone md-l"><button class="md-arw" type="button" data-md="prev" aria-label="上一首">${icon('chevron-left', 15, { strokeWidth: 2.4 })}</button></div>
+      <div class="md-zone md-r"><button class="md-arw" type="button" data-md="next" aria-label="下一首">${icon('chevron-right', 15, { strokeWidth: 2.4 })}</button></div>
+      <div class="md-txt"><div class="md-cur"><span data-md="title"></span></div><div class="md-pv"><span data-md="preview"></span></div></div>
+      <div class="md-sub"><span data-md="artist"></span><span class="md-tms"><span class="md-tm" data-md="t1"></span> / <span class="md-tm" data-md="t2"></span></span></div>
+    </div></div>
+    <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
+    <div class="md-slots">
+      <button class="md-slot" type="button" data-md="mode"></button>
+      <button class="md-slot" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 17)}</button>
+      <button class="md-slot md-vslot" type="button" data-md="vol" aria-label="静音"></button>
     </div>
   </div>
+  <div class="md-vrail" role="slider" tabindex="-1" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-hidden="true"><i class="md-vfill"></i></div>
 </div></div>
-<div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel">
+<div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="设置">
   <span class="md-sw md-g">${icon('settings-2', 20)}</span><span class="md-sw md-x">${icon('x', 20)}</span>
 </button></div>
 <section class="md-pnl" id="music-dock-panel" role="dialog" aria-label="播放面板" aria-hidden="true">
@@ -117,10 +107,6 @@
         const $ = (sel) => host.querySelector(sel);
         const $$ = (sel) => Array.from(host.querySelectorAll(sel));
         const el = {
-            np: $('[data-md="np"]'),
-            npImg: $('.md-np-img'),
-            npTitle: $('.md-np-t'),
-            npArtist: $('.md-np-a'),
             dockIn: $('.md-dock-in'),
             quick: $('.md-quick'),
             quickGroup: $('.md-quick-g'),
@@ -133,6 +119,10 @@
             pv: $('.md-pv'),
             title: $('[data-md="title"]'),
             preview: $('[data-md="preview"]'),
+            artist: $('[data-md="artist"]'),
+            nx: [$('[data-md="nx1"]'), $('[data-md="nx2"]')],
+            vrail: $('.md-vrail'),
+            vfill: $('.md-vfill'),
             modeSlot: $('[data-md="mode"]'),
             stageSlot: $('[data-md="stage"]'),
             volSlot: $('[data-md="vol"]'),
@@ -171,6 +161,8 @@
             queueSource: null,
             queueLength: -1,
             trackKey: '',
+            volOpen: false,
+            volDrag: false,
             destroyed: false
         };
         let expandTimer = null;
@@ -201,18 +193,6 @@
         const trackArtist = (track) => track ? (track.artist || '未知艺术家') : '';
         const coverUrl = (track) => track?.albumArt ? fileUrl(track.albumArt) : '';
 
-        // ───────── 胶囊弹簧 ─────────
-        const spring = { w: { v: 0, vel: 0 }, h: { v: CAPSULE_H_COLLAPSED, vel: 0 } };
-        let springFrame = 0;
-        let springLast = 0;
-        const capsuleTarget = () => {
-            const max = Math.min(CAPSULE_MAX_W, Math.max(0, global.innerWidth - 32));
-            // 窄窗口（紧凑档）收起和展开同宽，面板把手挂在胶囊右端。
-            const ratio = global.innerWidth < COMPACT_BELOW ? 1 : global.innerWidth >= 768 ? 0.6 : 0.8;
-            return state.expanded
-                ? { w: max, h: CAPSULE_H_EXPANDED }
-                : { w: Math.round(max * ratio), h: CAPSULE_H_COLLAPSED };
-        };
         // 「降低动态」统一读音乐窗口的设置（跟随系统 / 开 / 关）；没有这个模块时才退回系统设置。
         const systemReduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const reducedMotion = {
@@ -223,54 +203,65 @@
             syncBodyClass();
             listen(systemReduced, 'change', syncBodyClass);
         }
-        const writeCapsuleSize = () => {
-            el.cap.style.width = `${spring.w.v.toFixed(2)}px`;
-            el.cap.style.height = `${spring.h.v.toFixed(2)}px`;
+
+        // ───────── 流体层 ─────────
+        // 播放条是一块会变状态的物质：播放过的部分凝固成实心玻璃，没播的部分是雾，凝固的边界就是进度；
+        // 暂停时整条化成雾，鼠标移上来（关注）又凝固。设置小环停在顶边时播放条凹进去让它，
+        // 打开面板时小环飞到右下角，凹口愈合。音量从播放条里像水滴一样分裂上去。
+        // 舞台的「性能档位」选节能时不跑流体层，播放条退成不透明的实色。
+        const SCENE_GLOW = {
+            light: { base: ['#f29a63', '#f7d9c6', '#ffffff'], diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'], tunnel: ['#4fa597', '#cfe9e2', '#ffffff'] },
+            dark: { base: ['#c8693a', '#4a3a32', '#2b2927'], diorama: ['#d0602c', '#4d362b', '#2a2725'], tunnel: ['#3d8f82', '#2f4440', '#262a29'] }
         };
-        const stepSpring = (now) => {
-            springFrame = 0;
-            const dt = Math.min((now - springLast) / 1000, 1 / 30);
-            springLast = now;
-            const target = capsuleTarget();
-            let moving = false;
-            for (const key of ['w', 'h']) {
-                const s = spring[key];
-                const sub = dt / 6;
-                for (let i = 0; i < 6; i++) {
-                    const accel = -SPRING_K * (s.v - target[key]) - SPRING_C * s.vel;
-                    s.vel += accel * sub;
-                    s.v += s.vel * sub;
-                }
-                if (Math.abs(s.v - target[key]) > 0.25 || Math.abs(s.vel) > 0.5) moving = true;
-                else { s.v = target[key]; s.vel = 0; }
+        const lowQuality = () => global.MusicStageConfig?.get?.()?.quality === 'energy-saving';
+        let fluid = null;
+        const syncFluid = () => {
+            const want = typeof global.createMusicDockFluid === 'function' && !lowQuality();
+            if (want && !fluid) {
+                fluid = global.createMusicDockFluid({
+                    host,
+                    bar: el.cap,
+                    ring: el.hdl,
+                    reduced: () => reducedMotion.matches
+                });
+            } else if (!want && fluid) {
+                fluid.destroy();
+                fluid = null;
+                el.hdl.style.transform = '';
             }
-            writeCapsuleSize();
-            if (moving && !state.destroyed) springFrame = requestAnimationFrame(stepSpring);
-        };
-        const animateCapsule = (instant = false) => {
-            if (instant || reducedMotion?.matches || document.hidden) {
-                if (springFrame) cancelAnimationFrame(springFrame);
-                springFrame = 0;
-                const target = capsuleTarget();
-                spring.w.v = target.w; spring.h.v = target.h;
-                spring.w.vel = spring.h.vel = 0;
-                writeCapsuleSize();
-                return;
+            host.classList.toggle('md-fl-on', Boolean(fluid));
+            host.classList.toggle('md-fl-low', !fluid);
+            if (fluid) {
+                fluid.layout();
+                fluid.setRingDocked(!state.panelOpen);
+                syncGlow();
+                syncSolid();
+                renderProgress();
             }
-            if (springFrame) return;
-            springLast = performance.now();
-            springFrame = requestAnimationFrame(stepSpring);
         };
+        const syncGlow = () => {
+            if (!fluid) return;
+            const palette = SCENE_GLOW[document.body.classList.contains('light-theme') ? 'light' : 'dark'];
+            const mode = stageActive() ? app.stageHost?.modeId : null;
+            fluid.setGlow(palette[mode] || palette.base);
+        };
+        // 实心 = 正在播放，或者正被关注（悬停、拖动）。
+        const syncSolid = () => {
+            const solid = app.isPlaying === true || state.hover || state.dragging !== null;
+            host.classList.toggle('md-vapor', !solid);
+            fluid?.setSolid(solid);
+        };
+        const animateCapsule = () => { fluid?.layout(); };
 
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
         const syncExpanded = () => {
+            syncSolid();
             const next = shouldExpand();
             if (next === state.expanded) return;
             state.expanded = next;
             el.cap.classList.toggle('md-ex', next);
-            animateCapsule();
         };
 
         // ───────── 进度 ─────────
@@ -278,11 +269,14 @@
             const d = duration();
             const t = currentTime();
             const fraction = d > 0 ? Math.min(1, t / d) : 0;
+            // 进度边界在 6%～94% 之间走，和流体层、拖动反算用同一个比例。
+            const edge = PROGRESS_INSET + fraction * (1 - 2 * PROGRESS_INSET);
             for (const trk of el.tracks) {
-                trk.firstElementChild.style.transform = `scaleX(${fraction.toFixed(5)})`;
-                trk.querySelector('.md-kn-rail').style.transform = `translateX(${(fraction * 100).toFixed(3)}%)`;
+                trk.firstElementChild.style.transform = `scaleX(${edge.toFixed(5)})`;
+                trk.querySelector('.md-kn-rail').style.transform = `translateX(${(edge * 100).toFixed(3)}%)`;
                 trk.setAttribute('aria-valuenow', String(Math.round(t)));
             }
+            fluid?.setProgress(fraction);
             const timeText = formatClock(t);
             const durText = formatClock(d);
             if (timeText !== state.lastTimeText) {
@@ -313,22 +307,27 @@
             const rect = trk.getBoundingClientRect();
             const d = duration();
             if (!(d > 0) || rect.width <= 0) return null;
-            const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+            // 进度边界在播放条宽度的 6%～94% 之间走（两端是播放键和音量键），按同样的比例反算。
+            const fraction = Math.min(1, Math.max(0, ((clientX - rect.left) / rect.width - PROGRESS_INSET) / (1 - 2 * PROGRESS_INSET)));
             return fraction * d;
         };
         for (const trk of el.tracks) {
+            // 在播放条空白处按下：横向拖动超过 4px 才算拖进度，否则就是一次普通点击（交给播放条）。
+            let pending = null;
+            let swallowClick = false;
             listen(trk, 'pointerdown', (event) => {
                 if (event.button !== 0) return;
-                const time = seekFromPointer(trk, event.clientX);
-                if (time === null) return;
-                event.preventDefault();
-                event.stopPropagation();
+                pending = { x: event.clientX, pointerId: event.pointerId };
                 trk.setPointerCapture?.(event.pointerId);
-                state.dragging = { time, trk, pointerId: event.pointerId };
-                trk.classList.add('md-held');
-                renderProgress();
             });
             listen(trk, 'pointermove', (event) => {
+                if (!state.dragging && pending && Math.abs(event.clientX - pending.x) > 4) {
+                    const time = seekFromPointer(trk, event.clientX);
+                    if (time === null) { pending = null; return; }
+                    state.dragging = { time, trk, pointerId: pending.pointerId };
+                    trk.classList.add('md-held');
+                    syncExpanded();
+                }
                 if (!state.dragging || state.dragging.trk !== trk) return;
                 const time = seekFromPointer(trk, event.clientX);
                 if (time === null) return;
@@ -336,17 +335,23 @@
                 renderProgress();
             });
             const finish = (event, commit) => {
+                pending = null;
+                trk.releasePointerCapture?.(event.pointerId);
                 if (!state.dragging || state.dragging.trk !== trk) return;
                 const { time } = state.dragging;
                 state.dragging = null;
+                swallowClick = true;
                 trk.classList.remove('md-held');
-                trk.releasePointerCapture?.(event.pointerId);
                 if (commit) app.seekTo?.(time);
                 kickProgress();
             };
             listen(trk, 'pointerup', (event) => finish(event, true));
             listen(trk, 'pointercancel', (event) => finish(event, false));
-            listen(trk, 'click', (event) => event.stopPropagation());
+            listen(trk, 'click', (event) => {
+                if (!swallowClick) return;
+                swallowClick = false;
+                event.stopPropagation();
+            });
             listen(trk, 'keydown', (event) => {
                 const d = duration();
                 if (!(d > 0)) return;
@@ -377,6 +382,11 @@
             }
             if (!dwellTimer) dwellTimer = later(() => { dwellTimer = null; setQuick(true); }, QUICK_DWELL_MS);
         });
+        listen(el.cap, 'pointermove', (event) => {
+            if (event.pointerType === 'touch') return;
+            fluid?.pointer(event.clientX);
+        });
+        listen(el.cap, 'pointerleave', () => fluid?.pointer(null));
         listen(el.dockIn, 'pointerleave', () => {
             cancel(expandTimer); expandTimer = null;
             cancel(dwellTimer); dwellTimer = null;
@@ -389,7 +399,7 @@
             }, HOVER_COLLAPSE_MS);
         });
         listen(el.cap, 'click', (event) => {
-            if (event.target.closest('button, .md-trk')) return;
+            if (event.target.closest('button')) return;
             // 舞台里点胶囊就在要去的地方，这一下改成打开命令面板。
             if (!stageActive()) app.stageHost?.enter?.();
             else if (palette) palette.open();
@@ -427,6 +437,7 @@
                 ? icon('pause', 20, { fill: 'currentColor' })
                 : `<span class="md-play-nudge">${icon('play', 20, { fill: 'currentColor' })}</span>`;
             el.play.setAttribute('aria-label', playing ? '暂停' : '播放');
+            el.play.dataset.on = playing ? '1' : '0';
         };
         listen(el.play, 'click', (event) => {
             event.stopPropagation();
@@ -456,6 +467,42 @@
         listen($('.md-zone.md-r'), 'pointerenter', () => showPreview(neighbour(1)));
         listen($('.md-zone.md-l'), 'pointerleave', () => showPreview(null));
         listen($('.md-zone.md-r'), 'pointerleave', () => showPreview(null));
+        // 条上的「下一首、再下一首」：越往后越糊，悬停变清楚，点它就切过去。
+        // 手动队列里的歌点了就从队列里拿掉；上下文里的直接跳到那一首。
+        const upNext = () => {
+            if (typeof app.getUpNext === 'function') {
+                const up = app.getUpNext(2);
+                return [...up.manual.map((track, i) => ({ track, manual: i })), ...up.context.map((track) => ({ track, manual: -1 }))].slice(0, 2);
+            }
+            const one = neighbour(1);
+            return one ? [{ track: one, manual: -1 }] : [];
+        };
+        let nextRows = [];
+        function renderNext() {
+            nextRows = upNext();
+            el.nx.forEach((button, i) => {
+                const row = nextRows[i];
+                button.hidden = !row;
+                if (!row) return;
+                const name = trackTitle(row.track);
+                if (button.textContent !== name) button.textContent = name;
+                button.setAttribute('aria-label', `切到 ${name}`);
+                button.title = i === 0 ? `下一首：${name}` : `再下一首：${name}`;
+            });
+        }
+        el.nx.forEach((button, i) => listen(button, 'click', (event) => {
+            event.stopPropagation();
+            const row = nextRows[i];
+            if (!row) return;
+            showPreview(null);
+            if (i === 0) { app.nextTrack?.(); return; }
+            const index = (app.playlist || []).indexOf(row.track);
+            if (index < 0) return;
+            if (row.manual >= 0) app.queueRemove?.(row.manual);
+            app.loadTrack?.(index);
+        }));
+        listen(document, 'music-queue-change', () => renderNext());
+
         const slideTitle = (dir) => {
             if (reducedMotion?.matches) return;
             el.cur.style.transition = 'none';
@@ -480,6 +527,7 @@
             el.modeSlot.classList.toggle('md-on', mode !== 'repeat');
             el.modeSlot.setAttribute('aria-label', MODE_LABELS[mode] || '播放模式');
             el.modeSlot.title = MODE_LABELS[mode] || '播放模式';
+            renderNext();
         };
         listen(el.modeSlot, 'click', (event) => { event.stopPropagation(); cycleMode(); });
 
@@ -502,9 +550,82 @@
             timers.add(vtipTimer);
         };
         listen(el.volSlot, 'click', (event) => { event.stopPropagation(); toggleMute(); flashVolume(); });
+        // 悬停音量键一会儿（或者在上面滚轮）：音量像一滴水从播放条里分裂上去，里面是一根竖着的音量条，可以拖。
+        let volOpenTimer = null;
+        let volCloseTimer = null;
+        const placeRail = () => {
+            const slot = el.volSlot.getBoundingClientRect();
+            const box = el.dockIn.getBoundingClientRect();
+            const bar = el.cap.getBoundingClientRect();
+            if (!slot.width) return;
+            el.vrail.style.left = `${Math.round(slot.left + slot.width / 2 - box.left)}px`;
+            el.vrail.style.bottom = `${Math.round(box.bottom - bar.top + 16)}px`;
+        };
+        const setVolumeOpen = (open) => {
+            cancel(volOpenTimer); volOpenTimer = null;
+            if (open) { cancel(volCloseTimer); volCloseTimer = null; }
+            if (state.volOpen === open) return;
+            state.volOpen = open;
+            if (open) placeRail();
+            host.classList.toggle('md-vopen', open);
+            el.vrail.setAttribute('aria-hidden', String(!open));
+            el.vrail.tabIndex = open ? 0 : -1;
+            el.volSlot.setAttribute('aria-expanded', String(open));
+            fluid?.setVolumeOpen(open);
+        };
+        const scheduleVolumeClose = () => {
+            if (volCloseTimer || state.volDrag) return;
+            volCloseTimer = later(() => { volCloseTimer = null; setVolumeOpen(false); }, 600);
+        };
+        listen(el.volSlot, 'pointerenter', (event) => {
+            if (event.pointerType === 'touch') return;
+            cancel(volCloseTimer); volCloseTimer = null;
+            if (!state.volOpen && !volOpenTimer) volOpenTimer = later(() => setVolumeOpen(true), 280);
+        });
+        listen(el.volSlot, 'pointerleave', () => { cancel(volOpenTimer); volOpenTimer = null; if (state.volOpen) scheduleVolumeClose(); });
+        listen(el.vrail, 'pointerenter', () => { cancel(volCloseTimer); volCloseTimer = null; });
+        listen(el.vrail, 'pointerleave', () => scheduleVolumeClose());
+        const volumeFromRail = (clientY) => {
+            const rect = el.vrail.getBoundingClientRect();
+            if (!(rect.height > 0)) return readVolume();
+            return Math.round(Math.min(1, Math.max(0, (rect.bottom - clientY) / rect.height)) * 100) / 100;
+        };
+        listen(el.vrail, 'pointerdown', (event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            el.vrail.setPointerCapture?.(event.pointerId);
+            state.volDrag = true;
+            setVolume(volumeFromRail(event.clientY));
+            flashVolume();
+        });
+        listen(el.vrail, 'pointermove', (event) => {
+            if (!state.volDrag) return;
+            setVolume(volumeFromRail(event.clientY));
+            flashVolume();
+        });
+        const endVolDrag = (event) => {
+            if (!state.volDrag) return;
+            state.volDrag = false;
+            el.vrail.releasePointerCapture?.(event.pointerId);
+            if (!el.vrail.matches(':hover') && !el.volSlot.matches(':hover')) scheduleVolumeClose();
+        };
+        listen(el.vrail, 'pointerup', endVolDrag);
+        listen(el.vrail, 'pointercancel', endVolDrag);
+        listen(el.vrail, 'keydown', (event) => {
+            const delta = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 0.05 : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -0.05 : 0;
+            if (event.key === 'Escape') { setVolumeOpen(false); el.volSlot.focus(); event.stopPropagation(); return; }
+            if (!delta) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setVolume(Math.round((readVolume() + delta) * 100) / 100);
+            flashVolume();
+        });
+        listen(el.vrail, 'click', (event) => event.stopPropagation());
         listen(el.volSlot, 'wheel', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            setVolumeOpen(true);
             const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
             wheelAcc += (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
             const steps = Math.trunc(wheelAcc / 100); // 鼠标滚轮一格约 100px
@@ -513,14 +634,14 @@
             setVolume(Math.round((readVolume() - steps * 0.05) * 100) / 100);
             flashVolume();
         }, { passive: false });
-        listen(el.np, 'click', () => app.stageHost?.enter?.());
 
         const renderStage = () => {
             const inStage = stageActive();
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
-            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K）' : '点一下进入歌词舞台';
+            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K），左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
+            syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
         };
@@ -533,18 +654,18 @@
             const cover = coverUrl(track);
             const key = track?.path || '';
             el.title.textContent = title;
-            el.npTitle.textContent = title;
-            el.npArtist.textContent = artist;
+            el.artist.textContent = artist;
             el.pTitle.textContent = title;
             el.pArtist.textContent = artist;
-            el.np.hidden = !track;
+            el.cap.classList.toggle('md-notrack', !track);
             const coverCss = cover ? `url("${cover.replace(/"/g, '%22')}")` : '';
-            el.npImg.style.backgroundImage = coverCss;
-            el.npImg.classList.toggle('md-empty', !cover);
             el.pCover.innerHTML = cover ? '' : icon('music', 18);
             el.pCover.style.backgroundImage = coverCss;
             if (key !== state.trackKey) {
+                // 换歌：上一首像一滴水从右边分裂出去蒸发掉（第一次渲染不算）。
+                if (state.trackKey) fluid?.split();
                 state.trackKey = key;
+                renderNext();
                 // 换了歌，上一首的加载失败提示就不用再留着了。
                 if (state.noticeTrackKey && state.noticeTrackKey !== key) { global.MusicToast?.dismiss('playback'); state.noticeTrackKey = ''; }
                 state.lyricIndex = -2;
@@ -596,6 +717,11 @@
                 const btn = row.querySelector('[data-act="mute"]');
                 const name = volumeIcon(v);
                 if (btn.dataset.icon !== name) { btn.dataset.icon = name; btn.innerHTML = icon(name, 17); }
+            }
+            if (el.vfill) {
+                el.vfill.style.transform = `scaleY(${v.toFixed(3)})`;
+                el.vrail.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+                el.vrail.setAttribute('aria-valuetext', v > 0.001 ? `${Math.round(v * 100)}%` : '已静音');
             }
             if (el.volSlot) {
                 const name = volumeIcon(v);
@@ -993,6 +1119,7 @@
                 const cur = modes.indexOf(currentStageMode());
                 const next = modes[(cur + Number(target.dataset.d) + modes.length) % modes.length];
                 if (next) app.stageHost?.setMode?.(next.id);
+                syncGlow();
                 closePop();
                 renderBody();
             } else if (act === 'scene-pick') {
@@ -1043,6 +1170,7 @@
                 el.hdl.classList.add('md-open');
                 el.handle.setAttribute('aria-expanded', 'true');
                 el.handle.setAttribute('aria-label', '关闭面板');
+                fluid?.setRingDocked(false);
             }
             renderTabs();
             renderBody();
@@ -1056,6 +1184,7 @@
             el.hdl.classList.remove('md-open');
             el.handle.setAttribute('aria-expanded', 'false');
             el.handle.setAttribute('aria-label', '打开面板');
+            fluid?.setRingDocked(true);
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
         listen(el.handle, 'click', togglePanel);
@@ -1150,7 +1279,7 @@
             const inStage = stageActive();
             if (inStage !== lastStage) { lastStage = inStage; renderStage(); }
             const light = document.body.classList.contains('light-theme');
-            if (light !== lastTheme) { lastTheme = light; if (state.panelOpen && state.tab === '控制') renderBody(); }
+            if (light !== lastTheme) { lastTheme = light; syncGlow(); if (state.panelOpen && state.tab === '控制') renderBody(); }
         });
         // 标题、歌手、封面都由播放器写到旧卡片上；跟着它们变。
         observe(app.trackTitle, { childList: true, characterData: true, subtree: true }, renderTrack);
@@ -1179,7 +1308,8 @@
         });
         listen(document, 'visibilitychange', () => { if (!document.hidden) kickProgress(); });
         listen(global, 'resize', () => {
-            animateCapsule(true);
+            animateCapsule();
+            if (state.volOpen) placeRail();
             if (state.panelOpen) placeMarks(el.pnl);
         });
 
@@ -1360,7 +1490,10 @@
         renderVolume();
         state.expanded = shouldExpand();
         el.cap.classList.toggle('md-ex', state.expanded);
-        animateCapsule(true);
+        syncFluid();
+        if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => syncFluid()));
+        // 字体和布局稳定后再量一次（流体层要对齐按钮的真实位置）。
+        requestAnimationFrame(() => { if (!state.destroyed) animateCapsule(); });
         kickProgress();
         lastPlaying = app.isPlaying === true;
         lastStage = stageActive();
@@ -1385,7 +1518,8 @@
                 global.MusicToast?.clear();
                 for (const id of timers) clearTimeout(id);
                 timers.clear();
-                if (springFrame) cancelAnimationFrame(springFrame);
+                fluid?.destroy();
+                fluid = null;
                 observers.forEach((observer) => observer.disconnect());
                 cleanups.splice(0).forEach((fn) => fn());
                 document.body.classList.remove('music-dock-on', 'music-dock-sheet-open');

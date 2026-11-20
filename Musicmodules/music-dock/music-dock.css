@@ -50,90 +50,58 @@ body.music-dock-on .music-player .controls {
 }
 #music-dock-root .md-i { display: block; flex: none; }
 
-/* ───────── 左下：正在播放药丸 ───────── */
-.md-np {
-  position: fixed;
-  left: 24px;
-  bottom: 32px;
-  z-index: 40;
-  pointer-events: auto;
-  display: flex;
-  min-width: 240px;
-  max-width: calc(100vw - 48px);
-  align-items: center;
-  gap: 12px;
-  overflow: hidden;
-  border-radius: 9999px;
-  border: 1px solid var(--md-pill-border) !important;
-  padding: 8px 20px 8px 8px !important;
-  text-align: left;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1);
-  background: var(--md-pill-bg) !important;
-  color: var(--md-pill-fg) !important;
-  transition: background-color .15s, opacity .35s ease-out, transform .35s ease-out;
-  animation: md-np-in .35s ease-out both;
+/* ───────── 流体播放条的颜色（底栏专用；以后可以搬进 music-tokens.css 的 --md-fluid-*） ───────── */
+#music-dock-root {
+  --md-bar-w: min(640px, calc(100vw - 32px));
+  --md-bar-h: 64px;
+  --md-fl-ink: #f1ece6;
+  --md-fl-ink2: rgba(241, 236, 230, .62);
+  --md-fl-ink-rgb: 241, 236, 230;
+  --md-fl-pb-bg: #f1ece6;
+  --md-fl-pb-fg: #1d1b1a;
+  --md-fl-bloom: .12;
+  --md-fl-mist: rgba(20, 18, 17, .22);
+  --md-fl-low-bg: #2b2927;
+  --md-fl-low-fill: #4a3a32;
+  --md-fl-low-edge: rgba(255, 255, 255, .08);
+  --md-fl-ring: #fff;
 }
-.md-np:hover { background: var(--md-pill-bg-hover) !important; }
-.md-np:active { opacity: .85; }
-.md-np[hidden],
-body.music-stage-active .md-np { display: none; }
-@keyframes md-np-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
-.md-np-cv {
-  position: relative;
-  display: flex;
-  height: 44px;
-  width: 44px;
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: 9999px;
-  background: var(--md-pill-cover);
-}
-.md-np-img { position: absolute; inset: 0; background: center / cover no-repeat; }
-.md-np-img.md-empty { background-image: url("../../assets/musicdark.jpeg"); }
-body.light-theme .md-np-img.md-empty { background-image: url("../../assets/musiclight.jpeg"); }
-.md-np-tx { display: block; min-width: 0; max-width: 200px; flex: 1; }
-.md-np-k {
-  display: block;
-  height: 10px;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 10px;
-  letter-spacing: .14em;
-  color: var(--md-pill-kicker);
-  user-select: none;
-}
-.md-np-t {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 16px;
-}
-.md-np-a {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 14px;
-  color: var(--md-pill-sub);
+body.light-theme #music-dock-root {
+  --md-fl-ink: #2a2522;
+  --md-fl-ink2: rgba(42, 37, 34, .6);
+  --md-fl-ink-rgb: 42, 37, 34;
+  --md-fl-pb-bg: #2a2522;
+  --md-fl-pb-fg: #fff;
+  --md-fl-bloom: .55;
+  --md-fl-mist: rgba(255, 255, 255, .22);
+  --md-fl-low-bg: #f7f2ee;
+  --md-fl-low-fill: #f2d6c4;
+  --md-fl-low-edge: rgba(42, 37, 34, .08);
 }
 
-/* ───────── 底部中间：进度胶囊 ───────── */
+/* ───────── 流体层：雾床 + SVG 形状（music-dock-fluid.js 生成） ───────── */
+.md-mist {
+  position: fixed;
+  height: 250px;
+  z-index: 48;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(26px) saturate(1.3);
+  backdrop-filter: blur(26px) saturate(1.3);
+  background: radial-gradient(60% 70% at 50% 85%, var(--md-fl-mist), transparent 70%);
+  -webkit-mask-image: radial-gradient(55% 65% at 50% 82%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(55% 65% at 50% 82%, #000 30%, transparent 75%);
+}
+.md-fluid { position: fixed; z-index: 50; pointer-events: none; overflow: visible; }
+.md-fl-bloom { fill: #fff; opacity: var(--md-fl-bloom); }
+
+/* ───────── 底部中间：流体播放条 ───────── */
 .md-dock {
   position: fixed;
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
   z-index: var(--mt-z-dock, 60);
-  width: 100%;
-  max-width: min(32rem, 100vw);
-  padding: 0 16px;
+  width: var(--md-bar-w);
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -144,20 +112,18 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
   width: 100%;
   display: flex;
   justify-content: center;
-  padding-bottom: 32px;
+  padding-bottom: 24px;
 }
 .md-quick {
   position: absolute;
   bottom: 100%;
-  left: 0;
-  right: 0;
+  left: 64px;
   display: flex;
-  justify-content: center;
   pointer-events: none;
 }
 .md-quick-in {
   pointer-events: none;
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   opacity: 0;
   transform: translateY(6px);
   visibility: hidden;
@@ -194,131 +160,99 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 
 .md-cap {
   position: relative;
-  overflow: hidden;
-  border-radius: 9999px;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  cursor: pointer;
-  background: var(--md-capsule-bg);
-  border: 1px solid var(--md-capsule-border);
-  box-shadow: var(--md-capsule-shadow);
-  padding: 8px 16px;
-  transition: background-color .3s, padding .2s var(--mt-ease, ease);
-  contain: layout paint;
-}
-.md-cap:hover { background: var(--md-capsule-bg-hover); }
-.md-cap.md-ex {
-  background: var(--md-capsule-bg-open);
-  box-shadow: var(--md-capsule-shadow-open);
-  padding: 12px;
-}
-.md-cap-c {
+  width: 100%;
+  height: var(--md-bar-h);
+  border-radius: calc(var(--md-bar-h) / 2);
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 32px;
-  padding: 0 16px;
-}
-.md-cap-e { display: none; }
-.md-cap.md-ex .md-cap-c { display: none; }
-.md-cap.md-ex .md-cap-e {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  column-gap: 16px;
-  row-gap: 8px;
-  align-items: center;
-  width: 100%;
-}
-.md-prow { display: flex; align-items: center; gap: 12px; width: 100%; }
-.md-tm {
-  font: 500 10px/15px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  color: var(--md-time);
-  opacity: .6;
-  width: 32px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+  gap: 14px;
+  padding: 0 10px 0 6px;
+  color: var(--md-fl-ink);
+  cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
-.md-tm.md-r { text-align: right; }
-.md-trk {
-  position: relative;
-  flex: 1;
-  height: 6px;
-  border-radius: 9999px;
-  background: var(--md-track);
-  cursor: pointer;
-  touch-action: none;
+/* 流体层开着时播放条本身透明，形状和材质都由 SVG 画；节能档退成不透明的实色。 */
+.md-fl-low .md-cap {
+  background: var(--md-fl-low-bg);
+  box-shadow: 0 0 0 1px var(--md-fl-low-edge), 0 12px 30px -14px rgba(0, 0, 0, .35);
+  overflow: hidden;
 }
-.md-trk::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; bottom: -8px; }
+.md-cap > :not(.md-trk) { position: relative; z-index: 1; }
+
+/* 进度：整条都是拖动区。流体档里进度就是实心和雾的边界，这里不再画线；节能档里填一块浅色表示播过的部分。 */
+.md-trk {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  touch-action: none;
+  outline-offset: 3px;
+}
 .md-fill {
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
-  background: var(--md-tp);
+  border-radius: inherit;
+  background: var(--md-fl-low-fill);
   transform-origin: left;
   transform: scaleX(0);
+  display: none;
 }
+.md-fl-low .md-fill { display: block; }
 .md-kn-rail { position: absolute; inset: 0; pointer-events: none; }
 .md-kn {
   position: absolute;
   left: 0;
-  top: -3px;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  border-radius: 9999px;
-  background: var(--md-tp);
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--md-fl-ink);
   opacity: 0;
   transition: opacity .15s;
 }
-.md-trk:hover .md-kn,
 .md-trk.md-held .md-kn,
-.md-trk:focus-visible .md-kn { opacity: 1; }
+.md-trk:focus-visible .md-kn { opacity: .5; }
 
 #music-dock-root .md-pb {
-  grid-column: 1;
-  grid-row: 1 / 3;
-  display: flex;
-  height: 48px;
-  width: 48px;
+  display: grid;
+  place-items: center;
+  height: 52px;
+  width: 52px;
   flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: var(--md-tp);
-  color: var(--md-on-tp);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1);
-  transition: transform .15s;
+  border-radius: 50%;
+  background: var(--md-fl-pb-bg);
+  color: var(--md-fl-pb-fg);
+  transition: border-radius .5s cubic-bezier(.3, 1.7, .45, 1), transform .3s cubic-bezier(.3, 1.7, .45, 1);
 }
-#music-dock-root .md-pb:hover { transform: scale(1.05); }
-#music-dock-root .md-pb:active { transform: scale(.96); }
-.md-play-nudge { display: block; margin-left: 4px; }
-.md-ttl { grid-column: 2; grid-row: 1; min-width: 0; padding: 0 8px; }
-.md-tnav { position: relative; min-width: 0; user-select: none; padding: 0 4px; }
-.md-zone { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; width: 56px; z-index: 1; }
-.md-zone.md-l { left: 0; justify-content: flex-start; padding-left: 4px; }
-.md-zone.md-r { right: 0; justify-content: flex-end; padding-right: 4px; }
+#music-dock-root .md-pb[data-on="1"] { border-radius: 18px; }
+#music-dock-root .md-pb:active { transform: scale(.9); }
+#music-dock-root .md-pb:focus-visible { outline: 2px solid var(--md-fl-ink); outline-offset: 3px; }
+.md-play-nudge { display: block; margin-left: 3px; }
+
+/* 正在播放：歌名 + 「歌手 · 01:24 / 03:34」；悬停左右半边换成上一首 / 下一首的名字 */
+.md-ttl { flex: 0 1 210px; min-width: 0; pointer-events: none; transition: filter .6s, opacity .6s; }
+.md-tnav { position: relative; min-width: 0; }
+.md-zone { position: absolute; top: 0; height: 22px; width: 50%; display: flex; align-items: center; z-index: 1; pointer-events: auto; }
+.md-zone.md-l { left: -18px; justify-content: flex-start; }
+.md-zone.md-r { right: -4px; justify-content: flex-end; }
 #music-dock-root .md-arw {
-  display: flex;
-  height: 24px;
-  width: 24px;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  height: 20px;
+  width: 20px;
   border-radius: 9999px;
   opacity: 0;
   transition: opacity .2s;
 }
 .md-tnav:hover .md-arw,
-#music-dock-root .md-arw:focus-visible { opacity: .7; }
-#music-dock-root .md-arw:hover { opacity: 1; background: var(--md-hover); }
-.md-txt { pointer-events: none; position: relative; height: 24px; }
+#music-dock-root .md-arw:focus-visible { opacity: .6; }
+#music-dock-root .md-arw:hover { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }
+.md-txt { position: relative; height: 22px; }
 .md-txt > div {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 56px;
-  right: 56px;
+  inset: 0 18px 0 0;
   display: flex;
   align-items: center;
   transition: opacity .22s ease-out, transform .22s ease-out;
@@ -328,33 +262,102 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 700;
+  font: 700 16px/22px var(--mt-font-ui);
 }
 .md-pv { opacity: 0; }
 .md-tnav.md-previewing .md-cur { opacity: 0; }
-.md-tnav.md-previewing .md-pv { opacity: .45; }
-.md-slots { grid-column: 3; grid-row: 1 / 3; display: flex; align-items: center; gap: 4px; }
+.md-tnav.md-previewing .md-pv { opacity: .55; }
+.md-sub {
+  display: flex;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--md-fl-ink2);
+  white-space: nowrap;
+}
+.md-sub [data-md="artist"] { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.md-sub [data-md="artist"]:empty { display: none; }
+.md-sub [data-md="artist"]:not(:empty) + .md-tms::before { content: "·"; margin: 0 5px; }
+.md-tms { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* 下一首、再下一首：越往后越糊，悬停凝固 */
+.md-nx { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 22px; overflow: hidden; padding: 6px 0; }
+#music-dock-root .md-nxb {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 15px/22px var(--mt-font-ui);
+  filter: blur(1.6px);
+  opacity: .6;
+  transition: filter .7s, opacity .7s;
+}
+#music-dock-root .md-nxb.md-nx2 { filter: blur(3.4px); opacity: .32; }
+#music-dock-root .md-nxb:hover,
+#music-dock-root .md-nxb:focus-visible { filter: none; opacity: .9; }
+.md-nxb[hidden] { display: none; }
+
+.md-slots { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 #music-dock-root .md-slot {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
   border-radius: 9999px;
-  padding: 8px;
-  opacity: .4;
+  opacity: .55;
   transition: transform .18s cubic-bezier(.2, .8, .2, 1), background-color .15s, opacity .15s;
 }
-#music-dock-root .md-slot:hover { opacity: 1; background: var(--md-slot-hover); }
-#music-dock-root .md-slot.md-on { opacity: 1; background: var(--md-slot-on-bg); color: var(--md-slot-on-fg); }
+#music-dock-root .md-slot:hover { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .08); }
+#music-dock-root .md-slot.md-on { opacity: 1; }
 #music-dock-root .md-slot:active { transform: scale(.9); }
-#music-dock-root .md-vslot.md-vshow { opacity: 1; }
-.md-cap-e > .md-prow { grid-column: 2; grid-row: 2; padding: 0 8px; }
+#music-dock-root .md-vslot.md-vshow,
+.md-vopen #music-dock-root .md-vslot,
+#music-dock-root.md-vopen .md-vslot { opacity: 1; }
 
-/* ───────── 右下：面板把手 ───────── */
+/* 暂停：整条化成雾，文字也跟着糊一点；鼠标移上来（关注）又凝固 */
+#music-dock-root.md-vapor .md-ttl { filter: blur(1.2px); opacity: .72; }
+#music-dock-root.md-vapor .md-nxb { opacity: .4; }
+
+/* 音量水滴里的竖条 */
+.md-vrail {
+  position: absolute;
+  z-index: 2;
+  width: 8px;
+  height: 78px;
+  margin-left: -4px;
+  border-radius: 6px;
+  background: rgba(var(--md-fl-ink-rgb), .18);
+  cursor: ns-resize;
+  touch-action: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.md-vrail::before { content: ""; position: absolute; inset: -14px -20px; }
+.md-vfill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--md-fl-ink);
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+#music-dock-root.md-vopen .md-vrail { opacity: 1; pointer-events: auto; transition-delay: .18s; }
+#music-dock-root.md-fl-low .md-vrail { box-shadow: 0 0 0 14px var(--md-fl-low-bg), 0 0 0 15px var(--md-fl-low-edge), 0 14px 30px 6px rgba(0, 0, 0, .25); transition-delay: 0s; }
+
+.md-cap.md-notrack .md-nx,
+.md-cap.md-notrack .md-tms { visibility: hidden; }
+
+/* ───────── 设置小环（面板把手） ───────── */
+/* 节能档：固定在右下角的圆按钮。流体档：白色小环，平时停在播放条顶边，打开面板时飞到右下角。 */
 .md-hdl {
   position: fixed;
   right: 32px;
   bottom: 32px;
-  z-index: var(--mt-z-dock, 60);
+  z-index: calc(var(--mt-z-dock, 60) + 2);
   pointer-events: auto;
   width: 48px;
   height: 48px;
@@ -392,6 +395,24 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 .md-sw.md-x { opacity: 0; transform: scale(.5); }
 .md-hdl.md-open .md-sw.md-g { opacity: 0; transform: scale(.5); }
 .md-hdl.md-open .md-sw.md-x { opacity: 1; transform: none; }
+
+#music-dock-root.md-fl-on .md-hdl { left: 0; top: 0; right: auto; bottom: auto; width: 40px; height: 40px; will-change: transform; }
+#music-dock-root.md-fl-on .md-hdl button,
+#music-dock-root.md-fl-on .md-hdl.md-open button {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 6px solid var(--md-fl-ring);
+  box-shadow: 0 0 18px 4px rgba(255, 255, 255, .7), inset 0 0 8px rgba(255, 255, 255, .8);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--md-fl-ring);
+  transition: transform .3s cubic-bezier(.3, 1.7, .45, 1), box-shadow .3s;
+}
+#music-dock-root.md-fl-on .md-hdl button:hover { transform: scale(1.08); box-shadow: 0 0 24px 6px rgba(255, 255, 255, .8), inset 0 0 8px rgba(255, 255, 255, .8); }
+#music-dock-root.md-fl-on .md-hdl button:focus-visible { outline: 2px solid var(--md-fl-ring); outline-offset: 4px; }
+#music-dock-root.md-fl-on .md-sw.md-g { display: none; }
+#music-dock-root.md-fl-on .md-sw .md-i { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .45)); }
 
 /* ───────── 统一面板 ───────── */
 .md-pnl {
@@ -804,26 +825,21 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
 @media (max-width: 900px) {
   .md-sheet { right: 16px; left: 16px; width: auto; }
 }
-/* 紧凑档（窗口窄于 640）：胶囊收起和展开同宽，把手缩成 40 挂在胶囊右端，面板从胶囊右端往上长。 */
+/* 窄窗口：先收掉「再下一首」，再收掉「下一首」和播放模式，歌名优先 */
+@media (max-width: 759.98px) {
+  #music-dock-root .md-nxb.md-nx2 { display: none; }
+}
 @media (max-width: 639.98px) {
-  #music-dock-root { --md-cap-right: max(16px, calc((100vw - 480px) / 2)); }
-  .md-np { display: none; }
   .md-dock-in { padding-bottom: 16px; }
-  .md-cap { padding-right: 56px; }
-  .md-cap.md-ex { padding-right: 56px; }
-  .md-cap.md-ex .md-cap-e { column-gap: 10px; }
-  .md-ttl { padding: 0; }
-  .md-zone { width: 28px; }
-  .md-txt > div { left: 28px; right: 28px; }
-  .md-slots { gap: 0; }
-  /* 窄窗口里胶囊放不下第三个按钮，留给歌名；滚轮和 M 键照样能调 */
-  #music-dock-root .md-vslot { display: none; }
-  .md-cap-e > .md-prow { padding: 0; gap: 8px; }
-  .md-cap-c { padding: 0 4px 0 12px; }
-  .md-hdl { right: calc(var(--md-cap-right) + 8px); bottom: 21px; width: 40px; height: 40px; z-index: calc(var(--mt-z-dock, 60) + 1); }
-  #music-dock-root .md-hdl button { width: 40px; height: 40px; box-shadow: none; }
-  .md-pnl { right: var(--md-cap-right); bottom: 100px; margin-bottom: 0; max-width: calc(100vw - 2 * var(--md-cap-right)); max-height: calc(100vh - 150px); transform-origin: calc(100% - 28px) calc(100% + 60px); }
-  .md-sheet { bottom: 100px; }
+  .md-cap { gap: 10px; }
+  .md-quick { left: 0; }
+  .md-pnl { right: 16px; bottom: 150px; margin-bottom: 0; max-width: calc(100vw - 32px); max-height: calc(100vh - 190px); transform-origin: calc(100% - 28px) calc(100% + 60px); }
+  .md-sheet { bottom: 150px; }
+}
+@media (max-width: 519.98px) {
+  .md-nx { visibility: hidden; flex-basis: 0; }
+  #music-dock-root .md-slot[data-md="mode"] { display: none; }
+  .md-ttl { flex: 1 1 auto; }
 }
 /* 「降低动态」：body.music-reduce-motion 由音乐窗口的设置决定（跟随系统 / 开 / 关） */
 body.music-reduce-motion #music-dock-root *,
@@ -957,7 +973,9 @@ body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .46); }
 #music-dock-root .md-cmd .md-cmd-in:focus-visible { outline: none; box-shadow: none; }
 .md-cmd-kbd { flex-shrink: 0; border-radius: 6px; padding: 2px 6px; font: 10px/14px ui-monospace, Consolas, monospace; background: var(--md-fill); color: var(--md-t3); }
 body.music-dock-cmd-open .md-dock,
-body.music-dock-cmd-open .md-np { opacity: 0; pointer-events: none; }
+body.music-dock-cmd-open .md-fluid,
+body.music-dock-cmd-open .md-mist,
+body.music-dock-cmd-open .md-hdl { opacity: 0; pointer-events: none; }
 
 /* ───────── 提示层（music-toast.js）───────── */
 /* 挂在 body 上、独立于底栏，比底栏层高一级，弹窗（1000 起）仍然盖在它上面。 */
