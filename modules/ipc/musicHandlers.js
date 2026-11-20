@@ -212,6 +212,14 @@ async function readPlaylistFile() {
     return [];
 }
 
+// 要把一份非空的列表写成空列表时，先把原文件复制成 .bak（只留最近一份）。
+async function backupBeforeEmptying(file) {
+    try {
+        const current = await fs.readJson(file);
+        if (Array.isArray(current) && current.length > 0) await fs.copy(file, `${file}.bak`, { overwrite: true });
+    } catch (_) { /* 没有原文件或读不出来就不备份 */ }
+}
+
 // 先写临时文件再改名：写到一半退出或断电不会留下半截歌单。同一个文件的保存排队进行，
 // 排队期间又来的保存只留最后一份。歌单本身不缩进，几千首歌时少写一半字节。
 const jsonWriteQueues = new Map();
@@ -825,6 +833,10 @@ function initialize(options) {
 
         ipcMain.handle('save-music-playlist', async (event, playlist) => {
             try {
+                // 不是数组就不写：写进去之后下次读出来是空曲库。
+                if (!Array.isArray(playlist)) throw new TypeError('playlist must be an array');
+                // 一份非空曲库被清空时先留个备份：曲库读取失败后界面以空列表存盘，整个曲库就没了。
+                if (playlist.length === 0) await backupBeforeEmptying(MUSIC_PLAYLIST_FILE);
                 await writeJsonAtomic(MUSIC_PLAYLIST_FILE, playlist);
                 return { success: true };
             } catch (error) {
@@ -839,7 +851,8 @@ function initialize(options) {
         ipcMain.handle('get-custom-playlists', async () => {
             try {
                 if (await fs.pathExists(CUSTOM_PLAYLISTS_FILE)) {
-                    return await fs.readJson(CUSTOM_PLAYLISTS_FILE);
+                    const playlists = await fs.readJson(CUSTOM_PLAYLISTS_FILE);
+                    return Array.isArray(playlists) ? playlists : [];
                 }
                 return [];
             } catch (error) {
@@ -850,6 +863,8 @@ function initialize(options) {
 
         ipcMain.handle('save-custom-playlists', async (event, playlists) => {
             try {
+                if (!Array.isArray(playlists)) throw new TypeError('playlists must be an array');
+                if (playlists.length === 0) await backupBeforeEmptying(CUSTOM_PLAYLISTS_FILE);
                 await writeJsonAtomic(CUSTOM_PLAYLISTS_FILE, playlists, { spaces: 2 });
                 return { success: true };
             } catch (error) {
