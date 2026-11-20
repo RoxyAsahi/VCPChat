@@ -15,7 +15,8 @@
     const fmtTime = (sec) => {
         const s = Number(sec);
         if (!(s > 0)) return '--:--';
-        return pad(Math.floor(s / 60)) + ':' + pad(Math.floor(s % 60));
+        const h = Math.floor(s / 3600);
+        return (h ? h + ':' + pad(Math.floor(s / 60) % 60) : pad(Math.floor(s / 60))) + ':' + pad(Math.floor(s % 60));
     };
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -78,6 +79,8 @@
         if (!KINDS.some(([k]) => k === state.kind)) state.kind = 'all';
 
         const tracks = () => (Array.isArray(app.playlist) ? app.playlist : []);
+        // 时长：扫描器给的 duration，没有就用播放过后记下的；整页都没有时长时不显示这一列
+        const durationOf = (t, i) => (Number(t && t.duration) > 0 ? Number(t.duration) : Number(opts.durationOf?.(t, i)) || 0);
 
         const rebuild = () => {
             const index = opts.getIndex();
@@ -97,6 +100,7 @@
                 y += row.type === 'head' ? HEAD_H : ROW_H;
             });
             state.offsets[out.rows.length] = y;
+            el.classList.toggle('no-time', !out.rows.some((row) => row.type === 'track' && durationOf(tracks()[row.i], row.i) > 0));
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
             r.total.textContent = pad(out.count, 4) + ' / ' + pad(tracks().length, 4);
@@ -128,7 +132,7 @@
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             return `<span class="no">${esc(opts.fileNumber(t, row.i))}</span>`
                 + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
-                + `<span class="tm">${fmtTime(t.duration)}</span>`;
+                + `<span class="tm">${fmtTime(durationOf(t, row.i))}</span>`;
         };
 
         const paintRow = (node, row, k) => {

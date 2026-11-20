@@ -334,6 +334,22 @@
             return true;
         };
 
+        // 曲目没带时长时，播放过一次就记下来（按路径，存在本机），目录里能显示
+        const DURATION_KEY = 'musicArchiveDurations';
+        let durations = {};
+        try { durations = JSON.parse(localStorage.getItem(DURATION_KEY) || '{}') || {}; } catch (e) { durations = {}; }
+        const durationOf = (t) => (t && t.path && durations[t.path]) || 0;
+        const recordDuration = () => {
+            const t = tracks()[app.currentTrackIndex];
+            const d = Number(app.lastKnownDuration);
+            if (!t || !t.path || Number(t.duration) > 0 || !(d > 0) || Math.abs((durations[t.path] || 0) - d) < 1) return;
+            durations[t.path] = Math.round(d);
+            const keys = Object.keys(durations);
+            if (keys.length > 4000) for (const k of keys.slice(0, keys.length - 4000)) delete durations[k];
+            try { localStorage.setItem(DURATION_KEY, JSON.stringify(durations)); } catch (e) { /* 只是方便 */ }
+            list?.rebuild();
+        };
+
         let list = null;
         const LIST_KEY = 'musicArchiveList';
         let listPref = null;
@@ -439,12 +455,16 @@
                 dark: !document.body.classList.contains('light-theme')
             };
         };
-        const applyTheme = () => {
+        /* wave: true 时从当前选中格起一圈圈翻色（运行中切主题用）；第一次建场景直接换 */
+        const applyTheme = ({ wave = false } = {}) => {
             if (!state.scene) return;
             const th = readTheme();
-            state.scene.setTheme(th.colors, th.dark);
+            state.scene.setTheme(th.colors, th.dark, wave && isShown() ? { wave: { lane: state.lane, row: state.row } } : {});
             kick();
         };
+        /* 进播放页的过场期间（body.music-stage-entering）选中卡多抬一点；外部也可以直接调 raise(高度) */
+        const raise = (amount) => { state.scene?.raise(amount); kick(); };
+        const syncEntering = () => raise(document.body.classList.contains('music-stage-entering') ? 0.9 : undefined);
 
         let sceneQuality = null;
         const ensureScene = () => {
@@ -626,8 +646,10 @@
             const cls = document.body.className;
             const themeChanged = cls.includes('light-theme') !== lastBodyClass.includes('light-theme');
             const stageChanged = cls.includes('music-stage-active') !== lastBodyClass.includes('music-stage-active');
+            const enteringChanged = cls.includes('music-stage-entering') !== lastBodyClass.includes('music-stage-entering');
             lastBodyClass = cls;
-            if (themeChanged) applyTheme();
+            if (themeChanged) applyTheme({ wave: true });
+            if (enteringChanged) syncEntering();
             if (stageChanged && !cls.includes('music-stage-active') && isShown()) {
                 // 从播放页回来：旧界面的背景声纹不要重新起来
                 app.destroyAmbientPixi?.();
@@ -646,6 +668,7 @@
             if (!isShown()) return;
             if (dataChanged()) rebuild();
             updatePlaying();
+            recordDuration();
         }, 1000);
 
         const destroy = () => {
@@ -671,7 +694,7 @@
                 app,
                 Index: IndexLib,
                 getIndex: () => searchIndex,
-                getRecent: recentIndices,
+                getRecent: recentIndices, durationOf,
                 columnOfGroup: null,
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPick: (i, ctx) => goToTrack(i, ctx),
@@ -694,6 +717,8 @@
             playSelected,
             openSearch,
             setListOpen,
+            raise,
+            setThemeWave: () => applyTheme({ wave: true }),
             get list() { return list; },
             destroy,
             get mode() { return state.mode; },

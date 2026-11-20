@@ -224,6 +224,17 @@
         grooves.frustumCulled = false; grooves2.frustumCulled = false;
         scene.add(tags, rings, grooves, grooves2);
         const layers = [cards, tags, rings, grooves, grooves2];
+        // 卡身、圆点、浅槽的颜色放在每个实例上（材质本身取白），换主题时可以一张张翻过去
+        polymer.color.set('#ffffff'); ringMat.color.set('#ffffff'); grooveMat.color.set('#ffffff');
+        const TINTED = [[cards, 'card'], [rings, 'badge'], [grooves, 'groove'], [grooves2, 'groove']];
+        const tint = { card: new THREE.Color('#3b4448'), badge: new THREE.Color('#5d676b'), groove: new THREE.Color('#4a5559') };
+        const paintUniform = () => {
+            for (const [mesh, part] of TINTED) {
+                for (let i = 0; i < POOL; i++) mesh.setColorAt(i, tint[part]);
+                mesh.instanceColor.needsUpdate = true;
+            }
+        };
+        paintUniform();
 
         let lighting = LIGHTING.dark;
         let fontStack = 'sans-serif';
@@ -247,34 +258,96 @@
             tagTex.needsUpdate = true;
         };
 
-        /* colors: { paper, card, floor, badge, groove, font }，dark: 是否深色 */
-        const setTheme = (colors, dark) => {
+        /*
+         * 主题翻色。整体（背景、雾、地面、灯光）用 0.85 秒缓动过去；卡片按到原点的距离依次翻，
+         * 每张 0.58 秒，最远的晚 0.6 秒起步，1.18 秒后全部落定。中途再换一次，每张卡从它当时的颜色接着翻。
+         */
+        const GLOBAL_DUR = 0.85, CARD_DUR = 0.58, MAX_DELAY = 0.6, WAVE_TOTAL = 1.18;
+        const smooth = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+        const nowS = () => performance.now() / 1000;
+        const lookOf = (colors, l) => ({
+            bg: new THREE.Color(colors.paper), floor: new THREE.Color(colors.floor),
+            hemiSky: new THREE.Color(l.hemiSky), hemiGround: new THREE.Color(l.hemiGround), sheenColor: new THREE.Color(l.sheenColor),
+            hemi: l.hemi, key: l.key, fill: l.fill, exposure: l.exposure, sheen: l.sheen, clearcoat: l.clearcoat, fogNear: l.fogNear, fogFar: l.fogFar
+        });
+        const COLOR_KEYS = ['bg', 'floor', 'hemiSky', 'hemiGround', 'sheenColor'];
+        const NUM_KEYS = ['hemi', 'key', 'fill', 'exposure', 'sheen', 'clearcoat', 'fogNear', 'fogFar'];
+        const look = lookOf({ paper: '#11181b', floor: '#192125' }, LIGHTING.dark);
+        let lookFade = null;   // { from, to, t0 }
+        scene.background = look.bg.clone();
+        scene.fog = new THREE.Fog(look.bg.clone(), DIST + look.fogNear, DIST + look.fogFar);
+        const applyLook = (L) => {
+            scene.background.copy(L.bg);
+            scene.fog.color.copy(L.bg);
+            scene.fog.near = DIST + L.fogNear; scene.fog.far = DIST + L.fogFar;
+            floorMat.color.copy(L.floor);
+            polymer.sheen = L.sheen; polymer.sheenColor.copy(L.sheenColor); polymer.clearcoat = L.clearcoat;
+            hemi.color.copy(L.hemiSky); hemi.groundColor.copy(L.hemiGround); hemi.intensity = L.hemi;
+            key.intensity = L.key; fill.intensity = L.fill;
+            renderer.toneMappingExposure = L.exposure;
+        };
+        const lookAt = (fade, T) => {
+            const k = smooth((T - fade.t0) / GLOBAL_DUR);
+            const out = {};
+            for (const c of COLOR_KEYS) out[c] = fade.from[c].clone().lerp(fade.to[c], k);
+            for (const n of NUM_KEYS) out[n] = fade.from[n] + (fade.to[n] - fade.from[n]) * k;
+            return out;
+        };
+
+        let waves = [];        // { to: {card,badge,groove}, lane, row, t0 }
+        let tagPending = 0;    // 卡面小标签在波纹过半时换
+        const waveK = (w, lane, row, T) => smooth((T - w.t0 - Math.min(MAX_DELAY, Math.abs(row - w.row) * 0.034 + Math.abs(lane - w.lane) * 0.11)) / CARD_DUR);
+        const colorAt = (part, lane, row, T, k, out) => {
+            if (k < 0) return out.copy(tint[part]);
+            const w = waves[k];
+            const s = waveK(w, lane, row, T);
+            if (s >= 1) return out.copy(w.to[part]);
+            colorAt(part, lane, row, w.t0, k - 1, out);   // 这一波开始时它是什么颜色
+            return s > 0 ? out.lerp(w.to[part], s) : out;
+        };
+        const themeBusy = () => Boolean(lookFade || waves.length);
+
+        /* colors: { paper, card, floor, badge, groove, font }，dark: 是否深色，wave: { lane, row } 翻色原点 */
+        const setTheme = (colors, dark, { wave = null } = {}) => {
             lighting = dark ? LIGHTING.dark : LIGHTING.light;
             fontStack = colors.font || fontStack;
-            const bg = new THREE.Color(colors.paper);
-            scene.background = bg;
-            scene.fog = new THREE.Fog(bg, DIST + lighting.fogNear, DIST + lighting.fogFar);
-            floorMat.color.set(colors.floor);
-            polymer.color.set(colors.card);
-            polymer.sheen = lighting.sheen;
-            polymer.sheenColor.set(lighting.sheenColor);
-            polymer.clearcoat = lighting.clearcoat;
-            ringMat.color.set(colors.badge);
-            grooveMat.color.set(colors.groove);
-            hemi.color.set(lighting.hemiSky);
-            hemi.groundColor.set(lighting.hemiGround);
-            hemi.intensity = lighting.hemi;
-            key.intensity = lighting.key;
-            fill.intensity = lighting.fill;
             for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat]) m.envMapIntensity = lighting.env;
-            renderer.toneMappingExposure = lighting.exposure;
-            paintTag();
+            const to = lookOf(colors, lighting);
+            const parts = { card: new THREE.Color(colors.card), badge: new THREE.Color(colors.badge), groove: new THREE.Color(colors.groove) };
+            const T = nowS();
+            if (!wave || reducedMotion()) {
+                lookFade = null; waves = []; tagPending = 0;
+                Object.assign(look, to);
+                applyLook(look);
+                Object.assign(tint, parts);
+                paintUniform();
+                paintTag();
+            } else {
+                const from = lookFade ? lookAt(lookFade, T) : { ...look };
+                lookFade = { from, to, t0: T };
+                if (waves.length >= 3) { Object.assign(tint, waves[0].to); waves.shift(); }
+                waves.push({ to: parts, lane: wave.lane, row: wave.row, t0: T });
+                tagPending = T + 0.3;
+            }
             invalidate();
+        };
+        const stepTheme = (T) => {
+            if (lookFade) {
+                if (T - lookFade.t0 >= GLOBAL_DUR) { Object.assign(look, lookFade.to); lookFade = null; applyLook(look); }
+                else applyLook(lookAt(lookFade, T));
+            }
+            if (tagPending && T >= tagPending) { tagPending = 0; paintTag(); }
+            if (waves.length && T - waves[waves.length - 1].t0 >= WAVE_TOTAL) {
+                Object.assign(tint, waves[waves.length - 1].to);
+                waves = [];
+                paintUniform();
+            }
         };
 
         // ---- 状态 ----
         const target = { lane: 0, row: 0 };
         const camLane = { v: 0, vel: 0 }, camRow = { v: 0, vel: 0 }, shoulder = { v: 0, vel: 0 }, focus = { v: 0, vel: 0 }, lift = { v: 0.4, vel: 0 };
+        let liftGoal = 0.4;   // 选中卡抬起的高度；进播放页前会再抬高一些
         const pulses = [];
         const hoverLifts = new Map();
         let hovered = null;
@@ -317,7 +390,7 @@
             target.lane = lane; target.row = row;
             camLane.v = focus.v = lane; camRow.v = shoulder.v = row;
             camLane.vel = camRow.vel = shoulder.vel = focus.vel = 0;
-            lift.v = 0.4; lift.vel = 0;
+            lift.v = liftGoal; lift.vel = 0;
             pulses.length = 0;
             invalidate();
         };
@@ -334,7 +407,10 @@
             damp(camRow, target.row, rate, dt);
             damp(shoulder, target.row, rate, dt);
             damp(focus, target.lane, rate, dt);
-            damp(lift, 0.4, 26, dt);
+            damp(lift, liftGoal, reduced ? 40 : 26, dt);
+            stepTheme(T);
+            const tinting = waves.length > 0;
+            const tmpC = tinting ? (stepTheme.c || (stepTheme.c = new THREE.Color())) : null;
             const idleTarget = !reduced && now - lastInput > 2500 ? 1 : 0;
             idleGain += (idleTarget - idleGain) * Math.min(1, dt * 1.2);
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
@@ -363,6 +439,9 @@
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
+                    if (tinting) {
+                        for (const [mesh, part] of TINTED) mesh.setColorAt(i, colorAt(part, lane, row, T, waves.length - 1, tmpC));
+                    }
                     cellAt[i * 2] = lane;
                     cellAt[i * 2 + 1] = row;
                     i++;
@@ -375,6 +454,7 @@
             }
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
+            if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
 
             camera.position.copy(aim).addScaledVector(view, DIST);
             if (!reduced) { camera.position.x += pointer.x * 0.12; camera.position.y -= pointer.y * 0.12; }
@@ -383,7 +463,7 @@
             dirty = false;
 
             const settled = Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
-                && Math.abs(lift.v - 0.4) < 0.001 && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
+                && Math.abs(lift.v - liftGoal) < 0.001 && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0);
             return {
                 moving: !settled,
@@ -431,6 +511,13 @@
             invalidate();
         };
         const touch = () => { lastInput = performance.now(); idleGain = 0; };
+        /* 选中卡的抬起高度，不传回到默认 0.4 */
+        const raise = (amount) => {
+            const goal = Number.isFinite(amount) ? amount : 0.4;
+            if (goal === liftGoal) return;
+            liftGoal = goal;
+            invalidate();
+        };
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
@@ -446,10 +533,11 @@
         return {
             canvas,
             tier,
-            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, dispose,
+            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, dispose,
             get dirty() { return dirty; },
             get target() { return { ...target }; },
-            debug: () => ({ pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            get themeBusy() { return themeBusy(); },
+            debug: () => ({ waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 

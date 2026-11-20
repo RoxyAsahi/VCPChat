@@ -240,6 +240,8 @@ body.music-archive-off:not(.music-stage-active) .archive-return { display: block
 .archive-list-row .tx { min-width: 0; display: grid; gap: 3px; }
 .archive-list-row .tx b { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-list-row .tx em { font-style: normal; font-size: 10px; letter-spacing: .8px; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+.archive-list.no-time .archive-list-cols, .archive-list.no-time .archive-list-row { grid-template-columns: 92px 1fr; }
+.archive-list.no-time .archive-list-cols span:last-child, .archive-list.no-time .archive-list-row .tm { display: none; }
 .archive-list-row .tm { font-size: 11px; color: var(--ar-muted); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
 .archive-list-row.playing .no { color: var(--ar-accent); }
 .archive-list-row.playing .no::after { content: " ▸"; }
