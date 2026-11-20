@@ -236,10 +236,10 @@
          */
         const SANDBOX_VIEWS = {
             intro: { az: 40, el: 40, size: 66, target: [4, 12, 40] },
-            verse: { az: 40, el: 30, size: 50, target: [4, 15, 40] },
+            verse: { az: 40, el: 30, size: 45, target: [4, 15, 40] },
             prechorus: { az: 60, el: 26, size: 40, target: [22, 15, 42] },
             chorus: { az: 20, el: 23, size: 37, target: [8, 17, 52] },
-            interlude: { az: -38, el: 31, size: 50, target: [4, 15, 40] },
+            interlude: { az: -38, el: 31, size: 45, target: [4, 15, 40] },
             outro: { az: 46, el: 36, size: 70, target: [4, 10, 40] }
         };
         const sandboxNow = { az: 40, el: 30, size: 54, target: [4, 13, 40], at: null };
