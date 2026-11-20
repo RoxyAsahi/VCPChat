@@ -287,10 +287,45 @@
             if (lane === state.lane && row === state.row) return;
             state.lane = lane;
             state.row = row;
+            collapse();
+            const col = column();
+            if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
             syncList();
             kick();
+        };
+
+        /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
+        const focusByColumn = new Map();
+        const stepLane = (dl) => {
+            const n = state.columns.length;
+            if (!n || !dl) return;
+            const lane = state.lane + dl;
+            const col = state.columns[Model.wrap(lane, n)];
+            const remembered = col ? focusByColumn.get(col.id) : undefined;
+            let row = state.row;
+            if (col && col.items.length && remembered !== undefined) {
+                const m = col.items.length;
+                row = remembered + m * Math.round((state.row - remembered) / m);
+            }
+            select(lane, row);
+        };
+        /* 展开选中卡：多抬一点，焦点落到 ACCESS FILE；换选中就收回 */
+        let expanded = false;
+        const expandSelected = () => {
+            if (selectedIndex() < 0) return;
+            expanded = true;
+            root.classList.add('is-expanded');
+            if (!document.body.classList.contains('music-stage-entering')) state.scene?.raise(0.7);
+            refs.access.focus({ preventScroll: true });
+            kick();
+        };
+        const collapse = () => {
+            if (!expanded) return;
+            expanded = false;
+            root.classList.remove('is-expanded');
+            if (!document.body.classList.contains('music-stage-entering')) state.scene?.raise();
         };
 
         const playSelected = ({ stage = true, group = null } = {}) => {
@@ -656,11 +691,18 @@
                 kick();
             });
             canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); kick(); });
+            // 单击侧卡只把它移到中间；再点中间那张才展开（抬高、焦点落到 ACCESS FILE）；双击或回车播放
             canvas.addEventListener('click', (e) => {
                 const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
                 if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
-                if (c.lane === state.lane && c.row === state.row) playSelected();
+                if (c.lane === state.lane && c.row === state.row) expandSelected();
                 else select(c.lane, c.row);
+            });
+            canvas.addEventListener('dblclick', (e) => {
+                const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
+                if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
+                if (c.lane !== state.lane || c.row !== state.row) select(c.lane, c.row);
+                playSelected();
             });
             canvas.addEventListener('contextmenu', (e) => {
                 const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
@@ -732,14 +774,17 @@
             state.scene?.touch();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            // 鼠标滚轮一格就是一张（不累计余量）；触控板的小增量照常累计，惯性交给系统
+            const notch = e.deltaMode !== 0 || (Math.abs(e.deltaX) < 1 && Math.abs(e.deltaY) >= 50 && Number.isInteger(e.deltaY));
             if (horizontal) {
-                const n = wheelLanes((e.shiftKey ? e.deltaY : e.deltaX) * unit, e.timeStamp);
-                if (n) select(state.lane + n, state.row);
+                const n = notch ? Math.sign(e.shiftKey ? e.deltaY : e.deltaX) : wheelLanes((e.shiftKey ? e.deltaY : e.deltaX) * unit, e.timeStamp);
+                if (n) stepLane(n);
             } else {
-                const n = wheelRows(e.deltaY * unit, e.timeStamp);
+                const n = notch ? Math.sign(e.deltaY) : wheelRows(e.deltaY * unit, e.timeStamp);
                 if (n) {
                     select(state.lane, state.row + n);
-                    if (!reducedMotion()) {
+                    // 连续快速拨滚轮松手后再滑一段；触控板自己有惯性，不再叠
+                    if (notch && !reducedMotion()) {
                         inertia.push(n, performance.now() / 1000);
                         clearTimeout(inertiaTimer);
                         inertiaTimer = setTimeout(releaseWheel, 90);
@@ -755,8 +800,8 @@
                     case 'access': playSelected(); break;
                     case 'up': select(state.lane, state.row - 1); break;
                     case 'down': select(state.lane, state.row + 1); break;
-                    case 'left': select(state.lane - 1, state.row); break;
-                    case 'right': select(state.lane + 1, state.row); break;
+                    case 'left': stepLane(-1); break;
+                    case 'right': stepLane(1); break;
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
@@ -791,7 +836,13 @@
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
             stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
-            if (next) { e.preventDefault(); state.scene?.touch(); select(next.lane, next.row); return; }
+            if (next) {
+                e.preventDefault();
+                state.scene?.touch();
+                if (next.lane !== state.lane) stepLane(next.lane - state.lane);
+                else select(next.lane, next.row);
+                return;
+            }
             if (e.key === 'Enter') {
                 if (tag === 'BUTTON' && e.target.closest('#music-archive-view') && !e.target.closest('.archive-access, .archive-file-title')) return;
                 e.preventDefault(); playSelected(); return;

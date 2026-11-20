@@ -97,6 +97,9 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-access { display: flex; align-items: center; gap: 70px; margin-left: 58px; margin-top: 58px; font-size: 14px; letter-spacing: 1px; }
 .archive-access > span { font-size: 24px; transition: transform .3s; }
 .archive-access:hover > span { transform: translateX(9px); }
+/* 再点中间那张卡：展开，ACCESS FILE 亮起来等着回车 */
+#music-archive-view.is-expanded .archive-access { color: var(--ar-accent); }
+#music-archive-view.is-expanded .archive-access > span { transform: translateX(9px); }
 .archive-access.is-playing::before { content: ""; width: 6px; height: 6px; background: var(--ar-accent); margin-right: -58px; }
 /* 选中曲目的封面：按需加载，没有封面就不显示 */
 .archive-cover { position: absolute; left: 618px; top: 186px; width: 92px; height: 92px; background: center / cover no-repeat; opacity: 0; transition: opacity .35s; box-shadow: 0 0 0 1px rgba(var(--ar-paper-rgb), .6); }

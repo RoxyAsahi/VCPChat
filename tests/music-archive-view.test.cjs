@@ -367,3 +367,17 @@ test('Ctrl+L 定位当前播放，目录切回全部并滚到那一行', () => {
     assert.match(on.textContent, /Song 20/);
     f.close();
 });
+
+test('每一列记住上次停在第几首，换列回来回到那一首', () => {
+    const f = fixture({ playlists: [{ id: 'p', name: '夜间散步', tracks: ['/m/5', '/m/7', '/m/9', '/m/11', '/m/13'] }] });
+    f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown'); // 全部曲目第 6 首
+    f.key('ArrowRight');                       // 第一次进歌单：保持行号（第 6 行在 5 首的歌单里回绕到第 1 首 /m/5）
+    assert.equal(f.view.debug().selected, 5);
+    f.key('ArrowUp'); f.key('ArrowUp');        // 歌单里往回两首
+    const inPlaylist = f.view.debug().selected;
+    f.key('ArrowLeft');                        // 回全部曲目：回到第 6 首
+    assert.equal(f.view.debug().selected, 5);
+    f.key('ArrowRight');                       // 再进歌单：回到刚才那首
+    assert.equal(f.view.debug().selected, inPlaylist);
+    f.close();
+});
