@@ -106,6 +106,10 @@ function setupPlayer(app) {
     app.handlePhantomAudioEvent = (type) => {
         if (consumePhantomEcho(type)) return;
         if (app.isTrackLoading) return;
+        // 事件说的状态和占位音频此刻的状态对不上，就是迟到的回声（比如我们刚 play() 又 pause()，
+        // 机器很卡时 play 事件过了销账的时限才到）。真按媒体键时，事件到的那一刻两边是一致的。
+        const audio = app.phantomAudio;
+        if (audio && typeof audio.paused === 'boolean' && audio.paused !== (type === 'pause')) return;
         // 真人按媒体键不可能一秒好几次；短时间内来了一串，说明有东西在自激，直接不理。
         const now = Date.now();
         while (externalPhantomEvents.length && externalPhantomEvents[0] < now - 2000) externalPhantomEvents.shift();

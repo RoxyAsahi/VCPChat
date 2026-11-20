@@ -875,7 +875,6 @@ body.music-dock-stage-settings #music-stage .music-stage-settings { display: non
 }
 @media (max-width: 519.98px) {
   .md-nx { visibility: hidden; flex-basis: 0; }
-  #music-dock-root .md-slot[data-md="mode"] { display: none; }
   .md-ttl { flex: 1 1 auto; }
 }
 /* 「降低动态」：body.music-reduce-motion 由音乐窗口的设置决定（跟随系统 / 开 / 关） */
@@ -1667,7 +1666,6 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl button:focus-visible { outlin
 
 /* ───────── 窗口不够宽、抽屉又开着：播放条收窄让位（宽度由 music-dock.js 写进 --md-bar-w），内容按紧凑档收 ───────── */
 #music-dock-root.md-squeeze .md-nx { visibility: hidden; flex-basis: 0; }
-#music-dock-root.md-squeeze .md-slot[data-md="mode"] { display: none; }
 #music-dock-root.md-squeeze .md-ttl { flex: 1 1 auto; }
 body.music-reduce-motion .mtst-layer { transition: none; }
 
@@ -1685,3 +1683,15 @@ body.light-theme #music-dock-root { --md-dr-glass: rgba(252, 252, 253, .92); }
 #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .5); }
 body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 2px 10px rgba(40, 30, 20, .16), 0 0 0 .5px rgba(40, 30, 20, .06); }
 body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 3px 14px rgba(40, 30, 20, .22), 0 0 0 .5px rgba(40, 30, 20, .08); }
+
+/* ───────── 快捷行长在播放条右端 ─────────
+ * 条上右边只留一个「更多」；循环、播放列表、歌词舞台、音效、音量都在它上方那一团里，
+ * 指针停在「更多」上就从条里长出来。靠右对齐，音量在最右，音量水滴从它头顶接着往上长。 */
+.md-quick { left: auto; right: 34px; }
+.md-quick-in { padding-bottom: 20px; }
+@media (max-width: 639.98px) { .md-quick { left: auto; right: 12px; } }
+#music-dock-root .md-quick-g .md-slot { width: 36px; height: 36px; padding: 0; opacity: .7; }
+#music-dock-root .md-quick-g .md-slot:hover,
+#music-dock-root .md-quick-g .md-slot.md-on,
+#music-dock-root .md-quick-g .md-slot:focus-visible { opacity: 1; }
+#music-dock-root .md-more.md-on { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }

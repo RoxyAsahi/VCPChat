@@ -65,7 +65,13 @@
 
         host.innerHTML = `
 <div class="md-dock"><div class="md-dock-in">
-  <div class="md-quick"><div class="md-quick-in"><div class="md-quick-g" role="toolbar" aria-label="快捷操作"></div></div></div>
+  <div class="md-quick" id="music-dock-quick"><div class="md-quick-in"><div class="md-quick-g" role="toolbar" aria-label="快捷操作">
+    <button class="md-slot md-qb" type="button" data-md="mode"></button>
+    <button class="md-slot md-qb" type="button" data-q="queue" aria-label="播放列表" title="播放列表">${icon('list-music', 17)}</button>
+    <button class="md-slot md-qb" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 17)}</button>
+    <button class="md-slot md-qb" type="button" data-q="fx" aria-label="音效设置" title="音效设置">${icon('sliders-horizontal', 17)}</button>
+    <button class="md-slot md-qb md-vslot" type="button" data-md="vol" aria-label="静音"></button>
+  </div></div></div>
   <div class="md-cap" title="点一下进入歌词舞台">
     <div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div>
     <button class="md-pb" type="button" data-md="play" aria-label="播放"></button>
@@ -77,9 +83,7 @@
     </div></div>
     <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
     <div class="md-slots">
-      <button class="md-slot" type="button" data-md="mode"></button>
-      <button class="md-slot" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 17)}</button>
-      <button class="md-slot md-vslot" type="button" data-md="vol" aria-label="静音"></button>
+      <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、歌词舞台、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
     </div>
   </div>
   <div class="md-vrail" role="slider" tabindex="-1" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-hidden="true"><i class="md-vfill"></i></div>
@@ -124,6 +128,7 @@
             dockIn: $('.md-dock-in'),
             quick: $('.md-quick'),
             quickGroup: $('.md-quick-g'),
+            more: $('[data-md="more"]'),
             cap: $('.md-cap'),
             play: $('[data-md="play"]'),
             prev: $('[data-md="prev"]'),
@@ -516,11 +521,48 @@
         }
 
         // ───────── 胶囊悬停与快捷行 ─────────
-        const setQuick = (show) => {
-            if (el.quick.classList.contains('md-show') === Boolean(show)) return;
+        // 快捷行从播放条右端的「更多」上方长出来：指针停在「更多」上，或者点它、键盘聚焦到它，就展开；
+        // 指针离开底栏、按 Esc、点别处就收回去。点过「更多」算钉住，指针离开也不收。
+        let quickPinned = false;
+        const setQuick = (show, { pin = false } = {}) => {
+            show = Boolean(show);
+            quickPinned = show && (pin || quickPinned);
+            if (el.quick.classList.contains('md-show') === show) return;
             el.quick.classList.toggle('md-show', show);
+            el.more.setAttribute('aria-expanded', String(show));
+            el.more.classList.toggle('md-on', show);
+            if (!show && state.volOpen) setVolumeOpen(false);
             fluid?.setQuick(show, show ? el.quickGroup.getBoundingClientRect() : null);
         };
+        listen(el.more, 'pointerenter', (event) => {
+            if (event.pointerType === 'touch') return;
+            if (!dwellTimer) dwellTimer = later(() => { dwellTimer = null; setQuick(true); }, QUICK_DWELL_MS);
+        });
+        listen(el.more, 'pointerleave', () => { cancel(dwellTimer); dwellTimer = null; });
+        listen(el.more, 'click', (event) => {
+            event.stopPropagation();
+            cancel(dwellTimer); dwellTimer = null;
+            const open = el.quick.classList.contains('md-show');
+            if (open && quickPinned) setQuick(false); else setQuick(true, { pin: true });
+        });
+        listen(el.more, 'keydown', (event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            setQuick(true, { pin: true });
+            el.quickGroup.querySelector('button')?.focus();
+        });
+        listen(el.quick, 'keydown', (event) => {
+            if (event.key !== 'Escape' || state.volOpen) return;
+            event.stopPropagation();
+            setQuick(false);
+            el.more.focus();
+        });
+        listen(document, 'pointerdown', (event) => {
+            if (!quickPinned) return;
+            const t = event.target;
+            if (el.quick.contains(t) || el.more.contains(t) || el.vrail.contains(t)) return;
+            setQuick(false);
+        });
         listen(el.cap, 'pointerenter', (event) => {
             if (event.pointerType === 'touch') return;
             cancel(collapseTimer); collapseTimer = null;
@@ -531,7 +573,6 @@
                     syncExpanded();
                 }, HOVER_EXPAND_MS);
             }
-            if (!dwellTimer) dwellTimer = later(() => { dwellTimer = null; setQuick(true); }, QUICK_DWELL_MS);
         });
         listen(el.cap, 'pointermove', (event) => {
             if (event.pointerType === 'touch') return;
@@ -541,7 +582,7 @@
         listen(el.dockIn, 'pointerleave', () => {
             cancel(expandTimer); expandTimer = null;
             cancel(dwellTimer); dwellTimer = null;
-            setQuick(false);
+            if (!quickPinned && !state.volDrag) setQuick(false);
             if (!state.hover || collapseTimer) return;
             collapseTimer = later(() => {
                 collapseTimer = null;
@@ -555,26 +596,14 @@
             if (!stageActive()) app.stageHost?.enter?.();
         });
 
-        const quickItems = () => {
-            const inStage = stageActive();
-            return [
-                { id: 'volume', icon: volumeIcon(), label: '音量', run: () => openPanel('控制') },
-                { id: 'queue', icon: 'list-music', label: '播放列表', run: () => openPanel('播放列表') },
-                { id: 'stage', icon: 'captions', label: inStage ? '离开歌词舞台' : '歌词舞台', on: inStage, run: toggleStage },
-                { id: 'fx', icon: 'sliders-horizontal', label: '声音设置', run: () => openPanel('声音') }
-            ];
-        };
-        const renderQuick = () => {
-            const items = quickItems();
-            el.quickGroup.innerHTML = items.map((item) => (
-                `<button class="md-qb${item.on ? ' md-on' : ''}" type="button" data-q="${item.id}" title="${item.label}" aria-label="${item.label}"${item.on ? ' aria-pressed="true"' : ''}>${icon(item.icon, 16)}</button>`
-            )).join('');
-        };
+        const quickActions = { queue: () => openPanel('播放列表'), fx: () => openSheet() };
+        const renderQuick = () => {};
         listen(el.quickGroup, 'click', (event) => {
             const button = event.target.closest('[data-q]');
             if (!button) return;
             event.stopPropagation();
-            quickItems().find((item) => item.id === button.dataset.q)?.run();
+            setQuick(false);
+            quickActions[button.dataset.q]?.();
         });
 
         // ───────── 播放按钮、切歌、两个槽位 ─────────
@@ -706,7 +735,7 @@
             const bar = el.cap.getBoundingClientRect();
             if (!slot.width) return;
             el.vrail.style.left = `${Math.round(slot.left + slot.width / 2 - box.left)}px`;
-            el.vrail.style.bottom = `${Math.round(box.bottom - bar.top + 16)}px`;
+            el.vrail.style.bottom = `${Math.round(box.bottom - Math.min(bar.top, slot.top - 4) + 16)}px`;
         };
         const setVolumeOpen = (open) => {
             cancel(volOpenTimer); volOpenTimer = null;
@@ -879,11 +908,6 @@
                 }
                 el.volSlot.setAttribute('aria-label', v > 0.001 ? `静音（音量 ${pct}%）` : '取消静音');
                 el.volSlot.title = v > 0.001 ? `音量 ${pct}%：滚轮调节，点一下静音（M）` : '已静音：点一下恢复（M）';
-            }
-            const qb = el.quickGroup.querySelector('[data-q="volume"]');
-            if (qb) {
-                const name = volumeIcon(v);
-                if (qb.dataset.icon !== name) { qb.dataset.icon = name; qb.innerHTML = icon(name, 16); }
             }
         };
 
