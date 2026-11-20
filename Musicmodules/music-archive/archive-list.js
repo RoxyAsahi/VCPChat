@@ -703,6 +703,7 @@
         const toast = (message, action) => { try { global.MusicToast?.show?.({ message, action }); } catch (e) { /* 没有提示层就不提示 */ } };
         const commitPlaylists = () => {
             app.saveCustomPlaylists?.();
+            app.refreshPreload?.();
             if (app.currentSidebarView === 'playlists') app.renderSidebarContent?.('playlists');
             if (opts.onPlaylistsChanged) opts.onPlaylistsChanged(); else rebuild();
         };
@@ -869,6 +870,7 @@
             const after = () => {
                 if (app.playlistViewSource && Array.isArray(app.currentFilteredTracks)) app.renderPlaylist?.(app.currentFilteredTracks); else app.renderPlaylist?.();
                 app.api?.saveMusicPlaylist?.(app.playlist);
+                app.refreshPreload?.();
                 if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
             };
             after();
