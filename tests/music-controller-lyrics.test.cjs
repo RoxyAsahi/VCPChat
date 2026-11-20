@@ -160,3 +160,21 @@ test('分布式服务透传歌词标准 content，不替换为执行成功提示
     assert.equal(response.data.status, 'success');
     assert.equal(response.data.result, lyrics);
 });
+test('AI 点歌能进入播放器里的每一个演出模式', () => {
+    const ids = new Set();
+    for (const file of ['Musicmodules/music-stage/music-stage-modes.js', 'Musicmodules/music-stage/music-stage-advanced-modes.js']) {
+        for (const m of read(file).matchAll(/\{\s*id:\s*'([a-z]+)',\s*label:\s*'([^']+)'/g)) ids.add(`${m[1]}:${m[2]}`);
+    }
+    ids.add('starborn:星诞');
+    assert.ok(ids.size >= 9, [...ids].join(','));
+    const handlers = read('modules/ipc/musicHandlers.js');
+    const accepted = handlers.slice(handlers.indexOf('supportedStageModes'), handlers.indexOf(']);', handlers.indexOf('supportedStageModes')));
+    const controller = read('VCPDistributedServer/Plugin/MusicController/music-controller.js');
+    const manifest = read('VCPDistributedServer/Plugin/MusicController/plugin-manifest.json');
+    for (const entry of ids) {
+        const [id, label] = entry.split(':');
+        assert.ok(accepted.includes(`'${id}'`), `musicHandlers 不接受 ${id}`);
+        assert.ok(controller.includes(`${id}: '${id}'`) && controller.includes(`'${label}': '${id}'`), `插件不认 ${id}/${label}`);
+        assert.ok(manifest.includes(`${id}（${label}）`), `插件说明里没写 ${id}（${label}）`);
+    }
+});
