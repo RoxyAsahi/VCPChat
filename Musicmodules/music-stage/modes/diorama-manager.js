@@ -179,6 +179,11 @@
             const time = R.finiteNumber(frame.playbackTime);
             const dt = lastTime === null ? 0 : time - lastTime;
             const seek = lastTime === null || dt < 0 || dt > 0.5;
+            // The same song starting over (single-track repeat, or played again
+            // from its end): come down from the sky into its opening rather
+            // than cutting from the last shot straight back to the first.
+            if (dt < 0 && !leaving && time < 3 && Number.isFinite(compiledDuration)
+                && lastTime > compiledDuration - 12) arriving = 1e-6;
             // Freeze all live modulation, not just the camera, on repeated or paused frames.
             if (seek || frame.isPlaying && dt > 0) {
                 const live = onset.update(frame);
@@ -215,6 +220,8 @@
             // Up to the sky on the way out of a song, down from it on the way
             // into the next. Not inside the saloon: there the sky is a ceiling.
             const outdoors = 1 - R.clamp(pose.cabinView || 0);
+            // Opening inside the saloon: no sky to come down from; the dissolve does it.
+            if (arriving && outdoors < 0.5) arriving = 0;
             // Advance by drawn frames, at most a thirtieth of a second each, so
             // the rebuild's long first frame cannot swallow the move.
             const now = performance.now();
@@ -380,6 +387,7 @@
             cutsCount: timeline?.cuts.length || 0, rhythmSource: timeline?.rhythmSource,
             pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
             degradeSteps: renderScale.steps, drawnQuality: drawn().quality,
+            handover: leaving ? 'leaving' : arriving ? 'arriving' : null,
             drawCalls: renderer?.info.render.calls, triangles: renderer?.info.render.triangles,
             geometries: renderer?.info.memory.geometries, textures: renderer?.info.memory.textures,
             programs: renderer?.info.programs?.length, canvasSmoothing,
