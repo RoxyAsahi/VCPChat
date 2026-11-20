@@ -236,6 +236,90 @@
         };
         paintUniform();
 
+        // ---- 卡面标题：只给相机附近几列看得见的卡贴，贴片池循环复用 ----
+        // 每张贴片一块小画布，换卡时只重画这一块；一帧最多重画几块，避免滚动时卡顿。
+        // 字色压得比 HUD 淡，免得和浮在上面的说明文字抢
+        const LABEL_LANES = tier.shadows ? 1 : 0;          // 省电档只贴当前这一列
+        const LABEL_ROWS = [-8, 10];
+        const LABEL_POOL = (LABEL_LANES * 2 + 1) * (LABEL_ROWS[1] - LABEL_ROWS[0] + 1);
+        const LABEL_DRAWS_PER_FRAME = 8;
+        const LABEL_W = 3.5, LABEL_H = 0.26;
+        const labelGeo = new THREE.PlaneGeometry(LABEL_W, LABEL_H);
+        labelGeo.translate(0.2, 3.5, 0.197);
+        const labelInk = { ink: 'rgba(224,227,220,.86)', muted: 'rgba(166,176,177,.8)' };
+        const labels = Array.from({ length: LABEL_POOL }, () => {
+            const c = document.createElement('canvas');
+            c.width = 768; c.height = 58;
+            const tex = new THREE.CanvasTexture(c);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+            const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+            const mesh = new THREE.Mesh(labelGeo, mat);
+            mesh.visible = false;
+            mesh.receiveShadow = tier.shadows;
+            scene.add(mesh);
+            return { mesh, canvas: c, tex, mat, cell: null, drawn: null };
+        });
+        let labelFor = null;                 // (lane, row) => { key, title, code } | null
+        let labelEpoch = 0;                  // 主题、字体、数据变了就加一，旧的画面全部作废
+        const drawLabel = (L, info) => {
+            const g = L.canvas.getContext('2d');
+            g.clearRect(0, 0, 768, 58);
+            g.textBaseline = 'middle';
+            g.font = '500 20px ' + fontStack;
+            const code = String(info.code || '');
+            const codeW = code ? g.measureText(code).width : 0;
+            g.fillStyle = labelInk.muted;
+            if (code) g.fillText(code, 768 - 8 - codeW, 30);
+            g.font = '500 30px ' + fontStack;
+            g.fillStyle = labelInk.ink;
+            let title = String(info.title || '');
+            const room = 768 - 16 - codeW - 36;
+            if (g.measureText(title).width > room) {
+                while (title.length > 1 && g.measureText(title + '…').width > room) title = title.slice(0, -1);
+                title += '…';
+            }
+            g.fillText(title, 8, 31);
+            L.tex.needsUpdate = true;
+            L.drawn = info.key + '#' + labelEpoch;
+        };
+        const labelWanted = new Map();
+        let labelsPending = false;
+        const placeLabels = () => {
+            labelsPending = false;
+            const free = [];
+            for (const L of labels) {
+                if (L.cell && labelWanted.has(L.cell)) continue;
+                L.cell = null;
+                free.push(L);
+            }
+            const taken = new Set(labels.filter((L) => L.cell).map((L) => L.cell));
+            for (const [cell] of labelWanted) {
+                if (taken.has(cell)) continue;
+                // 优先用之前就画着这张卡的贴片，省得重画
+                const want = labelWanted.get(cell).info;
+                let k = free.findIndex((L) => L.drawn === want.key + '#' + labelEpoch);
+                if (k === -1) k = free.length - 1;
+                if (k < 0) break;
+                const L = free.splice(k, 1)[0];
+                L.cell = cell;
+            }
+            let draws = 0;
+            for (const L of labels) {
+                const w = L.cell ? labelWanted.get(L.cell) : null;
+                if (!w) { L.mesh.visible = false; continue; }
+                if (L.drawn !== w.info.key + '#' + labelEpoch) {
+                    if (draws >= LABEL_DRAWS_PER_FRAME) { L.mesh.visible = false; labelsPending = true; continue; }
+                    drawLabel(L, w.info);
+                    draws++;
+                }
+                L.mesh.position.set(w.x, w.y, w.z);
+                L.mesh.visible = true;
+            }
+        };
+        const setLabeler = (fn) => { labelFor = typeof fn === 'function' ? fn : null; labelEpoch++; invalidate(); };
+        const refreshLabels = () => { labelEpoch++; invalidate(); };
+
         let lighting = LIGHTING.dark;
         let fontStack = 'sans-serif';
         const paintTag = () => {
@@ -311,6 +395,9 @@
         const setTheme = (colors, dark, { wave = null } = {}) => {
             lighting = dark ? LIGHTING.dark : LIGHTING.light;
             fontStack = colors.font || fontStack;
+            labelInk.ink = colors.labelInk || (dark ? 'rgba(224,227,220,.62)' : 'rgba(8,10,8,.58)');
+            labelInk.muted = colors.labelMuted || (dark ? 'rgba(166,176,177,.55)' : 'rgba(98,95,88,.6)');
+            labelEpoch++;
             for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat]) m.envMapIntensity = lighting.env;
             const to = lookOf(colors, lighting);
             const parts = { card: new THREE.Color(colors.card), badge: new THREE.Color(colors.badge), groove: new THREE.Color(colors.groove) };
@@ -417,6 +504,7 @@
 
             const baseLane = Math.round(camLane.v);
             const baseRow = Math.round(camRow.v);
+            labelWanted.clear();
             let i = 0;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
                 for (let ri = -ROWS_BEFORE; ri < ROWS_AFTER; ri++) {
@@ -437,6 +525,10 @@
                     let y = BASE_Y + f + hl;
                     if (lane === target.lane && row === target.row) y += lift.v;
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
+                    if (labelFor && li >= -LABEL_LANES && li <= LABEL_LANES && ri >= LABEL_ROWS[0] && ri <= LABEL_ROWS[1]) {
+                        const info = labelFor(lane, row);
+                        if (info) labelWanted.set(lane + ':' + row, { info, x: dummy.position.x, y, z: dummy.position.z });
+                    }
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
                     if (tinting) {
@@ -454,6 +546,7 @@
             }
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
+            placeLabels();
             if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
 
             camera.position.copy(aim).addScaledVector(view, DIST);
@@ -464,7 +557,7 @@
 
             const settled = Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
                 && Math.abs(lift.v - liftGoal) < 0.001 && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
-                && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0);
+                && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
             return {
                 moving: !settled,
                 idle: now - lastInput > 8000,
@@ -522,6 +615,8 @@
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
             for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat]) m.dispose();
+            for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
+            labelGeo.dispose();
             floor.geometry.dispose();
             tagTex.dispose();
             envTarget.dispose();
@@ -533,11 +628,11 @@
         return {
             canvas,
             tier,
-            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, dispose,
+            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, refreshLabels, dispose,
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ labels: labels.filter((L) => L.mesh.visible).length, waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 
