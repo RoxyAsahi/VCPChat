@@ -313,6 +313,7 @@
         };
         /* 位置条上的流体小滴：底栏的通用模块在时才用，没有就还是竖线游标 */
         let tickMarker = null;
+        let tickDropAt = null;
         const tickDrop = () => {
             if (tickMarker || typeof global.createMusicFluidMarker !== 'function') return tickMarker;
             tickMarker = global.createMusicFluidMarker(refs.ticks, { axis: 'x', thickness: 7, align: 'center' });
@@ -338,7 +339,8 @@
             if (drop) {
                 const w = refs.ticks.clientWidth || 300;
                 const x = frac * (w - 14) + 7;
-                drop.moveTo({ start: x - 7, end: x + 7 });
+                // 位置没变就不叫它（每叫一次它都会排一帧）
+                if (tickDropAt !== x) { tickDropAt = x; drop.moveTo({ start: x - 7, end: x + 7 }); }
                 marks.forEach((m, i) => { if (i < n) m.dataset.mdDist = String(Math.min(4, Math.abs(i - nearest))); });
             }
             refs.ticks.setAttribute('aria-valuemin', '1');

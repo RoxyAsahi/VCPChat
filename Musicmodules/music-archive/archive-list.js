@@ -304,6 +304,7 @@
          * 滚得快时拉出细颈；其他组的首字母离当前组越远越淡（data-md-dist）。
          */
         let drop = null;
+        let dropAt = null;
         let lastScroll = null;
         const syncDrop = (headK, top, stickyY) => {
             if (typeof global.createMusicFluidMarker !== 'function') return;
@@ -325,8 +326,12 @@
                 node.dataset.mdDist = String(at < 0 || hi < 0 ? 4 : Math.min(4, Math.abs(hi - at)));
             }
             // 用内容坐标（不用元素的屏幕矩形：HUD 整体缩放过，屏幕像素和内容像素对不上）
-            if (stickyY === null) { drop.moveTo(null); return; }
+            // 位置没变就不叫它（每叫一次它都会排一帧）
             const wide = Boolean(r.sticky.querySelector('.wide'));
+            const at2 = stickyY === null ? 'off' : stickyY + (wide ? 'w' : 'n');
+            if (at2 === dropAt) return;
+            dropAt = at2;
+            if (stickyY === null) { drop.moveTo(null); return; }
             drop.moveTo(wide ? { start: stickyY + 30, end: stickyY + 48 } : { start: stickyY + 22, end: stickyY + 56 }, { instant: far });
         };
 
@@ -605,7 +610,7 @@
             setKind,
             render: schedule,
             focusSearch: () => { r.input.focus(); r.input.select(); },
-            destroyDrop: () => { drop?.destroy(); drop = null; },
+            destroyDrop: () => { drop?.destroy(); drop = null; dropAt = null; },
             /* 在档案页直接打字：聚焦检索框并带入这个字（替换掉原来的检索词） */
             typeInto: (text) => {
                 r.input.focus();
