@@ -298,15 +298,15 @@
         const syncDrop = (headK, top, stickyY) => {
             if (typeof global.createMusicFluidMarker !== 'function') return;
             // 一下跳出一屏以外（换排序、键盘跳到很远的一首）：小滴不拖着长颈飞过去，直接落在新位置
-            const far = drop && lastScroll && Math.abs(top - lastScroll.top) > (r.viewport.clientHeight || 600);
-            if (far) { drop.destroy(); drop = null; lastScroll = null; }
+            const far = Boolean(drop && lastScroll && Math.abs(top - lastScroll.top) > (r.viewport.clientHeight || 600));
             if (!drop) {
                 drop = global.createMusicFluidMarker(r.viewport, { axis: 'y', thickness: 5, align: 'start', inset: 2 });
                 if (drop) el.classList.add('has-drop');
             }
             if (!drop) return;
             const now = performance.now();
-            if (lastScroll && now > lastScroll.t) drop.setVelocity(Math.max(-80, Math.min(80, (top - lastScroll.top) / ROW_H / ((now - lastScroll.t) / 1000))));
+            if (far) drop.setVelocity(0);
+            else if (lastScroll && now > lastScroll.t) drop.setVelocity(Math.max(-80, Math.min(80, (top - lastScroll.top) / ROW_H / ((now - lastScroll.t) / 1000))));
             lastScroll = { t: now, top };
             const at = state.heads.indexOf(headK);
             for (const [k, node] of state.rendered) {
@@ -317,7 +317,7 @@
             // 用内容坐标（不用元素的屏幕矩形：HUD 整体缩放过，屏幕像素和内容像素对不上）
             if (stickyY === null) { drop.moveTo(null); return; }
             const wide = Boolean(r.sticky.querySelector('.wide'));
-            drop.moveTo(wide ? { start: stickyY + 30, end: stickyY + 48 } : { start: stickyY + 22, end: stickyY + 56 });
+            drop.moveTo(wide ? { start: stickyY + 30, end: stickyY + 48 } : { start: stickyY + 22, end: stickyY + 56 }, { instant: far });
         };
 
         const findRow = (i, ctx) => {
