@@ -87,7 +87,6 @@
 <div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="设置">
   <span class="md-sw md-g">${icon('settings-2', 20)}</span><span class="md-sw md-x">${icon('x', 20)}</span>
 </button><span class="md-hdl-tip" data-md="hdl-tip" aria-hidden="true"></span></div>
-<svg class="md-notch" aria-hidden="true" focusable="false"></svg>
 <section class="md-pnl" id="music-dock-panel" role="dialog" aria-label="播放面板" aria-hidden="true">
   <div class="md-hd">
     <div class="md-hd-cv"></div>
@@ -137,7 +136,6 @@
             t2: $$('[data-md="t2"]'),
             hdl: $('.md-hdl'),
             hdlTip: $('[data-md="hdl-tip"]'),
-            notch: $('.md-notch'),
             handle: $('[data-md="handle"]'),
             pnl: $('.md-pnl'),
             pCover: $('.md-hd-cv'),
@@ -301,6 +299,7 @@
         };
         const lowQuality = () => global.MusicStageConfig?.get?.()?.quality === 'energy-saving';
         let fluid = null;
+        let lastRange = ''; // 上次推给流体层的进度区间
         const syncFluid = () => {
             const want = typeof global.createMusicDockFluid === 'function' && !lowQuality();
             if (want && !fluid) {
@@ -319,6 +318,7 @@
             host.classList.toggle('md-fl-low', !fluid);
             if (fluid) {
                 fluid.layout();
+                lastRange = '';
                 fluid.setRingDocked(!state.panelOpen);
                 syncGlow();
                 syncSolid();
@@ -375,12 +375,25 @@
         };
 
         // ───────── 进度 ─────────
+        // 进度不从播放键底下开始：0% 落在曲名正上方，播放头开头不挡播放键。
+        // 曲名位置随悬停展开、紧凑档变化，每次用时量一下（只读两个矩形）。
+        const progressRange = () => {
+            const cap = el.cap.getBoundingClientRect();
+            const txt = el.cap.querySelector('.md-txt')?.getBoundingClientRect();
+            let a = PROGRESS_INSET;
+            if (cap.width > 0 && txt && txt.width > 0) a = Math.min(0.45, Math.max(PROGRESS_INSET, (txt.left - cap.left) / cap.width));
+            const b = 1 - PROGRESS_INSET;
+            const key = `${a.toFixed(4)}:${b}`;
+            if (key !== lastRange) { lastRange = key; fluid?.setProgressRange(a, b); }
+            return [a, b];
+        };
         const renderProgress = () => {
             const d = duration();
             const t = currentTime();
             const fraction = d > 0 ? Math.min(1, t / d) : 0;
-            // 进度边界在 6%～94% 之间走，和流体层、拖动反算用同一个比例。
-            const edge = PROGRESS_INSET + fraction * (1 - 2 * PROGRESS_INSET);
+            // 进度边界从曲名左缘走到 94%（音量键前），和流体层、拖动反算用同一个区间。
+            const [a, b] = progressRange();
+            const edge = a + fraction * (b - a);
             for (const trk of el.tracks) {
                 trk.firstElementChild.style.transform = `scaleX(${edge.toFixed(5)})`;
                 trk.querySelector('.md-kn-rail').style.transform = `translateX(${(edge * 100).toFixed(3)}%)`;
@@ -419,8 +432,9 @@
             const rect = trk.getBoundingClientRect();
             const d = duration();
             if (!(d > 0) || rect.width <= 0) return null;
-            // 进度边界在播放条宽度的 6%～94% 之间走（两端是播放键和音量键），按同样的比例反算。
-            const fraction = Math.min(1, Math.max(0, ((clientX - rect.left) / rect.width - PROGRESS_INSET) / (1 - 2 * PROGRESS_INSET)));
+            // 按 renderProgress 同一个区间反算（起点是曲名左缘，终点在音量键前）。
+            const [a, b] = progressRange();
+            const fraction = Math.min(1, Math.max(0, ((clientX - rect.left) / rect.width - a) / (b - a)));
             return fraction * d;
         };
         for (const trk of el.tracks) {
@@ -1273,47 +1287,6 @@
 
         // 右侧抽屉打开时播放条往左让位，右边缘停在抽屉内容左边 24px；放得下就不动。窄窗口抽屉铺满，不让位。
         const DRAWER_W = 400;
-        // 抽屉右下角的凹口：底色用 clip-path 切出一个 L 形缺口，内角是和小环同心的圆弧，两处外角倒圆；
-        // 小环停在圆心上，环和抽屉之间留一道缝，再用一截细颈连着（细颈和弧边的亮线画在 .md-notch 里）。
-        const NOTCH_D = 40;  // 圆心距窗口右、下边（流体层 cornerLocal 用同一个数）
-        const NOTCH_R = 36;  // 凹口圆弧半径：小环外径 20 + 16 的缝（细颈要有地方拉开）
-        const NOTCH_F = 14;  // 外角倒圆
-        const notchPath = (w, h) => {
-            const cx = w - NOTCH_D; const cy = h - NOTCH_D; const R = NOTCH_R; const F = NOTCH_F;
-            return `M0 0H${w}V${cy - R - F}Q${w} ${cy - R} ${w - F} ${cy - R}H${cx}A${R} ${R} 0 0 0 ${cx - R} ${cy}V${h - F}Q${cx - R} ${h} ${cx - R - F} ${h}H0Z`;
-        };
-        let notchKey = '';
-        const syncNotch = () => {
-            const drbg = host.querySelector('.md-drbg');
-            const vw = global.innerWidth || 0;
-            if (!drbg) return;
-            const on = vw >= COMPACT_BELOW;
-            const w = drbg.offsetWidth; const h = drbg.offsetHeight;
-            const key = on ? `${w}x${h}` : 'off';
-            if (key === notchKey) return;
-            notchKey = key;
-            drbg.style.clipPath = on && w && h ? `path('${notchPath(w, h)}')` : '';
-            if (el.notch && !el.notch.firstChild) {
-                const box = NOTCH_D * 3;
-                const c = box - NOTCH_D;
-                const R = NOTCH_R; const F = NOTCH_F;
-                const rim = `M${box} ${c - R - F}Q${box} ${c - R} ${box - F} ${c - R}H${c}A${R} ${R} 0 0 0 ${c - R} ${c}V${box - F}Q${c - R} ${box} ${c - R - F} ${box}`;
-                // 细颈：从弧边朝圆心收到环外沿，两侧向内凹，像两滴液体之间拉出的颈。
-                const pt = (r, deg) => { const a = deg * Math.PI / 180; return `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`; };
-                // 两端宽、中间收成约 6px 的腰；靠抽屉那端张开一点，像从弧边被拉出来。
-                const neck = `M${pt(R + 1, 207)}C${pt(R - 4, 221)} ${pt(24, 220)} ${pt(19.5, 208)}A19.5 19.5 0 0 1 ${pt(19.5, 242)}C${pt(24, 230)} ${pt(R - 4, 229)} ${pt(R + 1, 243)}A${R + 1} ${R + 1} 0 0 0 ${pt(R + 1, 207)}Z`;
-                el.notch.setAttribute('viewBox', `0 0 ${box} ${box}`);
-                el.notch.setAttribute('width', box);
-                el.notch.setAttribute('height', box);
-                el.notch.innerHTML = '<defs>'
-                    + '<filter id="md-notch-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter>'
-                    + `<linearGradient id="md-notch-neck" gradientUnits="userSpaceOnUse" x1="${pt(R + 1, 225).split(' ')[0]}" y1="${pt(R + 1, 225).split(' ')[1]}" x2="${pt(18, 225).split(' ')[0]}" y2="${pt(18, 225).split(' ')[1]}">`
-                    + '<stop offset="0" class="md-notch-s0"/><stop offset=".55" class="md-notch-s1" style="stop-opacity:.7"/><stop offset="1" class="md-notch-s1"/></linearGradient></defs>'
-                    + `<path class="md-notch-glow" d="${rim}" filter="url(#md-notch-glow)"/>`
-                    + `<path class="md-notch-rim" d="${rim}"/>`
-                    + `<path class="md-notch-neck" d="${neck}" fill="url(#md-notch-neck)"/>`;
-            }
-        };
         const syncShift = () => {
             const vw = global.innerWidth || 0;
             const barW = el.cap.offsetWidth || 0;
@@ -1322,8 +1295,6 @@
             const shift = state.panelOpen && vw >= COMPACT_BELOW && barW ? Math.min(0, room - right) : 0;
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
-            syncNotch();
-            el.notch?.classList.toggle('md-open', state.panelOpen);
         };
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }

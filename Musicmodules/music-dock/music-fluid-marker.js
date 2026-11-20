@@ -4,7 +4,7 @@
 //
 // 用法：
 //   const marker = createMusicFluidMarker(container, { axis: 'x', thickness: 4, inset: 0, align: 'end' });
-//   marker.moveTo(element)              // 或 marker.moveTo({ start, end })，单位是相对 container 的像素
+//   marker.moveTo(element)              // 或 marker.moveTo({ start, end })，单位是相对 container 的像素；第二个参数 { instant: true } 直接落位
 //   marker.setVelocity(rowsPerSecond)   // 可选：越快细颈越长（档案页 onMotion 的 velocity 直接传进来）
 //   marker.setDistances(items, active)  // 给每一项写 data-md-dist="0..4"（到当前项的距离），渐淡渐糊的样式自己写
 //   marker.destroy()
@@ -38,7 +38,10 @@
         };
         const svg = make('svg', { class: 'mfm', 'aria-hidden': 'true', focusable: 'false' });
         const defs = make('defs', {}, svg);
-        const filter = make('filter', { id: `${id}-goo`, x: '-20%', y: '-200%', width: '140%', height: '500%' }, defs);
+        // 滤镜区域按轴放大：沿轴方向留一点余量，垂直方向是细条，要放很多倍才装得下模糊
+        const filter = make('filter', axis === 'x'
+            ? { id: `${id}-goo`, x: '-20%', y: '-200%', width: '140%', height: '500%' }
+            : { id: `${id}-goo`, x: '-200%', y: '-20%', width: '500%', height: '140%' }, defs);
         make('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: String(Math.max(1.5, thickness * 0.55)), result: 'b' }, filter);
         make('feColorMatrix', { in: 'b', mode: 'matrix', values: '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9' }, filter);
         const g = make('g', { class: 'mfm-body', filter: `url(#${id}-goo)` }, svg);
@@ -113,12 +116,14 @@
         };
 
         return {
-            moveTo(target) {
+            // opts.instant：直接落位，不拉细颈（跳到很远的地方时用）
+            moveTo(target, opts) {
                 const sp = span(target);
                 if (!sp) { svg.style.opacity = '0'; return; }
                 svg.style.opacity = '';
                 s.tgS = sp[0]; s.tgE = sp[1];
-                if (!s.placed || reduced()) {
+                if (!s.placed || reduced() || opts?.instant) {
+                    if (s.frame) { win.cancelAnimationFrame(s.frame); s.frame = 0; }
                     s.hs = s.ts = s.tgS; s.he = s.te = s.tgE; s.placed = true;
                     draw();
                     return;

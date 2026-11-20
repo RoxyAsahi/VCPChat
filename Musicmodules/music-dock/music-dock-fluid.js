@@ -105,6 +105,8 @@
         const geo = { x: 0, y: 0, w: 0, h: 0, left: 0, bottom: 0, layerW: 0, playX: 0, volX: 0, ringX: 0 };
         const s = {
             progress: 0,
+            // 进度在播放条宽度里走的区间（0～1）：起点由 music-dock.js 量成曲名左缘，终点在音量键前。
+            range: { a: 0.06, b: 0.94 },
             solidity: { v: 1, t: 1 },
             bump: { x: 0, r: 0, tx: 0, tr: 0 },
             vol: { v: 0, t: 0 },
@@ -212,7 +214,8 @@
             const layerTop = vh - geo.bottom - LAYER_H;
             return { x: cx - geo.left, y: cy - layerTop };
         };
-        const progressX = () => geo.x + geo.w * (0.06 + Math.min(1, Math.max(0, s.progress)) * 0.88);
+        const progressFrac = () => s.range.a + Math.min(1, Math.max(0, s.progress)) * (s.range.b - s.range.a);
+        const progressX = () => geo.x + geo.w * progressFrac();
         const dockPoint = () => {
             // 暂停或让位时沉进条里（配合 showTarget 一起淡掉），播放时骑在条的上沿。
             if (s.ringMode === 'playhead') return { x: progressX(), y: geo.y + 2 + (playheadUp() ? 0 : 14) };
@@ -244,7 +247,7 @@
         };
 
         const writeProgress = () => {
-            const x = 0.06 + Math.min(1, Math.max(0, s.progress)) * 0.88;
+            const x = progressFrac();
             setAttr(h1, 'offset', Math.max(0, x - 0.03).toFixed(3));
             setAttr(h2, 'offset', Math.min(1, x + 0.13).toFixed(3));
         };
@@ -360,6 +363,13 @@
                 const next = Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
                 if (Math.abs(next - s.progress) < 0.0005) return;
                 s.progress = next;
+                writeProgress();
+                if (s.ringMode === 'playhead' && s.ring.docked) { retargetRing(); kick(); }
+            },
+            setProgressRange(a, b) {
+                const na = Math.min(0.6, Math.max(0, Number(a) || 0)); const nb = Math.min(1, Math.max(na + 0.1, Number(b) || 1));
+                if (Math.abs(na - s.range.a) < 0.001 && Math.abs(nb - s.range.b) < 0.001) return;
+                s.range.a = na; s.range.b = nb;
                 writeProgress();
                 if (s.ringMode === 'playhead' && s.ring.docked) { retargetRing(); kick(); }
             },

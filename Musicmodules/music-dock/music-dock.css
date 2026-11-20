@@ -1113,8 +1113,8 @@ body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
   background:
     radial-gradient(420px 360px at 100% 0%, color-mix(in srgb, var(--md-accent) 16%, transparent), transparent 70%),
     linear-gradient(to left, var(--md-glass) 0, var(--md-glass) 46%, transparent 100%);
-  backdrop-filter: blur(28px) saturate(1.3);
-  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
   /* 横向从右往左渐隐；纵向在底栏那一段往下渐隐，和底栏衔接，不留方形底 */
   -webkit-mask-image: linear-gradient(to left, #000 50%, transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
   mask-image: linear-gradient(to left, #000 50%, transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
@@ -1439,14 +1439,23 @@ body.music-reduce-motion #music-dock-root .md-dock,
 body.music-reduce-motion .md-fluid,
 body.music-reduce-motion .md-mist { transition: none; }
 
-/* ───────── 抽屉一直到窗口底，右下角切出凹口给小环 ─────────
- * 凹口的形状由 music-dock.js 用 clip-path 切（L 形缺口，内角是和小环同心的圆弧，外角倒圆），
- * 边是清楚的，不是模糊挖洞。弧边一道细亮线 + 很淡的色光代替投影；小环和抽屉之间一截细颈。 */
+/* ───────── 抽屉一直到窗口底，右下角让出一个凹口给小环 ─────────
+ * 凹口是遮罩里减掉的一块形状（右下角 140px 见方的 SVG）：抽屉的边从右缘缓缓弯进来，绕过小环（同心，留一道缝），
+ * 再缓缓弯回底边；左上方留一截越收越细的颈，一直搭到环上。颈和抽屉是同一层磨砂，没有描边。
+ * 圆心距右、下各 40px，和流体层 cornerLocal 一致。 */
 .md-pnl { bottom: 20px; }
 .md-pnl .md-dockrow { padding-right: 76px; }
 .md-drbg {
-  -webkit-mask-image: linear-gradient(to left, #000 50%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, #000 50%, transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cpath d='M140 24C140 50 126 64 100 64A36 36 0 0 0 85.93 66.86C79.87 70.15 81.55 77.62 87.66 85.55L85.55 87.66C77.62 81.55 70.15 79.87 66.86 85.93A36 36 0 0 0 64 100C64 126 50 140 24 140H140Z'/%3E%3C/svg%3E");
+  mask-image: linear-gradient(to left, #000 50%, transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cpath d='M140 24C140 50 126 64 100 64A36 36 0 0 0 85.93 66.86C79.87 70.15 81.55 77.62 87.66 85.55L85.55 87.66C77.62 81.55 70.15 79.87 66.86 85.93A36 36 0 0 0 64 100C64 126 50 140 24 140H140Z'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%, 140px 140px;
+  mask-size: 100% 100%, 140px 140px;
+  -webkit-mask-position: 0 0, right bottom;
+  mask-position: 0 0, right bottom;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: source-out;
+  mask-composite: subtract;
 }
 @media (max-width: 639.98px) {
   .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
@@ -1454,28 +1463,12 @@ body.music-reduce-motion .md-mist { transition: none; }
   .md-drbg {
     -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
     mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-composite: source-over;
+    mask-composite: add;
   }
 }
-.md-notch {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  z-index: calc(var(--mt-z-dock, 60) + 1);
-  pointer-events: none;
-  overflow: visible;
-  opacity: 0;
-  transition: opacity .2s var(--mt-ease, ease);
-}
-.md-notch.md-open { opacity: 1; transition: opacity .36s var(--mt-ease, ease) .18s; }
-.md-notch-rim { fill: none; stroke: rgba(var(--md-tp-rgb), .28); stroke-width: 1; }
-.md-notch-glow { fill: none; stroke: var(--md-fl-tint, var(--md-accent)); stroke-width: 3; opacity: .45; }
-.md-notch-s0 { stop-color: var(--md-glass); stop-opacity: .9; }
-.md-notch-s1 { stop-color: var(--md-fl-ring, #fff); stop-opacity: .95; }
-/* 细颈在小环落定后才从环上拉出来 */
-.md-notch-neck { transform-box: view-box; transform-origin: 66.67% 66.67%; transform: scale(.5); opacity: 0; transition: transform .2s var(--mt-ease, ease), opacity .15s; }
-.md-notch.md-open .md-notch-neck { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.3, 1.4, .5, 1) .32s, opacity .25s .32s; }
-body.music-reduce-motion .md-notch-neck { transition: none; }
-@media (max-width: 639.98px) { .md-notch { display: none; } }
 /* 节能档（没有流体层）的把手也停在凹口圆心上 */
 #music-dock-root.md-fl-low .md-hdl { right: 16px; bottom: 16px; }
 
