@@ -102,6 +102,7 @@
   </div>
   <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist"></div></div>
 </section>
+<div class="md-drbg" aria-hidden="true"></div>
 <section class="md-sheet" role="dialog" aria-label="音效设置" aria-hidden="true">
   <div class="md-sheet-hd"><b>音效设置</b><button class="md-ib md-m" type="button" data-md="sheet-close" aria-label="关闭音效设置">${icon('x', 17)}</button></div>
   <div class="md-sheet-body"></div>
