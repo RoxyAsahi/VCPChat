@@ -1625,3 +1625,5 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open .md-sw .md-i { filter
   -webkit-backdrop-filter: blur(12px) saturate(1.15);
 }
 #music-dock-root.md-fl-low .md-drbg { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* 浅色主题下白色焦点圈看不见，换成墨色 */
+body.light-theme #music-dock-root.md-fl-on .md-hdl button:focus-visible { outline-color: var(--md-t1); }

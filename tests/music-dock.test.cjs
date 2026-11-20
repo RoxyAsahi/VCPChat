@@ -690,3 +690,55 @@ test('fluid layer schedules no animation frames once it is at rest, when hidden,
         assert.equal(scheduled, suspended, 'and returning needs no animation either');
     } finally { fluid.destroy(); }
 });
+
+test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, the playhead seeks and is described', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const handle = doc.querySelector('[data-md="handle"]');
+        const key = (node, k, extra = {}) => node.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+
+        // 播放头：有说明文字，方向键跳转
+        assert.equal(handle.getAttribute('aria-describedby'), 'music-dock-playhead-tip');
+        assert.match(doc.getElementById('music-dock-playhead-tip').textContent, /\d+:\d+ \/ \d+:\d+/);
+        app.lastKnownCurrentTime = 50;
+        app.lastStateUpdateTime = Date.now();
+        handle.focus();
+        key(handle, 'ArrowRight');
+        assert.deepEqual(calls.pop(), ['seek', 55]);
+        key(handle, 'ArrowLeft');
+        assert.deepEqual(calls.pop(), ['seek', 45]);
+
+        // 打开：焦点进抽屉，落在选中的页签上；页签是 tablist，只有选中的那个能 Tab 到
+        const play = doc.querySelector('[data-md="play"]');
+        play.focus();
+        dock.openPanel('控制');
+        const tabs = () => [...doc.querySelectorAll('[data-md="tabs"] [role="tab"]')];
+        assert.equal(doc.querySelector('[data-md="tabs"]').getAttribute('aria-label'), '面板页签');
+        assert.equal(doc.activeElement.textContent, '控制');
+        assert.deepEqual(tabs().map((t) => t.tabIndex), [-1, -1, 0, -1, -1]);
+        assert.equal(handle.hasAttribute('aria-describedby'), false, 'as the close button it is no longer described as a playhead');
+        key(doc.activeElement, 'ArrowRight');
+        assert.equal(doc.activeElement.textContent, '播放列表');
+        assert.equal(doc.activeElement.getAttribute('aria-selected'), 'true');
+        key(doc.activeElement, 'Home');
+        assert.equal(doc.activeElement.textContent, '封面');
+        key(doc.activeElement, 'ArrowLeft');
+        assert.equal(doc.activeElement.textContent, '音质', 'wraps around');
+        assert.equal(doc.getElementById('music-dock-panel-body').getAttribute('role'), 'tabpanel');
+
+        // 子页的返回按钮有名字，进子页时焦点在它上面
+        dock.openStageSettings();
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '返回控制页');
+        assert.ok(doc.querySelector('[data-md="fx-back"]').getAttribute('aria-label'));
+
+        // 关闭：焦点回到打开前的地方
+        dock.closePanel();
+        assert.equal(doc.activeElement, play);
+        // 焦点不在抽屉里时关闭不抢焦点
+        handle.focus();
+        dock.openPanel();
+        app.volumeSlider.focus();
+        dock.closePanel();
+        assert.equal(doc.activeElement, app.volumeSlider);
+    } finally { dock.destroy(); }
+});

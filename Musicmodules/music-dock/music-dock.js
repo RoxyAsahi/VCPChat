@@ -86,14 +86,14 @@
 </div></div>
 <div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="设置">
   <span class="md-sw md-g">${icon('settings-2', 20)}</span><span class="md-sw md-x">${icon('x', 20)}</span>
-</button><span class="md-hdl-tip" data-md="hdl-tip" aria-hidden="true"></span></div>
+</button><span class="md-hdl-tip" id="music-dock-playhead-tip" data-md="hdl-tip"></span></div>
 <section class="md-pnl" id="music-dock-panel" role="dialog" aria-label="播放面板" aria-hidden="true">
   <div class="md-hd">
     <div class="md-hd-cv"></div>
     <div class="md-hd-tx"><b data-md="p-title"></b><span data-md="p-artist"></span></div>
     <button class="md-ib md-m md-hd-act" type="button" data-md="share" aria-label="分享当前音频" title="分享当前音频">${icon('share-2', 17)}</button>
   </div>
-  <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body"></div></div>
+  <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body" id="music-dock-panel-body" role="tabpanel"></div></div>
   <div class="md-sp" data-md="stagepage" hidden>
     <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="sp-back" aria-label="返回控制页" title="返回">${icon('chevron-left', 18)}</button><b>舞台调制</b><span class="md-sp-cur" data-md="sp-cur"></span></div>
     <div class="md-sp-sc" data-md="sp-scroll">
@@ -104,7 +104,7 @@
     <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="fx-back" aria-label="返回" title="返回">${icon('chevron-left', 18)}</button><b>音效设置</b><span class="md-sp-cur" data-md="fx-cur"></span></div>
     <div class="md-fx-sc" data-md="fx-scroll"><div class="md-fx-h md-fx-out"><span class="md-fx-n">01</span><b>输出</b></div></div>
   </div>
-  <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist"></div></div>
+  <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist" aria-label="面板页签"></div></div>
 </section>
 <div class="md-drbg" aria-hidden="true"></div>
 `;
@@ -348,8 +348,14 @@
             host.classList.toggle('md-vapor', !solid);
             fluid?.setSolid(solid);
             fluid?.setPlaying?.(app.isPlaying === true);
-            fluid?.setRingFocus?.(state.ringHover === true || state.dragging?.fromRing === true, state.dragging?.fromRing === true);
-            el.hdl.classList.toggle('md-tip', ringMode === 'playhead' && !state.panelOpen && (state.ringHover === true || state.dragging?.fromRing === true));
+            // 键盘焦点落在播放头上时和拖着它一样：放大、显示时间，暂停时也露出来，看得见焦点在哪。
+            const ringHeld = state.dragging?.fromRing === true || state.ringKbd === true;
+            fluid?.setRingFocus?.(state.ringHover === true || ringHeld, ringHeld);
+            const asPlayhead = ringMode === 'playhead' && !state.panelOpen;
+            el.hdl.classList.toggle('md-tip', asPlayhead && (state.ringHover === true || ringHeld));
+            // 读屏：当作播放头时把时间读出来，并说明方向键可以跳转。
+            if (asPlayhead) { el.handle.setAttribute('aria-describedby', 'music-dock-playhead-tip'); el.handle.title = '播放头：拖动或按左右方向键跳转，点一下打开面板'; }
+            else { el.handle.removeAttribute('aria-describedby'); el.handle.title = state.panelOpen ? '关闭' : '设置'; }
         };
         const animateCapsule = () => { fluid?.layout(); };
 
@@ -1193,7 +1199,7 @@
 
         const renderTabs = () => {
             el.tabs.innerHTML = '<i class="md-mk"></i>' + TABS.map((tab, index) => (
-                `<button type="button" role="tab" aria-selected="${tab === state.tab}" class="${tab === state.tab ? 'md-on' : ''}" data-i="${index}"><span>${tab}</span></button>`
+                `<button type="button" role="tab" aria-selected="${tab === state.tab}" aria-controls="music-dock-panel-body" tabindex="${tab === state.tab ? 0 : -1}" class="${tab === state.tab ? 'md-on' : ''}" data-i="${index}"><span>${tab}</span></button>`
             )).join('');
             placeMarks(el.pnl);
         };
@@ -1205,6 +1211,23 @@
             el.pnl.scrollTop = 0;
             renderTabs();
             renderBody();
+        });
+
+        // 页签按 tablist 的习惯：Tab 只停在选中的那个，左右方向键 / Home / End 切换并把焦点带过去。
+        listen(el.tabs, 'keydown', (event) => {
+            const cur = TABS.indexOf(state.tab);
+            const next = event.key === 'ArrowRight' ? (cur + 1) % TABS.length
+                : event.key === 'ArrowLeft' ? (cur - 1 + TABS.length) % TABS.length
+                    : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : -1;
+            if (next < 0 || !event.target.closest('button[data-i]')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            state.tab = TABS[next];
+            closePop();
+            el.pnl.scrollTop = 0;
+            renderTabs();
+            renderBody();
+            el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
         });
 
         listen(el.body, 'click', (event) => {
@@ -1298,6 +1321,7 @@
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
         };
+        let panelReturn = null;
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
             if (!state.panelOpen) {
@@ -1309,6 +1333,14 @@
                 el.handle.setAttribute('aria-label', '关闭面板');
                 fluid?.setRingDocked(false);
                 syncShift();
+                // 焦点进抽屉（落在当前页签上）；记住是从哪里打开的，关的时候还回去。
+                const from = document.activeElement;
+                panelReturn = from && from !== document.body && !el.pnl.contains(from) ? from : el.handle;
+                renderTabs();
+                renderBody();
+                el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
+                syncSolid();
+                return;
             }
             renderTabs();
             renderBody();
@@ -1324,6 +1356,14 @@
             el.handle.setAttribute('aria-label', '打开面板');
             fluid?.setRingDocked(true);
             syncShift();
+            // 焦点原来在抽屉里（或在关闭钮上）才还回去，不去抢别处的焦点。
+            const active = document.activeElement;
+            if (active && (el.pnl.contains(active) || active === el.handle)) {
+                const back = panelReturn && panelReturn.isConnected ? panelReturn : el.handle;
+                back.focus?.({ preventScroll: true });
+            }
+            panelReturn = null;
+            syncSolid();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
         // 播放头模式下白环就是播放头：按住横向拖动超过 4px 就是拖进度，松手跳过去；不拖就是普通点击（开关面板）。
@@ -1366,6 +1406,21 @@
             // 指针移到播放头上：放大成完整的环，上方显示当前时间，看得出它是播放头、可以拖。
             listen(el.handle, 'pointerenter', () => { state.ringHover = true; syncSolid(); });
             listen(el.handle, 'pointerleave', () => { state.ringHover = false; syncSolid(); });
+            // 键盘：Tab 能走到播放头；左右方向键每次跳 5 秒，回车/空格照常开面板。
+            listen(el.handle, 'focus', () => { state.ringKbd = el.handle.matches(':focus-visible'); syncSolid(); });
+            listen(el.handle, 'blur', () => { state.ringKbd = false; syncSolid(); });
+            listen(el.handle, 'keydown', (event) => {
+                if (ringMode !== 'playhead' || state.panelOpen) return;
+                const dir = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                const d = duration();
+                // 带修饰键的方向键留给全局快捷键（Shift + 方向键是上一首 / 下一首）。
+                if (!dir || !(d > 0) || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                state.ringKbd = true;
+                app.seekTo?.(Math.min(d, Math.max(0, currentTime() + dir * 5)));
+                kickProgress();
+            });
             listen(el.handle, 'pointercancel', (event) => finish(event, false));
             listen(el.handle, 'click', (event) => {
                 if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
