@@ -30,7 +30,7 @@
             const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
             if (len < 0.05 || y1 - y0 < 0.05) return;
             const cols = Math.max(1, Math.round(len / (bay || layout.BAY)));
-            const bw = len / cols;
+            const bw = Math.round(len / cols * 256) / 256;
             const base = pos.length / 3;
             const corners = [[p0, y0, 0], [p1, y0, len], [p1, y1, len], [p0, y1, 0]];
             corners.forEach(([p, y, u]) => {
@@ -114,6 +114,8 @@
         const shellUniforms = Object.assign(fogUniforms, shared, {
             uFloor: { value: FLOOR },
             uLitBias: { value: 0 },
+            // 远景机位压低窗灯，让霓虹招牌出来。
+            uWindowGain: { value: 1 },
             uDetail: { value: 1 }
         });
 
@@ -143,6 +145,7 @@
                 uniform float uFloor;
                 uniform float uLitBias;
                 uniform float uDetail;
+                uniform float uWindowGain;
                 varying vec4 vFace;
                 varying vec4 vInfo;
                 varying vec3 vWorld;
@@ -161,10 +164,11 @@
                 }
                 // 屋里的灯色：钨丝暖光、日光灯冷白、偏绿的旧灯管、红窗帘、电视蓝。
                 vec3 roomTone(float h){
-                    if (h < 0.38) return vec3(1.00, 0.58, 0.28);
-                    if (h < 0.62) return vec3(0.70, 0.92, 1.00);
-                    if (h < 0.76) return vec3(0.62, 1.00, 0.70);
-                    if (h < 0.88) return vec3(1.00, 0.36, 0.44);
+                    if (h < 0.40) return vec3(1.00, 0.66, 0.36);
+                    if (h < 0.66) return vec3(0.78, 0.92, 1.00);
+                    if (h < 0.76) return vec3(0.72, 1.00, 0.80);
+                    if (h < 0.84) return vec3(1.00, 0.45, 0.42);
+                    if (h < 0.90) return vec3(1.00, 0.85, 0.60);
                     return vec3(0.42, 0.55, 1.00);
                 }
                 // 窗洞里的房间：沿视线在一个 1×1×深 的盒子里求交，背墙、侧墙、天花、地板分别着色。
@@ -192,8 +196,9 @@
                 }
 
                 void main(){
-                    float seed = vInfo.x;
-                    float kind = vInfo.y;
+                    // 插值出来的常量也会有末位抖动，散列会把它放大成雪花点：先取整。
+                    float seed = floor(vInfo.x * 9973.0 + 0.5) / 9973.0;
+                    float kind = floor(vInfo.y + 0.5);
                     vec3 n = normalize(vNormal);
                     vec3 V = normalize(vWorld - cameraPosition);
                     float wet = uWet;
@@ -207,7 +212,8 @@
                         vec3 col = kwLight(vWorld, n, alb, 0.8);
                         // 积水的屋顶反一点天光。
                         float puddle = smoothstep(0.62, 0.66, kwFbm(p * 0.25 + seed * 91.0)) * wet;
-                        col = mix(col, uSky * 0.9 + 0.02, puddle * 0.6);
+                        float fresR = pow(1.0 - max(0.0, -V.y), 4.0);
+                        col = mix(col, uSky * (0.18 + 0.5 * fresR) + kwLight(vWorld, n, vec3(0.5), 0.1) * 0.4, puddle * 0.75);
                         gl_FragColor = vec4(col, 1.0);
                         #include <tonemapping_fragment>
                         #include <colorspace_fragment>
@@ -215,7 +221,7 @@
                         return;
                     }
 
-                    float u = vFace.x, v = vFace.y, len = vFace.z, bay = vFace.w;
+                    float u = vFace.x, v = vFace.y, len = vFace.z, bay = floor(vFace.w * 256.0 + 0.5) / 256.0;
                     float fl = floor(v / uFloor);
                     vec2 cell = vec2(fract(u / bay), fract(v / uFloor));
                     float col_ = floor(u / bay);
@@ -248,9 +254,21 @@
                     float hasWindow = 1.0;
                     if (kind > 2.5 && kind < 3.5) hasWindow = step(0.82, h2);
                     if (kind > 6.5) hasWindow = step(0.25, h2);
-                    float type = fract(seed * 3.7 + floor(fl / 50.0));
-                    vec2 wMin = type < 0.5 ? vec2(0.12, 0.3) : vec2(0.2, 0.26);
-                    vec2 wMax = type < 0.5 ? vec2(0.88, 0.82) : vec2(0.8, 0.86);
+                    // 地面层是店铺，窗由店面和卷闸代替（巷道模块画）。
+                    if (fl < 0.5 && kind < 1.5) hasWindow = 0.0;
+                    // 每栋楼一种窗型：横长推拉窗、方窗、窄高窗、带气窗的、满开间的。
+                    float type = fract(seed * 3.7);
+                    vec2 wMin, wMax;
+                    if (type < 0.25) { wMin = vec2(0.10, 0.32); wMax = vec2(0.90, 0.80); }
+                    else if (type < 0.45) { wMin = vec2(0.22, 0.28); wMax = vec2(0.78, 0.84); }
+                    else if (type < 0.6) { wMin = vec2(0.32, 0.2); wMax = vec2(0.68, 0.88); }
+                    else if (type < 0.8) { wMin = vec2(0.14, 0.24); wMax = vec2(0.86, 0.9); }
+                    else { wMin = vec2(0.04, 0.3); wMax = vec2(0.96, 0.84); }
+                    // 个别人家改过窗：更小或封掉一半。
+                    float reno = kwHash(vec2(h * 19.0, seed * 7.0));
+                    if (reno < 0.12) { wMin.x += 0.18; wMax.x -= 0.18; }
+                    else if (reno < 0.18) { wMax.y = mix(wMin.y, wMax.y, 0.5); }
+                    else if (reno < 0.22) hasWindow = 0.0;
                     if (kind > 2.5 && kind < 3.5) { wMin = vec2(0.32, 0.45); wMax = vec2(0.68, 0.75); }
                     vec2 fw = fwidth(cell) * 1.5;
                     vec2 inA = smoothstep(wMin - fw, wMin + fw, cell) * (1.0 - smoothstep(wMax - fw, wMax + fw, cell));
@@ -262,7 +280,7 @@
                         // 每扇窗亮不亮会慢慢变：有人回家开灯、有人关灯睡觉。
                         float epoch = floor(uTime / 41.0 + h * 9.0);
                         float litRoll = kwHash(vec2(h * 97.0 + epoch, seed * 13.0));
-                        float litP = (kind > 6.5 ? 0.22 : kind > 4.5 ? 0.3 : 0.4) + uLitBias;
+                        float litP = (kind > 6.5 ? 0.2 : kind > 4.5 ? 0.24 : 0.3) + uLitBias;
                         float lit = step(litRoll, litP);
                         vec3 tone = roomTone(fract(h * 5.31 + seed));
                         // 电视：蓝光随时间抖。
@@ -271,7 +289,7 @@
                         vec3 t = normalize(vec3(n.z, 0.0, -n.x));
                         vec3 lv = vec3(dot(V, t), V.y, -dot(V, n));
                         vec3 inside = room(wc, vec3(lv.x / (bay * (wMax.x - wMin.x)), lv.y / (uFloor * (wMax.y - wMin.y)), lv.z / 3.0), tone, h, 1.0);
-                        inside *= lit * (kind > 6.5 ? 0.9 : 1.25) * mix(1.0, tvFlick, tv);
+                        inside *= lit * uWindowGain * (kind > 6.5 ? 0.9 : 0.6 + 0.6 * fract(h * 13.7)) * mix(1.0, tvFlick, tv);
                         // 窗帘：一半拉上，透着色。
                         float curtain = step(0.55, h2) * step(wc.x, fract(h2 * 7.0) * 0.8 + 0.1);
                         inside = mix(inside, tone * lit * 0.55 * vec3(1.0, 0.85, 0.8), curtain * 0.75);
@@ -592,6 +610,11 @@
             acPositions,
             update(state) {
                 shared.uTime.value = state.time || 0;
+                const far = state.shot === 'iso' || state.shot === 'diorama' || state.shot === 'roof';
+                const target = far ? 0.5 : 0.85;
+                const g = shellUniforms.uWindowGain;
+                g.value += (target - g.value) * Math.min(1, (state.dt || 0.016) * 2 + (g.init ? 0 : 1));
+                g.init = true;
             },
             setPalette() {},
             setTier(tier) {

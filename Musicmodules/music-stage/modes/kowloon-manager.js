@@ -40,6 +40,20 @@
                 const z = p[2] - t * 4;
                 return { position: [p[0] - 6 + t * 3, p[1] - 3 + t * 1.5, z], look: C.screen.target, fov: C.screen.fov };
             },
+            // 固定斜俯视：几道周期互不成倍数的慢正弦，绕、俯仰、推拉都很轻。
+            diorama: (t, seed, time = 0) => {
+                const wave = (period, phase) => Math.sin(time / period * Math.PI * 2 + phase);
+                const base = C.iso.position, target = C.iso.target;
+                const dx = base[0] - target[0], dz = base[2] - target[2];
+                const r = Math.hypot(dx, dz, base[1] - target[1]);
+                const az = Math.atan2(dx, dz) + (15 * wave(67, 0) + 5 * wave(29, 1.3)) * Math.PI / 180;
+                const el = Math.asin((base[1] - target[1]) / r) + 4 * wave(47, 0.7) * Math.PI / 180;
+                const k = r * Math.exp(0.06 * wave(41, 2.1));
+                return {
+                    position: [target[0] + Math.sin(az) * Math.cos(el) * k, target[1] + Math.sin(el) * k, target[2] + Math.cos(az) * Math.cos(el) * k],
+                    look: target, fov: C.iso.fov
+                };
+            },
             roof: (t, seed) => {
                 const from = seed < 0.5 ? C.roof.from : C.roof.to, to = seed < 0.5 ? C.roof.to : C.roof.from;
                 const p = lerp3(from, to, 0.1 + t * 0.35);
@@ -61,7 +75,7 @@
         const L = () => global.MusicStageKowloonLayout;
         const evalRig = (shot, time) => {
             const t = Math.min(1, Math.max(0, (time - shot.start) / Math.max(0.1, shot.end - shot.start)));
-            if (rigs[shot.id]) return rigs[shot.id](t, shot.seed);
+            if (rigs[shot.id]) return rigs[shot.id](t, shot.seed, time);
             const rig = extra.find(r => r.id === shot.id);
             if (rig) {
                 const f = t * (rig.points.length - 1);
@@ -74,14 +88,16 @@
         const director = {
             force: null,
             setExtraRigs(list) { extra = Array.isArray(list) ? list.filter(r => r?.points?.length >= 2) : []; },
+            mode: 'auto',
             pose(frame, time) {
+                if (director.mode === 'diorama' && !director.force) return { id: 'diorama', ...rigs.diorama(0, 0, time) };
                 if (director.force) {
                     const { id, t } = director.force;
                     return { id, ...evalRig({ id, seed: 0.3, start: 0, end: 1 }, t) };
                 }
                 const line = frame.activeLine;
                 const key = line ? `l:${line.startTime}` : `gap:${Math.floor(time / 9)}`;
-                if (!current || current.key !== key && time - current.start > 5.5 || time < current.start - 0.5) {
+                if (!current || !director.hold && current.key !== key && time - current.start > 5.5 || time < current.start - 0.5) {
                     const start = line ? line.startTime : Math.floor(time / 9) * 9;
                     const end = line ? (frame.nextLines?.[0]?.startTime ?? line.endTime + 2) : start + 9;
                     previous = current && time >= current.start ? { shot: current, at: time } : null;
@@ -102,6 +118,67 @@
 
     // 截图脚本用：拿到最近一个实例，固定机位。
     let lastInstance = null;
+    /*
+     * 拖拽看景：按住拖动绕着当前机位的注视点转、滚轮推拉；松手 8 秒后慢慢
+     * 回到导演给的机位。只是叠在机位上的偏移，不改导演的安排。
+     */
+    const createOrbit = () => {
+        const view = { az: 0, el: 0, zoom: 1 };
+        let dragging = null, idleSince = -Infinity, wake = () => {};
+        const LIMIT = { az: 75 * Math.PI / 180, elMin: -25 * Math.PI / 180, elMax: 30 * Math.PI / 180, zMin: 0.35, zMax: 2.2 };
+        const clampView = () => {
+            view.az = Math.max(-LIMIT.az, Math.min(LIMIT.az, view.az));
+            view.el = Math.max(LIMIT.elMin, Math.min(LIMIT.elMax, view.el));
+            view.zoom = Math.max(LIMIT.zMin, Math.min(LIMIT.zMax, view.zoom));
+        };
+        return {
+            attach(scope, element, onWake) {
+                wake = onWake;
+                scope.listen(element, 'pointerdown', event => {
+                    if (event.button !== 0) return;
+                    dragging = { x: event.clientX, y: event.clientY, id: event.pointerId };
+                    element.setPointerCapture?.(event.pointerId);
+                    element.style.cursor = 'grabbing';
+                });
+                scope.listen(element, 'pointermove', event => {
+                    if (!dragging || event.pointerId !== dragging.id) return;
+                    view.az -= (event.clientX - dragging.x) * 0.005;
+                    view.el += (event.clientY - dragging.y) * 0.004;
+                    dragging.x = event.clientX; dragging.y = event.clientY;
+                    clampView(); idleSince = performance.now(); wake();
+                });
+                const end = event => {
+                    if (!dragging || event.pointerId !== dragging.id) return;
+                    dragging = null; idleSince = performance.now(); element.style.cursor = '';
+                };
+                scope.listen(element, 'pointerup', end);
+                scope.listen(element, 'pointercancel', end);
+                scope.listen(element, 'wheel', event => {
+                    event.preventDefault();
+                    view.zoom *= Math.exp(event.deltaY * 0.0012);
+                    clampView(); idleSince = performance.now(); wake();
+                }, { passive: false });
+                scope.listen(element, 'dblclick', () => { view.az = view.el = 0; view.zoom = 1; wake(); });
+            },
+            get active() { return Boolean(dragging) || performance.now() - idleSince < 8000 || Math.abs(view.az) + Math.abs(view.el) + Math.abs(view.zoom - 1) > 0.002; },
+            // 每帧：闲着够久就往回收；返回叠加了偏移的机位。
+            apply(pose, dt) {
+                if (!dragging && performance.now() - idleSince > 8000) {
+                    const k = 1 - Math.exp(-Math.max(0, dt) * 1.2);
+                    view.az -= view.az * k; view.el -= view.el * k; view.zoom += (1 - view.zoom) * k;
+                }
+                if (Math.abs(view.az) + Math.abs(view.el) + Math.abs(view.zoom - 1) < 1e-4) return pose;
+                const [px, py, pz] = pose.position, [lx, ly, lz] = pose.look;
+                const dx = px - lx, dy = py - ly, dz = pz - lz;
+                const r = Math.hypot(dx, dy, dz);
+                const az = Math.atan2(dx, dz) + view.az;
+                const el = Math.max(-0.2, Math.min(1.45, Math.asin(dy / r) + view.el));
+                const k = r * view.zoom;
+                return { ...pose, position: [lx + Math.sin(az) * Math.cos(el) * k, Math.max(0.8, ly + Math.sin(el) * k), lz + Math.cos(az) * Math.cos(el) * k] };
+            }
+        };
+    };
+
     const create = (container, services) => {
         const mode = U.makeModeBase('kowloon', '町景', container, services);
         const fallback = U.createElement('div', 'kowloon-fallback diorama-fallback');
@@ -113,7 +190,8 @@
         let T, scene, camera, renderer, layout, city, signs, alley, optics, director, shared, placeholderLights = [];
         let initialized = false, fallbackMode = false, initializing = null;
         let latest = null, lastTime = null, width = 1, height = 1, shotId = '';
-        let dirty = true;
+        let dirty = true, lastWall = 0;
+        const orbit = createOrbit();
         const cap = U.createFrameCap();
         const onset = R.createAudioOnset();
         const audio = { energy: 0, bass: 0, vocal: 0, impact: 0 };
@@ -189,7 +267,11 @@
             audio.vocal = R.clamp(frame.audio?.vocal) * gain;
 
             const settings = options();
-            const pose = director.pose(frame, time);
+            director.mode = settings.cameraMode === 'diorama' ? 'diorama' : 'auto';
+            // 看景时导演不换机位，免得手里的画面被切走。
+            director.hold = orbit.active;
+            const pose = orbit.apply(director.pose(frame, time), performance.now() / 1000 - (lastWall || performance.now() / 1000));
+            lastWall = performance.now() / 1000;
             if (pose.id !== shotId) shotId = pose.id;
             camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
             camera.lookAt(pose.look[0], pose.look[1], pose.look[2]);
@@ -198,8 +280,11 @@
 
             const state = {
                 time: settings.reducedMotion ? 0 : time, dt, playbackTime: time, isPlaying: frame.isPlaying,
-                audio, lyric: lyricState(frame, time), camera, shot: pose.id, options: settings
+                audio, lyric: lyricState(frame, time), camera, shot: pose.id, options: settings,
+                lines: frame.lines || [],
+                track: { title: services?.app?.stripAudioExtension?.(frame.track?.title) || frame.track?.title || '', artist: frame.track?.artist || '' }
             };
+            state.song = state.track;
             shared.uTime.value = state.time;
             // 渲染顺序：巷道先（它要画积水反射），再楼体、招牌。
             modules().forEach(m => m.update(state));
@@ -238,6 +323,8 @@
                 renderer.domElement.className = 'diorama-canvas kowloon-canvas';
                 mode.root.insertBefore(renderer.domElement, fallback);
                 const canvas = renderer.domElement;
+                canvas.style.touchAction = 'none';
+                orbit.attach(mode.scope, canvas, () => { dirty = true; if (latest && !latest.isPlaying) update(latest, true); });
                 mode.scope.listen(canvas, 'webglcontextlost', event => {
                     event.preventDefault();
                     if (renderer?.domElement !== canvas) return;
@@ -254,7 +341,14 @@
                 city = global.MusicStageKowloonCity.create(T, ctx);
                 ctx.city = city;
                 if (global.MusicStageKowloonSigns?.create) signs = global.MusicStageKowloonSigns.create(T, ctx);
-                if (!alley) { shared.uWet.value = 0.7; }
+                if (!alley) {
+                    // 巷道模块还没并进来：先铺一块湿地面，好看楼体落地。
+                    shared.uWet.value = 0.7;
+                    const ground = new T.Mesh(new T.PlaneGeometry(1200, 1200), new T.MeshBasicMaterial({ color: 0x07090c }));
+                    ground.rotation.x = -Math.PI / 2;
+                    ground.name = 'kowloon-placeholder-ground';
+                    scene.add(ground);
+                }
                 // 招牌模块还没并进来时，用一组占位霓虹光看楼体受光。
                 placeholderLights = signs ? [] : layout.slots(sl => sl.use === 'sign' && sl.floor <= 4)
                     .filter((_, i) => i % 7 === 0).map((sl, i) => ({
@@ -311,6 +405,7 @@
             ...(initialized ? Object.assign({}, ...modules().map(m => m.stats?.() || {})) : null)
         });
         // harness 用：固定机位截图。
+        mode.debugScene = () => ({ scene, camera, renderer, T });
         mode.debugSetShot = (id, t = 0.5) => { if (director) director.force = id ? { id, t } : null; dirty = true; if (latest) update(latest, true); };
         mode.scope.add(() => { disposeGraphics(); latest = null; });
         resize();

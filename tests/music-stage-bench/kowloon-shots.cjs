@@ -20,11 +20,11 @@ const SHOTS = (args.shots || 'iso,street,screen,roof').split(',');
     page.on('console', m => { if (/error|warn/i.test(m.type()) && !/deprecated/.test(m.text())) console.log('[page]', m.type(), m.text().slice(0, 400)); });
     page.on('pageerror', e => console.log('[pageerror]', e.message));
     await page.goto(`${origin}/blank.html`);
-    await page.evaluate(({ quality }) => {
+    await page.evaluate(({ quality, extra }) => {
         localStorage.clear();
         localStorage.setItem('musicStageMode', 'kowloon');
-        localStorage.setItem('musicStageConfig', JSON.stringify({ quality }));
-    }, { quality: args.quality || 'standard' });
+        localStorage.setItem('musicStageConfig', JSON.stringify({ quality, modes: { kowloon: JSON.parse(extra || '{}') } }));
+    }, { quality: args.quality || 'standard', extra: args.kowloon || '' });
     const t = Number(args.t || 30);
     await page.goto(`${origin}/Musicmodules/harness.html?lyrics=song&duration=215&t=${t}`);
     await page.waitForTimeout(400);

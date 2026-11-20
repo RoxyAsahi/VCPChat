@@ -152,6 +152,7 @@
                 audioReactivity: 1
             },
             kowloon: {
+                cameraMode: 'auto',
                 rain: 'light',
                 postProcess: true,
                 glow: 1,
@@ -232,6 +233,7 @@
             geometryMode: enumValue(source.geometryMode, ['clouds', 'corridor'], fallback.geometryMode),
             cabinFrame: bool(source.cabinFrame, fallback.cabinFrame),
             rain: enumValue(source.rain, ['off', 'light', 'heavy'], fallback.rain),
+            cameraMode: fallback.cameraMode === undefined ? source.cameraMode : enumValue(source.cameraMode, ['auto', 'diorama'], fallback.cameraMode),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),

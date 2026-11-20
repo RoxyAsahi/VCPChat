@@ -307,7 +307,7 @@
     };
 
     const CAMERA = Object.freeze({
-        iso: { position: [120, 95, 175], target: [5, 18, 30], fov: 32, orbit: 22 },
+        iso: { position: [78, 62, 128], target: [6, 20, 46], fov: 38, orbit: 22 },
         street: { from: [-40, 2.2, 67], to: [55, 4.5, 67], target: [10, 18, 60], fov: 50 },
         roof: { from: [-90, 56, 40], to: [60, 50, -40], fov: 55 },
         screen: { position: [10, 22, 80], target: [10, 24, 60], fov: 40 }
