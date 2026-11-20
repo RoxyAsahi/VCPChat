@@ -56,7 +56,10 @@ const SHOTS = (args.shots || 'alley-walk@0.3,alley-puddle@0.5,alley-rise@0.5,str
             const timing = await page.evaluate(({ id, tt }) => {
                 const m = MusicStageKowloonManager.debugInstance();
                 const alley = MusicStageKowloonAlley.debugInstance();
-                const run = () => { const t0 = performance.now(); for (let i = 0; i < 8; i++) m.debugSetShot(id, (tt === undefined ? 0.5 : Number(tt)) + i * 1e-4); return (performance.now() - t0) / 8; };
+                const gl = alley.debug().renderer.getContext();
+                const px = new Uint8Array(4);
+                // Read a pixel back after each frame so the GPU has really finished it.
+                const run = () => { const t0 = performance.now(); for (let i = 0; i < 8; i++) { m.debugSetShot(id, (tt === undefined ? 0.5 : Number(tt)) + i * 1e-4); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } return (performance.now() - t0) / 8; };
                 run();
                 const on = run();
                 const { root, tierName } = alley.debug();
@@ -68,7 +71,7 @@ const SHOTS = (args.shots || 'alley-walk@0.3,alley-puddle@0.5,alley-rise@0.5,str
             console.log(shot, 'frame ms with alley', timing.on, 'without', timing.off);
         }
         console.log(shot, JSON.stringify({ draws: snap.drawCalls, tris: snap.triangles, camera: snap.camera, alley: alley && {
-            draws: alley.drawCalls, tris: alley.triangles, rain: alley.rainStreaks, fog: +alley.fogDensity.toFixed(4), reflection: alley.reflection } }));
+            draws: alley.alleyDrawCalls, tris: alley.alleyTriangles, rain: alley.rainStreaks, fog: +alley.fogDensity.toFixed(4), reflection: alley.reflection } }));
     }
     await browser.close();
     server.close();

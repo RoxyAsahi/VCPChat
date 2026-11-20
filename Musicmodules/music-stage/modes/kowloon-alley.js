@@ -398,14 +398,17 @@
                         int k=int(vKind+0.5);
                         if(k==1){
                             // Corrugated slats, paint chipped at the bottom, rust running down.
-                            float slat=fract(vLocal.y/0.075);kRelief=smoothstep(0.0,0.5,abs(slat-0.5));kDepth=0.006;
-                            diffuseColor.rgb*=0.88+0.12*kRelief;
-                            diffuseColor.rgb*=0.8+0.3*kNoise(at*vec2(0.6,4.0));
+                            float slat=fract(vLocal.y/0.075);
+                            // Slats finer than a couple of pixels fade to their average, no moire.
+                            float resolve=1.0-smoothstep(0.2,0.55,fwidth(vLocal.y/0.075));
+                            kRelief=smoothstep(0.0,0.5,abs(slat-0.5))*resolve;kDepth=0.006*resolve;
+                            diffuseColor.rgb*=0.94+0.12*(kRelief-0.5*resolve);
+                            diffuseColor.rgb*=0.85+0.25*kNoise(at*vec2(0.6,2.0));
                             float rust=smoothstep(0.55,0.8,grime+0.35*(1.0-smoothstep(0.0,0.9,vLocal.y+vSize.y*0.5)));
                             diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.22,0.11,0.06)*(0.6+0.6*streak),rust*0.8);
                             // Scrawl and stuck-on bills, a few per shutter.
                             float bill=step(0.82,kHash(floor(at*vec2(1.5,2.2))+vSeed*5.0))*step(abs(vLocal.y),0.5);
-                            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.55,0.52,0.45)*(0.6+0.4*kNoise(at*8.0)),bill*0.8);
+                            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.55,0.52,0.45)*(0.7+0.3*kNoise(at*3.0)),bill*0.7);
                         } else if(k==2){
                             vec2 bars=abs(fract(at/vec2(0.12,0.12))-0.5);
                             if(min(bars.x,bars.y)>0.11&&af.y<0.5)discard;
@@ -436,7 +439,7 @@
                     .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
                     {int k=int(vKind+0.5);
                      roughnessFactor=k==8||k==9?0.35:k==3?0.6:k==6?0.9:k==1||k==7?0.55:0.7;
-                     roughnessFactor=mix(roughnessFactor,0.18,wetness*(k==6?0.4:0.8));}`)
+                     roughnessFactor=mix(roughnessFactor,0.18,wetness*(k==6?0.4:k==1?0.35:0.8));}`)
                     .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                     {int k=int(vKind+0.5);metalnessFactor=k==1||k==2||k==7||k==0?0.45:0.0;}`)
                     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -631,7 +634,7 @@
                 const h = range(3, 3.8);
                 boxes.add([x, h, z], [1.2, 0.05, 0.06], yaw, 5, new T.Color(tone[0], tone[1], tone[2]));
                 boxes.add([x, h + 0.05, z], [1.26, 0.03, 0.12], yaw, 0, '#2a2c2e');
-                lamp([x, h - 0.1, z], tone, 1.5, 7, rand() < 0.12 ? 1 : 0);
+                lamp([x, h - 0.1, z], tone, 1.0, 5, rand() < 0.12 ? 1 : 0);
             }
             // Cables over the alley: bundles crossing, a few running along it.
             for (let d = range(0.5, 2); d < run.length; d += range(1.2, 3.2)) {
@@ -713,7 +716,7 @@
                         const [lx, lz] = at(t, -0.4);
                         boxes.add([lx, open - 0.05, lz], [width * 0.8, 0.04, 0.04], facing, 5, '#ffcf8a');
                         const [sx, sz] = at(t, 0.5);
-                        lamp([sx, open * 0.5, sz], LAMP_TONES[1], 1.0, 4.5);
+                        lamp([sx, open * 0.5, sz], LAMP_TONES[1], 0.8, 3.5);
                     }
                 } else if (r < 0.58) {
                     boxes.add([x, 1.25, z], [width, 2.5, 0.05], facing, 2, '#4a4e50');
@@ -723,11 +726,11 @@
                     const [cx, cz] = at(t, 0.3);
                     boxes.add([cx, 0.45, cz], [width * 0.9, 0.9, 0.5], facing, pick([0, 4, 6]), pick(CRATE));
                     const [awx, awz] = at(t, reach / 2);
-                    if (street || width0 >= 2.2) boxes.add([awx, 2.75, awz], [width, 0.03, reach + 0.1], facing, 3, pick(TARP), -0.22);
+                    if (street) boxes.add([awx, 2.75, awz], [width, 0.03, reach + 0.1], facing, 3, pick(TARP), -0.22);
                     const [bx, bz] = at(t, reach * 0.35);
                     const tone = pick(LAMP_TONES);
                     lumps.add([bx, 2.45, bz], [0.05, 0.065, 0.05], 0, 5, new T.Color(tone[0], tone[1], tone[2]));
-                    lamp([bx, 2.35, bz], tone, 1.3, 5.5, rand() < 0.15 ? 1 : 0);
+                    lamp([bx, 2.35, bz], tone, 0.9, 4, rand() < 0.15 ? 1 : 0);
                     if (rand() < 0.35) steamSources.push([cx, 0.95, cz, range(3, 5)]);
                     for (let i = 0; i < 3; i++) {
                         const [gx, gz] = at(t + range(-width * 0.35, width * 0.35), 0.3);
@@ -809,7 +812,7 @@
                 const lit = rand() < 0.88;
                 boxes.add([x, y, z], [ew ? 1.2 : 0.05, 0.05, ew ? 0.05 : 1.2], 0, lit ? 5 : 0,
                     lit ? new T.Color(tone[0], tone[1], tone[2]) : '#444');
-                if (lit) lamp([x, y - 0.1, z], tone, 1.4, Math.min(7, b.y0 * 0.8), rand() < 0.15 ? 1 : 0);
+                if (lit) lamp([x, y - 0.1, z], tone, 1.0, Math.min(5, b.y0 * 0.6), rand() < 0.15 ? 1 : 0);
                 // Cables and pipes are fixed to the soffit here, not strung across.
                 for (let k = 0; k < 3; k++) {
                     const off = range(-0.8, 0.8);
@@ -1121,13 +1124,13 @@
                 void main(){
                     float life=fract(time/source.w+seed.x);
                     vec3 c=source.xyz+vec3(0.35*life+sin(life*5.0+seed.x*30.0)*0.06,life*2.2,0.15*life);
-                    float size=(0.18+life*0.85)*seed.y;
+                    float size=(0.12+life*0.55)*seed.y;
                     vec3 right=vec3(viewMatrix[0][0],viewMatrix[1][0],viewMatrix[2][0]);
                     vec3 up=vec3(viewMatrix[0][1],viewMatrix[1][1],viewMatrix[2][1]);
                     vec3 w=c+(right*position.x+up*position.y)*size;
                     vUv=position.xy;vSeed=seed.x*37.0+source.x;
                     float dist=distance(cameraPosition,c);
-                    vFade=smoothstep(0.0,0.12,life)*(1.0-smoothstep(0.5,1.0,life))*(1.0-smoothstep(25.0,45.0,dist));
+                    vFade=smoothstep(0.0,0.12,life)*(1.0-smoothstep(0.5,1.0,life))*(1.0-smoothstep(25.0,45.0,dist))*smoothstep(0.8,3.0,dist);
                     vec3 lit=hemiSky*0.6;
                     for(int i=0;i<${MAX_LIGHTS};i++){if(i>=uLightCount)break;float f=max(0.0,1.0-length(uLightPos[i]-c)/uLightRad[i]);lit+=uLightCol[i]*f*f;}
                     vLit=lit;
@@ -1139,7 +1142,7 @@
                 void main(){
                     float r=length(vUv);if(r>1.0)discard;
                     float puff=kFbm(vUv*1.6+vSeed)*1.3-0.25;
-                    float a=smoothstep(1.0,0.2,r)*clamp(puff,0.0,1.0)*vFade*0.35;
+                    float a=smoothstep(1.0,0.2,r)*clamp(puff,0.0,1.0)*vFade*0.2;
                     if(a<0.004)discard;
                     gl_FragColor=vec4(vLit*0.9,a);
                     #include <tonemapping_fragment>
@@ -1364,9 +1367,13 @@
         };
         const shelterOrder = bridges.map(b => ({ b, d: 0 }));
 
+        let mirrorLive = false;
         const renderMirror = camera => {
             const renderer = ctx.renderer;
-            if (!renderer || !reflectionOn || !camera) return;
+            mirrorLive = Boolean(renderer && reflectionOn && camera && camera.position.y < 28);
+            floorMat.uniforms.reflectOn.value = mirrorLive ? 1 : 0;
+            // From high up the puddles are a few pixels each: the sky and the lamp streaks do.
+            if (!mirrorLive) return;
             camera.updateMatrixWorld();
             mirror.position.copy(camera.position);
             mirror.position.y = -mirror.position.y;
@@ -1397,7 +1404,7 @@
             mirror.layers.disable(LAYER_FLOOR);
             const size = renderer.getSize(new T.Vector2());
             const buffer = size.x * renderer.getPixelRatio();
-            const width = Math.max(64, Math.round(Math.min(buffer * 0.5, tierName === 'ultimate' ? 1280 : 800)));
+            const width = Math.max(64, Math.round(Math.min(buffer * (tierName === 'ultimate' ? 0.5 : 0.4), tierName === 'ultimate' ? 1280 : 640)));
             const height = Math.max(1, Math.round(width * size.y / Math.max(1, size.x)));
             if (target.width !== width || target.height !== height) target.setSize(width, height);
             const oldTarget = renderer.getRenderTarget();
@@ -1471,7 +1478,7 @@
                 lu.uRain.value = rainLevel;
                 lu.uWet.value = shared.wetness.value;
                 // Rain scatters the street's light up the walls.
-                lu.uGlowStrength.value = (palette.light ? 0.12 : 0.5) * (1 + rainLevel * 0.3);
+                lu.uGlowStrength.value = (palette.light ? 0.1 : 0.32) * (1 + rainLevel * 0.25);
             }
             haloMat.uniforms.haze.value = 0.45 + rainLevel * 0.8;
         };
@@ -1526,7 +1533,6 @@
             drips.visible = !far;
             if (!far) placeDrips(camera);
             if (laundry) laundry.visible = true;
-            floorMat.uniforms.reflectOn.value = reflectionOn ? 1 : 0;
             updateLightning(state);
             cones.visible = !far;
             if (!far) placeCones(camera);
@@ -1551,8 +1557,8 @@
                 triangles += range * (m.isInstancedMesh ? m.count : g.isInstancedBufferGeometry ? g.instanceCount : 1);
             });
             return {
-                drawCalls: meshes.length + (reflectionOn ? 0 : 0), triangles: Math.round(triangles),
-                reflection: reflectionOn ? [target.width, target.height] : null,
+                alleyDrawCalls: meshes.length, alleyTriangles: Math.round(triangles),
+                reflection: mirrorLive ? [target.width, target.height] : null,
                 rain: rainLevel, rainStreaks: rain.visible ? rainGeometry.drawRange.count / 6 : 0,
                 lamps: lamps.length, lightsUsed: lightUniforms.uLightCount.value, drips: DRIPS,
                 cables: cableCount, garments: laundryCount,
@@ -1571,6 +1577,8 @@
                 radius: l.radius, flicker: l.flicker, flickerValue: flickerOf(l, lastTime) })),
             cameraRigs: () => rigs.map(r => ({ id: r.id, points: r.points.map(p => p.slice()), look: r.look.map(p => p.slice()), fov: r.fov })),
             layers: { viewOnly: LAYER_VIEW_ONLY, floor: LAYER_FLOOR },
+            // Lightning brightness now, 0..1 (0 when no strike), for anything that flashes with it.
+            flash: () => shared.flash.value,
             stats,
             dispose() {
                 if (scene.fog === fog) scene.fog = null;
@@ -1579,7 +1587,7 @@
                 if (lastInstance === api) lastInstance = null;
             },
             // For the screenshot script: the scene and this module's own group.
-            debug: () => ({ scene, root, options, tierName })
+            debug: () => ({ scene, root, options, tierName, renderer: ctx.renderer })
         };
         lastInstance = api;
         return api;
