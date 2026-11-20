@@ -120,11 +120,18 @@
             clearTimeout(bootTimer);
             if (holding && !preparing) bootTimer = setTimeout(() => { if (!state.destroyed) applyEmpty(); }, Math.max(0, bootUntil - performance.now()) + 20);
         };
-        const rebuild = ({ keep = true, track = -1, reindex = true, prepared = null, laterList = false } = {}) => {
+        const rebuild = ({ keep = true, track = -1, reindex = true, prepared = null, laterList = false, steady = false } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
-            const keepIndex = keep ? selectedIndex() : track;
+            const keepKind = keep && column() ? column().kind : null;
+            let keepIndex = keep ? selectedIndex() : track;
+            // 选中的那首按路径认：曲库变了以后（扫描途中追加、扫完重排）下标会变，路径不会
+            if (keep && state.selPath) {
+                const k = pathIndex().get(Model.normalizePath(state.selPath));
+                if (k !== undefined) keepIndex = k;
+            }
+            if (state.dataRefs.length <= 0) steady = false;
             const firstData = state.dataRefs.length <= 0 && tracks().length > 0;
             // 只换排序时曲库没变，检索索引（拼音、罗马音）不用重建
             if (prepared && prepared.index && prepared.list === app.playlist && prepared.index.size === tracks().length) searchIndex = prepared.index;
@@ -144,7 +151,13 @@
                 const r = keepIndex >= 0 ? columns[byId].items.indexOf(keepIndex) : -1;
                 row = r !== -1 ? r : Math.min(state.row, Math.max(0, columns[byId].items.length - 1));
             } else {
-                const at = Model.locate(columns, keepIndex >= 0 ? keepIndex : app.currentTrackIndex, 0);
+                // 原来那一列没了（歌变多以后首字母列会拆开或改名）：先在同一类的列里找这首歌
+                let at = null;
+                if (keepKind && keepIndex >= 0) {
+                    const l = columns.findIndex((c) => c.kind === keepKind && c.items.includes(keepIndex));
+                    if (l !== -1) at = { lane: l, row: columns[l].items.indexOf(keepIndex) };
+                }
+                at = at || Model.locate(columns, keepIndex >= 0 ? keepIndex : app.currentTrackIndex, 0);
                 if (at) { lane = at.lane; row = at.row; }
             }
             state.lane = lane;
@@ -160,8 +173,8 @@
             renderHud(true);
             updatePlaying(true);
             // 大曲库分片重建时，目录（两万行的分组和排序）放到下一片再排
-            if (laterList && list) { clearTimeout(listTimer); listTimer = setTimeout(() => { listTimer = 0; if (state.destroyed) return; list.rebuild(); syncList(); }, 0); }
-            else { clearTimeout(listTimer); listTimer = 0; list?.rebuild(); syncList(); }
+            if (laterList && list) { clearTimeout(listTimer); listTimer = setTimeout(() => { listTimer = 0; if (state.destroyed) return; list.rebuild({ steady }); syncList(steady); }, 0); }
+            else { clearTimeout(listTimer); listTimer = 0; list?.rebuild({ steady }); syncList(steady); }
             schedulePlace();
         };
 
@@ -303,10 +316,17 @@
             refs.status.textContent = got ? 'SCAN COMPLETE ／ ' + pad(got, 4) + ' FILES' : 'SCAN COMPLETE ／ NO FILES FOUND';
             scan.timer = setTimeout(() => { scan.timer = 0; renderScan(); }, 4000);
         };
+        let growTimer = 0;
         const scanOff = [
             app.api?.onMusicScanStart?.((data) => setScan({ active: true, current: 0, total: Number(data && data.total) || 0 })),
             app.api?.onMusicScanProgress?.((data) => setScan({ active: true, current: Number(data && data.current) || 0, total: Number(data && data.total) || scan.total })),
-            app.api?.onMusicScanComplete?.(scanDone)
+            app.api?.onMusicScanComplete?.(scanDone),
+            // 扫描途中播放器会把新读到的曲目一批批接到曲库末尾：阵列和目录跟着长（歌多时隔久一点再排）。
+            // 旧的主进程不发这个事件，那就和以前一样扫完一次换上。
+            app.api?.onMusicScanBatch?.(() => {
+                if (growTimer) return;
+                growTimer = setTimeout(() => { growTimer = 0; if (!state.destroyed && isShown() && dataChanged()) rebuildSoon(); }, tracks().length > 5000 ? 1500 : 500);
+            })
         ];
         renderScan();
 
@@ -389,6 +409,7 @@
             const r = count ? Model.wrap(state.row, count) : 0;
             const index = selectedIndex();
             const t = tracks()[index];
+            state.selPath = t ? t.path : null;
             refs.cat.textContent = col.name;
             refs.fno.textContent = t ? fileNumber(t, index) : 'TRK-000';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
@@ -477,6 +498,9 @@
         const scheduleCover = (t, immediate) => {
             clearTimeout(state.coverTimer);
             const url = coverOf(t);
+            // 还是同一张、已经显示着：不动它（曲库重建时会重画说明块，封面不该跟着闪）
+            if (url && refs.cover.dataset.url === url && refs.cover.dataset.state === 'ready') return;
+            refs.cover.dataset.url = '';
             refs.cover.classList.remove('on');
             refs.cover.dataset.state = url ? 'loading' : 'none';
             if (!url) refs.cover.style.backgroundImage = '';
@@ -489,6 +513,7 @@
                     refs.cover.style.backgroundImage = `url("${url}")`;
                     refs.cover.classList.add('on');
                     refs.cover.dataset.state = 'ready';
+                    refs.cover.dataset.url = url;
                 };
                 const fail = () => {
                     if (coverOf(selectedTrack()) !== url) return;
@@ -703,7 +728,7 @@
         let warming = null;
         const rebuildSoon = () => {
             const list = tracks();
-            if (!IndexLib || !IndexLib.warm || list.length <= WARM_ABOVE) { warming = null; rebuild(); return; }
+            if (!IndexLib || !IndexLib.warm || list.length <= WARM_ABOVE) { warming = null; rebuild({ steady: true }); return; }
             if (warming && warming.list === app.playlist && warming.n === list.length) return;
             const job = warming = { list: app.playlist, n: list.length, at: 0, pinyin: pinyinOf() };
             if (state.dataRefs.length <= 0) applyEmpty(true); // 从空到有：先把空状态收起来
@@ -724,7 +749,7 @@
                 if (!job.sort(8)) return later();
                 if (!job.cols) { job.colsKey = columnsKey(); job.cols = computeColumns(job.index); return later(); }
                 warming = null;
-                rebuild({ prepared: job, laterList: true });
+                rebuild({ prepared: job, laterList: true, steady: true });
             };
             slice();
         };
@@ -838,10 +863,10 @@
             fromList = false;
         };
         let fromList = false;
-        const syncList = () => {
+        const syncList = (quiet = false) => {
             if (!list || fromList || !listOpen()) return;
             const col = column();
-            list.reveal(selectedIndex(), col ? col.id : null);
+            list.reveal(selectedIndex(), col ? col.id : null, { quiet: quiet === true });
         };
 
         const playIndex = (i, ctx, { stage, group = null }) => {
@@ -1297,11 +1322,13 @@
             clearTimeout(scan.timer);
             clearTimeout(bootTimer);
             clearTimeout(listTimer);
+            clearTimeout(growTimer);
             scanOff.forEach((off) => { if (typeof off === 'function') off(); });
             clearTimeout(state.coverTimer);
             stopInertia();
             lyrics?.destroy();
             tickMarker?.destroy();
+            list?.closeBatchMenu?.();
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
@@ -1333,6 +1360,8 @@
                 getRecent: recentIndices, durationOf,
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
+                onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
+                onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });

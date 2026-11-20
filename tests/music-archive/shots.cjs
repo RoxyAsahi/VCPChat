@@ -59,6 +59,26 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
       // 目录切到歌单分类，阵列走到那个空歌单
       await page.evaluate(() => { document.querySelector('[data-kind="playlist"]').click(); const v = window.app.archiveView; const k = v.debug().columns.findIndex((c) => c.id === 'playlist:e'); for (let i = 0; i < k; i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); });
     }
+    else if (name.includes('multi')) {
+      // 多选三行，在其中一行上右键打开批量菜单
+      await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('.archive-list-row')];
+        rows[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        rows[3].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+        rows[5].dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+        const box = rows[3].getBoundingClientRect();
+        rows[3].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 150, clientY: box.top + 20 }));
+      });
+    }
+    else if (name.includes('plshelf')) {
+      // 歌单分类 + 拖起一行（歌单架出现），第一个歌单标题上的按钮显出来
+      await page.evaluate(() => {
+        document.querySelector('[data-kind="playlist"]').click();
+        const row = document.querySelector('.archive-list-row');
+        row.dispatchEvent(new Event('dragstart', { bubbles: true }));
+        const acts = document.querySelector('.archive-list-group .acts'); if (acts) acts.style.opacity = 1;
+      });
+    }
     else if (name.includes('scan') || name.includes('nolyr')) { /* 停在原处 */ }
     else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
