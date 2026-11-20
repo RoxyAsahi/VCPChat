@@ -681,6 +681,7 @@ test('右侧滚动歌词：播放器有歌词时显示，当前行跟着进度�
         }
     });
     const el = f.w.document.querySelector('.archive-lyrics');
+    f.w.document.querySelector('[data-act="lyrics"]').click(); // 歌词面板平时收着，这里手动打开
     assert.ok(el && !el.hidden);
     assert.ok(f.w.document.querySelector('.archive-hud').classList.contains('has-lyrics'));
     const d = f.view.debug().lyrics;
@@ -713,6 +714,7 @@ test('右侧歌词：经典视图和播放页里不显示，暂停时不走表',
         }
     });
     const el = f.w.document.querySelector('.archive-lyrics');
+    f.w.document.querySelector('[data-act="lyrics"]').click(); // 歌词面板平时收着，这里手动打开
     assert.ok(!el.hidden);
     assert.ok(!f.view.debug().lyrics.ticking);
     f.view.showClassic();
@@ -867,6 +869,7 @@ test('空的原因各有说法：检索没结果、空歌单、还没有播放�
 test('右侧歌词：正在放的歌等一会儿还没有歌词，只留栏头和「获取歌词」；歌词到了换成歌词，不占大封面的版面', async () => {
     const f = fixture({ setup: (w, app) => { w.innerWidth = 1600; w.innerHeight = 900; app.isPlaying = true; app.currentLyrics = []; app.openLyricsFetchModal = (i) => { app.fetchAsked = i; }; } });
     const el = f.w.document.querySelector('.archive-lyrics');
+    f.w.document.querySelector('[data-act="lyrics"]').click(); // 歌词面板平时收着，这里手动打开
     const hud = f.w.document.querySelector('.archive-hud');
     const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
     f.view.refresh();
@@ -1001,10 +1004,17 @@ test('把歌拖到歌单上：拖起一行时目录下方出现歌单架，松�
     const toasts = [];
     const f = fixture({ setup: (w, app) => { app.saveCustomPlaylists = () => {}; w.MusicToast = { show: (t) => toasts.push(t) }; } });
     const el = f.view.list.el;
-    const ev = (type, target) => { const e = new f.w.Event(type, { bubbles: true, cancelable: true }); target.dispatchEvent(e); return e; };
+    // 拖：按住一行横着拖出去（上下拖是滚动），移到落点上，松手
+    const pe = (type, target, x, y) => target.dispatchEvent(new f.w.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));
+    const ev = (type, target) => {
+        if (type === 'dragstart') { pe('pointerdown', target, 100, 100); pe('pointermove', target, 140, 102); }
+        else if (type === 'dragover') { pe('pointermove', target, 200, 300); return { defaultPrevented: target.classList.contains('drop-over') }; }
+        else if (type === 'drop') pe('pointerup', target, 200, 300);
+        else if (type === 'dragend') pe('pointerup', target, 140, 102);
+        return null;
+    };
     f.view.setListOpen(true);
     const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
-    assert.equal(rowOf('Song 3').draggable, true);
     const shelf = el.querySelector('[data-l="shelf"]');
     ev('dragstart', rowOf('Song 3'));
     assert.equal(shelf.hidden, false);
@@ -1108,8 +1118,11 @@ test('目录多选：Ctrl 点选、Shift 选一段、Ctrl+A、Esc；多选时右
     assert.equal(f.view.list.picked.length, 0);
     // 拖多选里的一行 = 拖这几首
     click('Song 10'); click('Song 12', { shiftKey: true });
-    rowOf('Song 11').dispatchEvent(new f.w.Event('dragstart', { bubbles: true }));
-    el.querySelector('[data-drop="p"]').dispatchEvent(new f.w.Event('drop', { bubbles: true, cancelable: true }));
+    const pe = (type, target, x, y) => target.dispatchEvent(new f.w.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));
+    pe('pointerdown', rowOf('Song 11'), 100, 100); pe('pointermove', rowOf('Song 11'), 140, 102);
+    assert.match(doc.querySelector('.archive-drag-ghost').textContent, /3 首/);
+    pe('pointerup', el.querySelector('[data-drop="p"]'), 200, 300);
+    assert.equal(doc.querySelector('.archive-drag-ghost'), null);
     assert.ok(['/m/10', '/m/11', '/m/12'].every((p) => f.app.customPlaylists[0].tracks.includes(p)));
     f.close();
 });
@@ -1237,5 +1250,79 @@ test('只用键盘：Shift+方向键选一段、回头收窄、不按 Shift 回�
     assert.equal(doc.activeElement.dataset.pl, 'delete-no');
     doc.activeElement.click();
     assert.equal(doc.activeElement.dataset.pl, 'delete');
+    f.close();
+});
+
+test('歌词面板平时不占位：选好歌播放后才出来，浏览到别的歌就收起，定位当前播放或 LYRICS 按钮再打开', () => {
+    const f = fixture({
+        setup: (w, app) => {
+            Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
+            app.currentLyrics = [{ time: 0, text: 'a' }, { time: 5, text: 'b' }];
+            app.isPlaying = true;
+            app.stageHost = { active: false, enter() {} };
+        }
+    });
+    const doc = f.w.document;
+    const el = doc.querySelector('.archive-lyrics');
+    const hud = doc.querySelector('.archive-hud');
+    const btn = doc.querySelector('[data-act="lyrics"]');
+    assert.equal(el.hidden, true, '打开这一页时不弹');
+    assert.ok(!hud.classList.contains('has-lyrics'));
+    f.key('Enter'); // 选中的就是正在放的这首：选好了
+    assert.equal(el.hidden, false);
+    assert.equal(btn.getAttribute('aria-pressed'), 'true');
+    f.key('ArrowDown'); // 去看别的歌
+    assert.equal(el.hidden, true, '浏览时收起');
+    assert.ok(!hud.classList.contains('has-lyrics'), '版面还给选中卡');
+    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+    doc.querySelector('[data-act="now"]').click();
+    assert.equal(el.hidden, false, '定位当前播放：回到那首，歌词回来');
+    btn.click();
+    assert.equal(el.hidden, true, '按钮可以手动收起');
+    btn.click();
+    assert.equal(el.hidden, false);
+    f.close();
+});
+
+test('CONTROL 入口：播放器给了 openMusicControls 就用它；没有就回经典视图并展开声学处理', () => {
+    const calls = [];
+    const f = fixture({ setup: (w, app) => { app.openMusicControls = (s) => calls.push(['open', s]); } });
+    const doc = f.w.document;
+    doc.querySelector('[data-act="controls"]').click();
+    assert.equal(calls.length, 1);
+    delete f.app.openMusicControls;
+    const drawer = doc.createElement('div'); drawer.id = 'acoustic-drawer';
+    drawer.innerHTML = '<button class="acoustic-drawer-toggle" aria-expanded="false"></button>';
+    drawer.firstChild.addEventListener('click', () => calls.push(['toggle']));
+    doc.body.appendChild(drawer);
+    doc.querySelector('[data-act="controls"]').click();
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1][0], 'toggle');
+    assert.equal(f.view.debug().mode, 'classic');
+    f.close();
+});
+
+test('目录可以按住上下拖着滚动：拖动时跟手，松手不算点击；横着拖一行才是拎歌', () => {
+    const f = fixture({});
+    const el = f.view.list.el;
+    f.view.setListOpen(true);
+    const vp = el.querySelector('[data-l="viewport"]');
+    const pe = (type, target, x, y) => target.dispatchEvent(new f.w.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));
+    const row = el.querySelectorAll('.archive-list-row')[4];
+    const before = f.view.debug().selected;
+    assert.equal(row.draggable, false, '不用系统拖放');
+    pe('pointerdown', row, 100, 400);
+    pe('pointermove', row, 102, 396); // 还没过阈值
+    assert.equal(vp.scrollTop, 0);
+    pe('pointermove', row, 103, 300);
+    assert.equal(vp.scrollTop, 100, '内容跟着手往上走');
+    assert.ok(el.classList.contains('grabbing'));
+    assert.equal(el.querySelector('[data-l="shelf"]').hidden, true, '上下拖不出歌单架');
+    pe('pointermove', row, 103, 340);
+    assert.equal(vp.scrollTop, 60);
+    pe('pointerup', row, 103, 340);
+    assert.ok(!el.classList.contains('grabbing'));
+    row.dispatchEvent(new f.w.MouseEvent('click', { bubbles: true, cancelable: true }));
+    assert.equal(f.view.debug().selected, before, '拖完松手那一下不选中');
     f.close();
 });

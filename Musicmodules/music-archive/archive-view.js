@@ -28,6 +28,8 @@
                 <button type="button" data-act="list" data-ref="listBtn" title="档案目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST</button>
                 <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
+                <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="歌词面板（选好歌播放后自动打开，浏览别的歌时收起）" aria-pressed="false">LYRICS</button>
+                <button type="button" data-act="controls" title="声学处理、舞台与播放参数">CONTROL <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="now" title="定位当前播放（Ctrl+L）" aria-label="定位当前播放"><span class="archive-glyph-now">◷</span></button>
             </nav>
             <div class="archive-callout">
@@ -567,6 +569,7 @@
             state.scene?.select(lane, row, { pulse });
             renderHud();
             syncList();
+            if (state.lyricsOn && selectedIndex() !== app.currentTrackIndex) wantLyrics(false);
             schedulePlace();
             kick();
         };
@@ -650,6 +653,7 @@
                 const whole = col.kind === 'letter' || col.kind === 'all';
                 startQueue(whole ? libraryOrder() : col.items, index, source, whole ? '全部曲目' : col.name);
             }
+            wantLyrics(true);
             if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
         };
 
@@ -820,9 +824,31 @@
 
         let list = null;
         let lyrics = null;
+        /*
+         * 歌词面板平时不占位：在这一页选好歌播放（或点了定位当前播放、LYRICS）之后才出来，
+         * 选中移到别的歌上（在浏览）就收起，把地方还给选中卡的信息
+         */
+        const wantLyrics = (on) => {
+            on = Boolean(on);
+            if (on === Boolean(state.lyricsOn)) return;
+            state.lyricsOn = on;
+            refs.lyricsBtn?.setAttribute('aria-pressed', String(on));
+            syncLyrics();
+        };
+        /* 一级入口：原来的控制参数（声学处理、舞台、播放）。播放器给了入口就用它的；没有就回经典视图把声学处理展开 */
+        const openControls = (section) => {
+            if (typeof app.openMusicControls === 'function') { app.openMusicControls(section); return; }
+            if (app.musicDock && typeof app.musicDock.openPanel === 'function') { app.musicDock.openPanel('控制'); return; }
+            setMode('classic', { persist: false });
+            const drawer = document.getElementById('acoustic-drawer');
+            const toggle = drawer && drawer.querySelector('.acoustic-drawer-toggle');
+            if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+            drawer?.scrollIntoView?.({ block: 'nearest' });
+            toggle?.focus?.();
+        };
         const syncLyrics = () => {
             if (!lyrics) return;
-            lyrics.setAllowed(isShown() && !isNarrow() && !document.body.classList.contains('music-stage-active'));
+            lyrics.setAllowed(state.lyricsOn && isShown() && !isNarrow() && !document.body.classList.contains('music-stage-active'));
             lyrics.sync();
         };
         const LIST_KEY = 'musicArchiveList';
@@ -861,6 +887,8 @@
             fromList = true;
             select(nearLane, nearRow, { pulse });
             fromList = false;
+            // 在目录里点到正在放的那首：也算选好了
+            if (i === app.currentTrackIndex && selectedIndex() === i) wantLyrics(true);
         };
         let fromList = false;
         const syncList = (quiet = false) => {
@@ -879,6 +907,7 @@
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
         const locatePlaying = () => {
             goToPlaying();
+            if (tracks()[app.currentTrackIndex] && selectedIndex() === app.currentTrackIndex) wantLyrics(true);
             if (list && listOpen()) {
                 if (list.kind !== 'all' && !list.query) list.setKind('all');
                 const col = column();
@@ -1208,6 +1237,8 @@
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
+                    case 'lyrics': wantLyrics(!state.lyricsOn); break;
+                    case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
                     case 'add-cloud': document.getElementById('add-webdav-btn')?.click(); break;
@@ -1329,6 +1360,7 @@
             lyrics?.destroy();
             tickMarker?.destroy();
             list?.closeBatchMenu?.();
+            list?.endPress?.();
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
@@ -1352,6 +1384,7 @@
             list = ListLib.create({
                 host: refs.hud,
                 app,
+                reducedMotion,
                 Index: IndexLib,
                 getIndex: () => searchIndex,
                 getSpec: sortSpec,
@@ -1400,7 +1433,7 @@
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
                 selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null,
-                lyrics: lyrics ? lyrics.debug() : null
+                lyrics: lyrics ? lyrics.debug() : null, lyricsOn: Boolean(state.lyricsOn)
             })
         };
         app.archiveView = api;

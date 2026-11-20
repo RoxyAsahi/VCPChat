@@ -75,7 +75,9 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
       await page.evaluate(() => {
         document.querySelector('[data-kind="playlist"]').click();
         const row = document.querySelector('.archive-list-row');
-        row.dispatchEvent(new Event('dragstart', { bubbles: true }));
+        const b = row.getBoundingClientRect();
+        row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: b.left + 60, clientY: b.top + 10 }));
+        document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: b.left + 160, clientY: b.top + 14 }));
         const acts = document.querySelector('.archive-list-group .acts'); if (acts) acts.style.opacity = 1;
       });
     }
