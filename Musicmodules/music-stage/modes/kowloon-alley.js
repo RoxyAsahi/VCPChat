@@ -143,6 +143,11 @@
             hemiGround: { value: new T.Color('#2a1b26') },
             glowTint: { value: new T.Color('#000000') },
             flash: { value: 0 },
+            // Where the nearby detail gathers: the camera, or in the sandbox view (camera far
+            // off, parallel projection) a spot on the street by the focus. sb is 1 in that view.
+            eye: { value: new T.Vector3(0, 1.7, 0) },
+            sb: { value: 0 },
+            sbBox: { value: new T.Vector4(-30, 38, 8, 72) },
             shelterBox: { value: Array.from({ length: MAX_SHELTERS }, () => new T.Vector4(0, 0, 0, 0)) },
             shelterY: { value: new Float32Array(MAX_SHELTERS) }
         };
@@ -178,7 +183,10 @@
             kwHazeLow: { value: new T.Color('#10151f') },
             kwHazeMid: { value: new T.Color('#3a2716') },
             kwHazeHigh: { value: new T.Color('#a8682a') },
-            kwHazeShape: { value: new T.Vector4(1.6, 8, 0.28, 0.45) }
+            kwHazeShape: { value: new T.Vector4(1.6, 8, 0.28, 0.45) },
+            kwHazeSb: shared.sb,
+            // Its own copy of the density, so a caller scaling scene.fog for one view does not reach it.
+            kwHazeDensity: { value: 0.0105 }
         };
         const HAZE_VERTEX_PARS = `#include <fog_pars_vertex>
             #ifdef USE_FOG
@@ -191,19 +199,26 @@
         const HAZE_FRAGMENT_PARS = `#include <fog_pars_fragment>
             #ifdef USE_FOG
             varying vec3 vKwHazeW;
-            uniform vec3 kwHazeLow,kwHazeMid,kwHazeHigh;uniform vec4 kwHazeShape;
-            #ifndef FOG_EXP2
-            uniform float fogDensity;
-            #endif
+            uniform vec3 kwHazeLow,kwHazeMid,kwHazeHigh;uniform vec4 kwHazeShape;uniform float kwHazeSb;
+            uniform float kwHazeDensity;
             vec4 kwHaze(vec3 p){
                 // Nothing within a few metres of the lens: the walls beside the camera keep their dark.
-                vec3 d=p-cameraPosition;float L=length(d),ds=L/6.0;
+                vec3 ro=cameraPosition;vec3 d=p-ro;
+                // The sandbox view looks at a cut block from far outside: only the air inside it
+                // counts, the low layer and a little above, never the smog band the camera sits in.
+                if(kwHazeSb>0.5){
+                    float far=length(d);vec3 dir=d/max(far,1e-3);
+                    float reach=min(far,45.0);
+                    if(dir.y<-1e-3)reach=min(reach,max(0.0,(28.0-p.y)/-dir.y));
+                    ro=p-dir*reach;d=p-ro;
+                }
+                float L=length(d),ds=L/6.0;
                 float tau=0.0;vec3 acc=vec3(0.0);
                 for(int i=0;i<6;i++){
-                    float y=cameraPosition.y+d.y*((float(i)+0.5)/6.0);
+                    float y=ro.y+d.y*((float(i)+0.5)/6.0);
                     float g=kwHazeShape.x*exp(-max(y,0.0)/kwHazeShape.y);
-                    float hi=kwHazeShape.w*smoothstep(25.0,120.0,y)*(1.0-smoothstep(260.0,420.0,y));
-                    float sg=(g+kwHazeShape.z+hi)*fogDensity*ds*smoothstep(1.5,6.0,L*(float(i)+0.5)/6.0);
+                    float hi=kwHazeShape.w*smoothstep(25.0,120.0,y)*(1.0-smoothstep(260.0,420.0,y))*(1.0-kwHazeSb);
+                    float sg=(g+kwHazeShape.z*(1.0-0.6*kwHazeSb)+hi)*kwHazeDensity*ds*max(kwHazeSb,smoothstep(1.5,6.0,L*(float(i)+0.5)/6.0));
                     vec3 c=mix(kwHazeLow,kwHazeMid,smoothstep(4.0,32.0,y));
                     c=mix(c,kwHazeHigh,smoothstep(24.0,120.0,y));
                     acc+=c*exp(-tau)*(1.0-exp(-sg));
@@ -1177,7 +1192,7 @@
         const dripMat = keep(new T.ShaderMaterial({
             transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: true,
             uniforms: T.UniformsUtils.merge([T.UniformsLib.fog, {}]),
-            vertexShader: `attribute vec3 corner;uniform float time;uniform vec3 uLightPos[${MAX_LIGHTS}];uniform vec3 uLightCol[${MAX_LIGHTS}];uniform float uLightRad[${MAX_LIGHTS}];uniform int uLightCount;
+            vertexShader: `attribute vec3 corner;uniform float time,kwSb;uniform vec3 kwEye;uniform vec3 uLightPos[${MAX_LIGHTS}];uniform vec3 uLightCol[${MAX_LIGHTS}];uniform float uLightRad[${MAX_LIGHTS}];uniform int uLightCount;
                 varying vec2 vUv;varying float vKind,vAlpha;varying vec3 vTint;
                 #include <fog_pars_vertex>
                 void main(){
@@ -1185,20 +1200,20 @@
                     float fallH=max(position.y,0.5);float T=sqrt(2.0*fallH/9.8);
                     float cycle=T+1.1;float t=mod(time+phase*cycle,cycle);
                     vec3 p=position;vUv=corner.xy;vKind=kind;
-                    vec3 toCam=cameraPosition-p;float dist=length(toCam);
-                    vAlpha=1.0-smoothstep(18.0,40.0,dist);
+                    vec3 toCam=cameraPosition-p;float dist=distance(kwEye,p);
+                    vAlpha=1.0-smoothstep(18.0+kwSb*30.0,40.0+kwSb*40.0,dist);
                     vec4 mvPosition;
                     if(kind<1.5){
                         float tt=t-kind*0.45;
                         float y=p.y-0.5*9.8*tt*tt;float v=9.8*tt;
                         if(tt<0.0||y<0.0){vAlpha=0.0;}
                         p.y=y;
-                        float len=clamp(v*0.018,0.02,0.12);
+                        float len=clamp(v*0.018,0.02,0.12)*(1.0+kwSb*4.0);
                         vec3 side=normalize(cross(vec3(0.0,1.0,0.0),toCam));
-                        p+=side*corner.x*0.006+vec3(0.0,corner.y*len,0.0);
+                        p+=side*corner.x*(0.006+kwSb*0.04)+vec3(0.0,corner.y*len,0.0);
                     } else {
                         float land=t-T;
-                        float r=clamp(land,0.0,0.4)*0.6+0.02;
+                        float r=(clamp(land,0.0,0.4)*0.6+0.02)*(1.0+kwSb*1.5);
                         vAlpha*=step(0.0,land)*(1.0-smoothstep(0.0,0.45,land));
                         p=vec3(p.x+corner.x*r,0.012,p.z+corner.y*r);
                     }
@@ -1222,7 +1237,7 @@
                     #include <fog_fragment>
                 }`
         }));
-        Object.assign(dripMat.uniforms, { time: shared.time, ...lightSet });
+        Object.assign(dripMat.uniforms, { time: shared.time, kwEye: shared.eye, kwSb: shared.sb, ...lightSet });
         const drips = new T.Mesh(dripGeometry, dripMat);
         drips.name = 'kowloonDrips'; drips.frustumCulled = false; drips.layers.set(LAYER_VIEW_ONLY);
         root.add(drips);
@@ -1251,9 +1266,10 @@
             transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending,
             uniforms: { time: shared.time, amount: shared.rain, centre: { value: new T.Vector3() },
                 wind: { value: new T.Vector2(0.6, 0.9) }, colour: { value: new T.Color('#8fa4b8') },
+                kwSb: shared.sb, kwSbArea: shared.sbBox,
                 ...lightSet,
                 shelterBox: shared.shelterBox, shelterY: shared.shelterY },
-            vertexShader: `attribute vec2 corner;uniform float time,amount;uniform vec3 centre;uniform vec2 wind;
+            vertexShader: `attribute vec2 corner;uniform float time,amount,kwSb;uniform vec4 kwSbArea;uniform vec3 centre;uniform vec2 wind;
                 uniform vec3 uLightPos[${MAX_LIGHTS}];uniform vec3 uLightCol[${MAX_LIGHTS}];uniform float uLightRad[${MAX_LIGHTS}];uniform int uLightCount;
                 ${SHELTER}
                 varying float vAlpha,vAcross;varying vec3 vGlow;
@@ -1265,19 +1281,27 @@
                     p.z=centre.z+(fract((position.z*BOX*1.618-centre.z)/BOX)-0.5)*BOX;
                     float drop=fract(position.y-time*fall/HEIGHT);
                     p.y=max(centre.y,1.0)-HEIGHT*0.35+drop*HEIGHT;
+                    // Sandbox view: the rain fills the whole cut block, roofs to street; fewer,
+                    // longer, thicker streaks, so they read from far above.
+                    if(kwSb>0.5){
+                        p.x=mix(kwSbArea.x,kwSbArea.y,fract(position.x*7.31+position.y*3.17));
+                        p.z=mix(kwSbArea.z,kwSbArea.w,fract(position.z*5.77+position.x*1.618));
+                        p.y=drop*66.0;
+                    }
                     vec3 v=vec3(wind.x,-fall,wind.y);
-                    vec3 head=mix(p,p-v*(0.035+fract(position.y*13.7)*0.03),corner.y);
+                    vec3 head=mix(p,p-v*(0.035+fract(position.y*13.7)*0.03)*(1.0+kwSb*3.5),corner.y);
                     vec3 toCam=normalize(cameraPosition-head);
                     float dist=distance(cameraPosition,p);
-                    head+=normalize(cross(normalize(v),toCam))*corner.x*(0.003+dist*0.001);
+                    head+=normalize(cross(normalize(v),toCam))*corner.x*mix(0.003+dist*0.001,0.055,kwSb);
                     vAlpha=smoothstep(1.0,4.5,dist)*(1.0-smoothstep(BOX*0.2,BOX*0.5,dist))*step(0.0,p.y)*(0.3+0.7*fract(position.x*91.3));
+                    if(kwSb>0.5)vAlpha=0.18+0.45*fract(position.x*91.3);
                     vAlpha*=1.0-kSheltered(p);
                     vAcross=corner.x;
                     // Drops falling through a lamp's or a sign's light carry its colour.
                     vec3 glow=vec3(0.0);
                     for(int i=0;i<${MAX_LIGHTS};i++){if(i>=uLightCount)break;float f=max(0.0,1.0-length(uLightPos[i]-p)/(uLightRad[i]*1.2));
                         glow+=uLightCol[i]*f*f;}
-                    vGlow=glow;
+                    vGlow=glow+vec3(0.2,0.25,0.3)*kwSb;
                     gl_Position=projectionMatrix*viewMatrix*vec4(head,1.0);
                     if(vAlpha<=0.0)gl_Position=vec4(2.0,2.0,2.0,1.0);
                 }`,
@@ -1408,7 +1432,7 @@
         const steamMat = keep(new T.ShaderMaterial({
             transparent: true, depthWrite: false, fog: true,
             uniforms: T.UniformsUtils.merge([T.UniformsLib.fog, {}]),
-            vertexShader: `attribute vec4 source;attribute vec2 seed;uniform float time;uniform vec3 hemiSky;
+            vertexShader: `attribute vec4 source;attribute vec2 seed;uniform float time,kwSb;uniform vec3 hemiSky;
                 ${LIGHT_DECL}
                 varying vec2 vUv;varying float vFade,vSeed;varying vec3 vLit;
                 #include <fog_pars_vertex>
@@ -1420,7 +1444,7 @@
                     vec3 up=vec3(viewMatrix[0][1],viewMatrix[1][1],viewMatrix[2][1]);
                     vec3 w=c+(right*position.x+up*position.y)*size;
                     vUv=position.xy;vSeed=seed.x*37.0+source.x;
-                    float dist=distance(cameraPosition,c);
+                    float dist=kwSb>0.5?10.0:distance(cameraPosition,c);
                     vFade=smoothstep(0.0,0.12,life)*(1.0-smoothstep(0.5,1.0,life))*(1.0-smoothstep(25.0,45.0,dist))*smoothstep(0.8,3.0,dist);
                     vec3 lit=hemiSky*0.6;
                     for(int i=0;i<${MAX_LIGHTS};i++){if(i>=uLightCount)break;float f=max(0.0,1.0-length(uLightPos[i]-c)/uLightRad[i]);lit+=uLightCol[i]*f*f;}
@@ -1441,7 +1465,7 @@
                     #include <fog_fragment>
                 }`
         }));
-        Object.assign(steamMat.uniforms, { time: shared.time, hemiSky: shared.hemiSky, ...lightSet });
+        Object.assign(steamMat.uniforms, { time: shared.time, kwSb: shared.sb, hemiSky: shared.hemiSky, ...lightSet });
         const steam = new T.Mesh(steamGeometry, steamMat);
         steam.name = 'kowloonSteam'; steam.frustumCulled = false; steam.renderOrder = 3;
         steam.visible = steamSources.length > 0;
@@ -1622,25 +1646,26 @@
         }
         const splashMat = keep(new T.ShaderMaterial({
             transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false,
-            uniforms: { time: shared.time, centre: { value: new T.Vector3() }, ...lightSet,
+            uniforms: { time: shared.time, centre: { value: new T.Vector3() }, kwSb: shared.sb, ...lightSet,
                 shelterBox: shared.shelterBox, shelterY: shared.shelterY },
-            vertexShader: `attribute vec3 seed;uniform float time;uniform vec3 centre;
+            vertexShader: `attribute vec3 seed;uniform float time,kwSb;uniform vec3 centre;
                 ${LIGHT_DECL}
                 ${SHELTER}
                 varying vec2 vUv;varying float vLife;varying vec3 vLit;
-                const float BOX=14.0;
                 void main(){
+                    // Sandbox view: spread along the street by the focus, and big enough to see.
+                    float BOX=mix(14.0,40.0,kwSb);
                     float cycle=0.55+seed.z*0.5;float t=time/cycle+seed.z*7.0;float n=floor(t);float life=fract(t);
                     // A new spot for every drop.
                     vec2 j=fract(seed.xy+vec2(n*0.6180339,n*0.4142135));
                     vec3 p=vec3(centre.x+(fract((j.x*BOX-centre.x)/BOX)-0.5)*BOX,0.0,centre.z+(fract((j.y*BOX-centre.z)/BOX)-0.5)*BOX);
-                    float size=0.035+0.05*life;
+                    float size=(0.035+0.05*life)*(1.0+kwSb*3.5);
                     vec3 right=normalize(vec3(viewMatrix[0][0],0.0,viewMatrix[2][0]));
                     vec3 w=p+right*position.x*size+vec3(0.0,position.y*size*(1.2-life)*1.4,0.0);
                     vUv=position.xy;vLife=life;
                     vec3 lit=vec3(0.05,0.06,0.08);
                     for(int i=0;i<${MAX_LIGHTS};i++){if(i>=uLightCount)break;float f=max(0.0,1.0-length(uLightPos[i]-p)/uLightRad[i]);lit+=uLightCol[i]*f*f;}
-                    vLit=lit*(1.0-kSheltered(p))*(1.0-smoothstep(4.0,7.0,distance(cameraPosition,p)));
+                    vLit=lit*(1.0-kSheltered(p))*mix(1.0-smoothstep(4.0,7.0,distance(cameraPosition,p)),step(${streets.south[0].toFixed(1)},p.z)*1.6,kwSb);
                     gl_Position=projectionMatrix*viewMatrix*vec4(w,1.0);
                     if(life>0.35)gl_Position=vec4(2.0,2.0,2.0,1.0);
                 }`,
@@ -1937,7 +1962,7 @@
         let dayDim = 1;
         applyAtmosphere();
 
-        const updateRain = (state, camera) => {
+        const updateRain = (state, camera, real = camera) => {
             const opt = state.options || options;
             const wanted = RAIN_LEVELS[opt.rain ?? options.rain] ?? RAIN_LEVELS.light;
             const now = (global.performance?.now?.() ?? Date.now()) / 1000;
@@ -1949,7 +1974,7 @@
             // It has rained all evening: the floor is wet even when it stops.
             shared.wetness.value = Number.isFinite(options.wetness) ? clamp(options.wetness) : 0.55 + 0.45 * rainLevel;
             const share = tierName === 'energy-saving' ? 0.5 : 1;
-            const count = Math.round((RAIN_COUNTS[tierName] ?? RAIN_COUNTS.standard) * rainLevel * share);
+            const count = Math.min(RAIN_MAX, Math.round((RAIN_COUNTS[tierName] ?? RAIN_COUNTS.standard) * rainLevel * share * (shared.sb.value ? 1.6 : 1)));
             rain.visible = count > 0;
             rainGeometry.setDrawRange(0, count * 6);
             splashGeometry.instanceCount = Math.round(SPLASHES * rainLevel * share * (tierName === 'ultimate' ? 1 : 0.7));
@@ -1958,7 +1983,7 @@
             coneMat.uniforms.haze.value = (0.5 + rainLevel * 0.9) * (camera ? 1 - smooth(10, 50, camera.position.y) * 0.7 : 1);
             if (camera) rainMat.uniforms.centre.value.copy(camera.position);
             // Thick between the walls, thin enough from above that the whole block still reads.
-            const height = camera ? camera.position.y : 2;
+            const height = real ? real.position.y : 2;
             const near = 1 - smooth(4, 48, height);
             if (options.heightFog === false) {
                 fog.density = (0.0045 + 0.017 * near) * (1 + rainLevel * 0.45) * (palette.light ? 0.7 : 1) * (options.fog ?? 1);
@@ -1971,6 +1996,7 @@
                 shape.z = 0.28 * (1 + rainLevel * 0.3);
                 shape.w = 0.45 * (options.smog ?? 1) * (palette.light ? 0.4 : 1);
             }
+            haze.kwHazeDensity.value = fog.density;
             if (lu) {
                 lu.uRain.value = rainLevel;
                 lu.uWet.value = shared.wetness.value;
@@ -2022,13 +2048,26 @@
         };
 
         const update = (state = {}) => {
-            const camera = state.camera || ctx.camera;
+            const real = state.camera || ctx.camera;
             const time = Number.isFinite(state.time) ? state.time : 0;
             shared.time.value = time;
             lastTime = time;
+            // Sandbox view: the camera is hundreds of metres off, so what follows the viewer
+            // (drips, splashes, light cones, the covered stretches) gathers on the street by
+            // the focus instead, and the rain fills the cut block.
+            const box = state.sandbox || null;
+            shared.sb.value = box ? 1 : 0;
+            let camera = real;
+            if (box) {
+                shared.sbBox.value.set(box.x0, box.x1, box.z0, box.z1);
+                const f = state.focus || [(box.x0 + box.x1) / 2, 0, (box.z0 + box.z1) / 2];
+                anchor.position.set(clamp(f[0], box.x0 + 8, box.x1 - 8), 1.7, clamp(streets.south[0] + 4, box.z0, box.z1));
+                camera = anchor;
+            }
+            if (camera) shared.eye.value.copy(camera.position);
             gather(state, camera);
             hazeScan(false);
-            updateRain(state, camera);
+            updateRain(state, camera, real);
             // Detail that only shows from inside the alleys.
             const far = state.shot === 'iso' || state.shot === 'roof';
             drips.visible = !far;
@@ -2038,8 +2077,9 @@
             cones.visible = !far;
             if (!far) placeCones(camera);
             steam.visible = !far && steamSources.length > 0;
-            renderMirror(camera);
+            renderMirror(real);
         };
+        const anchor = { position: new T.Vector3() };
 
         const setTier = tier => {
             tierName = (typeof tier === 'string' ? tier : tier?.name) || 'standard';

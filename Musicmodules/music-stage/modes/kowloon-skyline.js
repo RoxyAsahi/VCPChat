@@ -410,6 +410,8 @@
                     #include <fog_fragment>
                 }`
         }));
+        // 沙盒截面裁切时，高架和列车的盒子往南多让一米（见 kowloon-sandbox.js）。
+        railMat.userData.kwSandboxBox = 'rail';
         const rail = new T.Mesh(railGeo, railMat);
         rail.name = 'kowloon-rail';
         rail.frustumCulled = false;
@@ -450,6 +452,7 @@
                     #include <fog_fragment>
                 }`
         }));
+        carMat.userData.kwSandboxBox = 'rail';
         const cars = new T.InstancedMesh(carGeo, carMat, CARS);
         cars.name = 'kowloon-train';
         cars.frustumCulled = false;

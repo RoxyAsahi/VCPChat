@@ -152,7 +152,7 @@
                 audioReactivity: 1
             },
             kowloon: {
-                cameraMode: 'auto',
+                cameraMode: 'sandbox',
                 rain: 'light',
                 lightning: true,
                 reflections: true,
@@ -239,7 +239,7 @@
             fog: fallback.fog === undefined ? source.fog : clamp(source.fog, 0.5, 1.5, fallback.fog),
             lightning: fallback.lightning === undefined ? source.lightning : bool(source.lightning, fallback.lightning),
             reflections: fallback.reflections === undefined ? source.reflections : bool(source.reflections, fallback.reflections),
-            cameraMode: fallback.cameraMode === undefined ? source.cameraMode : enumValue(source.cameraMode, ['auto', 'diorama'], fallback.cameraMode),
+            cameraMode: fallback.cameraMode === undefined ? source.cameraMode : enumValue(source.cameraMode, ['sandbox', 'auto', 'diorama'], fallback.cameraMode),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),
