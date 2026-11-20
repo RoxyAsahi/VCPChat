@@ -38,11 +38,12 @@
                 <button type="button" class="archive-access" data-act="access" data-ref="access">ACCESS FILE <span>→</span></button>
                 <div class="archive-cover" data-ref="cover" aria-hidden="true"></div>
             </div>
-            <div class="archive-empty">
-                <h2>ARCHIVE EMPTY</h2>
-                <p>曲库里还没有歌曲。添加本地文件夹或从云端导入后，这里会按歌单排成档案阵列。</p>
-                <button type="button" data-act="add-local">ADD LOCAL FOLDER →</button>
-                <button type="button" data-act="add-cloud">IMPORT FROM CLOUD →</button>
+            <div class="archive-empty" role="status">
+                <h2 data-ref="emptyTitle">ARCHIVE EMPTY</h2>
+                <p data-ref="emptyText"></p>
+                <div class="archive-scan-bar" aria-hidden="true"><i data-ref="scanBar"></i></div>
+                <button type="button" data-act="add-local">添加音乐文件夹 <span>ADD LOCAL FOLDER →</span></button>
+                <button type="button" data-act="add-cloud">从云端导入 <span>IMPORT FROM CLOUD →</span></button>
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
@@ -50,7 +51,7 @@
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
                 <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> 直接打字检索</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
-                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
+                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status">SESSION AUTHORIZED</span></span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
         </div>`;
 
@@ -88,6 +89,7 @@
             activity: { animated: true, idle: false },
             destroyed: false,
             coverCache: new Map(),
+            dirCovers: new Map(),
             coverTimer: 0,
             playingKey: '',
             dataRefs: { playlist: null, length: -1, playlists: null, plSig: '' }
@@ -100,13 +102,14 @@
         const selectedTrack = () => tracks()[selectedIndex()] || null;
         const playlistsSig = () => (app.customPlaylists || []).map((p) => (p && p.id) + ':' + (p && p.tracks ? p.tracks.length : 0) + ':' + (p && p.name)).join('|');
 
-        const rebuild = ({ keep = true, track = -1 } = {}) => {
+        const rebuild = ({ keep = true, track = -1, reindex = true } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : track;
             const firstData = state.dataRefs.length <= 0 && tracks().length > 0;
-            rebuildIndex();
+            // 只换排序时曲库没变，检索索引（拼音、罗马音）不用重建
+            if (reindex || !searchIndex || searchIndex.size !== tracks().length) rebuildIndex();
             const columns = buildColumns();
             state.columns = columns;
             state.sig = Model.signature(columns);
@@ -237,6 +240,43 @@
         };
         const columnOfGroup = (g) => (letterOf && letterOf.get(g)) || 'all';
 
+        /*
+         * 扫描曲库的过程：主进程先报总数、再逐首报进度、扫完才把曲目一次交过来，
+         * 所以这里显示的是进度（空曲库时占中间的位置，有歌时写在左下角状态里），阵列在扫完那一刻换上新曲库。
+         */
+        const EMPTY_TEXT = '曲库里还没有歌曲。添加本地文件夹或从云端导入后，这里会按首字母和歌单排成档案阵列。';
+        const scan = { active: false, current: 0, total: 0, timer: 0 };
+        const renderScan = () => {
+            root.classList.toggle('is-scanning', scan.active);
+            const total = scan.total;
+            const digits = Math.max(4, String(total).length);
+            const progress = total ? pad(scan.current, digits) + ' / ' + pad(total, digits) : '';
+            refs.emptyTitle.textContent = scan.active ? 'SCANNING ARCHIVE' : 'ARCHIVE EMPTY';
+            refs.emptyText.textContent = scan.active
+                ? (total ? '正在读取曲目信息 ' + progress + '，读完后这里会排成档案阵列。' : '正在查找音乐文件…')
+                : EMPTY_TEXT;
+            refs.scanBar.style.transform = `scaleX(${total ? Math.min(1, scan.current / total) : 0})`;
+            if (scan.active) refs.status.textContent = total ? 'SCANNING ' + progress : 'SCANNING';
+            else if (!scan.timer) refs.status.textContent = 'SESSION AUTHORIZED';
+        };
+        const setScan = (next) => {
+            Object.assign(scan, next);
+            renderScan();
+        };
+        const scanDone = (data) => {
+            const got = Array.isArray(data) ? data.length : (data && Array.isArray(data.tracks) ? data.tracks.length : 0);
+            clearTimeout(scan.timer);
+            setScan({ active: false });
+            refs.status.textContent = got ? 'SCAN COMPLETE ／ ' + pad(got, 4) + ' FILES' : 'SCAN COMPLETE ／ NO FILES FOUND';
+            scan.timer = setTimeout(() => { scan.timer = 0; renderScan(); }, 4000);
+        };
+        const scanOff = [
+            app.api?.onMusicScanStart?.((data) => setScan({ active: true, current: 0, total: Number(data && data.total) || 0 })),
+            app.api?.onMusicScanProgress?.((data) => setScan({ active: true, current: Number(data && data.current) || 0, total: Number(data && data.total) || scan.total })),
+            app.api?.onMusicScanComplete?.(scanDone)
+        ];
+        renderScan();
+
         const dataChanged = () => {
             const d = state.dataRefs;
             return d.playlist !== app.playlist || d.length !== tracks().length || d.playlists !== app.customPlaylists || d.plSig !== playlistsSig();
@@ -318,7 +358,9 @@
             refs.fno.textContent = t ? fileNumber(t, index) : 'TRK-000';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
             const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
-            refs.fmeta.textContent = (meta || (t ? 'UNKNOWN ARTIST' : '')).toUpperCase();
+            // 空列：告诉人下一步怎么做
+            const idle = col.kind === 'search' ? 'ESC 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
+            refs.fmeta.textContent = t ? (meta || 'UNKNOWN ARTIST').toUpperCase() : idle;
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -341,8 +383,52 @@
             return 'TRK-' + Model.fileCode(index);
         };
 
-        // 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首
-        const coverOf = (t) => (t && t.albumArt ? fileUrl(t.albumArt) : '');
+        /*
+         * 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首。
+         * 曲库里带了封面（内嵌封面扫描时已存成文件）就用它；没有的话试同目录下常见的封面图（cover / folder / front），
+         * 每个目录只试一次。图片缓存最多 64 张、目录结果最多 256 条；读不出来的就不显示（露出后面的阵列），不留破图。
+         */
+        const COVER_NAMES = ['cover.jpg', 'folder.jpg', 'cover.png', 'front.jpg', 'folder.png', 'Cover.jpg', 'Folder.jpg'];
+        const dirOf = (t) => {
+            const p = String((t && t.path) || '');
+            if (!p || /^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p)) return ''; // 远程曲目没有本地目录
+            const cut = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+            return cut > 0 ? p.slice(0, cut) : '';
+        };
+        const capped = (map, key, value, max) => {
+            map.set(key, value);
+            if (map.size > max) map.delete(map.keys().next().value);
+            return value;
+        };
+        const probeDir = (dir) => {
+            const entry = capped(state.dirCovers, dir, { url: null }, 256);
+            let k = 0;
+            const next = () => {
+                if (k >= COVER_NAMES.length) { entry.url = ''; return; }
+                const url = fileUrl(dir + '/' + COVER_NAMES[k++]);
+                const img = new Image();
+                img.decoding = 'async';
+                img.onload = () => {
+                    entry.url = url;
+                    capped(state.coverCache, url, { img, ok: true }, 64);
+                    const t = selectedTrack();
+                    if (t && !t.albumArt && dirOf(t) === dir) scheduleCover(t, true);
+                };
+                img.onerror = next;
+                img.src = url;
+            };
+            next();
+        };
+        const coverOf = (t, probe = false) => {
+            if (!t) return '';
+            if (t.albumArt) return fileUrl(t.albumArt);
+            const dir = dirOf(t);
+            if (!dir) return '';
+            const known = state.dirCovers.get(dir);
+            if (known) return known.url || '';
+            if (probe) probeDir(dir);
+            return '';
+        };
         const preload = (url) => {
             if (!url || state.coverCache.has(url)) return;
             const img = new Image();
@@ -351,24 +437,32 @@
             img.onload = () => { entry.ok = true; };
             img.onerror = () => { entry.ok = false; };
             img.src = url;
-            state.coverCache.set(url, entry);
-            if (state.coverCache.size > 64) state.coverCache.delete(state.coverCache.keys().next().value);
+            capped(state.coverCache, url, entry, 64);
         };
         const scheduleCover = (t, immediate) => {
             clearTimeout(state.coverTimer);
             const url = coverOf(t);
             refs.cover.classList.remove('on');
-            if (!url) { refs.cover.style.backgroundImage = ''; return; }
+            refs.cover.dataset.state = url ? 'loading' : 'none';
+            if (!url) refs.cover.style.backgroundImage = '';
             state.coverTimer = setTimeout(() => {
+                if (!url) { coverOf(t, true); return; } // 没有自带封面：停稳后才去试同目录的图
                 preload(url);
                 const entry = state.coverCache.get(url);
                 const show = () => {
                     if (coverOf(selectedTrack()) !== url) return;
                     refs.cover.style.backgroundImage = `url("${url}")`;
                     refs.cover.classList.add('on');
+                    refs.cover.dataset.state = 'ready';
+                };
+                const fail = () => {
+                    if (coverOf(selectedTrack()) !== url) return;
+                    refs.cover.style.backgroundImage = '';
+                    refs.cover.dataset.state = 'failed';
                 };
                 if (entry.ok) show();
-                else if (entry.ok === null) entry.img.addEventListener('load', show, { once: true });
+                else if (entry.ok === false) fail();
+                else { entry.img.addEventListener('load', show, { once: true }); entry.img.addEventListener('error', fail, { once: true }); }
                 const col = column();
                 if (col && col.items.length > 1) {
                     for (const d of [-2, -1, 1, 2]) preload(coverOf(tracks()[Model.cellTrack(state.columns, state.lane, state.row + d)]));
@@ -573,7 +667,7 @@
             try { localStorage.setItem(SORT_KEY, mode); } catch (e) { /* 只是记住 */ }
             // 按新顺序重排：选中的那首留在选中，换到它在新排法里的那一列
             const keepIndex = selectedIndex();
-            rebuild({ keep: false, track: keepIndex });
+            rebuild({ keep: false, track: keepIndex, reindex: false });
             followSort();
         };
         // 拼音表按需加载（项目已有的依赖），加载好之后重建索引，汉字才能按拼音检索和分组
@@ -1125,6 +1219,8 @@
             savePlace();
             state.destroyed = true;
             clearInterval(clockTimer);
+            clearTimeout(scan.timer);
+            scanOff.forEach((off) => { if (typeof off === 'function') off(); });
             clearTimeout(state.coverTimer);
             stopInertia();
             lyrics?.destroy();

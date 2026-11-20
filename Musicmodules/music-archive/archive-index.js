@@ -169,19 +169,30 @@
         ['d7', Infinity, '7 分钟以上', 'OVER 07:00'],
         ['d?', 0, '时长未知', 'UNKNOWN LENGTH']
     ];
+    const RANKS = new WeakMap();
+    const rankOf = (index, key, cmp) => {
+        let per = RANKS.get(index);
+        if (!per) RANKS.set(index, per = {});
+        if (!per[key]) {
+            const order = Array.from({ length: index.size }, (_, i) => i).sort(cmp);
+            const rank = new Uint32Array(index.size);
+            order.forEach((i, k) => { rank[i] = k; });
+            per[key] = rank;
+        }
+        return per[key];
+    };
     const sortSpec = (index, { mode = 'title', tracks = [], durationOf = null } = {}) => {
-        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
+        // 标题的名次只排一次（按索引缓存）：之后各处比较都是数字相减，两万首切排序才不卡
+        const titleRank = rankOf(index, 'title', (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b);
+        const byTitle = (a, b) => titleRank[a] - titleRank[b];
         const letter = { rank: (g) => GROUP_RANK.get(g) ?? 999, name: groupName, ref: groupRef, family: familyOf };
         if (mode === 'artist') {
-            return {
-                mode, ...letter,
-                group: (i) => index.artistGroup(i),
-                cmp: (a, b) => {
-                    const ka = index.artistKey(a), kb = index.artistKey(b);
-                    if (!ka !== !kb) return ka ? -1 : 1; // 没写歌手的放最后
-                    return COLLATE(ka, kb) || byTitle(a, b);
-                }
-            };
+            const artistRank = rankOf(index, 'artist', (a, b) => {
+                const ka = index.artistKey(a), kb = index.artistKey(b);
+                if (!ka !== !kb) return ka ? -1 : 1; // 没写歌手的放最后
+                return COLLATE(ka, kb) || byTitle(a, b);
+            });
+            return { mode, ...letter, group: (i) => index.artistGroup(i), cmp: (a, b) => artistRank[a] - artistRank[b] };
         }
         if (mode === 'duration') {
             const len = (i) => {
@@ -315,7 +326,7 @@
                 const items = (pl.tracks || []).map((p) => byPath.get(String(p || '').replace(/\\/g, '/').toLowerCase())).filter((i) => i !== undefined);
                 const nameHit = q && norm(pl.name).includes(norm(q));
                 const hits = !q || nameHit ? items : index.query(q, { only: items });
-                if (!hits.length) return;
+                if (!hits.length && (q || items.length)) return;
                 const id = 'playlist:' + (pl.id ?? order);
                 head(String(pl.name || '未命名歌单'), id, hits.length);
                 hits.forEach((i) => push(i, id));

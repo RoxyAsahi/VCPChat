@@ -758,3 +758,111 @@ test('没有流体标记模块时照旧用竖线游标', () => {
     assert.ok(!ticks.querySelector('svg'));
     f.close();
 });
+
+test('封面：自带封面直接用，读不出来不留破图；没有封面时试同目录的图，每个目录只试一次', async () => {
+    const asked = [];
+    const f = fixture({
+        tracks: [
+            { path: '/a/0.flac', title: 'A0', albumArt: '/c/ok.jpg' },
+            { path: '/a/1.flac', title: 'A1', albumArt: '/c/bad.jpg' },
+            { path: '/b/2.flac', title: 'A2' },
+            { path: '/b/3.flac', title: 'A3' },
+            { path: 'https://x.test/dav/4.flac', title: 'A4' }
+        ],
+        playlists: [],
+        setup: (w) => {
+            w.Image = class {
+                constructor() { this.l = {}; }
+                addEventListener(type, fn) { (this.l[type] = this.l[type] || []).push(fn); }
+                set src(v) {
+                    asked.push(v);
+                    const ok = /ok\.jpg$|\/b\/folder\.jpg$/.test(v);
+                    w.setTimeout(() => { const t = ok ? 'load' : 'error'; this['on' + t]?.(); (this.l[t] || []).forEach((fn) => fn()); }, 0);
+                }
+            };
+        }
+    });
+    const cover = f.w.document.querySelector('[data-ref="cover"]');
+    const wait = (ms = 200) => new Promise((r) => f.w.setTimeout(r, ms));
+    await wait();
+    assert.equal(cover.dataset.state, 'ready');
+    assert.match(cover.style.backgroundImage, /ok\.jpg/);
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'failed');
+    assert.equal(cover.style.backgroundImage, '');
+    assert.equal(cover.classList.contains('on'), false);
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'ready');
+    assert.match(cover.style.backgroundImage, /\/b\/folder\.jpg/);
+    const probes = asked.filter((u) => /\/b\//.test(u)).length;
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'ready', '同目录第二首直接用上次找到的图');
+    assert.equal(asked.filter((u) => /\/b\//.test(u)).length, probes, '不再重新试');
+    f.key('ArrowDown'); await wait();
+    assert.equal(cover.dataset.state, 'none', '远程曲目不去试本地目录');
+    assert.equal(asked.some((u) => /x\.test/.test(u)), false);
+    f.close();
+});
+
+test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时写在左下角状态里，扫完恢复', () => {
+    const fns = {};
+    const api = { onMusicScanStart: (fn) => { fns.start = fn; return () => { fns.start = null; }; }, onMusicScanProgress: (fn) => { fns.progress = fn; }, onMusicScanComplete: (fn) => { fns.complete = fn; } };
+    const f = fixture({ n: 0, playlists: [], setup: (w, app) => { app.api = api; } });
+    const root = f.w.document.getElementById('music-archive-view');
+    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    assert.match(root.querySelector('[data-act="add-local"]').textContent, /添加音乐文件夹/);
+    fns.start();
+    assert.ok(root.classList.contains('is-scanning'));
+    assert.equal(f.text('emptyTitle'), 'SCANNING ARCHIVE');
+    fns.progress({ current: 437, total: 1280 });
+    assert.match(f.text('emptyText'), /0437 \/ 1280/);
+    assert.equal(f.text('status'), 'SCANNING 0437 / 1280');
+    assert.match(root.querySelector('[data-ref="scanBar"]').style.transform, /scaleX\(0\.34/);
+    fns.complete({ tracks: new Array(1280) });
+    assert.equal(root.classList.contains('is-scanning'), false);
+    assert.equal(f.text('status'), 'SCAN COMPLETE ／ 1280 FILES');
+    assert.equal(f.text('emptyTitle'), 'ARCHIVE EMPTY');
+    f.close();
+    assert.equal(fns.start, null, '关掉时取消订阅');
+});
+
+test('空的原因各有说法：检索没结果、空歌单、还没有播放记录', () => {
+    const f = fixture({ playlists: [{ id: 'e', name: '空歌单', tracks: [] }] });
+    const empty = () => f.view.list.el.querySelector('[data-l="empty"]');
+    f.view.setListOpen(true);
+    f.view.list.input.value = 'zzqx';
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.match(empty().textContent, /没有找到「zzqx」.*ESC 清除检索/);
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(empty().style.display, 'none');
+    f.view.list.el.querySelector('[data-kind="playlist"]').click();
+    assert.match(empty().textContent, /歌单里还没有歌.*右键/);
+    f.view.list.el.querySelector('[data-kind="recent"]').click();
+    assert.match(empty().textContent, /还没有播放记录/);
+    // 阵列走到空歌单那一列：说明是空的，并提示怎么加歌
+    const lane = f.view.debug().columns.findIndex((c) => c.id === 'playlist:e');
+    for (let k = 0; k < lane; k++) f.key('ArrowRight');
+    assert.equal(f.text('ftitle'), '这个歌单还是空的');
+    assert.match(f.text('fmeta'), /右键/);
+    f.close();
+});
+
+test('右侧歌词：正在放的歌等一会儿还没有歌词，只留栏头和「获取歌词」；歌词到了换成歌词，不占大封面的版面', async () => {
+    const f = fixture({ setup: (w, app) => { w.innerWidth = 1600; w.innerHeight = 900; app.isPlaying = true; app.currentLyrics = []; app.openLyricsFetchModal = (i) => { app.fetchAsked = i; }; } });
+    const el = f.w.document.querySelector('.archive-lyrics');
+    const hud = f.w.document.querySelector('.archive-hud');
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    f.view.refresh();
+    assert.equal(el.hidden, true, '刚开始先不说没有（可能还在取）');
+    await wait(2700);
+    assert.equal(el.hidden, false);
+    assert.ok(el.classList.contains('none'));
+    assert.equal(hud.classList.contains('has-lyrics'), false);
+    el.querySelector('[data-y="fetch"]').click();
+    assert.equal(f.app.fetchAsked, 0);
+    f.app.currentLyrics = [{ time: 1, text: '第一句' }, { time: 5, text: '第二句' }];
+    f.view.refresh();
+    assert.equal(el.classList.contains('none'), false);
+    assert.ok(hud.classList.contains('has-lyrics'));
+    f.close();
+});
