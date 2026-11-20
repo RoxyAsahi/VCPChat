@@ -918,6 +918,118 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && app.lyricsFetchModal.classList.contains('visible')) closeLyricsFetchModal();
         });
+        // ── 右键菜单的作用范围 ──
+        // 「从列表中移除」要按右键时所在的视图决定删哪里，而不是按上一次从哪里点播。
+        // 经典列表记下它此刻显示的是哪一组；档案页由档案视图告诉我们选中的是哪一列。
+        const renderPlaylistBase = app.renderPlaylist;
+        app.playlistViewSource = null;
+        app.renderPlaylist = (filtered) => {
+            let source = filtered ? (app.filteredPlaylistSource || { type: 'filter' }) : null;
+            if (source?.type === 'playlist') {
+                // 语义搜索等别的入口不会清掉旧的歌单来源：显示的歌不全在这个歌单里，就不算歌单视图。
+                const pl = app.customPlaylists.find(p => p.id === source.id);
+                const paths = new Set(pl ? pl.tracks : []);
+                if (!pl || !filtered.every(t => paths.has(t.path))) source = { type: 'filter' };
+            }
+            app.playlistViewSource = source;
+            return renderPlaylistBase(filtered);
+        };
+        let pendingMenuSurface = null;
+        document.addEventListener('contextmenu', (e) => {
+            pendingMenuSurface = e.target?.closest?.('#playlist') ? 'classic'
+                : e.target?.closest?.('#music-archive-view') ? 'archive' : null;
+        }, true);
+        document.addEventListener('click', (e) => {
+            if (e.target?.closest?.('#music-archive-view [data-act="save"]')) pendingMenuSurface = 'archive';
+        }, true);
+        const archiveMenuScope = () => {
+            if (app.contextMenuScopeHint !== undefined) { const hint = app.contextMenuScopeHint; app.contextMenuScopeHint = undefined; return hint; }
+            try {
+                const d = app.archiveView?.debug?.();
+                const n = d?.columns?.length || 0;
+                const id = n ? d.columns[((d.lane % n) + n) % n].id : '';
+                if (id.startsWith('playlist:')) {
+                    const plId = id.slice('playlist:'.length);
+                    const pl = app.customPlaylists.find(p => String(p.id) === plId);
+                    if (pl) return { type: 'playlist', id: pl.id, name: pl.name };
+                }
+            } catch (err) { /* 拿不到就按曲库处理，曲库移除会先确认 */ }
+            return null;
+        };
+        const showContextMenuBase = app.showContextMenu;
+        app.showContextMenu = (x, y) => {
+            const surface = pendingMenuSurface;
+            pendingMenuSurface = null;
+            app.contextMenuScope = surface === 'classic' ? app.playlistViewSource
+                : surface === 'archive' ? archiveMenuScope() : null;
+            return showContextMenuBase(x, y);
+        };
+        const notify = (message, action) => {
+            try { window.MusicToast?.show?.({ message, action }); } catch (err) { /* 提示层不在时只是没有撤销 */ }
+        };
+        const removeFromPlaylist = (scope, track) => {
+            const pl = app.customPlaylists.find(p => p.id === scope.id);
+            if (!pl) return;
+            const at = pl.tracks.indexOf(track.path);
+            if (at < 0) return;
+            pl.tracks.splice(at, 1);
+            const refresh = () => {
+                app.saveCustomPlaylists();
+                if (app.playlistViewSource?.type === 'playlist' && app.playlistViewSource.id === pl.id) {
+                    app.currentFilteredTracks = pl.tracks.map(p => app.playlist.find(tr => tr.path === p)).filter(Boolean);
+                    app.renderPlaylist(app.currentFilteredTracks);
+                }
+                app.archiveView?.refresh?.();
+            };
+            refresh();
+            notify(`已从歌单「${pl.name}」移除`, { label: '撤销', run: () => { if (!pl.tracks.includes(track.path)) { pl.tracks.splice(Math.min(at, pl.tracks.length), 0, track.path); refresh(); } } });
+        };
+        const removeFromLibrary = (index) => {
+            const track = app.playlist[index];
+            if (!track) return;
+            const name = app.stripAudioExtension ? app.stripAudioExtension(track.title || '') : (track.title || '');
+            if (!confirm(`从曲库列表移除「${name}」？\n只是不再显示在播放器里，磁盘上的文件不会删除。`)) return;
+            const wasCurrent = app.currentTrackIndex === index;
+            // 删的正是在放的这首：先按当前列表记下它后面那首，删完直接接上（不跳过一首）。
+            const active = app.currentFilteredTracks || app.playlist;
+            const pos = active.indexOf(track);
+            const follower = wasCurrent && active.length > 1 ? active[(pos + 1) % active.length] : null;
+            const wasPlaying = Boolean(app.isPlaying || app.playIntent);
+            app.playlist.splice(index, 1);
+            if (Array.isArray(app.currentFilteredTracks)) app.currentFilteredTracks = app.currentFilteredTracks.filter(t => t !== track);
+            if (!wasCurrent && app.currentTrackIndex > index) app.currentTrackIndex--;
+            const view = app.playlistViewSource;
+            if (view && Array.isArray(app.currentFilteredTracks)) app.renderPlaylist(app.currentFilteredTracks);
+            else app.renderPlaylist();
+            if (wasCurrent) {
+                const next = follower && follower !== track ? app.playlist.indexOf(follower) : -1;
+                if (next >= 0) app.loadTrack(next, wasPlaying);
+                else { app.pauseTrack?.(); app.currentTrackIndex = Math.min(index, app.playlist.length - 1); }
+            }
+            app.api?.saveMusicPlaylist?.(app.playlist);
+            app.archiveView?.refresh?.();
+            notify(`已从曲库列表移除「${name}」`, { label: '撤销', run: () => {
+                if (app.playlist.includes(track)) return;
+                const at = Math.min(index, app.playlist.length);
+                app.playlist.splice(at, 0, track);
+                if (app.currentTrackIndex >= at) app.currentTrackIndex++;
+                if (Array.isArray(app.currentFilteredTracks) && view && pos >= 0 && !app.currentFilteredTracks.includes(track)) {
+                    const list = app.currentFilteredTracks.slice();
+                    list.splice(Math.min(pos, list.length), 0, track);
+                    app.currentFilteredTracks = list;
+                }
+                if (app.currentFilteredTracks && view) app.renderPlaylist(app.currentFilteredTracks); else app.renderPlaylist();
+                app.api?.saveMusicPlaylist?.(app.playlist);
+                app.archiveView?.refresh?.();
+            } });
+        };
+        app.removeTrackInScope = (index, scope = app.contextMenuScope) => {
+            const track = app.playlist[index];
+            if (!track) return;
+            if (scope?.type === 'playlist') removeFromPlaylist(scope, track);
+            else removeFromLibrary(index);
+        };
+
         app.contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
             item.onclick = (e) => {
                 const action = item.dataset.action; if (!action || action === 'add-to-playlist') return;
@@ -933,21 +1045,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         app.saveCustomPlaylists(); if (app.currentSidebarView === 'playlists') app.renderSidebarContent('playlists');
                     });
                 } else if (action === 'remove-from-list') {
-                    if (app.filteredPlaylistSource?.type === 'playlist') {
-                        const pl = app.customPlaylists.find(p => p.id === app.filteredPlaylistSource.id);
-                        if (pl) {
-                            const t = app.playlist[app.contextMenuTrackIndex];
-                            pl.tracks = pl.tracks.filter(tp => tp !== t.path);
-                            app.currentFilteredTracks = pl.tracks.map(p => app.playlist.find(tr => tr.path === p)).filter(Boolean);
-                            app.saveCustomPlaylists(); app.renderPlaylist(app.currentFilteredTracks);
-                        }
-                    } else {
-                        const t = app.playlist[app.contextMenuTrackIndex];
-                        app.playlist.splice(app.contextMenuTrackIndex, 1);
-                        if (app.currentTrackIndex === app.contextMenuTrackIndex) app.nextTrack();
-                        else if (app.currentTrackIndex > app.contextMenuTrackIndex) app.currentTrackIndex--;
-                        app.renderPlaylist(); app.api?.saveMusicPlaylist?.(app.playlist);
-                    }
+                    app.removeTrackInScope(app.contextMenuTrackIndex);
                 }
                 app.contextMenu.classList.remove('visible');
             };
@@ -960,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.searchInputTimer = setTimeout(() => {
                 if (app.isSemanticSearchActive) return;
                 const query = app.searchInput.value.toLowerCase();
-                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null;
+                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
                 app.renderPlaylist(app.currentFilteredTracks);
             }, 120);
         };
@@ -980,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!app.isSemanticSearchActive) {
                 // 退出语义搜索时恢复普通搜索
                 const query = app.searchInput.value.toLowerCase();
-                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null;
+                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
                 app.renderPlaylist(app.currentFilteredTracks);
             }
         };
