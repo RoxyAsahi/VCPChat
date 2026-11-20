@@ -314,9 +314,25 @@
                     draws++;
                 }
                 L.mesh.position.set(w.x, w.y, w.z);
+                if (underMask(w)) { L.mesh.visible = false; continue; }
+                // 当前列的标题实一些，左右邻列淡一些（邻列离相机更近，不压低会比当前列还显眼）
+                L.mat.opacity = w.li === 0 ? 1 : 0.5;
                 L.mesh.visible = true;
             }
         };
+        // HUD 文字（说明块）投在画面上的区域：落在里面的卡不贴标题，免得和浮字叠在一起
+        let labelMasks = [];
+        const projA = new THREE.Vector3(), projB = new THREE.Vector3();
+        const underMask = (w) => {
+            if (!labelMasks.length) return false;
+            projA.set(w.x + 0.2 - LABEL_W / 2, w.y + 3.5, w.z + 0.197).project(camera);
+            projB.set(w.x + 0.2 + LABEL_W / 2, w.y + 3.5, w.z + 0.197).project(camera);
+            const x0 = (Math.min(projA.x, projB.x) + 1) / 2 * W, x1 = (Math.max(projA.x, projB.x) + 1) / 2 * W;
+            const y0 = (1 - Math.max(projA.y, projB.y)) / 2 * H, y1 = (1 - Math.min(projA.y, projB.y)) / 2 * H;
+            return labelMasks.some((r) => x1 > r.left && x0 < r.right && y1 > r.top && y0 < r.bottom);
+        };
+        /* rects：画布像素坐标 { left, top, right, bottom } */
+        const setLabelMask = (rects) => { labelMasks = Array.isArray(rects) ? rects : []; invalidate(); };
         const setLabeler = (fn) => { labelFor = typeof fn === 'function' ? fn : null; labelEpoch++; invalidate(); };
         const refreshLabels = () => { labelEpoch++; invalidate(); };
 
@@ -525,9 +541,11 @@
                     let y = BASE_Y + f + hl;
                     if (lane === target.lane && row === target.row) y += lift.v;
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
-                    if (labelFor && li >= -LABEL_LANES && li <= LABEL_LANES && ri >= LABEL_ROWS[0] && ri <= LABEL_ROWS[1]) {
+                    // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
+                    const dl = lane - target.lane, dr = row - target.row;
+                    if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
                         const info = labelFor(lane, row);
-                        if (info) labelWanted.set(lane + ':' + row, { info, x: dummy.position.x, y, z: dummy.position.z });
+                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z });
                     }
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
@@ -546,12 +564,13 @@
             }
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
-            placeLabels();
             if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
 
             camera.position.copy(aim).addScaledVector(view, DIST);
             if (!reduced) { camera.position.x += pointer.x * 0.12; camera.position.y -= pointer.y * 0.12; }
             camera.lookAt(aim);
+            camera.updateMatrixWorld();
+            placeLabels();
             renderer.render(scene, camera);
             dirty = false;
 
@@ -628,11 +647,11 @@
         return {
             canvas,
             tier,
-            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, refreshLabels, dispose,
+            resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, setLabelMask, refreshLabels, dispose,
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ labels: labels.filter((L) => L.mesh.visible).length, waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 

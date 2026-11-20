@@ -577,6 +577,7 @@
             sceneQuality = quality();
             root.insertBefore(state.scene.canvas, root.firstChild);
             bindCanvas(state.scene.canvas);
+            updateLabelMask();
             // 卡面标题：近处几张卡印曲名和档案号
             state.scene.setLabeler?.((lane, row) => {
                 const index = Model.cellTrack(state.columns, lane, row);
@@ -602,7 +603,21 @@
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
+            updateLabelMask();
             kick();
+        };
+        // 说明块（档案号、曲名、ACCESS FILE）下面的卡不印标题
+        const updateLabelMask = () => {
+            if (!state.scene?.setLabelMask) return;
+            const callout = root.querySelector('.archive-callout');
+            const base = root.getBoundingClientRect();
+            if (!callout || callout.offsetParent === null) { state.scene.setLabelMask([]); return; }
+            const r = callout.getBoundingClientRect();
+            const sc = (root.clientHeight || global.innerHeight) / DESIGN_H;
+            const pad = 24 * sc;
+            // 说明块右半是一条延伸到边缘的细线，只挡文字那一段
+            const right = Math.min(r.right, r.left + 640 * sc);
+            state.scene.setLabelMask([{ left: r.left - base.left - pad, top: r.top - base.top - pad, right: right - base.left + pad, bottom: r.bottom - base.top + pad }]);
         };
 
         const frame = (now) => {
