@@ -849,24 +849,48 @@ body.music-dock-on .music-player .controls {
     background: transparent;
 }
 
-/* 开关：圆形只用在开关和状态点上 */
-.switch .slider {
-    background-color: var(--ar-line);
+/* 开关：细线方框里一个方块，开的时候墨色填满。整个音乐窗口共用这一段 */
+.switch,
+.switch.compact,
+.switch.scale-80 {
+    width: 30px;
+    height: 16px;
+    transform: none;
+}
+
+.switch .slider,
+.switch .slider.round {
+    border: 1px solid var(--ar-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .switch .slider::before,
-.switch .slider:before {
-    background-color: var(--ar-panel);
+.switch .slider.round::before {
+    top: 2px;
+    left: 2px;
+    bottom: auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 0;
+    background: var(--ar-muted);
     box-shadow: none;
 }
 
 .switch input:checked + .slider {
-    background-color: var(--ar-ink);
+    border-color: var(--ar-ink);
+    background: var(--ar-ink);
+}
+
+.switch input:checked + .slider::before {
+    background: var(--ar-paper);
+    transform: translateX(14px);
 }
 
 .switch input:focus-visible + .slider {
     outline: 2px solid var(--ar-ink);
-    outline-offset: 2px;
+    outline-offset: 3px;
 }
 
 /* 均衡器推子、通用滑条 */
