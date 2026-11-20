@@ -383,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Handlers & Listeners ---
         setupEventListeners();
         setupElectronHandlers();
+        window.setupMusicLikes?.(app); // 「喜欢」：右键菜单那一项要包在上面的菜单入口外面
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 
