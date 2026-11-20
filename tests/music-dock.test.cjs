@@ -117,18 +117,19 @@ test('dock drives the existing player methods and keeps the old slider as the vo
         dock.openPanel('播放列表');
         assert.equal(doc.querySelector('.md-qh span').textContent, '1', 'upcoming count leaves out the playing track');
 
+        // 音效设置不再是子页：它就是「声音」页，卡片搬进这一页，离开这一页或关掉面板就放回原处。
         dock.openSheet();
-        assert.equal(doc.getElementById('dsp').parentElement.dataset.md, 'fx-scroll', 'sound settings move into the drawer subpage');
-        assert.equal(doc.querySelector('[data-md="fxpage"]').hidden, false);
-        assert.ok(doc.querySelector('.md-pnl').classList.contains('md-sub'));
-        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        assert.equal(doc.getElementById('dsp').parentElement.className, 'main-content', 'Esc goes back and returns the card');
-        assert.equal(dock.panelOpen, true, 'first Esc only leaves the subpage');
-        assert.equal(dock.tab, '播放列表', 'back returns to the tab it came from');
-        dock.openSheet();
-        doc.querySelector('[data-md="fx-back"]').click();
-        assert.equal(doc.getElementById('dsp').parentElement.className, 'main-content');
-        assert.equal(doc.querySelector('[data-md="fxpage"]').hidden, true);
+        assert.equal(dock.tab, '声音');
+        assert.equal(doc.getElementById('dsp').parentElement.dataset.md, 'fx-scroll', 'sound settings sit in the sound tab');
+        assert.equal(doc.querySelector('[data-md="fx-scroll"]').hidden, false);
+        assert.equal(dock.soundSettingsOpen, true);
+        assert.equal(doc.querySelector('[data-act="fx"]'), null, 'no second entry that leads to another page');
+        dock.openPanel('播放列表');
+        assert.equal(doc.getElementById('dsp').parentElement.className, 'main-content', 'leaving the tab returns the card');
+        assert.equal(doc.querySelector('[data-md="fx-scroll"]').hidden, true);
+        app.openMusicControls('sound');
+        assert.equal(dock.tab, '声音');
+        assert.equal(doc.getElementById('dsp').parentElement.dataset.md, 'fx-scroll');
 
         doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert.equal(dock.panelOpen, false);
@@ -525,49 +526,85 @@ test('fluid bar: up-next titles on the bar, volume drop rail, ring docking and t
     } finally { dock.destroy(); }
 });
 
-test('stage settings live in the dock panel: the drawer content is moved in, opened from the control row, and moved back on destroy', () => {
+test('stage settings sit on the control page itself: each part is moved in, common ones first, no subpage, and moved back on destroy', () => {
     const { window, doc, app, dock, calls } = setup();
     dock.destroy();
     const stage = doc.createElement('div');
     stage.id = 'music-stage';
+    const row = (key, label, control) => `<label class="music-stage-tuning-row"><span class="music-stage-tuning-label">${label}</span><span class="music-stage-tuning-value"></span>${control.replace('>', ` data-stage-config-key="${key}">`)}</label>`;
+    const keys = [['vectorDecor', '矢量装饰'], ['rain', '雨（节能档减量）'], ['a', '甲'], ['b', '乙'], ['c', '丙'], ['d', '丁'], ['fontScale', '文字比例'], ['showTranslation', '翻译／罗马音'], ['glow', '辉光强度']];
     stage.innerHTML = `<aside class="music-stage-settings"><button class="music-stage-settings-toggle"></button>
-        <section class="music-stage-settings-card" hidden><div class="music-stage-settings-body"><div class="music-stage-mode-options"><input type="checkbox" data-stage-config-mode="partita"></div></div>
+        <section class="music-stage-settings-card" hidden><div class="music-stage-settings-body">
+        <section class="music-stage-settings-section"><div class="music-stage-mode-options"><input type="checkbox" data-stage-config-mode="partita"></div></section>
+        <section class="music-stage-settings-section"><div class="music-stage-tuning-controls">${keys.map(([k, l]) => row(k, l, '<input type="checkbox">')).join('')}</div></section>
+        <section class="music-stage-settings-section"><div class="music-stage-common-controls"></div></section></div>
         <div class="music-stage-settings-footer"><button class="music-stage-settings-reset">恢复出厂编排</button></div></section></aside>`;
     doc.body.appendChild(stage);
     const body = stage.querySelector('.music-stage-settings-body');
+    const tuning = stage.querySelector('.music-stage-tuning-controls');
     let changes = 0;
-    body.addEventListener('change', () => { changes += 1; });
+    stage.querySelector('.music-stage-mode-options').addEventListener('change', () => { changes += 1; });
     const again = window.initMusicDock(app);
     try {
-        assert.ok(doc.querySelector('[data-md="stagepage"] .music-stage-settings-body') === body, 'moved, not rebuilt');
-        assert.ok(doc.querySelector('[data-md="stagepage"] .music-stage-settings-reset'));
+        assert.ok(doc.querySelector('[data-md="tune-slot"] .music-stage-tuning-controls') === tuning, 'moved, not rebuilt');
+        assert.ok(doc.querySelector('[data-md="common-slot"] .music-stage-common-controls'));
+        assert.ok(doc.querySelector('[data-md="array-slot"] .music-stage-mode-options'));
+        assert.ok(doc.querySelector('[data-md="adv-acts"] .music-stage-settings-reset'));
         assert.ok(doc.body.classList.contains('music-dock-stage-settings'), 'old drawer is hidden by css');
 
+        // 舞台专属设置直接在控制页里：没有子页，面板一开就看得见。
         again.openPanel('控制');
-        doc.querySelector('[data-act="scene-pick"]').click();
+        assert.equal(doc.querySelector('[data-md="ext"]').hidden, false);
+        assert.equal(doc.querySelector('.md-pnl').classList.contains('md-sub'), false);
+        assert.equal(doc.querySelector('[data-md="tune-title"]').textContent, '流光设置');
         assert.equal(again.stageSettingsOpen, true);
-        assert.equal(doc.querySelector('[data-md="stagepage"]').hidden, false);
-        assert.equal(doc.querySelector('[data-md="sp-cur"]').textContent, '流光');
-        doc.querySelector('[data-md="sp-modes"] [data-mode="partita"]').click();
+        // 长名字拆成名字加一行说明；常用项排前面，其余收在「全部 N 项」里
+        const rows = [...tuning.children];
+        assert.equal(rows.length, 9);
+        assert.equal(rows[0].querySelector('[data-stage-config-key]').dataset.stageConfigKey, 'fontScale', 'common ones first');
+        const noted = tuning.querySelector('.md-tune-note');
+        assert.equal(noted.textContent, '节能档减量');
+        assert.equal(noted.parentElement.firstChild.textContent, '雨');
+        assert.equal(tuning.querySelectorAll('.md-tune-rest').length, 9 - 3);
+        const more = doc.querySelector('[data-md="tune-more"]');
+        assert.equal(more.hidden, false);
+        assert.match(more.textContent, /全部 9 项/);
+        assert.equal(doc.querySelector('[data-md="tune-slot"]').classList.contains('md-tune-all'), false);
+        more.click();
+        assert.equal(doc.querySelector('[data-md="tune-slot"]').classList.contains('md-tune-all'), true);
+        assert.equal(more.getAttribute('aria-expanded'), 'true');
+
+        // 舞台一行点开是原地的舞台格子
+        doc.querySelector('[data-act="scene-pick"]').click();
+        assert.equal(doc.querySelector('[data-act="scene-pick"]').getAttribute('aria-expanded'), 'true');
+        doc.querySelector('.md-scn [data-mode="partita"]').click();
         assert.deepEqual(calls.pop(), ['mode', 'partita']);
+        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(doc.querySelector('.md-scn'), null, 'Esc folds the stage grid first');
+        assert.equal(again.panelOpen, true);
 
         // 搬进来的控件上原有的事件还在
-        body.querySelector('input').dispatchEvent(new window.Event('change', { bubbles: true }));
+        doc.querySelector('[data-md="array-slot"] input').dispatchEvent(new window.Event('change', { bubbles: true }));
         assert.equal(changes, 1);
 
-        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        assert.equal(again.stageSettingsOpen, false, 'Esc goes back to the control page first');
-        assert.equal(again.panelOpen, true);
-        again.openStageSettings();
-        doc.querySelector('[data-md="sp-back"]').click();
-        assert.equal(again.stageSettingsOpen, false);
-        again.openStageSettings();
+        // 「更多」默认收起
+        const adv = doc.querySelector('[data-md="adv-body"]');
+        assert.equal(adv.hidden, true);
+        doc.querySelector('[data-md="adv-toggle"]').click();
+        assert.equal(adv.hidden, false);
+
         again.openPanel('播放列表');
-        assert.equal(again.stageSettingsOpen, false, 'switching tabs leaves the subpage');
+        assert.equal(doc.querySelector('[data-md="ext"]').hidden, true, 'the stage part only shows on the control tab');
+        assert.equal(again.stageSettingsOpen, false);
+        app.openMusicControls('stage');
+        assert.equal(again.tab, '控制');
     } finally {
         again.destroy();
     }
-    assert.ok(stage.querySelector('.music-stage-settings-card > .music-stage-settings-body') === body, 'moved back home');
+    assert.ok(body.querySelector('.music-stage-tuning-controls') === tuning, 'moved back home');
+    assert.ok(body.querySelector('.music-stage-mode-options'));
+    assert.ok(stage.querySelector('.music-stage-settings-card > .music-stage-settings-footer'));
+    assert.equal(app.openMusicControls, undefined);
     assert.ok(!doc.body.classList.contains('music-dock-stage-settings'));
 });
 
@@ -737,13 +774,14 @@ test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, t
         key(doc.activeElement, 'Home');
         assert.equal(doc.activeElement.textContent, '封面');
         key(doc.activeElement, 'ArrowLeft');
-        assert.equal(doc.activeElement.textContent, '音质', 'wraps around');
+        assert.equal(doc.activeElement.textContent, '声音', 'wraps around');
         assert.equal(doc.getElementById('music-dock-panel-body').getAttribute('role'), 'tabpanel');
 
-        // 子页的返回按钮有名字，进子页时焦点在它上面
+        // 没有子页了：直达舞台设置时焦点落在舞台那一行上，页面里也没有返回按钮
         dock.openStageSettings();
-        assert.equal(doc.activeElement.getAttribute('aria-label'), '返回控制页');
-        assert.ok(doc.querySelector('[data-md="fx-back"]').getAttribute('aria-label'));
+        assert.equal(doc.activeElement.dataset.act, 'scene-pick');
+        assert.equal(doc.activeElement.getAttribute('aria-expanded'), 'false');
+        assert.equal(doc.querySelector('[data-md="fx-back"], [data-md="sp-back"]'), null);
 
         // 关闭：焦点回到打开前的地方
         dock.closePanel();

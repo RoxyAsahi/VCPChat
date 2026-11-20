@@ -141,8 +141,7 @@
                 panelCmd('歌词', 'file-text', 'lyrics 歌词 geci'),
                 panelCmd('控制', 'settings-2', 'controls 控制 kongzhi'),
                 panelCmd('播放列表', 'list-music', 'queue playlist 播放列表 队列 bofangliebiao'),
-                panelCmd('音质', 'audio-lines', 'quality 音质 yinzhi'),
-                { id: 'fx', group: '面板', icon: 'sliders-horizontal', title: '音效设置', words: 'eq effects dsp 音效 均衡 yinxiao', run: () => openSheet() },
+                panelCmd('声音', 'audio-lines', 'sound quality eq effects dsp 声音 音质 音效 均衡 shengyin yinzhi yinxiao'),
                 ...(typeof global.MusicIntro?.replay === 'function'
                     ? [{ id: 'intro', group: '外观', icon: 'clapperboard', title: '播放完整开场', words: 'intro opening replay 开场 过场 动画 kaichang', run: () => global.MusicIntro.replay() }]
                     : []),

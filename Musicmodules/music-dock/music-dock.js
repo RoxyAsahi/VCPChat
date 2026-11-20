@@ -1,6 +1,6 @@
 // Musicmodules/music-dock/music-dock.js
 // 音乐窗口底栏：左下“正在播放”药丸、底部中间的进度胶囊（悬停展开、快捷行）、
-// 右下面板把手和统一面板（封面 / 歌词 / 控制 / 播放列表 / 音质）。
+// 右下面板把手和统一面板（封面 / 歌词 / 控制 / 播放列表 / 声音）。
 // 主界面和舞台共用这一条底栏。
 //
 // 约定：
@@ -23,7 +23,7 @@
     const SAFE_BOTTOM_PX = 96;
     const COMPACT_BELOW = 640;
 
-    const TABS = Object.freeze(['封面', '歌词', '控制', '播放列表', '音质']);
+    const TABS = Object.freeze(['封面', '歌词', '控制', '播放列表', '声音']);
     const MODE_LABELS = Object.freeze({ repeat: '列表循环', 'repeat-one': '单曲循环', shuffle: '随机播放' });
     const MODE_ICONS = Object.freeze({ repeat: 'repeat', 'repeat-one': 'repeat-1', shuffle: 'shuffle' });
 
@@ -93,16 +93,25 @@
     <div class="md-hd-tx"><b data-md="p-title"></b><span data-md="p-artist"></span></div>
     <button class="md-ib md-m md-hd-act" type="button" data-md="share" aria-label="分享当前音频" title="分享当前音频">${icon('share-2', 17)}</button>
   </div>
-  <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body" id="music-dock-panel-body" role="tabpanel"></div></div>
-  <div class="md-sp" data-md="stagepage" hidden>
-    <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="sp-back" aria-label="返回控制页" title="返回">${icon('chevron-left', 18)}</button><b>舞台调制</b><span class="md-sp-cur" data-md="sp-cur"></span></div>
-    <div class="md-sp-sc" data-md="sp-scroll">
-      <div class="md-sp-sec"><div class="md-sp-k">当前舞台</div><div class="md-pop-g" role="listbox" aria-label="选择舞台" data-md="sp-modes"></div></div>
+  <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body" id="music-dock-panel-body" role="tabpanel"></div>
+    <div class="md-ext" data-md="ext" hidden>
+      <section class="md-grp" data-md="tune-sec" aria-labelledby="music-dock-tune-title">
+        <div class="md-grp-h"><b id="music-dock-tune-title" data-md="tune-title"></b><span data-md="tune-hint"></span></div>
+        <div class="md-stage-in md-tune" data-md="tune-slot"></div>
+        <button class="md-fold" type="button" data-md="tune-more" aria-expanded="false" hidden></button>
+      </section>
+      <div class="md-tab md-tab2" data-md="body2"></div>
+      <div class="md-stage-in" data-md="common-slot"></div>
+      <section class="md-grp md-adv">
+        <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
+        <div class="md-adv-in" id="music-dock-adv" data-md="adv-body" hidden>
+          <div class="md-grp-k">出现在快速切换里的舞台</div>
+          <div class="md-stage-in" data-md="array-slot"></div>
+          <div class="md-adv-acts" data-md="adv-acts"></div>
+        </div>
+      </section>
     </div>
-  </div>
-  <div class="md-sp md-fxp" data-md="fxpage" hidden>
-    <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="fx-back" aria-label="返回" title="返回">${icon('chevron-left', 18)}</button><b>音效设置</b><span class="md-sp-cur" data-md="fx-cur"></span></div>
-    <div class="md-fx-sc" data-md="fx-scroll"><div class="md-fx-h md-fx-out"><span class="md-fx-n">01</span><b>输出</b></div></div>
+    <div class="md-fx-sc md-fx-in" data-md="fx-scroll" hidden><div class="md-fx-h md-fx-out"><span class="md-fx-n">01</span><b>输出</b></div></div>
   </div>
   <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist" aria-label="面板页签"></div></div>
 </section>
@@ -144,14 +153,18 @@
             share: $('[data-md="share"]'),
             body: $('[data-md="body"]'),
             tabs: $('[data-md="tabs"]'),
-            sp: $('[data-md="stagepage"]'),
-            spBack: $('[data-md="sp-back"]'),
-            spCur: $('[data-md="sp-cur"]'),
-            spScroll: $('[data-md="sp-scroll"]'),
-            spModes: $('[data-md="sp-modes"]'),
-            fx: $('[data-md="fxpage"]'),
-            fxBack: $('[data-md="fx-back"]'),
-            fxCur: $('[data-md="fx-cur"]'),
+            ext: $('[data-md="ext"]'),
+            body2: $('[data-md="body2"]'),
+            tuneSec: $('[data-md="tune-sec"]'),
+            tuneTitle: $('[data-md="tune-title"]'),
+            tuneHint: $('[data-md="tune-hint"]'),
+            tuneSlot: $('[data-md="tune-slot"]'),
+            tuneMore: $('[data-md="tune-more"]'),
+            commonSlot: $('[data-md="common-slot"]'),
+            advToggle: $('[data-md="adv-toggle"]'),
+            advBody: $('[data-md="adv-body"]'),
+            arraySlot: $('[data-md="array-slot"]'),
+            advActs: $('[data-md="adv-acts"]'),
             fxScroll: $('[data-md="fx-scroll"]')
         };
 
@@ -160,8 +173,8 @@
             expanded: false,
             panelOpen: false,
             tab: '控制',
-            subOpen: false,
-            sheetOpen: false,
+            scenesOpen: false,
+            tuneAll: false,
             dragging: null,
             lastTimeText: '',
             lastDurText: '',
@@ -548,7 +561,7 @@
                 { id: 'volume', icon: volumeIcon(), label: '音量', run: () => openPanel('控制') },
                 { id: 'queue', icon: 'list-music', label: '播放列表', run: () => openPanel('播放列表') },
                 { id: 'stage', icon: 'captions', label: inStage ? '离开歌词舞台' : '歌词舞台', on: inStage, run: toggleStage },
-                { id: 'fx', icon: 'sliders-horizontal', label: '音效设置', run: () => openSheet() }
+                { id: 'fx', icon: 'sliders-horizontal', label: '声音设置', run: () => openPanel('声音') }
             ];
         };
         const renderQuick = () => {
@@ -898,16 +911,10 @@
 
         const facts = () => {
             const track = currentTrack();
-            const pickText = (select) => select?.selectedOptions?.[0]?.textContent?.trim() || '';
             const ext = (track?.path || '').split('.').pop();
             const rows = [
                 ['来源', track ? (/^https?:/i.test(track.path || '') ? '云端' : '本地文件') : '—'],
-                ['格式', track ? [ext && ext.length <= 5 ? ext.toUpperCase() : '', track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : ''].filter(Boolean).join(' · ') || '—' : '—'],
-                ['输出', [pickText(app.deviceSelect) || '默认设备', app.wasapiSwitch?.checked ? 'WASAPI 独占' : ''].filter(Boolean).join(' · ')],
-                ['升频', pickText(app.upsamplingSelect) || '关闭'],
-                ['均衡器', app.eqSwitch?.checked ? `开 · ${pickText(app.eqTypeSelect) || 'IIR'}` : '关'],
-                ['响度', app.loudnessSwitch?.checked === false ? '关' : (pickText(app.loudnessModeSelect) || '开')],
-                ['抖动', app.ditherSwitch?.checked ? '开' : '关']
+                ['格式', track ? [ext && ext.length <= 5 ? ext.toUpperCase() : '', track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : ''].filter(Boolean).join(' · ') || '—' : '—']
             ];
             return rows;
         };
@@ -947,31 +954,23 @@
                 html += `<div class="md-vol"><button class="md-ib md-m" type="button" data-act="mute" data-icon="${volumeIcon(v)}" aria-label="静音">${icon(volumeIcon(v), 17)}</button>`
                     + `<div class="md-sld" role="slider" tabindex="0" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v * 100)}"><span class="md-sld-tr"><i class="md-sld-fill" style="transform:scaleX(${v})"></i></span><span class="md-sld-kn" style="left:calc(${v} * (100% - 16px))"></span></div>`
                     + `<span class="md-pct">${Math.round(v * 100)}%</span></div>`;
-                html += '<div class="md-tiles">'
+                html += '<div class="md-tiles md-tiles-2">'
                     + `<button class="md-tile${mode !== 'repeat' ? ' md-lit' : ''}" type="button" data-act="mode"><span class="md-ti">${icon(MODE_ICONS[mode] || 'repeat', 18)}</span><span>${MODE_LABELS[mode] || '播放模式'}</span></button>`
                     + `<button class="md-tile${inStage ? ' md-lit' : ''}" type="button" data-act="stage" aria-pressed="${inStage}"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>`
-                    + `<button class="md-tile" type="button" data-act="fx"><span class="md-ti">${icon('sliders-horizontal', 18)}<span class="md-chev">${icon('chevron-right', 14)}</span></span><span>音频效果器</span></button>`
                     + '</div><div class="md-sep"></div>';
                 if (scene) {
+                    // 舞台一行：左右箭头直接换；点中间在原地展开全部舞台（不再进子页）。
+                    const open = state.scenesOpen;
                     html += `<div class="md-mode"><div class="md-rw"><button class="md-st" type="button" data-act="scene-step" data-d="-1" aria-label="上一个舞台">${icon('chevron-left', 14)}</button>`
-                        + `<button class="md-mid" type="button" data-act="scene-pick" title="舞台调制：选舞台、演出阵列和模式调制"><span class="md-in"><span class="md-pic">${icon('clapperboard', 16)}</span>`
+                        + `<button class="md-mid${open ? ' md-open' : ''}" type="button" data-act="scene-pick" aria-expanded="${open}" aria-controls="music-dock-scenes" title="选择舞台"><span class="md-in"><span class="md-pic">${icon('clapperboard', 16)}</span>`
                         + `<span class="md-mid-tx"><span class="md-cap2">舞台</span><span class="md-val"><span>${escapeHtml(scene.label)}</span>${icon('chevron-down', 13)}</span></span></span></button>`
-                        + `<button class="md-st" type="button" data-act="scene-step" data-d="1" aria-label="下一个舞台">${icon('chevron-right', 14)}</button></div></div>`;
-                    html += '<div class="md-sep"></div>';
-                }
-                html += `<div class="md-nrow"><span class="md-lb">${light ? '日光素白' : '午夜墨染'}</span><span class="md-r">`
-                    + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
-                    + '</span></div>';
-                const motion = global.MusicMotion;
-                if (motion && Array.isArray(motion.PREFERENCES)) {
-                    const prefs = motion.PREFERENCES;
-                    const at = Math.max(0, prefs.findIndex((p) => p.value === motion.preference));
-                    html += `<div class="md-nrow"><span class="md-lb">降低动态</span><span class="md-r">`
-                        + segment('data-act="motion"', prefs.map((p) => ({ html: escapeHtml(p.label), aria: `降低动态：${p.label}` })), at, 'md-inline md-seg-tx')
-                        + '</span></div>';
-                }
-                if (typeof global.MusicIntro?.replay === 'function') {
-                    html += `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`;
+                        + `<button class="md-st" type="button" data-act="scene-step" data-d="1" aria-label="下一个舞台">${icon('chevron-right', 14)}</button></div>`;
+                    if (open) {
+                        html += `<div class="md-scn" id="music-dock-scenes" role="listbox" aria-label="选择舞台">${stageModes().map((m) => (
+                            `<button class="md-scn-b${m === scene ? ' md-on' : ''}" type="button" role="option" aria-selected="${m === scene}" data-mode="${m.id}" title="${escapeHtml(m.description || '')}">${escapeHtml(m.label)}</button>`
+                        )).join('')}</div>`;
+                    }
+                    html += '</div>';
                 }
             } else if (tab === '播放列表') {
                 const rows = buildQueueRows();
@@ -994,11 +993,14 @@
                 state.lyricsSource = app.currentLyrics;
                 state.lyricIndex = -2;
             } else {
-                html += `<dl class="md-facts">${facts().map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`
-                    + `<button class="md-wide" type="button" data-act="fx">${icon('sliders-horizontal', 15)}<span>打开完整音效设置</span>${icon('chevron-right', 14)}</button>`;
+                // 声音页：上面两行是这首歌的来源和格式，下面直接是全部输出与音效设置（原来的「音效设置」子页并进来了）。
+                html += `<dl class="md-facts md-facts-in">${facts().map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`;
             }
             el.body.innerHTML = html;
+            renderExt(tab === '控制');
+            syncFx(tab === '声音');
             placeMarks(el.body);
+            placeMarks(el.body2);
             if (tab === '播放列表') {
                 state.queueSource = activeList();
                 state.queueLength = state.queueSource.length;
@@ -1209,6 +1211,7 @@
             state.tab = TABS[Number(button.dataset.i)] || '控制';
             closePop();
             el.pnl.scrollTop = 0;
+            el.ext.parentElement.scrollTop = 0;
             renderTabs();
             renderBody();
         });
@@ -1225,13 +1228,14 @@
             state.tab = TABS[next];
             closePop();
             el.pnl.scrollTop = 0;
+            el.ext.parentElement.scrollTop = 0;
             renderTabs();
             renderBody();
             el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
         });
 
-        listen(el.body, 'click', (event) => {
-            const target = event.target.closest('[data-qact], [data-act], [data-q], .md-lyrl p, .md-seg button');
+        const onBodyClick = (event) => {
+            const target = event.target.closest('[data-qact], [data-act], [data-q], [data-mode], .md-lyrl p, .md-seg button');
             if (!target) return;
             const motionSeg = target.closest('.md-seg[data-act="motion"]');
             if (motionSeg && target.matches('button[data-i]')) {
@@ -1257,7 +1261,6 @@
             const act = target.dataset.act;
             if (act === 'mode') { cycleMode(); }
             else if (act === 'stage') { toggleStage(); }
-            else if (act === 'fx') { openSheet(); }
             else if (act === 'intro') { closePanel(); global.MusicIntro?.replay?.(); }
             else if (act === 'lyr-tr') { app.setLyricsTranslation?.(app.lyricsTranslation === false); renderBody(); }
             else if (act === 'lyr-off') { app.shiftLyrics?.(Number(target.dataset.d) || 0); renderBody(); }
@@ -1271,12 +1274,20 @@
                 const next = modes[(cur + Number(target.dataset.d) + modes.length) % modes.length];
                 if (next) app.stageHost?.setMode?.(next.id);
                 syncGlow();
-                closePop();
                 renderBody();
             } else if (act === 'scene-pick') {
-                openStagePage();
+                state.scenesOpen = !state.scenesOpen;
+                renderBody();
+                el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
+            } else if (target.dataset.mode && target.closest('.md-scn')) {
+                app.stageHost?.setMode?.(target.dataset.mode);
+                syncGlow();
+                renderBody();
+                el.body.querySelector('.md-scn-b.md-on')?.focus({ preventScroll: true });
             }
-        });
+        };
+        listen(el.body, 'click', onBodyClick);
+        listen(el.ext, 'click', onBodyClick);
 
         // 音量滑块：按下即跳到指针位置，拖动跟手，键盘左右 5%。
         listen(el.body, 'pointerdown', (event) => {
@@ -1368,6 +1379,7 @@
             if (!state.panelOpen) return;
             state.panelOpen = false;
             closePop();
+            syncFx(false);
             el.pnl.classList.remove('md-open');
             el.pnl.setAttribute('aria-hidden', 'true');
             el.hdl.classList.remove('md-open');
@@ -1447,100 +1459,145 @@
             });
         }
 
-        // ───────── 舞台调制子页 ─────────
-        // 控制页「舞台」那一行点进来：当前舞台（三列缩略格）+ 原来舞台控制舱里的演出阵列、模式调制、全局输出和「恢复出厂编排」。
-        // 控制舱的内容节点整块搬进这里（appendChild，不重建），舞台宿主绑在上面的事件和引用都还在；
-        // 原来的抽屉外壳和舞台右上角的入口按钮由 CSS 隐藏。
-        const stageSettingsBody = document.querySelector('#music-stage .music-stage-settings-body');
-        const stageSettingsFooter = document.querySelector('#music-stage .music-stage-settings-footer');
-        const stageSettingsHome = [stageSettingsBody, stageSettingsFooter].filter(Boolean)
-            .map((node) => ({ node, parent: node.parentNode, next: node.nextSibling }));
-        for (const { node } of stageSettingsHome) el.spScroll.appendChild(node);
-        if (stageSettingsHome.length) document.body.classList.add('music-dock-stage-settings');
+        // ───────── 舞台设置：直接排在控制页里 ─────────
+        // 原来舞台控制舱里的三块（当前舞台的专属设置、全局输出、演出阵列）和「恢复出厂编排」各自搬到控制页对应的位置
+        // （appendChild，不重建），舞台宿主绑在上面的事件和引用都还在；原来的抽屉外壳和舞台右上角的入口按钮由 CSS 隐藏。
+        // 控制页自上而下：音量 → 播放模式 / 歌词舞台 → 舞台（原地展开全部舞台）→ 这个舞台的设置 → 显示（所有舞台共用）→ 更多。
+        const stageRoot = document.getElementById('music-stage');
+        const stageParts = [
+            ['.music-stage-tuning-controls', el.tuneSlot],
+            ['.music-stage-common-controls', el.commonSlot],
+            ['.music-stage-mode-options', el.arraySlot],
+            ['.music-stage-settings-footer', el.advActs]
+        ].map(([selector, slot]) => ({ node: stageRoot?.querySelector(selector), slot })).filter((part) => part.node);
+        const stageSettingsHome = stageParts.map(({ node }) => ({ node, parent: node.parentNode, next: node.nextSibling }));
+        for (const { node, slot } of stageParts) slot.appendChild(node);
+        if (stageParts.length) document.body.classList.add('music-dock-stage-settings');
         cleanups.push(() => {
             for (const { node, parent, next } of stageSettingsHome.slice().reverse()) {
                 if (parent?.isConnected) parent.insertBefore(node, next?.parentNode === parent ? next : null);
             }
             document.body.classList.remove('music-dock-stage-settings');
         });
-        const renderStageModes = () => {
-            const modes = stageModes();
-            const current = currentStageMode();
-            el.spModes.innerHTML = modes.map((mode) => (
-                `<button class="md-op${mode === current ? ' md-on' : ''}" type="button" role="option" aria-selected="${mode === current}" data-mode="${mode.id}" title="${escapeHtml(mode.description || '')}">`
-                + `<span class="md-th">${icon('clapperboard', 16)}</span>${escapeHtml(mode.label)}</button>`
-            )).join('');
-            el.spCur.textContent = current ? current.label : '';
-        };
-        function openStagePage() {
-            if (!state.panelOpen) openPanel('控制');
-            renderStageModes();
-            state.subOpen = true;
-            el.sp.hidden = false;
-            el.pnl.classList.add('md-sub');
-            el.spScroll.scrollTop = 0;
-            el.pnl.scrollTop = 0;
-            el.spBack.focus({ preventScroll: true });
-        }
-        // 关掉面板里的子页（舞台调制或音效设置），回到页签内容。
-        function closePop() {
-            closeSheet();
-            if (!state.subOpen) return;
-            state.subOpen = false;
-            el.sp.hidden = true;
-            el.pnl.classList.remove('md-sub');
-        }
-        listen(el.spBack, 'click', () => {
-            closePop();
-            renderBody();
-            el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
+        const tuningNode = el.tuneSlot.firstElementChild;
+
+        // 每个舞台先露出最常动的几项，其余的收在「全部 N 项」里原地展开。没列出的舞台按定义顺序取前几项。
+        const TUNE_FIRST = Object.freeze({
+            diorama: ['rain', 'lyricCarrier', 'showTranslation', 'letterbox', 'cameraCuts', 'fireworks'],
+            tunnel: ['cameraSpeed', 'showTranslation', 'fontScale', 'starfield', 'showPlanets', 'showShips'],
+            kowloon: ['rain', 'cameraMode', 'lightning', 'reflections', 'showTranslation', 'fog'],
+            luminous: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
+            partita: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
+            cadenza: ['fontScale', 'showTranslation', 'showUpcoming', 'heroEmphasis', 'glow'],
+            fume: ['cameraMode', 'cameraSpeed', 'geometricBackground', 'glow', 'heroScale']
         });
-        listen(el.spModes, 'click', (event) => {
-            const button = event.target.closest('[data-mode]');
-            if (!button) return;
-            app.stageHost?.setMode?.(button.dataset.mode);
-            syncGlow();
-            renderStageModes();
+        const TUNE_FIRST_COUNT = 6;
+        let tuneBusy = false;
+        // 宿主每次换舞台都会重建这些行。这里只做三件事：把「名字（说明）」拆成名字和一行小字说明、
+        // 把常用项排到前面、给其余的行打上记号；控件本身和它上面的事件不动。
+        const dressTuning = () => {
+            if (!tuningNode || tuneBusy) return;
+            tuneBusy = true;
+            try {
+                const rows = Array.from(tuningNode.children);
+                const keyOf = (row) => row.querySelector('[data-stage-config-key]')?.dataset.stageConfigKey || '';
+                for (const row of rows) {
+                    const label = row.querySelector('.music-stage-tuning-label');
+                    if (!label || label.dataset.mdDone) continue;
+                    label.dataset.mdDone = '1';
+                    const match = /^(.+?)（(.+)）$/.exec(label.textContent || '');
+                    if (match) {
+                        label.textContent = match[1];
+                        const note = document.createElement('small');
+                        note.className = 'md-tune-note';
+                        note.textContent = match[2];
+                        label.appendChild(note);
+                    }
+                }
+                const scene = currentStageMode();
+                const wanted = TUNE_FIRST[scene?.id] || [];
+                let first = wanted.map((key) => rows.find((row) => keyOf(row) === key)).filter(Boolean);
+                if (rows.length <= TUNE_FIRST_COUNT + 2) first = rows.slice();
+                else if (first.length < 3) first = rows.slice(0, TUNE_FIRST_COUNT);
+                const rest = rows.filter((row) => !first.includes(row));
+                const ordered = first.concat(rest);
+                if (ordered.some((row, i) => row !== rows[i])) ordered.forEach((row) => tuningNode.appendChild(row));
+                rest.forEach((row) => row.classList.add('md-tune-rest'));
+                first.forEach((row) => row.classList.remove('md-tune-rest'));
+                el.tuneSec.hidden = rows.length === 0;
+                el.tuneMore.hidden = rest.length === 0;
+                el.tuneSlot.classList.toggle('md-tune-all', state.tuneAll || rest.length === 0);
+                el.tuneMore.setAttribute('aria-expanded', String(state.tuneAll));
+                el.tuneMore.innerHTML = `<span>${state.tuneAll ? '只看常用项' : `全部 ${rows.length} 项`}</span>${icon(state.tuneAll ? 'chevron-up' : 'chevron-down', 14)}`;
+                el.tuneTitle.textContent = scene ? `${scene.label}设置` : '舞台设置';
+                el.tuneHint.textContent = scene?.description || '';
+            } finally {
+                tuneBusy = false;
+            }
+        };
+        if (tuningNode) {
+            const tuneObserver = new MutationObserver(() => { dressTuning(); tuneObserver.takeRecords(); });
+            tuneObserver.observe(tuningNode, { childList: true });
+            cleanups.push(() => tuneObserver.disconnect());
+        }
+        listen(el.tuneMore, 'click', () => { state.tuneAll = !state.tuneAll; dressTuning(); });
+        listen(el.advToggle, 'click', () => {
+            const open = el.advBody.hidden;
+            el.advBody.hidden = !open;
+            el.advToggle.setAttribute('aria-expanded', String(open));
+            el.advToggle.classList.toggle('md-open', open);
         });
 
-        // 音效设置子页：控制页「音频效果器」或音质页的按钮点进来。原来的音效卡片整块搬进来（appendChild，不重建），
-        // 回到页签或关掉面板时放回原处，事件和引用都不变。
+        // 控制页下半段：舞台专属设置、「显示」一组（外观、降低动态，后面紧跟搬来的全局输出）和「更多」。
+        function renderExt(show) {
+            el.ext.hidden = !show;
+            if (!show) return;
+            dressTuning();
+            const light = document.body.classList.contains('light-theme');
+            let html = '<div class="md-grp-h"><b>显示</b><span>所有舞台共用</span></div>'
+                + `<div class="md-nrow"><span class="md-lb">外观</span><span class="md-r">`
+                + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
+                + '</span></div>';
+            const motion = global.MusicMotion;
+            if (motion && Array.isArray(motion.PREFERENCES)) {
+                const prefs = motion.PREFERENCES;
+                const at = Math.max(0, prefs.findIndex((p) => p.value === motion.preference));
+                html += `<div class="md-nrow"><span class="md-lb">降低动态</span><span class="md-r">`
+                    + segment('data-act="motion"', prefs.map((p) => ({ html: escapeHtml(p.label), aria: `降低动态：${p.label}` })), at, 'md-inline md-seg-tx')
+                    + '</span></div>';
+            }
+            el.body2.innerHTML = html;
+            const hasIntro = typeof global.MusicIntro?.replay === 'function';
+            let introBtn = el.advActs.querySelector('[data-act="intro"]');
+            if (hasIntro && !introBtn) {
+                el.advActs.insertAdjacentHTML('afterbegin', `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`);
+            } else if (!hasIntro && introBtn) introBtn.remove();
+        }
+        // 以前这里是「舞台调制」子页；现在只是打开控制页并滚到舞台那一段。
+        function openStageSettings() {
+            openPanel('控制');
+            const top = el.tuneSec.offsetTop - 8;
+            const scroller = el.ext.parentElement;
+            if (scroller && top > 0) scroller.scrollTop = top;
+            el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
+        }
+        function closePop() { state.scenesOpen = false; }
+
+        // 声音页：原来的音效卡片整块搬进来（appendChild，不重建），离开这一页或关掉面板时放回原处，事件和引用都不变。
         const dspCard = document.querySelector('.settings-container');
         const dspHome = dspCard ? { parent: dspCard.parentNode, next: dspCard.nextSibling } : null;
-        let fxFrom = null;
-        const fxSummary = () => {
-            const text = dspCard?.querySelector('[data-acoustic-summary]')?.textContent?.trim();
-            el.fxCur.textContent = text || '';
-        };
-        function openSheet() {
-            if (!dspCard || state.sheetOpen) return;
-            closePop();
-            if (!state.panelOpen) openPanel();
-            fxFrom = state.tab;
-            state.sheetOpen = true;
-            el.fxScroll.appendChild(dspCard);
-            fxSummary();
-            el.fx.hidden = false;
-            el.pnl.classList.add('md-sub');
-            el.fxScroll.scrollTop = 0;
-            el.pnl.scrollTop = 0;
-            el.fxBack.focus({ preventScroll: true });
+        let fxIn = false;
+        function syncFx(show) {
+            show = Boolean(show && dspCard && state.panelOpen);
+            el.fxScroll.hidden = !show;
+            if (show === fxIn) return;
+            fxIn = show;
+            if (show) el.fxScroll.appendChild(dspCard);
+            else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
-        function closeSheet() {
-            if (!state.sheetOpen) return;
-            state.sheetOpen = false;
-            el.fx.hidden = true;
-            if (!state.subOpen) el.pnl.classList.remove('md-sub');
-            if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
-        }
-        const backFromFx = () => {
-            closeSheet();
-            if (fxFrom && fxFrom !== state.tab) { state.tab = fxFrom; renderTabs(); }
-            renderBody();
-            el.body.querySelector('[data-act="fx"]')?.focus({ preventScroll: true });
-        };
-        listen(el.fxBack, 'click', backFromFx);
-        if (dspCard) listen(dspCard, 'change', () => { if (state.sheetOpen) fxSummary(); });
+        // 「音效设置」原来是抽屉里的子页，现在就是声音页；这两个名字留给命令面板和外面的调用。
+        function openSheet() { openPanel('声音'); }
+        function closeSheet() { syncFx(false); }
 
         listen(document, 'pointerdown', (event) => {
             const t = event.target;
@@ -1551,8 +1608,7 @@
         }, true);
         listen(document, 'keydown', (event) => {
             if (event.key !== 'Escape' || event.target?.closest?.('.md-cmd') || palette?.isOpen) return;
-            if (state.subOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
-            else if (state.sheetOpen) { backFromFx(); event.stopPropagation(); }
+            if (state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
 
@@ -1825,9 +1881,9 @@
             closeSheet,
             openPalette: (text) => palette?.open(text),
             openShortcuts: () => openHelp(),
-            openStageSettings: () => openStagePage(),
-            get stageSettingsOpen() { return state.subOpen; },
-            get soundSettingsOpen() { return state.sheetOpen; },
+            openStageSettings,
+            get stageSettingsOpen() { return state.panelOpen && state.tab === '控制'; },
+            get soundSettingsOpen() { return state.panelOpen && state.tab === '声音'; },
             get tab() { return state.tab; },
             get glowColors() { return currentGlow(); },
             get ringMode() { return ringMode; },
@@ -1853,11 +1909,18 @@
                 observers.forEach((observer) => observer.disconnect());
                 cleanups.splice(0).forEach((fn) => fn());
                 document.body.classList.remove('music-dock-on');
+                delete app.openMusicControls;
                 document.body.style.removeProperty('--music-dock-safe-bottom');
                 host.innerHTML = '';
             }
         };
         app.musicDock = api;
+        // 给窗口里别的入口用（比如档案页的按钮）：直接打开到某一段。section：'stage' 舞台设置，'sound' 声音，其余是控制页顶部。
+        app.openMusicControls = (section) => {
+            if (section === 'sound' || section === 'acoustic') openPanel('声音');
+            else if (section === 'stage') openStageSettings();
+            else openPanel('控制');
+        };
         global.addEventListener('beforeunload', api.destroy, { once: true });
         return api;
     }
