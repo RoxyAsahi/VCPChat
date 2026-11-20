@@ -33,6 +33,24 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     if (name.includes('nolist') || name.includes('narrow-list')) await page.evaluate(() => document.querySelector('[data-act="list"]').click());
     if (name.includes('sortmenu')) { await page.evaluate(() => document.querySelector('[data-l="sortBtn"]').click()); await page.waitForTimeout(2600); await page.screenshot({ path: path.join(OUT, name + '.png') }); await page.close(); continue; }
     if (name.includes('sortartist')) { await page.evaluate(() => document.querySelector('[data-l="sortBtn"]').click()); await page.evaluate(() => document.querySelector('[data-sort="artist"]').click()); }
+    if (name.includes('cover')) {
+      // 假封面（离线截图拿不到本地文件）：一张渐变加几何图形的画
+      await page.evaluate(() => {
+        const c = document.createElement('canvas'); c.width = c.height = 480;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 480, 480); grad.addColorStop(0, '#7fb3c8'); grad.addColorStop(1, '#e9c9a8');
+        g.fillStyle = grad; g.fillRect(0, 0, 480, 480);
+        g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); g.arc(320, 170, 70, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#2f4a55'; g.fillRect(0, 330, 480, 150);
+        g.fillStyle = '#f4efe8'; g.font = '700 54px sans-serif'; g.fillText('LOW TIDE', 36, 420);
+        const el = document.querySelector('.archive-cover');
+        el.style.backgroundImage = 'url(' + c.toDataURL() + ')'; el.classList.add('on');
+      });
+      await page.waitForTimeout(1800);
+      await page.screenshot({ path: path.join(OUT, name + '.png') });
+      await page.close();
+      continue;
+    }
     if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }

@@ -102,7 +102,9 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 #music-archive-view.is-expanded .archive-access > span { transform: translateX(9px); }
 .archive-access.is-playing::before { content: ""; width: 6px; height: 6px; background: var(--ar-accent); margin-right: -58px; }
 /* 选中曲目的封面：按需加载，没有封面就不显示 */
-.archive-cover { position: absolute; left: 618px; top: 186px; width: 92px; height: 92px; background: center / cover no-repeat; opacity: 0; transition: opacity .35s; box-shadow: 0 0 0 1px rgba(var(--ar-paper-rgb), .6); }
+/* 专辑封面：右边和歌手那行的右端对齐，放大到 232 见方，带一点投影压在卡片上 */
+.archive-cover { position: absolute; left: 478px; top: 186px; width: 232px; height: 232px; background: center / cover no-repeat; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .45s var(--mt-ease, ease); box-shadow: 0 0 0 1px rgba(var(--ar-paper-rgb), .6), 0 18px 40px rgba(0, 0, 0, .28); }
+.archive-cover.on { transform: none; }
 .archive-cover.on { opacity: 1; }
 
 /* 底部一排（底栏控件出现时整体上移让开） */
@@ -163,7 +165,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-hud.narrow .archive-rows, .archive-hud.narrow .archive-footer > span:nth-child(3), .archive-hud.narrow .archive-queue { display: none; }
 .archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { left: 59px; top: 300px; width: calc(100% - 59px); }
 .archive-hud.narrow .archive-summary { width: calc(100% - 118px); }
-.archive-hud.narrow .archive-cover { left: auto; right: 59px; }
+.archive-hud.narrow .archive-cover { left: auto; right: 59px; width: 168px; height: 168px; }
 .archive-hud.narrow .archive-lanes { left: 59px; bottom: 265px; }
 
 /* 滚动数字 */

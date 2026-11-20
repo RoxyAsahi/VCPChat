@@ -761,8 +761,8 @@
             const r = callout.getBoundingClientRect();
             const sc = (root.clientHeight || global.innerHeight) / DESIGN_H;
             const pad = 24 * sc;
-            // 说明块右半是一条延伸到边缘的细线，只挡文字那一段
-            const right = Math.min(r.right, r.left + 640 * sc);
+            // 说明块右半是一条延伸到边缘的细线，只挡文字和封面那一段
+            const right = Math.min(r.right, r.left + 730 * sc);
             state.scene.setLabelMask([{ left: r.left - base.left - pad, top: r.top - base.top - pad, right: right - base.left + pad, bottom: r.bottom - base.top + pad }]);
         };
 
