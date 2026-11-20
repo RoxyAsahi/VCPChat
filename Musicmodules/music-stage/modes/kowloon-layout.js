@@ -315,8 +315,8 @@
     });
 
     // 主入口：主巷 B 的南口，牌楼和集市雨棚（巷道模块画）。招牌避开 keepOut 这个盒子。
-    const GATE = Object.freeze({ x: -14, z: 61.2, width: 7.2, height: 8.2,
-        plaque: { center: [-14, 6.9, 61.5], width: 4.5, height: 1.2 },
+    const GATE = Object.freeze({ x: -14, z: 61.2, width: 7.2, height: 7.3,
+        plaque: { center: [-14, 5.05, 61.46], width: 2.6, height: 0.9 },
         keepOut: { x0: -28, x1: -1, z0: 50, z1: 64, y1: 9 } });
 
     const build = (seed = 'kowloon') => {
