@@ -135,3 +135,17 @@ test('removing the playing track continues with the one after it', () => {
     assert.equal(app.playlist[app.currentTrackIndex].path, 'C:/c.flac');
     assert.ok(!calls.includes('next'));
 });
+
+test('a re-render of the classic list reorders the playing context only while the classic list owns it', () => {
+    const { app } = setup();
+    const reorders = [];
+    let owned = true;
+    app.classicOrder = () => ['shown-order'];
+    app.contextFrom = (origin) => origin === 'classic' && owned;
+    app.reorderContext = (list, origin) => reorders.push([list[0], origin]);
+    app.renderPlaylist(null);
+    assert.deepEqual(reorders, [['shown-order', 'classic']]);
+    owned = false;
+    app.renderPlaylist(null);
+    assert.equal(reorders.length, 1, 'a context set elsewhere is left alone');
+});

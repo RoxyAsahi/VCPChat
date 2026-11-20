@@ -227,3 +227,42 @@ test('session: a whole-library context is stored as null and a missing track giv
     next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/gone.flac', time: 9 }));
     assert.equal(next.app.sessionStartPoint(), null);
 });
+
+test('playFromContext: the shown order becomes the context; library order is stored as the whole library', () => {
+    const { app, playlist, loads } = setup();
+    let rendered = 0;
+    app.renderPlaylist = () => { rendered += 1; };
+    const shown = [playlist[3], playlist[1], playlist[4]];
+    app.playFromContext(shown, 1, { origin: 'classic', render: false });
+    assert.deepEqual(titles(app.currentFilteredTracks), ['t3', 't1', 't4']);
+    assert.equal(rendered, 0, 'render: false leaves the list alone');
+    assert.deepEqual(loads, [1]);
+    assert.equal(app.getUpNext(3).context.map(t => t.title).join(), 't4,t3');
+
+    app.playFromContext(playlist.slice(), 0, { origin: 'classic' });
+    assert.equal(app.currentFilteredTracks, null, 'same as the library order means the whole library');
+    assert.equal(rendered, 1);
+});
+
+test('reorderContext: follows a new sort of the same group, only while that origin still owns the context', () => {
+    const { app, playlist, events } = setup();
+    app.playFromContext([playlist[0], playlist[1], playlist[2]], 1, { origin: 'classic', render: false });
+    const before = events.filter(e => e === 'music-queue-change').length;
+
+    assert.equal(app.reorderContext([playlist[2], playlist[1], playlist[0]], 'classic'), true);
+    assert.deepEqual(titles(app.currentFilteredTracks), ['t2', 't1', 't0']);
+    assert.equal(app.getUpNext(1).context[0].title, 't0', 'next follows the new order');
+    assert.ok(events.filter(e => e === 'music-queue-change').length > before, 'the queue page is told');
+    assert.equal(app.contextFrom('classic'), true, 'still owned after reordering');
+
+    assert.equal(app.reorderContext([playlist[2], playlist[3], playlist[0]], 'classic'), false, 'different members are ignored');
+    assert.equal(app.reorderContext([playlist[0], playlist[1], playlist[2]], 'archive'), false, 'another origin does not own it');
+
+    // 档案页换了上下文：经典列表再怎么排序都不碰
+    app.playFromContext([playlist[0], playlist[1], playlist[2]], 0, { origin: 'archive', render: false });
+    assert.equal(app.contextFrom('classic'), false);
+    assert.equal(app.reorderContext([playlist[1], playlist[0], playlist[2]], 'classic'), false);
+    // 直接改上下文（旧代码路径）也让记录失效
+    app.currentFilteredTracks = [playlist[4]];
+    assert.equal(app.contextFrom('archive'), false);
+});

@@ -453,6 +453,40 @@ function setupPlayer(app) {
         queueChanged();
     };
 
+    // ───────── 从某一组点播 ─────────
+    // 档案页的列、目录分组、经典列表都走这一个入口：把「看到的这一组、按看到的顺序」设成上下文队列，再放其中一首。
+    // list 为空或就是整个曲库原顺序时记为 null（= 整个曲库）。origin 记下是从哪来的（如 'classic'），
+    // 之后那里的排序变了可以跟着更新。
+    app.playFromContext = (list, index, { source = null, origin = null, render = true, play = true } = {}) => {
+        const tracks = Array.isArray(list) ? list.filter(Boolean) : null;
+        const whole = !tracks || (tracks.length === app.playlist.length && tracks.every((t, i) => t === app.playlist[i]));
+        app.currentFilteredTracks = whole ? null : tracks;
+        app.filteredPlaylistSource = source || null;
+        // 记下这次设的是哪一份列表：之后别处（档案页等）换了上下文，这条记录就不再算数。
+        app.playbackContext = { origin: origin || null, list: app.currentFilteredTracks, source: app.filteredPlaylistSource };
+        if (render) { try { app.renderPlaylist?.(app.currentFilteredTracks); } catch (error) { /* 旧列表只是同步显示 */ } }
+        return app.loadTrack(index, play);
+    };
+    // 上下文的顺序变了（比如经典列表换了排序），但还是同一组歌：换成新顺序，不打断播放。
+    app.contextFrom = (origin) => {
+        const ctx = app.playbackContext;
+        return Boolean(ctx && ctx.origin === origin && ctx.list === app.currentFilteredTracks && ctx.source === app.filteredPlaylistSource);
+    };
+    app.reorderContext = (list, origin = null) => {
+        if (origin && !app.contextFrom(origin)) return false;
+        const current = app.currentFilteredTracks || app.playlist;
+        if (!Array.isArray(list) || list.length !== current.length) return false;
+        const members = new Set(current);
+        if (!list.every(t => members.has(t))) return false;
+        if (list.every((t, i) => t === current[i])) return false;
+        const whole = list.every((t, i) => t === app.playlist[i]);
+        app.currentFilteredTracks = whole ? null : list.slice();
+        if (app.playbackContext) app.playbackContext.list = app.currentFilteredTracks;
+        announceQueue();
+        scheduleSessionSave();
+        return true;
+    };
+
     // ───────── 重启恢复：队列、上下文、进度 ─────────
     // 和「上次那首」「播放模式」一样存在 localStorage：
     // { v, track, time, context: 路径数组或 null（整个曲库）, source, manual: 路径数组 }。
