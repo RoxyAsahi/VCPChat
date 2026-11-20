@@ -67,7 +67,12 @@
         const cs = global.getComputedStyle(el);
         const radius = Math.min(rect.height / 2, parseFloat(cs.borderTopLeftRadius) || 16);
         const fill = cs.getPropertyValue('--mf-fill').trim() || cs.backgroundColor || 'rgba(128,128,128,.9)';
-        const z = (parseInt(cs.zIndex, 10) || 1000);
+        // 液体要画在弹出层所在那一层上面：取它自己和外层里最大的 z-index
+        let z = parseInt(cs.zIndex, 10) || 0;
+        for (let node = el.parentElement; node && node !== doc.body; node = node.parentElement) {
+            z = Math.max(z, parseInt(global.getComputedStyle(node).zIndex, 10) || 0);
+        }
+        z = z || 1000;
         const layer = overlay(doc, z);
         layer.drop.setAttribute('fill', fill);
         layer.body.setAttribute('fill', fill);
@@ -161,6 +166,40 @@
         const stop = running.get(el);
         if (stop) stop();
     }
+
+    // ───────── 弹窗：从最后一次按下的地方长出来 ─────────
+    // 各处弹窗（歌词获取、WebDAV、歌单对话框……）打开时都是给遮罩层加 visible / active 类。
+    // 这里统一看着这些遮罩层，打开时把里面的面板从最后一次按下指针的那一点长出来，各处代码不用改。
+    let lastPress = null;
+    const OVERLAYS = '.music-modal-overlay, .dialog-overlay';
+    const PANEL = '.music-modal, .dialog';
+    const watchDialogs = () => {
+        const doc = global.document;
+        if (!doc?.body || typeof global.MutationObserver !== 'function') return;
+        doc.addEventListener('pointerdown', (event) => { lastPress = { x: event.clientX, y: event.clientY, at: Date.now() }; }, true);
+        const isOpen = (node) => node.classList.contains('visible') || node.classList.contains('active');
+        const seen = new WeakMap();
+        const check = (node) => {
+            const open = isOpen(node);
+            if (open && !seen.get(node)) {
+                const panel = node.querySelector(PANEL);
+                // 键盘打开（没有最近的按下）就从窗口底部中间、播放条的位置长出来
+                const fresh = lastPress && Date.now() - lastPress.at < 1500;
+                const from = fresh ? lastPress : { x: global.innerWidth / 2, y: global.innerHeight - 60 };
+                if (panel) global.requestAnimationFrame?.(() => bud(panel, from, { duration: 520 }));
+            }
+            seen.set(node, open);
+        };
+        const observer = new global.MutationObserver((records) => {
+            for (const r of records) if (r.target.matches?.(OVERLAYS)) check(r.target);
+        });
+        for (const node of doc.querySelectorAll(OVERLAYS)) {
+            seen.set(node, isOpen(node));
+            observer.observe(node, { attributes: true, attributeFilter: ['class'] });
+        }
+    };
+    if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', watchDialogs, { once: true });
+    else watchDialogs();
 
     global.MusicFluid = Object.freeze({ bud, slide, cancel, enabled });
 })(typeof window !== 'undefined' ? window : globalThis);
