@@ -30,7 +30,6 @@
         const jitter = p < 1 ? 0.07 * Math.sin(p * 23.7) + 0.04 * Math.sin(p * 61.3) : 0;
         return text.slice(0, Math.max(1, Math.min(text.length, Math.ceil(clamp01(p + jitter) * text.length))));
     };
-    const pad4 = (n) => String(Math.max(0, Math.min(9999, Math.round(n)))).padStart(4, '0');
     const arc = (r, start, sweep, x = CX, y = CY) => {
         if (r <= 0 || sweep <= 0) return '';
         const pt = (a) => `${(x + Math.cos(a) * r).toFixed(2)},${(y + Math.sin(a) * r).toFixed(2)}`;
@@ -70,11 +69,11 @@
             el('text', { x: 262, y: 404, 'font-size': 9, 'letter-spacing': '2.2', class: 'mi-muted', opacity: 0 }, n.mark),
             el('text', { x: 262, y: 418, 'font-size': 9, 'letter-spacing': '2.2', class: 'mi-muted', opacity: 0 }, n.mark)
         ];
-        n.brand[0].textContent = 'ACOUSTIC INFORMATION';
-        n.brand[1].textContent = 'ARCHIVE SYSTEM';
+        n.brand[0].textContent = '本地曲库';
+        n.brand[1].textContent = '';
         n.auth = el('g', { opacity: 0 }, svg);
         n.authLabel = el('text', { x: 410, y: 292, 'font-size': 9, 'letter-spacing': '2.4', class: 'mi-muted' }, n.auth);
-        n.authLabel.textContent = 'AUTHORIZATION';
+        n.authLabel.textContent = '准备曲库';
         n.authText = el('text', { x: 410, y: 314, 'font-size': 18, 'font-weight': 600, 'letter-spacing': '1' }, n.auth);
         n.authCursor = el('rect', { x: 410, y: 300, width: 2.5, height: 17, class: 'mi-block' }, n.auth);
 
@@ -99,7 +98,7 @@
         n.welcome = el('g', { opacity: 0 }, svg);
         n.welcomeInner = el('g', {}, n.welcome);
         n.welcomeHead = el('text', { x: CX, y: 262, 'text-anchor': 'middle', 'font-size': 30, 'font-weight': 700, 'letter-spacing': '1' }, n.welcomeInner);
-        n.welcomeHead.textContent = 'WELCOME TO';
+        n.welcomeHead.textContent = '欢迎回来';
         n.welcomeBlock = el('rect', { x: CX - 128, y: 276, width: 256, height: 46, class: 'mi-block' }, n.welcomeInner);
         n.welcomeName = el('text', { x: CX, y: 310, 'text-anchor': 'middle', 'font-size': 30, 'font-weight': 700, 'letter-spacing': '2', class: 'mi-on-block' }, n.welcomeInner);
         n.welcomeName.textContent = 'VCP MUSIC';
@@ -168,7 +167,7 @@
 
     // ---------- 扫描环（开场与短版共用） ----------
     // local 是扫描段内的秒数；speed 把同一条轨迹压快（短版 1.5 倍）。
-    const renderScan = (n, local, { speed = 1, count = 0, label = 'INDEXING', sub = '' } = {}) => {
+    const renderScan = (n, local, { speed = 1, count = 0, label = '整理曲目', sub = '' } = {}) => {
         const t = local * speed;
         const collapse = smooth(progress(t, 1.12, 1.38));
         const r = keys([[0, 1500], [0.2, 900], [0.4, 520], [0.6, 330], [0.8, 274], [1.0, 258], [1.9, 246]], t) * (1 - collapse) + 46 * collapse;
@@ -205,7 +204,7 @@
         // 字距从很散收拢到正常
         const tracking = keys([[0, 26], [0.2, 12], [0.4, 5], [0.6, 1.6], [0.8, 0]], t);
         n.scanText.setAttribute('letter-spacing', tracking.toFixed(2));
-        n.scanText.textContent = `${label} ${pad4(count)} FILES`;
+        n.scanText.textContent = `${label} ${Math.max(0, Math.round(count))} 首`;
         const textOut = 1 - smooth(progress(t, 1.02, 1.18));
         n.scanText.style.opacity = String(keys([[0, 0], [0.16, 1]], t) * textOut);
         n.scanSub.textContent = sub;
@@ -220,7 +219,7 @@
         const f = frameOf(t);
         // 访问请求
         n.access.style.opacity = t < 0.35 || t >= 2.1 ? '0' : f === frameOf(2.0) ? '0.25' : '1';
-        n.accessText.textContent = typed('AUDIO ARCHIVE / ACCESS REQUEST', t, 0.4, 1.35);
+        n.accessText.textContent = typed('打开音乐曲库', t, 0.4, 1.0);
         n.accessCursor.setAttribute('x', String(392 + textWidth(n.accessText) + 4));
         n.accessCursor.style.opacity = Math.floor(t * 2.5) % 2 ? '0' : '1';
 
@@ -240,13 +239,12 @@
         n.auth.style.opacity = t >= 3.6 && t < 6.2 ? '1' : '0';
         let auth = '';
         if (t < 4.75) {
-            auth = typed('ID CONFIRMED', t, 3.6, 3.95);
-            if (t >= 4.12) auth += ' : ' + typed(ctx.name, t, 4.15, 4.5);
-        } else if (t < 5.35) auth = typed('REQUEST RECEIVED', t, 4.8, 5.15);
+            auth = typed('你好', t, 3.6, 3.8);
+            if (t >= 4.12 && ctx.name) auth += '，' + typed(ctx.name, t, 4.15, 4.5);
+        } else if (t < 5.35) auth = typed('读取曲库', t, 4.8, 5.05);
         else {
-            auth = typed('START PROCESSING', t, 5.4, 5.72);
+            auth = typed('排列档案', t, 5.4, 5.62);
             if (t >= 5.78) auth += '.'.repeat(Math.min(3, 1 + Math.floor((t - 5.78) / 0.12)));
-            if (f === frameOf(6.04) || f === frameOf(6.12)) auth = '            SING...';
         }
         n.authText.textContent = auth;
         n.authCursor.setAttribute('x', String(410 + textWidth(n.authText) + 4));
@@ -259,7 +257,7 @@
             const local = t - FULL.scan;
             renderScan(n, local, {
                 count: ctx.count() * easeOut(progress(local, 0.1, 1.2)),
-                sub: progress(local, 0.5, 0.7) > 0 ? `ID : ${ctx.name}` : ''
+                sub: progress(local, 0.5, 0.7) > 0 ? (ctx.name || '') : ''
             });
         }
 
@@ -276,7 +274,7 @@
             n.welcomeRule.setAttribute('width', String(256 * easeOut(progress(t, 8.3, 8.7))));
             const subOn = t >= 8.55 && !(f === frameOf(8.63) || f === frameOf(8.71));
             n.welcomeSub.style.opacity = subOn ? '1' : '0';
-            n.welcomeSub.textContent = `AUDIO ARCHIVE · ${pad4(ctx.count())} FILES`;
+            n.welcomeSub.textContent = `曲库 ${Math.max(0, Math.round(ctx.count()))} 首`;
             n.welcomeMark.style.opacity = t >= 8.4 ? '1' : '0';
             const exit = smooth(progress(t, FULL.exit, FULL.exit + 0.36));
             n.welcomeInner.setAttribute('transform', `translate(${CX} ${CY}) scale(${1 - 0.46 * exit}) translate(${-CX} ${-CY})`);
@@ -294,7 +292,7 @@
         renderScan(n, t, {
             speed: 1.5,
             count: ctx.count() * easeOut(progress(t, 0.1, 1.0)),
-            sub: `ID : ${ctx.name}`
+            sub: ctx.name || ''
         });
         const white = smooth(progress(t, 1.35, 1.8));
         n.flash.style.opacity = String(white * ctx.flashPeak);
@@ -318,7 +316,7 @@
         n.innerA.setAttribute('d', ''); n.innerB.setAttribute('d', '');
         // 等加载时圆环一直转
         const spin = (ctx.wait || 0) * 200 * DEG;
-        const loading = ctx.waiting && ctx.loadingLabel !== false ? 'LOADING STAGE' + '.'.repeat(1 + (Math.floor((ctx.wait || 0) * 3) % 3)) : '';
+        const loading = ctx.waiting && ctx.loadingLabel !== false ? '正在载入舞台' + '.'.repeat(1 + (Math.floor((ctx.wait || 0) * 3) % 3)) : '';
         let r, sweep, start;
         if (kind === 'enter') {
             n.veil.setAttribute('opacity', String(0.38 * smooth(progress(t, 0, 0.15))));
@@ -327,7 +325,7 @@
             start = keys([[0, 200], [0.5, -90]], t) * DEG + spin;
             n.white.setAttribute('d', arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG));
             n.scan.style.opacity = String(smooth(progress(t, 0, 0.08)));
-            n.fileLabel.textContent = loading || 'TRACK DATABASE';
+            n.fileLabel.textContent = loading || '进入舞台';
             n.fileText.textContent = typed(ctx.file, t, 0.04, 0.34);
             // 白场 90% 以上只维持约 110ms：0.45 起快速升到不透明，放开舞台后立刻开始退。
             n.flash.style.opacity = String(smooth(progress(t, 0.45, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.01, TRANSIT.enter - 0.1))));
@@ -350,8 +348,8 @@
                 n.scan.style.opacity = String(1 - smooth(progress(t, gate + 0.1, gate + 0.38)));
             }
             n.white.setAttribute('d', t < gate + 0.1 ? arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG) : '');
-            n.fileLabel.textContent = loading || 'RETURN';
-            n.fileText.textContent = typed('ARCHIVE', t, 0.04, 0.2);
+            n.fileLabel.textContent = loading || '返回';
+            n.fileText.textContent = typed('曲库', t, 0.04, 0.2);
         } else {
             // 换模式：舞台在点击 0.17 秒后才开始建新模式，纸色底 0.14 秒就盖严；等新模式加载好后揭开
             const gate = TRANSIT.switchGate;
@@ -362,7 +360,7 @@
             start = keys([[0, 120], [0.18, -90]], t) * DEG + spin;
             n.white.setAttribute('d', arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG));
             n.scan.style.opacity = String(smooth(progress(t, 0, 0.1)) * (1 - smooth(progress(t, gate + 0.05, TRANSIT.switch - 0.1))));
-            n.fileLabel.textContent = loading || 'STAGE MODE';
+            n.fileLabel.textContent = loading || '切换舞台';
             n.fileText.textContent = typed(ctx.file, t, 0.02, 0.18);
         }
         n.outer.setAttribute('d', arc(r, start, sweep));
@@ -380,7 +378,7 @@
         n.veil.setAttribute('opacity', '1');
         n.flash.style.opacity = '0';
         n.scan.style.opacity = '0';
-        n.fileLabel.textContent = 'LOADING STAGE';
+        n.fileLabel.textContent = '正在载入舞台';
         n.fileText.textContent = ctx.file || '';
         n.file.style.opacity = ctx.waiting && ctx.wait > 0.4 ? '1' : '0';
         return 1;
@@ -392,15 +390,15 @@
     // ---------- 播放器 ----------
     const init = (app) => {
         let current = null;
-        let userName = 'GUEST';
+        let userName = '';
 
         const loadName = async () => {
             try {
                 const api = global.utilityAPI?.loadSettings ? global.utilityAPI : app?.api || global.electronAPI;
                 const settings = await api?.loadSettings?.();
                 const name = String(settings?.userName || '').trim();
-                if (name) userName = name.toUpperCase().slice(0, 24);
-            } catch (e) { /* 取不到设置就用 GUEST */ }
+                if (name) userName = name.slice(0, 24);
+            } catch (e) { /* 取不到设置就不写名字 */ }
         };
         const namePromise = loadName();
 
@@ -445,7 +443,7 @@
                 root.setAttribute('role', 'presentation');
                 const skip = document.createElement('div');
                 skip.className = 'mi-skip';
-                skip.textContent = 'PRESS ANY KEY TO SKIP';
+                skip.textContent = '按任意键跳过';
                 root.appendChild(skip);
             }
             document.body.appendChild(root);
@@ -593,13 +591,14 @@
                 // 档案页据此把选中卡抬起来并继续画；舞台先不露出来，直到过场放完。
                 document.body.classList.add('music-stage-entering');
                 const track = app?.playlist?.[app.currentTrackIndex];
-                const file = global.MusicTrackSpecs?.fileNumber?.(track) || 'TRK-0000';
+                // 过场中间写的是要播放的曲名（去掉扩展名）
+                const file = String(track?.title || '').replace(/\.[a-z0-9]{2,5}$/i, '');
                 const hold = () => {
                     document.body.classList.remove('mi-stage-hold-exit');
                     document.body.classList.add('mi-stage-hold-enter');
                 };
                 const run = start('enter', {
-                    file: still ? '' : `FILE NUMBER: ${file}`,
+                    file: still ? '' : file,
                     still,
                     loadingLabel: SCENE_3D.includes(app?.stageHost?.modeId),
                     gate: {

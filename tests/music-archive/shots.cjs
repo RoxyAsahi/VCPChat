@@ -87,6 +87,23 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
+    if (name.includes('detail')) {
+      await page.evaluate(() => window.app.archiveView.openDetail());
+      if (name.includes('art')) {
+        // 假封面（离线截图拿不到本地文件），直接交给场景
+        await page.evaluate(() => {
+          const c = document.createElement('canvas'); c.width = c.height = 512;
+          const g = c.getContext('2d');
+          const grad = g.createLinearGradient(0, 0, 512, 512); grad.addColorStop(0, '#7fb3c8'); grad.addColorStop(1, '#e9c9a8');
+          g.fillStyle = grad; g.fillRect(0, 0, 512, 512);
+          g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); g.arc(340, 180, 76, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#2f4a55'; g.fillRect(0, 350, 512, 162);
+          g.fillStyle = '#f4efe8'; g.font = '700 58px sans-serif'; g.fillText('LOW TIDE', 36, 448);
+          window.app.archiveView.scene.setCover('fake', c);
+        });
+      }
+      await page.waitForFunction(() => { const d = window.app.archiveView.debug().scene; return d && d.detail >= 0.999 && d.clarity >= 1; }, null, { timeout: 60000 }).catch(() => {});
+    }
     await page.waitForTimeout(2600);
     await page.screenshot({ path: path.join(OUT, name + (args.size ? '-' + args.size : '') + '.png') });
     const dbg = await page.evaluate(() => window.app.archiveView.debug());
