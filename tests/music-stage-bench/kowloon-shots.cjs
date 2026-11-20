@@ -33,6 +33,7 @@ const SHOTS = (args.shots || 'iso,street,screen,roof').split(',');
     await page.evaluate(() => __h.pause && __h.pause());
     for (const shot of SHOTS) {
         const [id, tt] = shot.split('@');
+        if (args.time) await page.evaluate((t) => MusicStageKowloonManager.debugInstance().debugTime(t), Number(args.time));
         await page.evaluate(({ id, tt }) => MusicStageKowloonManager.debugInstance().debugSetShot(id, tt === undefined ? 0.5 : Number(tt)), { id, tt });
         await page.waitForTimeout(600);
         const file = path.join(OUT, `${shot.replace('@', '-')}.png`);

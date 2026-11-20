@@ -356,7 +356,7 @@
                     varying vec3 vNormal;
                     varying vec3 vLocal;
                     varying vec3 vColor;
-                    varying float vSeed;
+                    varying float vSeedRaw;
                     #include <fog_pars_vertex>
                     void main(){
                         mat4 im = mat4(1.0);
@@ -371,7 +371,7 @@
                         vec4 world = modelMatrix * im * vec4(position, 1.0);
                         vWorld = world.xyz;
                         vNormal = normalize(mat3(modelMatrix * im) * normal);
-                        vSeed = fract(dot(im[3].xyz, vec3(0.137, 0.731, 0.519)));
+                        vSeedRaw = fract(dot(im[3].xyz, vec3(0.137, 0.731, 0.519)));
                         vec4 mvPosition = viewMatrix * world;
                         gl_Position = projectionMatrix * mvPosition;
                         #include <fog_vertex>
@@ -385,10 +385,12 @@
                     varying vec3 vNormal;
                     varying vec3 vLocal;
                     varying vec3 vColor;
-                    varying float vSeed;
+                    varying float vSeedRaw;
                     #include <fog_pars_fragment>
                     void main(){
                         vec3 n = normalize(vNormal);
+                        // 每个实例的常量经插值会有末位抖动，取整后再拿去散列。
+                        float vSeed = floor(vSeedRaw * 997.0 + 0.5) / 997.0;
                         vec3 alb = vColor;
                         vec3 emit = vec3(0.0);
                         float grime = kwFbm(vLocal.xy * 3.0 + vSeed * 50.0);
@@ -426,10 +428,17 @@
                             float along = abs(n.x) > 0.5 ? p.z : p.x;
                             if (abs(n.y) < 0.5) {
                                 alb *= 0.8 + 0.25 * sin(along * 60.0);
-                                float win = step(abs(along - 0.5), 0.14) * step(abs(p.y - 0.55), 0.14);
-                                float lit = step(0.55, vSeed);
-                                emit = vec3(1.0, 0.62, 0.3) * win * lit * 1.1;
-                                alb *= 1.0 - win * 0.8;
+                                // 每一面自己决定开不开窗、窗在哪、亮不亮，免得一排排像人脸。
+                                float faceId = dot(n, vec3(1.0, 0.0, 3.0)) + vSeed * 17.0;
+                                float hf = fract(sin(faceId * 12.9898) * 43758.5453);
+                                float hg = fract(sin(faceId * 78.233) * 12543.123);
+                                float cx = 0.2 + 0.6 * hf, wwid = 0.08 + 0.12 * hg;
+                                float win = step(0.35, hg) * step(abs(along - cx), wwid) * step(abs(p.y - 0.58), 0.12 + 0.06 * hf);
+                                float door = step(hg, 0.2) * step(abs(along - (1.0 - cx)), 0.11) * step(p.y, 0.8);
+                                float lit = step(0.5, fract(hf * 7.0 + vSeed * 3.0));
+                                vec3 lampTone = hf > 0.7 ? vec3(0.7, 0.9, 1.0) : vec3(1.0, 0.62, 0.3);
+                                emit = lampTone * win * lit * (0.6 + 0.6 * hg);
+                                alb *= 1.0 - win * 0.8 - door * 0.6;
                             } else {
                                 alb *= 0.7 + 0.3 * sin(p.x * 40.0);
                             }
@@ -458,6 +467,7 @@
 
         const tmpM = new T.Matrix4(), tmpQ = new T.Quaternion(), tmpS = new T.Vector3(), tmpP = new T.Vector3();
         const up = new T.Vector3(0, 1, 0);
+        const xAxis = new T.Vector3(1, 0, 0), tmpQ2 = new T.Quaternion();
         const instanced = (name, geometry, material, items) => {
             if (!items.length) return null;
             disposables.push(geometry);
@@ -467,6 +477,7 @@
             items.forEach((it, i) => {
                 tmpP.set(it.p[0], it.p[1], it.p[2]);
                 tmpQ.setFromAxisAngle(up, it.yaw || 0);
+                if (it.tilt) tmpQ.multiply(tmpQ2.setFromAxisAngle(xAxis, it.tilt));
                 tmpS.set(it.s[0], it.s[1], it.s[2]);
                 tmpM.compose(tmpP, tmpQ, tmpS);
                 mesh.setMatrixAt(i, tmpM);
@@ -552,7 +563,7 @@
         const clothMesh = instanced('kowloon-clothes', boxGeo(), propMaterial(3), clothes);
 
         // ---------- 屋顶：加建铁皮屋、水箱、天线林、围栏 ----------
-        const shacks = [], tanks = [], antennas = [], rails = [];
+        const shacks = [], tanks = [], antennas = [], rails = [], dishes = [], crates = [];
         layout.lots.forEach(lot => {
             if (lot.height <= 0) return;
             const w = lot.x1 - lot.x0, d = lot.z1 - lot.z0;
@@ -576,10 +587,25 @@
                 const stand = rand() < 0.5 ? 1.2 : 0;
                 tanks.push({ p: [tx, y + stand + h / 2, tz], s: [r, h, r], yaw: 0, c: rand() < 0.5 ? [0.28, 0.36, 0.42] : [0.44, 0.42, 0.38] });
             }
-            const nAnt = Math.floor(rand() * (lot.floors > 12 ? 5 : 3));
+            // 天线林是城寨屋顶最认得出来的东西：高楼上一丛，矮楼上也有几根。
+            const nAnt = 1 + Math.floor(rand() * (lot.floors > 12 ? 8 : 4));
             for (let i = 0; i < nAnt; i += 1) {
                 const ah = 3 + rand() * 5;
-                antennas.push({ p: [lot.x0 + 0.3 + rand() * (w - 0.6), y, lot.z0 + 0.3 + rand() * (d - 0.6)], s: [1 + rand() * 0.6, ah, 1], yaw: rand() * Math.PI, c: [0.3, 0.3, 0.3] });
+                antennas.push({ p: [lot.x0 + 0.3 + rand() * (w - 0.6), y, lot.z0 + 0.3 + rand() * (d - 0.6)], s: [1 + rand() * 0.6, ah, 1], yaw: rand() * Math.PI, c: [0.17, 0.17, 0.18] });
+            }
+            // 高杆天线：细长，十来米。
+            if (rand() < 0.22) antennas.push({ p: [lot.x0 + 0.5 + rand() * (w - 1), y, lot.z0 + 0.5 + rand() * (d - 1)], s: [1.4, 9 + rand() * 5, 1.2], yaw: rand() * Math.PI, c: [0.15, 0.15, 0.16] });
+            // 锅盖天线：朝南斜着。
+            if (rand() < 0.3) {
+                const r = 0.35 + rand() * 0.4;
+                dishes.push({ p: [lot.x0 + 0.5 + rand() * (w - 1), y + 0.4 + rand() * 0.6, lot.z0 + 0.5 + rand() * (d - 1)], s: [r, 0.12, r], yaw: rand() * 0.8 - 0.4, tilt: 1.0 + rand() * 0.3, c: [0.36, 0.36, 0.35] });
+            }
+            // 屋顶杂物：木箱、油桶、旧家具堆。
+            const nCrate = Math.floor(rand() * 4);
+            for (let i = 0; i < nCrate; i += 1) {
+                const cs = 0.5 + rand() * 0.9;
+                const g = 0.2 + rand() * 0.2;
+                crates.push({ p: [lot.x0 + 0.4 + rand() * (w - 0.8), y + cs * 0.35, lot.z0 + 0.4 + rand() * (d - 0.8)], s: [cs, cs * 0.7, cs * (0.6 + rand() * 0.6)], yaw: rand() * Math.PI, c: [g * 1.1, g, g * 0.85] });
             }
             // 女儿墙上的铁栏只给对外的边。
             if (rand() < 0.6) rails.push({ p: [(lot.x0 + lot.x1) / 2, y + 0.55, lot.z1 - 0.05], s: [w, 1.1, 0.06], yaw: 0, c: [0.3, 0.29, 0.27] });
@@ -589,20 +615,27 @@
         const tankMesh = instanced('kowloon-tanks', tankGeo, propMaterial(3), tanks);
         // 鱼骨天线：一根竖杆，上半截几道横杆。并成一个几何，原点在杆底。
         const antennaGeo = (() => {
+            // 杆是两片十字交叉的面，横杆是竖着的细面：远看是线，三角面只有箱子的六分之一。
             const parts = [];
-            const mast = new T.BoxGeometry(0.05, 1, 0.05); mast.translate(0, 0.5, 0); parts.push(mast);
-            for (let i = 0; i < 6; i += 1) {
-                const bar = new T.BoxGeometry(0.6 - i * 0.07, 0.025, 0.025);
-                bar.translate(0, 0.62 + i * 0.065, 0);
-                parts.push(bar);
-            }
-            const boom = new T.BoxGeometry(0.025, 0.025, 0.5); boom.translate(0, 0.94, 0.1); parts.push(boom);
+            const quad = (w, h, x, y, z, rotY) => {
+                const g = new T.PlaneGeometry(w, h);
+                if (rotY) g.rotateY(rotY);
+                g.translate(x, y, z);
+                parts.push(g);
+            };
+            quad(0.06, 1, 0, 0.5, 0, 0);
+            quad(0.06, 1, 0, 0.5, 0, Math.PI / 2);
+            for (let i = 0; i < 6; i += 1) quad(0.6 - i * 0.07, 0.03, 0, 0.62 + i * 0.065, 0, 0);
+            quad(0.5, 0.03, 0, 0.94, 0.1, Math.PI / 2);
             const merged = mergeGeometries(T, parts);
             parts.forEach(p => p.dispose());
             return merged;
         })();
-        const antennaMesh = instanced('kowloon-antennas', antennaGeo, propMaterial(3), antennas);
+        const antennaMesh = instanced('kowloon-antennas', antennaGeo, propMaterial(3, { side: T.DoubleSide }), antennas);
         const railMesh = instanced('kowloon-rails', boxGeo(), propMaterial(0, { side: T.DoubleSide }), rails);
+        const dishGeo = new T.SphereGeometry(1, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+        const dishMesh = instanced('kowloon-dishes', dishGeo, propMaterial(3, { side: T.DoubleSide }), dishes);
+        const crateMesh = instanced('kowloon-crates', boxGeo(), propMaterial(2), crates);
 
         // ---------- 落水管与电缆束：沿立面竖着走 ----------
         const pipes = [];
@@ -622,7 +655,71 @@
         const pipeGeo = new T.CylinderGeometry(1, 1, 1, 6, 1, true);
         const pipeMesh = instanced('kowloon-pipes', pipeGeo, propMaterial(3), pipes);
 
-        const meshes = [shell, cageMesh, acMesh, awningMesh, poleMesh, clothMesh, shackMesh, tankMesh, antennaMesh, railMesh, pipeMesh].filter(Boolean);
+        const meshes = [shell, cageMesh, acMesh, awningMesh, poleMesh, clothMesh, shackMesh, tankMesh, antennaMesh, railMesh, pipeMesh, dishMesh, crateMesh].filter(Boolean);
+
+        // ---------- 天上：低飞进场的客机、远处高楼顶的航空障碍灯 ----------
+        // 客机从西北压低高度飞过屋顶，起落架灯照亮天线林，大约每 80 秒一架。
+        const plane = new T.Group();
+        plane.name = 'kowloon-plane';
+        const planeMat = propMaterial(3);
+        const fuselage = new T.CylinderGeometry(1.9, 1.6, 38, 12, 1);
+        fuselage.rotateX(Math.PI / 2);
+        const wing = new T.BoxGeometry(34, 0.5, 5.5);
+        const tailFin = new T.BoxGeometry(0.4, 6.5, 4.5);
+        tailFin.translate(0, 4, -16.5);
+        const tailWing = new T.BoxGeometry(12, 0.35, 3);
+        tailWing.translate(0, 1, -17);
+        const engine = new T.CylinderGeometry(0.95, 0.95, 3.6, 10, 1);
+        engine.rotateX(Math.PI / 2);
+        const planeGeo = mergeGeometries(T, [fuselage, wing, tailFin, tailWing,
+            engine.clone().translate(-6.5, -1.2, 1.5), engine.clone().translate(6.5, -1.2, 1.5)]);
+        [fuselage, wing, tailFin, tailWing, engine].forEach(g => g.dispose());
+        disposables.push(planeGeo);
+        // 道具材质的颜色来自 instanceColor，所以机身也用单实例的 InstancedMesh。
+        const planeInst = new T.InstancedMesh(planeGeo, planeMat, 1);
+        planeInst.setMatrixAt(0, new T.Matrix4());
+        planeInst.setColorAt(0, new T.Color(0.55, 0.56, 0.58));
+        planeInst.frustumCulled = false;
+        plane.add(planeInst);
+        const blinkGeo = new T.BufferGeometry();
+        const blinkPos = [0, -2.1, 14, -17, 0.2, 0, 17, 0.2, 0, 0, 7.4, -18, 0, 2.1, 0];
+        blinkGeo.setAttribute('position', new T.Float32BufferAttribute(blinkPos, 3));
+        blinkGeo.setAttribute('color', new T.Float32BufferAttribute([3, 3, 2.6, 3, 0.3, 0.2, 0.3, 3, 0.6, 3, 3, 3, 3, 0.25, 0.2], 3));
+        disposables.push(blinkGeo);
+        const blinkMat = new T.PointsMaterial({ size: 3.2, vertexColors: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, sizeAttenuation: true, fog: false });
+        disposables.push(blinkMat);
+        const planeLights = new T.Points(blinkGeo, blinkMat);
+        plane.add(planeLights);
+        plane.visible = false;
+        group.add(plane);
+        const PLANE_PERIOD = 80, PLANE_SPAN = 26;
+        const planeFrom = new T.Vector3(-420, 118, -260), planeTo = new T.Vector3(380, 34, 230);
+        const planeState = { light: null };
+
+        // 远处高楼顶的红色障碍灯，慢慢明灭。
+        const beaconPos = [], beaconPhase = [];
+        far.forEach(b => {
+            if (b.height < 60) return;
+            beaconPos.push((b.x0 + b.x1) / 2, b.height + 1, (b.z0 + b.z1) / 2);
+            beaconPhase.push(rand());
+        });
+        const beaconGeo = new T.BufferGeometry();
+        beaconGeo.setAttribute('position', new T.Float32BufferAttribute(beaconPos, 3));
+        beaconGeo.setAttribute('aPhase', new T.Float32BufferAttribute(beaconPhase, 1));
+        disposables.push(beaconGeo);
+        const beaconMat = new T.ShaderMaterial({
+            transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+            uniforms: { uTime: shared.uTime },
+            vertexShader: `attribute float aPhase; uniform float uTime; varying float vOn;
+                void main(){ vOn = pow(max(0.0, sin((uTime * 0.9 + aPhase * 6.28))), 6.0);
+                vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(900.0 / -mv.z, 2.0, 7.0); gl_Position = projectionMatrix * mv; }`,
+            fragmentShader: `varying float vOn; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d);
+                gl_FragColor = vec4(vec3(2.6, 0.25, 0.15) * a * (0.15 + vOn), 1.0); }`
+        });
+        disposables.push(beaconMat);
+        const beacons = new T.Points(beaconGeo, beaconMat);
+        beacons.frustumCulled = false;
+        group.add(beacons);
 
         // 给巷道线程滴水用：空调机的位置。
         const acPositions = acs.map(a => a.p);
@@ -637,17 +734,30 @@
                 const g = shellUniforms.uWindowGain;
                 g.value += (target - g.value) * Math.min(1, (state.dt || 0.016) * 2 + (g.init ? 0 : 1));
                 g.init = true;
+                const t = (state.time || 0) % PLANE_PERIOD;
+                plane.visible = t < PLANE_SPAN;
+                planeState.light = null;
+                if (plane.visible) {
+                    const k = t / PLANE_SPAN;
+                    plane.position.lerpVectors(planeFrom, planeTo, k);
+                    plane.lookAt(planeTo.x * 2 - planeFrom.x, planeTo.y * 2 - planeFrom.y, planeTo.z * 2 - planeFrom.z);
+                    const blink = Math.floor((state.time || 0) * 1.3) % 2;
+                    blinkMat.size = 3.2 + blink * 1.6;
+                    // 起落架灯打在屋顶上的光。
+                    const ahead = new T.Vector3(0, -2.5, 16).applyQuaternion(plane.quaternion).add(plane.position);
+                    planeState.light = { position: [ahead.x, ahead.y - 12, ahead.z], color: [1, 0.95, 0.85], intensity: 2.2, radius: 55 };
+                }
             },
             setPalette() {},
             setTier(tier) {
                 shellUniforms.uDetail.value = tier?.name === 'energy-saving' ? 0.6 : 1;
             },
             setOptions() {},
-            lights() { return []; },
+            lights() { return planeState.light ? [planeState.light] : []; },
             stats() {
                 return {
                     cityMeshes: meshes.length,
-                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length }
+                    cityInstances: { cages: cages.length, ac: acs.length, awnings: awnings.length, poles: poleItems.length, clothes: clothes.length, shacks: shacks.length, tanks: tanks.length, antennas: antennas.length, pipes: pipes.length, dishes: dishes.length, crates: crates.length, beacons: beaconPhase.length }
                 };
             },
             dispose() {

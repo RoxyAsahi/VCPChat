@@ -406,6 +406,7 @@
         });
         // harness 用：固定机位截图。
         mode.debugScene = () => ({ scene, camera, renderer, T });
+        mode.debugTime = (t) => { if (latest) { latest = { ...latest, playbackTime: t }; dirty = true; update(latest, true); } };
         mode.debugSetShot = (id, t = 0.5) => { if (director) director.force = id ? { id, t } : null; dirty = true; if (latest) update(latest, true); };
         mode.scope.add(() => { disposeGraphics(); latest = null; });
         resize();
