@@ -116,6 +116,7 @@
             state.lane = lane;
             state.row = row;
             state.scene?.jump(lane, row);
+            state.scene?.refreshLabels?.();
             root.classList.toggle('is-empty', tracks().length === 0);
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
@@ -576,6 +577,13 @@
             sceneQuality = quality();
             root.insertBefore(state.scene.canvas, root.firstChild);
             bindCanvas(state.scene.canvas);
+            // 卡面标题：近处几张卡印曲名和档案号
+            state.scene.setLabeler?.((lane, row) => {
+                const index = Model.cellTrack(state.columns, lane, row);
+                const t = index >= 0 ? tracks()[index] : null;
+                if (!t) return null;
+                return { key: index + ':' + (t.path || ''), title: Model.stripExtension(t.title) || '未知标题', code: fileNumber(t, index) };
+            });
             applyTheme();
             resize();
             state.scene.jump(keepTarget.lane, keepTarget.row);
