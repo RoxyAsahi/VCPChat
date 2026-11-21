@@ -837,3 +837,22 @@ body.music-reduce-motion .archive-list-group .gplay:active { transform: none; }
 #music-dock-root .md-qclr { border-radius: 9999px; padding: 0 9px; transition: color .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
 #music-dock-root .md-qclr:active { transform: scale(.9, .84); transition-duration: .1s; }
 body.music-reduce-motion #music-dock-root :is(.md-arw, .md-nxb, .md-qx, .md-qclr):active { transform: none; }
+
+/* ───────── 歌词：点一行跳过去 ─────────
+ * 首页右侧滚动歌词：手底下那一行背后一汪浅玻璃，在行之间流动（行会跟着歌往上走，那一汪也在同一层里一起走）。
+ * 首页和底栏抽屉的歌词行，按下时往左边轻轻压一下再弹回，表示「跳到这里」。 */
+.archive-lyrics-track { position: relative; isolation: isolate; }
+.archive-lyrics-track > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  height: 0;
+  border-radius: 16px;
+  transform: scale(.96, .7);
+}
+.archive-lyrics-track > .mf-trail.mf-on { transform: none; }
+:is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p) {
+  transform-origin: 0 50%;
+  transition: color .2s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+:is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: scale(.97); transition-duration: .1s; }
+body.music-reduce-motion :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: none; }

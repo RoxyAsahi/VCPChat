@@ -338,6 +338,7 @@
         { row: '#modal-song-list', item: '#modal-song-list > .music-modal-song-item', key: 'pl-songs', axis: 'xy', pad: 0 },
         { row: '.webdav-file-list', item: '.webdav-file-list > .webdav-file-item', key: 'dav-files', axis: 'xy', pad: 0 },
         { row: '.webdav-server-list', item: '.webdav-server-list > .webdav-server-item', key: 'dav-servers', axis: 'xy', pad: 0 },
+        { row: '.archive-lyrics-track', item: '.archive-lyrics-track > p', key: 'ar-lyrics', axis: 'xy', pad: 0 },
         { row: '.archive-detail-more', item: '.archive-detail-more li > button', key: 'ar-more', axis: 'xy', pad: 0 },
         { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
         { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
