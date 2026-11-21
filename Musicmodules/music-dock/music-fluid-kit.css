@@ -1147,3 +1147,7 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
 /* 播放队列在抽屉里铺满到底部页签上沿：原来固定 300px 高，下面空出一大截 */
 #music-dock-root .md-pnl .md-body > .md-tab:has(> .md-ql) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 #music-dock-root .md-pnl .md-body > .md-tab:has(> .md-ql) > .md-ql { flex: 1 1 0; height: auto; min-height: 240px; }
+
+/* 抽屉「封面」页：封面原来顶在上面、下面空出半屏；放到可用高度的视觉中心（略偏上），加一层落在玻璃上的柔影 */
+#music-dock-root .md-pnl .md-body > .md-tab:has(> .md-bigcv) { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; min-height: 0; padding-bottom: 6%; }
+#music-dock-root .md-pnl .md-bigcv { flex: 0 0 auto; width: 100%; box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .45); }
