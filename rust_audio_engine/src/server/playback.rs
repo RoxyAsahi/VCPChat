@@ -195,7 +195,7 @@ async fn load(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -206,10 +206,13 @@ async fn load(
     };
     let mut player = data.player.lock();
     match player.load_with_credentials(&path, credentials.as_ref()) {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success_with_state(
-            "Track loaded",
-            get_player_state(&player),
-        )),
+        Ok(()) => {
+            player.mark_applied();
+            HttpResponse::Ok().json(ApiResponse::success_with_state(
+                "Track loaded",
+                get_player_state(&player),
+            ))
+        }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::error(&format!("Failed to load: {}", e))),
     }
@@ -218,10 +221,13 @@ async fn load(
 async fn play(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let mut player = data.player.lock();
     match player.play() {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success_with_state(
-            "Playback started",
-            get_player_state(&player),
-        )),
+        Ok(()) => {
+            player.mark_applied();
+            HttpResponse::Ok().json(ApiResponse::success_with_state(
+                "Playback started",
+                get_player_state(&player),
+            ))
+        }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::error(&format!("Playback failed: {}", e))),
     }
@@ -230,10 +236,13 @@ async fn play(data: web::Data<Arc<AppState>>) -> HttpResponse {
 async fn pause(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let mut player = data.player.lock();
     match player.pause() {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success_with_state(
-            "Playback paused",
-            get_player_state(&player),
-        )),
+        Ok(()) => {
+            player.mark_applied();
+            HttpResponse::Ok().json(ApiResponse::success_with_state(
+                "Playback paused",
+                get_player_state(&player),
+            ))
+        }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::error(&format!("Pause failed: {}", e))),
     }
@@ -242,6 +251,7 @@ async fn pause(data: web::Data<Arc<AppState>>) -> HttpResponse {
 async fn stop(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let mut player = data.player.lock();
     player.stop();
+    player.mark_applied();
     HttpResponse::Ok().json(ApiResponse::success_with_state(
         "Playback stopped",
         get_player_state(&player),
@@ -254,10 +264,13 @@ async fn seek(
 ) -> HttpResponse {
     let mut player = data.player.lock();
     match player.seek(body.position) {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success_with_state(
-            "Seek successful",
-            get_player_state(&player),
-        )),
+        Ok(()) => {
+            player.mark_applied();
+            HttpResponse::Ok().json(ApiResponse::success_with_state(
+                "Seek successful",
+                get_player_state(&player),
+            ))
+        }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::error(&format!("Seek failed: {}", e))),
     }
@@ -279,6 +292,7 @@ async fn set_volume(
 ) -> HttpResponse {
     let mut player = data.player.lock();
     player.set_volume(body.volume as f64);
+    player.mark_applied();
     HttpResponse::Ok().json(ApiResponse::success_with_state(
         "Volume set",
         get_player_state(&player),
@@ -470,7 +484,7 @@ async fn scan_track_loudness(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -513,7 +527,7 @@ async fn scan_loudness_background(
     data: web::Data<Arc<AppState>>,
     body: web::Json<ScanBackgroundRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -659,7 +673,7 @@ async fn queue_next(
     data: web::Data<Arc<AppState>>,
     body: web::Json<QueueNextRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -690,7 +704,7 @@ async fn load_ir(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadIrRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };

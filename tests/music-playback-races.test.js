@@ -248,6 +248,92 @@ test('lyric lines are restyled only when the current line changes', () => {
     assert.equal(layoutReads, 0, 'steady frames must not force layout');
 });
 
+// --- 引擎推送（协议 2）---
+
+const hello = { type: 'hello', protocol: 2, features: ['playback_state', 'cmd_seq', 'spectrum_binary', 'streaming'] };
+const pushed = (fields) => ({
+    type: 'playback_state', state: 'playing', is_playing: true, position: 10, duration: 200,
+    file_path: 'C:/music/a.flac', rev: 1, applied_seq: 0, ...fields
+});
+
+test('an engine that pushes state turns polling off, and a dropped socket turns it back on', () => {
+    const app = setup();
+    app.isPlaying = true;
+    app.startStatePolling();
+    assert.notEqual(app.statePollInterval, null);
+    app.handleEngineHello(hello);
+    assert.equal(app.statePollInterval, null);
+    app.startStatePolling();
+    assert.equal(app.statePollInterval, null, 'no polling while pushes arrive');
+    app.handleEngineDisconnected();
+    assert.notEqual(app.statePollInterval, null, 'falls back to polling an old or vanished engine');
+    app.stopStatePolling();
+});
+
+test('an older engine without hello keeps polling', () => {
+    const app = setup();
+    app.handleEnginePlaybackState(pushed({ is_playing: false }));
+    assert.equal(app.enginePush, false);
+    app.startStatePolling();
+    assert.notEqual(app.statePollInterval, null);
+    app.stopStatePolling();
+});
+
+test('pushed state from before our last command is ignored', async () => {
+    const app = setup({ musicPlay: async () => ({ status: 'success', state: { cmd_seq: 7 } }) });
+    app.handleEngineHello(hello);
+    await app.playTrack();
+    assert.equal(app.isPlaying, true);
+    app.handleEnginePlaybackState(pushed({ rev: 2, applied_seq: 6, state: 'stopped', is_playing: false }));
+    assert.equal(app.isPlaying, true, 'state from before the play command must not flip the button back');
+    app.handleEnginePlaybackState(pushed({ rev: 3, applied_seq: 7, position: 42 }));
+    assert.equal(app.isPlaying, true);
+    assert.equal(app.lastKnownCurrentTime, 42);
+});
+
+test('a push that lands while the command is in flight is applied once the command returns', async () => {
+    const reply = deferred();
+    const app = setup({ musicPlay: () => reply.promise });
+    app.handleEngineHello(hello);
+    const playing = app.playTrack();
+    await tick(1);
+    // 引擎执行了播放但没有输出设备，立刻停了；HTTP 回包比推送晚到。
+    app.handleEnginePlaybackState(pushed({ rev: 5, applied_seq: 3, state: 'stopped', is_playing: false }));
+    assert.equal(app.isPlaying, true, 'held while the command is in flight');
+    reply.resolve({ status: 'success', state: { cmd_seq: 3 } });
+    await playing;
+    await tick(1);
+    assert.equal(app.isPlaying, false, 'the engine’s confirmed state wins over the optimistic button');
+});
+
+test('buffering is shown while the streamed track waits for the decoder', () => {
+    const app = setup();
+    app.handleEngineHello(hello);
+    app.handleEnginePlaybackState(pushed({ rev: 1, state: 'buffering' }));
+    assert.equal(app.isBuffering, true);
+    assert.equal(app.isPlaying, true, 'buffering is still playing, not paused');
+    app.handleEnginePlaybackState(pushed({ rev: 2, state: 'playing' }));
+    assert.equal(app.isBuffering, false);
+});
+
+test('binary spectrum frames decode to the same array the JSON frames carried', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../Musicmodules/music-visualizer.js'), 'utf8');
+    const start = source.indexOf('app.decodeEngineBinaryFrame = ');
+    const end = source.indexOf('app.destroyVisualizer = ');
+    assert.ok(start > 0 && end > start);
+    const app = {};
+    vm.runInNewContext(source.slice(start, end), { app, DataView, ArrayBuffer, Array });
+    const bins = [0.5, 0.25, 1];
+    const buffer = new ArrayBuffer(4 + bins.length * 4);
+    const view = new DataView(buffer);
+    view.setUint8(0, 1); view.setUint8(1, 1); view.setUint16(2, bins.length, true);
+    bins.forEach((v, i) => view.setFloat32(4 + i * 4, v, true));
+    // 跨 vm 上下文的数组原型不同，比较结构即可。
+    assert.equal(JSON.stringify(app.decodeEngineBinaryFrame(buffer)), JSON.stringify({ type: 'spectrum_data', data: bins }));
+    view.setUint8(0, 9);
+    assert.equal(app.decodeEngineBinaryFrame(buffer), null, 'unknown frame kinds are ignored');
+});
+
 test('play after a failed load retries the load instead of playing nothing', async t => {
     let ready = false;
     const app = setup({ getMusicState: async () => ready ? readyState() : ({ status: 'success', state: { is_loading: false } }) });
