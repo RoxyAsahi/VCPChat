@@ -3,7 +3,7 @@
 // 一个输入框同时搜歌（当前队列优先，再到全部曲目）、歌单和常用操作，记住最近用过的十项。
 // 结果分「歌曲 / 歌单 / 命令」三组。歌和歌单：回车播放，Shift+回车下一首播放，Ctrl+回车加入队列。
 // 有档案目录的拼音索引（MusicArchiveIndex + pinyin-pro）就用它，能按拼音、首字母找；没有时退回简单匹配。
-// 过滤写法：--歌手 名字、--专辑 名字、--标题 名字（也认 --artist / --album / --title 和 --a / --al / --t），
+// 过滤写法：歌手:名字、专辑:名字、标题:名字（冒号中英文都行），或 --歌手 名字（也认 --artist / --album / --title 和 --a / --al / --t），
 // 输入 -- 时列出可用的过滤。主界面和舞台里都能用。
 (function (global) {
     'use strict';
@@ -31,6 +31,14 @@
         const free = [];
         let current = null;
         for (const token of tokens) {
+            // 「歌手:周杰伦」「专辑：叶惠美」这种写法和 --歌手 一样（冒号后面可以空一格再写名字）
+            const colon = /^([^:：\s]+)[:：](.*)$/.exec(token);
+            const colonKey = colon && (FLAG_LOOKUP.get(colon[1]) || FLAG_LOOKUP.get(lower(colon[1])));
+            if (colonKey) {
+                if (colon[2]) { out[colonKey] = out[colonKey] ? `${out[colonKey]} ${colon[2]}` : colon[2]; current = colonKey; }
+                else current = colonKey;
+                continue;
+            }
             if (token.startsWith('--')) {
                 const name = token.slice(2);
                 const key = FLAG_LOOKUP.get(name) || FLAG_LOOKUP.get(lower(name));
@@ -383,7 +391,7 @@
             if (!state.items.length) {
                 list.innerHTML = input.value.trim()
                     ? `<div class="md-cmd-empty"><span>没有找到匹配的歌、歌单或操作</span></div>`
-                    : `<div class="md-cmd-empty"><span>输入歌名、歌手或专辑</span><span class="md-cmd-tip">加 --歌手、--专辑 可以缩小范围；输入「暂停」「音量 50」这类词也能直接执行</span></div>`;
+                    : `<div class="md-cmd-empty"><span>输入歌名、歌手或专辑</span><span class="md-cmd-tip">只找某个歌手或专辑：写「歌手:周杰伦」「专辑:叶惠美」</span><span class="md-cmd-tip">也可以直接输入「暂停」「音量 50」这样的指令</span></div>`;
                 input.removeAttribute('aria-activedescendant');
                 foot.hidden = true;
                 return;

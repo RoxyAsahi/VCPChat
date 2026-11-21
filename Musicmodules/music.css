@@ -2077,6 +2077,13 @@ body.sidebar-is-scrolling .sidebar-playlist li {
     transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+/* 菜单靠近窗口右边时，子菜单往左边展开 */
+.context-menu.sub-left .context-submenu {
+    left: auto;
+    right: calc(100% + 4px);
+    transform: translateX(5px);
+}
+
 .has-submenu:hover .context-submenu {
     opacity: 1;
     transform: translateX(0);

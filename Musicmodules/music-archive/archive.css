@@ -298,8 +298,10 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-recentq .rq:hover button { opacity: 1; }
 
 .archive-list-kinds { display: flex; align-items: baseline; margin: 16px 0 10px var(--gutter); font-size: 12px; letter-spacing: 1.3px; white-space: nowrap; }
-.archive-list-kinds > button { color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
-.archive-list-kinds > button + button::before { content: "／"; display: inline-block; margin: 0 10px; color: var(--ar-muted); font-weight: 400; opacity: .7; }
+.archive-list-kinds > button { position: relative; color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
+/* 分隔号放在按钮外面：键盘焦点框和点击范围只包文字本身，不把「／」也框进去 */
+.archive-list-kinds > button + button { margin-left: 32px; }
+.archive-list-kinds > button + button::before { content: "／"; position: absolute; right: calc(100% + 10px); width: 12px; text-align: center; color: var(--ar-muted); font-weight: 400; opacity: .7; pointer-events: none; }
 .archive-list-kinds > button:hover { color: var(--ar-ink); }
 .archive-list-kinds > button.on { color: var(--ar-ink); font-weight: 700; }
 
@@ -468,6 +470,8 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-foot { display: flex; align-items: baseline; gap: 16px; margin-left: var(--gutter); padding-top: 12px; }
 .archive-list-foot b { font-size: 44px; line-height: 1; font-weight: 400; font-variant-numeric: tabular-nums; }
 .archive-list-foot i { font-style: normal; font-weight: 300; font-size: 26px; color: var(--ar-slash, var(--ar-muted)); }
+.archive-list-foot i[hidden] { display: none; }
+.archive-list-foot.idle span { font-size: 15px; letter-spacing: 1px; color: var(--ar-muted); }
 .archive-list-foot span { font-size: 18px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
 /* 窄窗口：目录盖在阵列上，柔光更实一些 */
@@ -730,6 +734,46 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 /* 悬停统一：首页上带箭头的文字按钮（播放这一组、播放、详情、接着听）悬停都换成强调色，箭头往前挪 */
 .archive-access, .archive-brand-play, .archive-more, .archive-brand-resume, .archive-nav > button { transition: color .2s; }
 .archive-access:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+/* ═════════ 目录打开时的紧凑态 ═════════
+   目录打开：左上大标题缩成一行小标题，「播放这一组」「接着听」跟在后面；目录从标题下面一直拉到底，
+   底部的大号计数缩成一行小字。目录关上：标题、计数恢复原来的大号。
+   这里只写两套终态；开合动效由流体动效模块用 transform 补间（不在这里给 top/字号加过渡，免得每帧重排）。 */
+.archive-hud.list-open .archive-brand { top: 96px; }
+.archive-hud.list-open .archive-brand h1 { font-size: 30px; line-height: 36px; }
+.archive-hud.list-open .archive-brand > div { margin-top: 4px; }
+.archive-hud.list-open .archive-brand-play { margin-top: 10px; font-size: 15px; }
+.archive-hud.list-open .archive-brand-resume { margin-top: 10px; padding-top: 2px; }
+.archive-hud.list-open .archive-list { top: 196px; bottom: calc(30px + var(--archive-dock-lift, 0px)); }
+.archive-hud.list-open .archive-list-foot { padding-top: 6px; }
+.archive-hud.list-open .archive-list-foot b { font-size: 26px; }
+.archive-hud.list-open .archive-list-foot i { font-size: 18px; }
+.archive-hud.list-open .archive-list-foot span { font-size: 14px; }
+.archive-hud.narrow.list-open .archive-list, .archive-hud.narrow.short.list-open .archive-list { top: 196px; }
+/* 检索词在引号里面截断，右引号总露着 */
+.archive-brand-q { display: inline-block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+/* 检索没有结果：中间不再显示检索前那首的说明和翻页，只留目录里的「没有找到」 */
+.archive-hud.no-match .archive-callout, .archive-hud.no-match .archive-rows, .archive-hud.no-match .archive-lanes, .archive-hud.no-match .archive-cover { visibility: hidden; }
+/* 键盘提示：平时不常驻（字小、压在阵列上看不清），用键盘操作时才出现，鼠标一动就收起；字号也放大一档 */
+.archive-hint { font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.archive-hud.kbd .archive-hint { opacity: 1; }
+/* 歌词栏和中间说明块、右下换组各占各的：说明块收窄，和歌词栏之间留出 50px 以上，分隔线不再连成一条；
+   歌词栏底边在所有宽度下都抬到换组箭头上面（原来只有中等宽度这样做，宽窗口会压住「分组 07/19」） */
+.archive-lyrics { bottom: calc(205px + var(--archive-dock-lift, 0px)); }
+.archive-hud.has-lyrics .archive-callout { width: 430px; }
+.archive-hud.has-lyrics .archive-summary { width: 372px; }
+.archive-hud.has-lyrics .archive-rule { width: 373px; }
+.archive-hud.mid.has-lyrics .archive-callout { width: min(430px, calc(100% - 520px - 470px - 40px)); }
+.archive-hud.mid.has-lyrics .archive-summary { width: calc(100% - 58px); }
+.archive-hud.mid.has-lyrics .archive-rule { width: calc(100% - 57px); }
+/* 窄而矮的窗口（如 960×640）：右下的换组箭头会压在说明块的分隔线上，挪到左下角（矮窗口下那里的大号计数已经收起），贴着底栏上方 */
+.archive-hud.narrow.short .archive-lanes { left: 59px; right: auto; bottom: 22px; } /* 在 .archive-bottom 里，底栏抬高已经算过一次 */
+
+/* 检索没有结果：标题已经说了「没有结果」，底部计数不再显示「000 首」 */
+.archive-list-foot.zero > b, .archive-list-foot.zero > i, .archive-list-foot.zero > span { visibility: hidden; }
+/* 小操作图标统一用线条 SVG（字形 ✎ ✕ 在 Windows 上走字体回退，粗细大小都对不上） */
+.archive-ico { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.archive-list-recentq .rq button .archive-ico { width: 12px; height: 12px; }
+.archive-list-group .acts button { display: inline-flex; align-items: center; padding: 2px; }
 
 /* 很窄（宽不到 760 设计像素，音乐窗口最小宽度 420 时就是这档）：
    导航从右上挪到标题上方一行，字小一点；分组切换只留两个箭头，放在「第几首」那一行右边，不再压在曲名上。 */

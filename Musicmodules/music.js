@@ -723,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.lyricsFetchTitle.value = app.stripAudioExtension(track.title) || '';
             app.lyricsFetchArtist.value = track.artist || '';
             app.lyricsFetchTrack.textContent = `${app.stripAudioExtension(track.title) || '未知歌曲'} · ${track.artist || '未知艺术家'}`;
-            app.lyricsFetchResults.innerHTML = '<div class="music-modal-empty">点击“搜索多个源”查找可用歌词版本</div>';
+            app.lyricsFetchResults.innerHTML = '<div class="music-modal-empty">点「搜索多个源」查找可用的歌词版本</div>';
             app.lyricsFetchSelection.textContent = '尚未选择歌词版本';
             app.lyricsFetchApply.disabled = true;
             app.lyricsFetchSearchBtn.disabled = false;
@@ -1103,11 +1103,16 @@ document.addEventListener('DOMContentLoaded', () => {
             refresh();
             notify(`已从歌单「${pl.name}」移除`, { label: '撤销', run: () => { if (!pl.tracks.includes(track.path)) { pl.tracks.splice(Math.min(at, pl.tracks.length), 0, track.path); refresh(); } } });
         };
-        const removeFromLibrary = (index) => {
+        const removeFromLibrary = async (index) => {
             const track = app.playlist[index];
             if (!track) return;
             const name = app.stripAudioExtension ? app.stripAudioExtension(track.title || '') : (track.title || '');
-            if (!confirm(`从曲库列表移除「${name}」？\n只是不再显示在播放器里，磁盘上的文件不会删除。`)) return;
+            const ask = { title: `从曲库移除「${name}」？`, message: '只是不再显示在播放器里，磁盘上的文件不会删除。', confirmText: '移除', danger: true };
+            const ok = window.MusicDialog ? await window.MusicDialog.confirm(ask) : confirm(`${ask.title}\n${ask.message}`);
+            // 确认框开着时列表可能已经变了（扫描、别处删除）：按对象重新找位置。
+            if (!ok) return;
+            index = app.playlist.indexOf(track);
+            if (index < 0) return;
             const wasCurrent = app.currentTrackIndex === index;
             // 删的正是在放的这首：先按当前列表记下它后面那首，删完直接接上（不跳过一首）。
             const active = app.currentFilteredTracks || app.playlist;
@@ -1204,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.semanticSearchBtn.onclick = () => {
             app.isSemanticSearchActive = !app.isSemanticSearchActive;
             app.semanticSearchBtn.classList.toggle('active', app.isSemanticSearchActive);
-            app.searchInput.placeholder = app.isSemanticSearchActive ? "输入描述进行语义搜索..." : "搜索歌曲...";
+            app.searchInput.placeholder = app.isSemanticSearchActive ? "描述想听的歌，按语义搜索" : "搜索歌曲";
             
             if (!app.isSemanticSearchActive) {
                 // 退出语义搜索时恢复普通搜索
@@ -1412,6 +1417,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (state.dynamic_loudness_factor !== undefined) {
             app.dynamicLoudnessFactor.textContent = state.dynamic_loudness_factor.toFixed(2) + 'x';
+            // 引擎报上来之前不显示「补偿：--」这种占位
+            const info = app.dynamicLoudnessFactor.parentElement;
+            if (info?.hidden) info.hidden = false;
         }
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
     };

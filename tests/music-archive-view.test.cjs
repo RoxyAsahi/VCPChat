@@ -889,8 +889,10 @@ test('空的原因各有说法：检索没结果、空歌单、还没有播放�
     f.view.list.el.querySelector('[data-kind="recent"]').click();
     assert.match(empty().textContent, /还没有播放记录/);
     // 阵列走到空歌单那一列：说明是空的，并提示怎么加歌
-    const lane = f.view.debug().columns.findIndex((c) => c.id === 'playlist:e');
-    for (let k = 0; k < lane; k++) f.key('ArrowRight');
+    const cols = f.view.debug().columns;
+    const lane = cols.findIndex((c) => c.id === 'playlist:e');
+    // 目录换分类时阵列会跟着跳（见下面「目录换分类」），这里从当前位置走过去
+    for (let k = 0; k < cols.length && ((f.view.debug().lane % cols.length) + cols.length) % cols.length !== lane; k++) f.key('ArrowRight');
     assert.equal(f.text('ftitle'), '这个歌单还是空的');
     assert.match(f.text('fmeta'), /右键/);
     f.close();
@@ -1576,4 +1578,43 @@ test('每日推荐：有推荐时阵列最前面多一列「每日推荐」，�
     const g = fixture({ n: 80 });
     assert.notEqual(g.view.debug().columns[0].id, 'daily', '没有 dailyMix 时不加这一列');
     g.close();
+});
+
+test('目录换分类：阵列和左上标题跟过去；检索第一条结果带着阵列走，没有结果时收起中间说明', () => {
+    const f = fixture({ n: 60, playlists: [{ id: 'p', name: '夜间散步', tracks: ['/m/5', '/m/7', '/m/9'] }] });
+    const doc = f.w.document;
+    const hud = doc.querySelector('.archive-hud');
+    f.view.setListOpen(true);
+    const colKind = () => { const d = f.view.debug(); const n = d.columns.length; return d.columns[((d.lane % n) + n) % n].id; };
+    f.view.list.el.querySelector('[data-kind="playlist"]').click();
+    assert.equal(colKind(), 'playlist:p');
+    assert.equal(f.text('ctxName'), '夜间散步');
+    f.view.list.el.querySelector('[data-kind="all"]').click();
+    assert.ok(/^letter:|^all$/.test(colKind()), colKind());
+    // 检索：第一条结果带着阵列走
+    f.view.list.input.value = 'Song 42';
+    f.view.list.input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
+    assert.equal(f.text('ftitle'), 'Song 42');
+    assert.equal(doc.querySelector('.archive-brand-q').textContent, 'Song 42');
+    assert.ok(f.text('ctxName').endsWith('」'));
+    // 没有结果：中间说明收起，副标题不再重复 Esc
+    f.view.list.input.value = 'zzqx';
+    f.view.list.input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
+    f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
+    assert.ok(hud.classList.contains('no-match'));
+    assert.equal(f.text('ctxSub'), '没有结果');
+    assert.ok(f.view.list.el.querySelector('.archive-list-foot').classList.contains('zero'));
+    f.close();
+});
+
+test('键盘提示：用方向键时才出现，指针一按就收起', () => {
+    const f = fixture();
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.equal(hud.classList.contains('kbd'), false);
+    f.key('ArrowDown');
+    assert.ok(hud.classList.contains('kbd'));
+    f.w.document.getElementById('music-archive-view').dispatchEvent(new f.w.Event('pointerdown', { bubbles: true }));
+    assert.equal(hud.classList.contains('kbd'), false);
+    f.close();
 });

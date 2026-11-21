@@ -2344,13 +2344,42 @@
                             vec3 sea = mix(uColorPrimary, uColorInk, 0.1) * (0.05 + coast * 0.05);
                             vec3 plains = mix(mix(uColorPrimary, uColorInk, 0.6) * 0.13, mix(uColorInk, uColorEmber, 0.18) * 0.26,
                                 smoothstep(0.35, 0.7, relief));
+                            // Close to, the land carries ridges and fine grain; each scale
+                            // fades out before it is smaller than a pixel, so nothing shimmers.
+                            float span = length(fwidth(p));
+                            if (uDetail > 0.5) {
+                                float fineA = 1.0 - smoothstep(0.4, 1.0, span * 60.0);
+                                float fineB = 1.0 - smoothstep(0.4, 1.0, span * 160.0);
+                                // Ranges as bright crests with a shaded side, and patches of
+                                // darker and lighter ground between them.
+                                float ridge = pow(1.0 - abs(noise(q * 18.0) * 2.0 - 1.0), 6.0);
+                                float patches = smoothstep(0.35, 0.65, noise(q * 60.0 + 7.0));
+                                float grain = (patches - 0.5) * 0.4 * fineA + (noise(q * 160.0) - 0.5) * 0.16 * fineB;
+                                plains = mix(plains, plains * mix(vec3(1.0), uColorEmber / max(max(uColorEmber.r, uColorEmber.g), max(uColorEmber.b, 0.01)), 0.18),
+                                    patches * fineA);
+                                plains *= 1.0 + grain + ridge * 0.5;
+                                sea *= 1.0 + (noise(q * 40.0 + uTime * 0.02) - 0.5) * 0.3 * fineA;
+                            }
                             ground = mix(sea, plains, land);
                             ground = mix(ground, uColorInk * 0.92, cap);
                             vec3 w = vec3(p.x * 9.0, p.y * 16.0, p.z * 9.0) + vec3(uTime * 0.01, 0.0, 0.0) + s + 40.0;
-                            float swirl = fbm(w + vec3(fbm(w * 1.7), 0.0, fbm(w * 1.7 + 6.0)) * 1.2);
-                            // Big systems of cloud, broken into cells and streets close to.
+                            vec3 curl = vec3(fbm(w * 1.7), 0.0, fbm(w * 1.7 + 6.0)) * 1.2;
+                            float swirl = fbm(w + curl);
+                            // Big systems of cloud, broken into cells and streets close to,
+                            // with ragged, sharp edges rather than a soft blur.
                             float cells = uDetail > 0.5 ? noise(p * 70.0 + s) * 0.6 + noise(p * 170.0 + s) * 0.4 : 0.5;
-                            cover = smoothstep(0.52, 0.66, swirl + (cells - 0.5) * 0.16) * (0.7 + 0.3 * cells);
+                            float tatter = uDetail > 0.5
+                                ? (noise(p * 380.0 + curl * 4.0 + s) - 0.5) * 0.6 * (1.0 - smoothstep(0.4, 1.0, span * 380.0))
+                                    + (noise(p * 900.0 + s) - 0.5) * 0.4 * (1.0 - smoothstep(0.4, 1.0, span * 900.0)) : 0.0;
+                            float body = swirl + (cells - 0.5) * 0.16 + tatter * 0.07;
+                            cover = smoothstep(0.54, 0.6, body) * (0.62 + 0.38 * smoothstep(0.58, 0.72, body + cells * 0.08));
+                            // Each cloud throws its shadow on the ground a little away from the sun.
+                            if (uDetail > 0.5) {
+                                vec3 ps = normalize(p - normalize(uLightLocal) * 0.006);
+                                vec3 ws = vec3(ps.x * 9.0, ps.y * 16.0, ps.z * 9.0) + vec3(uTime * 0.01, 0.0, 0.0) + s + 40.0;
+                                float shade = smoothstep(0.54, 0.6, fbm(ws + curl) + (cells - 0.5) * 0.16);
+                                ground *= 1.0 - shade * (1.0 - cover) * 0.55;
+                            }
                             // Towns are points of light, gathered where the land is settled.
                             vec3 g = p * 420.0, cell = floor(g);
                             vec3 spot = cell + 0.5 + (vec3(hash(cell + 1.7), hash(cell + 4.1), hash(cell + 8.3)) - 0.5) * 0.6;
@@ -3513,8 +3542,11 @@
                     glyphMaterial.uniforms.hopStart.value = -1;
 
                     glyphTexture = new T.CanvasTexture(glyphCanvas);
-                    glyphTexture.generateMipmaps = false;
-                    glyphTexture.minFilter = T.LinearFilter;
+                    // The atlas is drawn large and shown small and slanted; without
+                    // mipmaps the strokes sparkle and break up (worst in ink on paper).
+                    glyphTexture.generateMipmaps = true;
+                    glyphTexture.minFilter = T.LinearMipmapLinearFilter;
+                    glyphTexture.anisotropy = 4;
                     glyphTexture.magFilter = T.LinearFilter;
                     const uniforms = glyphMaterial.uniforms;
                     uniforms.map.value = glyphTexture;
@@ -3718,6 +3750,10 @@
             }));
 
             lyricParticleMat.uniforms.uTint.value.copy(paper ? colors.accent.clone().lerp(new T.Color('#ffffff'), 0.5) : colors.accent);
+            // Added light is invisible on a white page except over the inked
+            // glyphs, where it punched pale holes into the sung words. On paper
+            // the points are laid on like ink instead.
+            lyricParticleMat.blending = paper ? T.NormalBlending : T.AdditiveBlending;
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
             ripples.forEach((r, idx) => r.mat.color.copy(idx % 2 === 0 ? colors.secondary : colors.accent));
             glyphCacheKey = ''; // 触发当前句按新主题重绘
@@ -3879,7 +3915,8 @@
                 const glyphAlpha = alive ? solidIn * solidOut : 0;
 
                 lyricAnchorGroup.position.set(stageX, stageY, stageZ);
-                const aspectScale = Math.min(1, Math.max(0.42, viewportAspect * 0.68));
+                // Narrow windows shrink the text less than the frame, so lines stay readable.
+                const aspectScale = Math.min(1, Math.max(0.6, viewportAspect * 0.92));
                 lyricAnchorGroup.scale.setScalar(aspectScale);
 
                 // 歌词平面面向相机并保留微幅电影级欧拉倾角

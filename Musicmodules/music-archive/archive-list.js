@@ -49,7 +49,7 @@
         <div class="archive-list-thumb" data-l="thumb" aria-hidden="true" hidden></div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
-            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
+            <b data-l="pos">000</b><i data-l="sep">/</i><span data-l="tot">首</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
         </div>`;
 
     /*
@@ -73,13 +73,15 @@
      * 右键菜单的键盘操作。菜单本身是播放器的 #track-context-menu（几行 div），这里在档案页打开它之后接管按键：
      * ↑ ↓ Home End 移动，Enter / 空格执行，→ 打开「加入歌单」子菜单、← 收回，Esc / Tab 关闭并把焦点还回去。
      * 菜单关掉（visible 类没了）就自动撤掉这些处理。
+     * playlist: true 时直接展开「加入歌单」子菜单（顶栏「＋ 加入歌单」按钮用，和 Spotify 的「添加到歌单」一样直接给歌单列表）。
      */
-    const menuKeyboard = (app, { restore = null } = {}) => {
+    const menuKeyboard = (app, { restore = null, playlist = false } = {}) => {
         const menu = app.contextMenu || document.getElementById('track-context-menu');
         if (!menu || !menu.classList.contains('visible')) return null;
         const shown = (el) => !el.hidden && el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
         const topItems = () => [...menu.querySelectorAll(':scope > .context-menu-item')].filter(shown);
         let sub = null; // 打开着的子菜单所在的那一项
+        let direct = false; // 一打开就是歌单列表：Esc 直接整个关掉，← 才回到上一层
         const subItems = () => (sub ? [...sub.querySelectorAll('.submenu-item')] : []);
         const items = () => (sub ? subItems() : topItems());
         const prep = (el) => { el.setAttribute('role', 'menuitem'); el.tabIndex = -1; };
@@ -125,7 +127,7 @@
                     finish();
                     break;
                 }
-                case 'Escape': if (sub) closeSub(); else close(); break;
+                case 'Escape': if (sub && !direct) closeSub(); else close(); break;
                 case 'Tab': close(); break;
                 default: return;
             }
@@ -135,7 +137,14 @@
         const observer = new MutationObserver(() => { if (!menu.classList.contains('visible')) finish({ focusBack: false }); });
         observer.observe(menu, { attributes: true, attributeFilter: ['class'] });
         document.addEventListener('keydown', onKey, true);
-        focusAt(0);
+        const plItem = playlist ? topItems().find((el) => el.classList.contains('has-submenu')) : null;
+        if (plItem && subItemsOf(plItem).length) { openSub(plItem); direct = true; }
+        else if (plItem) {
+            // 还没有歌单：子菜单只露出「暂无歌单」，焦点落到紧跟着的「新建歌单并添加」
+            plItem.classList.add('archive-kbd-sub');
+            const list = topItems();
+            focusAt(Math.min(list.indexOf(plItem) + 1, list.length - 1));
+        } else focusAt(0);
         return { close };
     };
 
@@ -151,7 +160,7 @@
 
         /*
          * 最近检索：检索后真的播了结果，才记下这个检索词（和 Spotify 一样，只是打字不算）。
-         * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，✕ 删一条，「清除」全删。
+         * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，叉号删一条，「清除」全删。
          * 只是这台机器上的方便，存在 localStorage 里。
          */
         const RECENT_Q_KEY = 'musicArchiveRecentQueries';
@@ -171,7 +180,7 @@
             box.hidden = !show;
             if (!show) return;
             box.innerHTML = '<header><span>最近检索</span><button type="button" data-rq-clear>清除</button></header>'
-                + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条">✕</button></div>`).join('');
+                + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
         };
         // 目录里「为你 · 每日推荐」那一节对应阵列的 daily 列，告诉阵列时换成列 id
         const columnCtx = (ctx) => (ctx === 'recent:daily' ? 'daily' : ctx);
@@ -276,12 +285,12 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
-            if (!out.count) { r.pos.textContent = '---'; r.tot.textContent = pad(0, 3); }   // 没有结果时 render 不会走到计数那里，别留着上一次的数
+            if (!out.count) setFoot(0, 0);   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();
             // 有检索词、有结果时给「存为智能歌单」（多选时让给多选说明）
             r.saveSmart.hidden = !(q0 && out.count && app.createSmartPlaylist) || multi.size > 1;
-            if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count); }
+            if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count, out.rows.find((row) => row.type === 'track') || null); }
             if (!out.count) {
                 // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
                 const q = state.query.trim();
@@ -378,8 +387,8 @@
                 }
                 const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
                 const len = groupLength(k);
-                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${pad(row.n)}${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
-                    + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
+                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${row.n} 首${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
+                    + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4"/></svg></button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>' : '');
             }
             const t = tracks()[row.i] || {};
             const meta = [t.artist, t.album].filter(Boolean).join(' · ') || '未知歌手';
@@ -543,10 +552,19 @@
             const sel = state.selectedRow;
             let nth = 0;
             if (sel >= 0) for (let k = 0; k <= sel; k++) if (state.rows[k].type === 'track') nth++;
-            r.pos.textContent = sel >= 0 ? pad(nth, 3) : '---';
-            r.tot.textContent = pad(state.count, 3);
+            setFoot(sel >= 0 ? nth : 0, state.count);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
+        // 底部计数：选中了一首是「012 / 120」；没选中时不放「--- / 120」这种占位，直接说「120 首」
+        function setFoot(nth, count) {
+            const idle = !(nth > 0);
+            r.pos.textContent = pad(idle ? count : nth, 3);
+            r.sep.hidden = idle;
+            r.tot.textContent = idle ? '首' : pad(count, 3);
+            r.pos.parentElement.classList.toggle('idle', idle);
+            // 检索没有结果时标题已经写了「没有结果」，底部不再摆一个「000 首」
+            r.pos.parentElement.classList.toggle('zero', !(count > 0));
+        }
 
         /* 右边的细滚动条：看得出目录有多长、现在在哪，也可以直接拖 */
         const THUMB_PAD = [56, 30]; // 目录上下两头是渐隐的，滚动条不伸进去
@@ -1583,6 +1601,8 @@
             if (!auto) { try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ } }
             r.viewport.scrollTop = 0;
             rebuild();
+            // 用户自己换的分类告诉档案页，阵列和左上标题跟过去（跟着阵列自动切的不回传，免得来回切）
+            if (!auto) opts.onKind?.(kind);
             const k = findRow(state.selected, null);
             if (k >= 0) state.selectedRow = k;
             const back = kindScroll.get(kind);

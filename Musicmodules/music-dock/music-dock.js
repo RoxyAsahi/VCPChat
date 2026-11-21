@@ -1129,7 +1129,7 @@
                 html += `<div class="md-qh"><b>播放队列</b><span>${upcoming}</span><span class="md-g"></span>`
                     + (rows.length > 1 ? `<button class="md-ib" type="button" data-act="q-save" aria-label="把队列存为歌单" title="把队列存为歌单">${icon('list-plus', 15)}</button>` : '')
                     + `<button class="md-ib md-s${playMode() === 'shuffle' ? ' md-lit' : ''}" type="button" data-act="shuffle" aria-label="随机播放" title="随机播放">${icon('shuffle', 15)}</button></div>`
-                    + (rows.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${rows.total}px"></div></div>` : '<p class="md-empty">还没有歌曲，用左侧“本地”添加音乐文件夹。</p>');
+                    + (rows.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${rows.total}px"></div></div>` : '<p class="md-empty">队列是空的。在首页添加音乐文件夹，点一首歌就会排进来。</p>');
             } else if (tab === '封面') {
                 const cover = coverUrl(currentTrack());
                 html += cover
@@ -1236,7 +1236,9 @@
                 return `<div class="md-qhd" role="presentation" style="${style}"><span>${escapeHtml(row.label)}</span><em>${row.count}</em>`
                     + (row.clear ? '<span class="md-g"></span><button class="md-qclr" type="button" data-qact="clear">清空</button>' : '') + '</div>';
             }
-            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`;
+            const dur = queueDuration(row.track);
+            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`
+                + (dur && row.type !== 'now' ? `<span class="md-qdur">${dur}</span>` : '');
             if (row.type === 'now') {
                 return `<div class="md-qi md-cur md-now" role="listitem" style="${style}">${text}<span class="md-g"></span><span class="md-qtag">正在播放</span></div>`;
             }
@@ -1256,6 +1258,23 @@
                 + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
         };
 
+        // 队列每行右边的时长：曲目自带的优先；没带的用档案页记下的（播放过一次就有，存在本机同一个键里）
+        let qDurs = null, qDursAt = 0;
+        const queueDuration = (t) => {
+            let sec = Number(t?.duration) > 0 ? Number(t.duration) : 0;
+            if (!sec && t?.path) {
+                const now = performance.now();
+                if (!qDurs || now - qDursAt > 5000) {
+                    try { qDurs = JSON.parse(localStorage.getItem('musicArchiveDurations') || '{}') || {}; } catch (e) { qDurs = {}; }
+                    qDursAt = now;
+                }
+                sec = Number(qDurs[t.path]) || 0;
+            }
+            sec = Math.round(sec);
+            if (!(sec > 0)) return '';
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = String(sec % 60).padStart(2, '0');
+            return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
+        };
         function renderQueueWindow(scroller, force = false) {
             if (state.queueDrag?.active) return; // 拖动时别重建行
             const rows = state.queueRows || [];
@@ -1402,7 +1421,12 @@
                 return;
             }
             if (state.lyricsSource !== app.currentLyrics) { renderBody(); return; }
-            const index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            let index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            // 暂停着打开（比如重开窗口停在 0:08）时歌词模块不更新当前行，这里按进度自己找一次，不然一行都不亮
+            if (index < 0 && !app.isPlaying && typeof app.lyricIndexAt === 'function' && currentTime() > 0) {
+                const at = app.lyricIndexAt(currentTime());
+                if (Number.isInteger(at)) index = at;
+            }
             if (!force && index === state.lyricIndex) return;
             box.querySelector('p.md-on')?.classList.remove('md-on');
             state.lyricIndex = index;
