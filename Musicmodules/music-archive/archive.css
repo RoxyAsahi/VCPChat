@@ -130,7 +130,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 /* 位置条：刻度铺满整列，竖线游标停在当前位置，可点可拖 */
 .archive-ticks { position: relative; width: 300px; height: 40px; cursor: pointer; touch-action: none; pointer-events: auto; }
 .archive-ticks > span { position: absolute; top: 0; width: 14px; height: 40px; }
-.archive-ticks > span::before { content: ""; position: absolute; left: 6px; top: 14px; width: 2px; height: 12px; background: var(--ar-line); transition: height .4s, background .4s, top .4s; }
+.archive-ticks > span::before { content: ""; position: absolute; left: 6px; top: 14px; width: 2px; height: 12px; background: var(--ar-tick, var(--ar-line)); transition: height .4s, background .4s, top .4s; }
 .archive-ticks:hover > span::before { height: 16px; top: 12px; }
 .archive-ticks-cursor { position: absolute; top: 3px; left: calc(var(--pos, 0) * (100% - 14px) + 6px); width: 2px; height: 33px; background: var(--ar-sel, var(--ar-ink)); transition: left .35s var(--mt-ease, ease); }
 .archive-ticks.is-scrubbing .archive-ticks-cursor { transition: none; background: var(--ar-accent); }
@@ -718,3 +718,5 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-brand-resume > span:last-child { font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .archive-brand-resume:hover, .archive-brand-resume:hover > b { color: var(--ar-accent-text, var(--ar-accent)); }
 #music-archive-view.is-detail .archive-brand-resume, #music-archive-view.is-empty .archive-brand-resume, #music-archive-view.is-loading .archive-brand-resume { visibility: hidden; }
+/* 空曲库：没有可搜的东西，目录的搜索框和分类标签也收起来，只留空状态说明 */
+#music-archive-view.is-empty .archive-list-search, #music-archive-view.is-empty .archive-list-kinds, #music-archive-view.is-empty .archive-list-viewport { visibility: hidden; }
