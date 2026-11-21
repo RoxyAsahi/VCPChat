@@ -1497,7 +1497,8 @@ body.music-reduce-motion .md-mist { transition: none; }
 }
 @media (max-width: 639.98px) {
   .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
-  .md-pnl .md-dockrow { padding-right: 0; }
+  /* 窄窗口下小环还悬在页签这一行的右端：给它让出位置，「声音」页签不再被盖住 */
+  .md-pnl .md-dockrow { padding-right: 56px; }
   .md-drbg {
     -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
     mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
