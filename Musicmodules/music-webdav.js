@@ -4,6 +4,19 @@
 function setupWebDav(app) {
     // 曲名、歌手、专辑来自文件标签，歌单名、服务器名、WebDAV 文件名来自用户或远端：拼进 HTML 前都要转义。
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // 引擎和主进程回的是「HTTP error: Server returned 401 Unauthorized」这类英文：换成一句能看懂的原因。
+    const webdavReason = (error, fallback, notFound = '服务器上没有这个文件夹') => {
+        const raw = String((error && error.message) || error || '')
+            .replace(/^Error invoking remote method '[^']*':\s*/i, '')
+            .replace(/^HTTP error:\s*/i, '').trim();
+        if (!raw) return fallback;
+        if (/\b404\b/.test(raw)) return notFound;
+        const described = typeof describeEngineError === 'function' ? describeEngineError(raw) : raw;
+        if (/[\u4e00-\u9fff]/.test(described)) return described;
+        return window.MusicErrorText ? window.MusicErrorText(raw, fallback) : fallback;
+    };
+    app.webdavReason = webdavReason;
+
     app.openWebDavModal = async () => {
         app.webdavModal.classList.add('active');
         if (!app.api?.listWebdavServers) return;
@@ -55,13 +68,19 @@ function setupWebDav(app) {
         app.webdavFileList.innerHTML = '<div class="no-lyrics" style="padding:20px;">加载中…</div>';
         app.webdavCurrentPath = dirPath;
         app.renderWebDavBreadcrumb(dirPath);
-        const result = await app.api.listWebdavDirectory({
-            serverId: app.activeWebDavServer.id,
-            url: app.activeWebDavServer.url,
-            path: dirPath,
-        });
+        let result;
+        try {
+            result = await app.api.listWebdavDirectory({
+                serverId: app.activeWebDavServer.id,
+                url: app.activeWebDavServer.url,
+                path: dirPath,
+            });
+        } catch (error) {
+            result = { status: 'error', message: error };
+        }
+        if (app.webdavCurrentPath !== dirPath) return; // 这期间已经点进别的文件夹
         if (!result || result.status !== 'success') {
-            app.webdavFileList.innerHTML = `<div class="no-lyrics" style="padding:20px;">错误: ${esc(result ? result.message : '未知错误')}</div>`;
+            app.webdavFileList.innerHTML = `<div class="no-lyrics" style="padding:20px;">打不开这个文件夹：${esc(webdavReason(result?.message, '服务器没有响应'))}</div>`;
             return;
         }
         const entries = result.entries.filter((entry) => {
@@ -160,10 +179,17 @@ function setupWebDav(app) {
             const username = document.getElementById('webdav-server-username').value.trim();
             const password = document.getElementById('webdav-server-password').value;
             if (!url) { app.webdavDialogStatus.textContent = '请输入 URL'; return; }
+            app.webdavDialogStatus.style.color = '';
             app.webdavDialogStatus.textContent = '测试中…';
-            const result = await app.api.testWebdavConnection({ url, username, password });
-            app.webdavDialogStatus.style.color = result.status === 'success' ? 'var(--music-highlight)' : '#e55';
-            app.webdavDialogStatus.textContent = result.message;
+            let result;
+            try {
+                result = await app.api.testWebdavConnection({ url, username, password });
+            } catch (error) {
+                result = { status: 'error', message: error };
+            }
+            const ok = result?.status === 'success';
+            app.webdavDialogStatus.style.color = ok ? 'var(--music-highlight)' : '#e55';
+            app.webdavDialogStatus.textContent = ok ? (result.message || '连接成功') : `连接失败：${webdavReason(result?.message, '服务器没有响应', '服务器上没有这个地址，检查 URL')}`;
         });
         app.webdavDialogConfirm?.addEventListener('click', async () => {
             const name = document.getElementById('webdav-server-name').value.trim();
@@ -171,7 +197,18 @@ function setupWebDav(app) {
             const username = document.getElementById('webdav-server-username').value.trim();
             const password = document.getElementById('webdav-server-password').value;
             if (!name || !url) { app.webdavDialogStatus.textContent = '名称和 URL 不能为空'; return; }
-            const server = await app.api.addWebdavServer({ name, url, username, password });
+            let server;
+            try {
+                server = await app.api.addWebdavServer({ name, url, username, password });
+            } catch (error) {
+                server = null;
+            }
+            if (!server || !server.id) {
+                // 主进程出错时：对话框留着说明一句，不把空的服务器塞进列表
+                app.webdavDialogStatus.style.color = '#e55';
+                app.webdavDialogStatus.textContent = '没有存上，再试一次';
+                return;
+            }
             app.webdavServers.push(server);
             app.webdavServerDialog.classList.remove('active');
             app.renderWebDavServerList();
@@ -196,13 +233,13 @@ function setupWebDav(app) {
                     // 读不到服务器：别留着上一次的结果让人误导入。
                     app.webdavScannedTracks = [];
                     app.webdavImportBtn.disabled = true;
-                    app.webdavImportBtn.textContent = `扫描失败：${result?.message || '服务器没有响应'}`;
+                    app.webdavImportBtn.textContent = `扫描失败：${webdavReason(result?.message, '服务器没有响应')}`;
                 }
             } catch (err) {
                 // 和服务器没响应时一样，把原因写在导入按钮上，不弹系统提示框。
                 app.webdavScannedTracks = [];
                 app.webdavImportBtn.disabled = true;
-                app.webdavImportBtn.textContent = `扫描出错：${err?.message || '未知原因'}`;
+                app.webdavImportBtn.textContent = `扫描出错：${webdavReason(err, '原因不明')}`;
             } finally {
                 unsubscribeProgress?.();
             }
