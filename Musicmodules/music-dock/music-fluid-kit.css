@@ -771,3 +771,18 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
   transform: scale(.94, .7);
 }
 .archive-detail-more > .mf-trail.mf-on { transform: none; }
+
+/* ───────── 弹窗里的列表（歌单编辑的歌曲、云端导入的服务器和文件）：手底下那一汪竖着流 ─────────
+ * 有它时行本身不再换悬停底色；已在歌单里、已选中的行保留自己的强调色光。 */
+:is(#modal-song-list, .webdav-file-list, .webdav-server-list) { position: relative; isolation: isolate; }
+:is(#modal-song-list, .webdav-file-list, .webdav-server-list) > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  height: 0;
+  border-radius: 14px;
+  transform: scale(.96, .7);
+}
+:is(#modal-song-list, .webdav-file-list, .webdav-server-list) > .mf-trail.mf-on { transform: none; }
+#modal-song-list:has(> .mf-trail.mf-on) > .music-modal-song-item:not(.in-playlist):hover,
+.webdav-file-list:has(> .mf-trail.mf-on) > .webdav-file-item:hover,
+.webdav-server-list:has(> .mf-trail.mf-on) > .webdav-server-item:not(.active):hover { background: none; }
