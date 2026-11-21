@@ -726,3 +726,18 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 /* 悬停统一：首页上带箭头的文字按钮（播放这一组、播放、详情、接着听）悬停都换成强调色，箭头往前挪 */
 .archive-access, .archive-brand-play, .archive-more, .archive-brand-resume, .archive-nav > button { transition: color .2s; }
 .archive-access:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+/* ═════════ 目录打开时的紧凑态 ═════════
+   目录打开：左上大标题缩成一行小标题，「播放这一组」「接着听」跟在后面；目录从标题下面一直拉到底，
+   底部的大号计数缩成一行小字。目录关上：标题、计数恢复原来的大号。
+   这里只写两套终态；开合动效由流体动效模块用 transform 补间（不在这里给 top/字号加过渡，免得每帧重排）。 */
+.archive-hud.list-open .archive-brand { top: 96px; }
+.archive-hud.list-open .archive-brand h1 { font-size: 30px; line-height: 36px; }
+.archive-hud.list-open .archive-brand > div { margin-top: 4px; }
+.archive-hud.list-open .archive-brand-play { margin-top: 10px; font-size: 15px; }
+.archive-hud.list-open .archive-brand-resume { margin-top: 10px; padding-top: 2px; }
+.archive-hud.list-open .archive-list { top: 196px; bottom: calc(30px + var(--archive-dock-lift, 0px)); }
+.archive-hud.list-open .archive-list-foot { padding-top: 6px; }
+.archive-hud.list-open .archive-list-foot b { font-size: 26px; }
+.archive-hud.list-open .archive-list-foot i { font-size: 18px; }
+.archive-hud.list-open .archive-list-foot span { font-size: 14px; }
+.archive-hud.narrow.list-open .archive-list, .archive-hud.narrow.short.list-open .archive-list { top: 196px; }
