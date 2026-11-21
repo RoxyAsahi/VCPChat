@@ -1193,7 +1193,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         app.searchInput.oninput = (e) => {
-            if (app.isSemanticSearchActive) return; // 语义搜索模式下不进行实时过滤
+            if (app.isSemanticSearchActive) {
+                // 语义搜索模式下不随输入过滤；但把框清空就回到整个曲库，不然还停在上一次的语义结果上。
+                if (!app.searchInput.value.trim() && app.currentFilteredTracks) {
+                    app.currentFilteredTracks = null; app.filteredPlaylistSource = null;
+                    app.renderPlaylist(null);
+                }
+                return;
+            }
             // 连续输入时只在停顿后过滤一次，避免每敲一个字就重建整个列表。
             clearTimeout(app.searchInputTimer);
             app.searchInputTimer = setTimeout(() => {
