@@ -186,22 +186,55 @@ void main() {
     // path through Runtime's resolvedWords fallback and retains legacy behavior.
     const glyphTiming = line => R.buildGlyphTimeline(line);
 
+    // Where each word begins and how long it runs, in glyphs, so a phrase is
+    // never cut inside a word ("隧道" stays whole). Without a segmenter every
+    // CJK glyph counts as a word, as before.
+    const wordSegmenter = typeof Intl !== 'undefined' && Intl.Segmenter
+        ? new Intl.Segmenter('zh', { granularity: 'word' }) : null;
+    const wordRuns = glyphs => {
+        const runs = new Array(glyphs.length).fill(0);
+        if (!wordSegmenter) return runs;
+        const starts = [];
+        let offset = 0;
+        glyphs.forEach(glyph => { starts.push(offset); offset += glyph.text.length; });
+        let at = 0;
+        for (const part of wordSegmenter.segment(glyphs.map(glyph => glyph.text).join(''))) {
+            while (at < glyphs.length && starts[at] < part.index) at += 1;
+            let length = 0;
+            while (at + length < glyphs.length && starts[at + length] < part.index + part.segment.length) length += 1;
+            if (at < glyphs.length) runs[at] = length;
+        }
+        return runs;
+    };
+
     // Lightweight phrase compiler: punctuation and vocal gaps are boundaries; source timing is unchanged.
-    const compilePhrases = (line, tuning) => {
+    // capacity: how many full-width glyphs fit on one row, when the caller
+    // lays the phrases out in rows (a Latin letter is about half of one).
+    const compilePhrases = (line, tuning, capacity = Infinity) => {
         const glyphs = glyphTiming(line);
         const limit = Math.round(amount(tuning.phraseLength, 12, 24)) || 12;
-        let phrase = 0, count = 0;
+        const runs = wordRuns(glyphs);
+        const wide = text => /[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u.test(text) ? 1 : 0.55;
+        let phrase = 0, count = 0, span = 0;
         glyphs.forEach((glyph, index) => {
             const previous = glyphs[index - 1];
             const naturalBreak = previous && (/[，。！？；、,.!?;:：]/u.test(previous.text)
                 || glyph.startTime - previous.endTime > 0.4);
-            const wordBreak = previous && (/\s/u.test(previous.text) || /[\u3040-\u30ff\u3400-\u9fff]/u.test(glyph.text));
-            if (count >= 3 && (naturalBreak || (count >= limit && wordBreak))) {
+            const wordStart = wordSegmenter ? runs[index] > 0 && Boolean(glyph.text.trim())
+                : previous && (/\s/u.test(previous.text) || /[\u3040-\u30ff\u3400-\u9fff]/u.test(glyph.text));
+            const word = glyphs.slice(index, index + Math.max(1, runs[index]));
+            const wordSpan = word.reduce((sum, item) => sum + wide(item.text), 0);
+            // Break before a word that would run past the phrase length or the
+            // row, never inside one, unless one word is longer than a phrase.
+            const overflow = wordStart && (count + word.length > limit || span + wordSpan > capacity);
+            if (count >= 3 && (naturalBreak || overflow || count >= limit + 4)) {
                 phrase += 1;
                 count = 0;
+                span = 0;
             }
             glyph.phrase = phrase;
             if (glyph.text.trim()) count += 1;
+            span += wide(glyph.text);
         });
         const groups = [];
         glyphs.forEach(glyph => {
@@ -225,7 +258,10 @@ void main() {
         const rows = [[]];
         let rowWidth = 0;
         const layout = tuning.lyricLayout || 'phrases';
-        const nodes = compilePhrases(line, tuning).map((glyph, index) => {
+        // Roughly how many full-width glyphs a row holds, so a phrase is cut
+        // where a word ends instead of where the row runs out.
+        const capacity = Math.max(3, maxWidth / (fontSize * 1.15));
+        const nodes = compilePhrases(line, tuning, layout === 'lines' ? Infinity : capacity).map((glyph, index) => {
             const node = new PIXI.Text({
                 text: glyph.text,
                 style: {
