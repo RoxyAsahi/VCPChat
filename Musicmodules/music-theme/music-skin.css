@@ -320,6 +320,19 @@ body.music-stage-active #custom-title-bar {
     color: var(--ar-muted);
 }
 
+/* 经典列表只建看得见的行，行号由脚本按整表位置写在 data-n 上 */
+.sidebar-playlist li[data-n]::before {
+    content: attr(data-n);
+}
+
+/* 五位数的行号（一万首以后）收小一点，不挤到标题上 */
+.sidebar-playlist li.n-long::before {
+    left: 13px;
+    width: 36px;
+    font-size: 9.5px;
+    letter-spacing: -0.02em;
+}
+
 .playlist li:hover,
 .sidebar-playlist li:hover {
     background: transparent;

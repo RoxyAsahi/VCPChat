@@ -979,6 +979,9 @@ document.addEventListener('DOMContentLoaded', () => {
         app.classicOrder = () => {
             // 档案页开着时经典列表还没重画，按它待画的那组歌算
             if (app.classicPendingSongs) { const inLib = new Set(app.playlist); return app.classicPendingSongs.filter(t => inLib.has(t)); }
+            // 列表只建了看得见的那些行，顺序按它要显示的整组歌算
+            const shown = app.classicShownSongs?.();
+            if (Array.isArray(shown)) { const inLib = new Set(app.playlist); return shown.filter(t => inLib.has(t)); }
             return Array.from(app.playlistEl.children, li => app.playlist[Number(li.dataset.index)]).filter(Boolean);
         };
         app.playlistEl.addEventListener('click', (e) => {

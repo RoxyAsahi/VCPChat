@@ -64,7 +64,10 @@ const FAKE = ({ n }) => {
         out.rowsUntouched = app.playlistEl.children.length === rowsBefore;
         document.querySelector('[data-act="classic"]')?.click();
         await new Promise((res) => setTimeout(res, 1500));
-        const shown = Array.from(app.playlistEl.children, (li) => app.playlist[Number(li.dataset.index)]);
+        // 经典列表只建看得见的行时，按它要显示的整组歌比
+        const drawn = Array.from(app.playlistEl.children, (li) => app.playlist[Number(li.dataset.index)]);
+        const shown = app.classicShownSongs ? app.classicShownSongs() : drawn;
+        out.drawnValid = drawn.length > 0 && drawn.every((t) => t && shown.includes(t));
         out.rows = shown.length;
         out.n = app.playlist.length;
         out.allValid = shown.every(Boolean);
@@ -77,7 +80,7 @@ const FAKE = ({ n }) => {
     const checks = [
         ['archive view is shown', r.archiveOn],
         ['hidden classic list is not rebuilt on removal', r.rowsUntouched],
-        ['classic list is drawn on return with every remaining track', r.rows === r.n && r.allValid],
+        ['classic list is drawn on return with every remaining track', r.rows === r.n && r.allValid && r.drawnValid],
         ['removed tracks are gone from the classic list', r.removedGone],
         ['classic play order matches what is shown', r.orderMatches],
         ['no page errors', errors.length === 0]
