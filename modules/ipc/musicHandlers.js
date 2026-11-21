@@ -1,6 +1,7 @@
 // modules/ipc/musicHandlers.js
 
-const { ipcMain, BrowserWindow, dialog } = require('electron');
+const electron = require('electron');
+const { ipcMain, BrowserWindow, dialog } = electron;
 const path = require('path');
 const fs = require('fs-extra');
 const { scanFolder, SUPPORTED_FORMATS } = require('../musicLibraryScanner');
@@ -12,6 +13,7 @@ const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPat
 const audioEngineEndpoint = require('../services/audioEngineEndpoint');
 const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
+const windowBounds = require('../musicWindowBounds');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -31,12 +33,26 @@ let mainWindow = null; // To be initialized
 let openChildWindows = []; // To be initialized
 let MUSIC_PLAYLIST_FILE;
 let MUSIC_COVER_CACHE_DIR;
+let MUSIC_WINDOW_BOUNDS_FILE;
 let LYRIC_DIR;
 let startAudioEngine; // To hold the function from main.js
 let stopAudioEngine; // To hold the function from main.js
 let musicWindowPromise = null; // To handle concurrent window creation requests
 let pendingPlaybackForNewWindow = null; // 用于在新窗口创建时传递待播放曲目及可选演出模式
 let ipcHandlersRegistered = false;
+const MUSIC_CRASH_LIMIT = 3;
+const MUSIC_CRASH_WINDOW_MS = 60 * 1000;
+
+function restoreMusicWindowBounds(limits) {
+    if (!MUSIC_WINDOW_BOUNDS_FILE) return null;
+    const saved = windowBounds.readSavedBounds(MUSIC_WINDOW_BOUNDS_FILE);
+    if (!saved) return null;
+    let workAreas = [];
+    try {
+        workAreas = (electron.screen?.getAllDisplays?.() || []).map((d) => d.workArea);
+    } catch (_) { /* 屏幕信息拿不到就用默认位置 */ }
+    return windowBounds.restoreBounds(saved, workAreas, limits);
+}
 
 // --- Singleton Music Window Creation Function ---
 function createOrFocusMusicWindow() {
@@ -106,9 +122,12 @@ function createOrFocusMusicWindow() {
         }
 
         console.log('[Music] Creating new music window instance.');
+        // 回到上次关窗时的位置和大小；那块屏不在了或窗口跑到屏幕外，就用默认位置居中
+        const restored = restoreMusicWindowBounds({ minWidth: 420, minHeight: 600 });
         musicWindow = new BrowserWindow({
-            width: 1280,
-            height: 700,
+            width: restored?.width || 1280,
+            height: restored?.height || 700,
+            ...(restored ? { x: restored.x, y: restored.y } : {}),
             minWidth: 420,
             minHeight: 600,
             title: '音乐播放器',
@@ -133,6 +152,7 @@ function createOrFocusMusicWindow() {
         musicWindow.setMenu(null);
 
         musicWindow.once('ready-to-show', () => {
+            if (restored?.maximized) musicWindow.maximize();
             musicWindow.show();
             musicCapsuleState = { ...musicCapsuleState, open: true };
             publishMusicCapsule();
@@ -159,6 +179,7 @@ function createOrFocusMusicWindow() {
         ipcMain.on('music-renderer-ready', readyHandler);
 
         musicWindow.on('close', (event) => {
+            if (MUSIC_WINDOW_BOUNDS_FILE) windowBounds.writeSavedBounds(MUSIC_WINDOW_BOUNDS_FILE, musicWindow);
             if (process.platform === 'darwin' && !require('electron').app.isQuitting) {
                 event.preventDefault();
                 musicWindow.hide();
@@ -199,6 +220,28 @@ function createOrFocusMusicWindow() {
         musicWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error(`[Music] Music window failed to load: ${errorDescription} (code: ${errorCode})`);
             rejectWindowCreation(new Error(`Music window failed to load: ${errorDescription}`));
+        });
+
+        // 页面进程崩了（显卡驱动重置、内存不够）：窗口没有系统边框，标题栏和按钮都在页面里，
+        // 崩了以后关不掉、也停不了，引擎却还在放。先暂停，再把页面重新载入，它会回到上次的歌和进度。
+        // 一分钟里崩到第 4 次就不再重来，直接关窗口（关窗口会停播），免得页面本身有问题时无限崩溃。
+        const crashedWindow = musicWindow;
+        let crashTimes = [];
+        crashedWindow.webContents.on('render-process-gone', (_event, details) => {
+            const reason = details?.reason || 'unknown';
+            console.error(`[Music] Music window renderer gone: ${reason}`);
+            if (reason === 'clean-exit' || crashedWindow.isDestroyed()) return;
+            audioEngineApi('/pause', 'POST').catch(() => {});
+            musicCapsuleState = { ...musicCapsuleState, playing: false };
+            publishMusicCapsule();
+            musicGrooveBus.publish({ playing: false });
+            const now = Date.now();
+            crashTimes = crashTimes.filter((at) => now - at < MUSIC_CRASH_WINDOW_MS).concat(now);
+            if (crashTimes.length > MUSIC_CRASH_LIMIT) {
+                crashedWindow.close();
+                return;
+            }
+            setTimeout(() => { if (!crashedWindow.isDestroyed()) crashedWindow.reload(); }, 250);
         });
     });
 
@@ -532,6 +575,7 @@ function initialize(options) {
     const APP_DATA_ROOT_IN_PROJECT = options.APP_DATA_ROOT_IN_PROJECT;
     MUSIC_PLAYLIST_FILE = path.join(APP_DATA_ROOT_IN_PROJECT, 'songlist.json');
     MUSIC_COVER_CACHE_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'MusicCoverCache');
+    MUSIC_WINDOW_BOUNDS_FILE = path.join(APP_DATA_ROOT_IN_PROJECT, 'music-window-bounds.json');
     LYRIC_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'lyric');
 
     if (ipcHandlersRegistered) {
