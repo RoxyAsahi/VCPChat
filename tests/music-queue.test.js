@@ -142,6 +142,7 @@ test('gapless switch into a queued track consumes it', async () => {
     await preload();
     app.renderPlaylist = () => {};
     app.trackTitle = {}; app.trackArtist = {}; app.trackBitrate = {}; app.albumArt = { style: {} };
+    app.progress = { style: {} }; app.currentTimeEl = {}; app.durationEl = {}; app.formatTime = s => String(s);
     app.stripAudioExtension = (t) => t; app.updateBlurredBackground = () => {}; app.fetchAndDisplayLyrics = () => {};
     app.updateMediaSessionMetadata = () => {}; app.rememberPlayed = () => {}; app.publishCapsuleState = () => {};
     app.syncTrackIndexByPath('C:/m/3.flac');

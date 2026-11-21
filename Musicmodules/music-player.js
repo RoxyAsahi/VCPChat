@@ -268,7 +268,6 @@ function setupPlayer(app) {
         if (had === Boolean(detail) && !detail) return;
         try { globalThis.document?.dispatchEvent?.(new CustomEvent('music-track-health', { detail: { track, failed: Boolean(detail), reason: detail || '' } })); } catch (error) {}
     };
-    app.markTrackPlayable = (track) => markFailed(track, '');
     const handleLoadFailure = (track, reason, requestId, wanted) => {
         const name = app.stripAudioExtension(track?.title) || '这首歌';
         const raw = String(reason);
@@ -1227,118 +1226,80 @@ function setupPlayer(app) {
         }
     };
 
+    // 引擎无缝切到了第 index 首：界面跟过去。和 loadTrack 一样把播放时钟归零、换上新时长，
+    // 不然要等下一次状态回来之前，歌词和进度条还按上一首的进度走（一下跳到新歌的末尾）。
+    const adoptSwitchedTrack = (index) => {
+        app.currentTrackIndex = index;
+        const track = app.playlist[index];
+        app.pendingTrackPath = track.path;
+        app.isTrackLoading = false; // gapless 切歌后后端已经加载好了，重置加载标志
+        app.engineTrackPath = track.path;
+        app.lastKnownCurrentTime = 0;
+        app.lastStateUpdateTime = Date.now();
+        if (track.duration > 0) {
+            app.lastKnownDuration = track.duration;
+            app.durationEl.textContent = app.formatTime(track.duration);
+        }
+        app.progress.style.width = '0%';
+        app.currentTimeEl.textContent = app.formatTime(0);
+        // 之前加载失败标灰过的歌，这次无缝放起来了，就不再是坏的。
+        if (app.failedTracks.has(track)) markFailed(track, '');
+        app.rememberPlayed(track);
+        app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
+        app.trackArtist.textContent = track.artist || '未知艺术家';
+        app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
+
+        const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
+        if (track.albumArt) {
+            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
+            app.albumArt.style.backgroundImage = albumArtUrl;
+            app.updateBlurredBackground(albumArtUrl);
+        } else {
+            app.albumArt.style.backgroundImage = defaultArtUrl;
+            app.updateBlurredBackground('none');
+        }
+
+        app.renderPlaylist(app.currentFilteredTracks);
+        app.scrollCurrentTrackToSidebarTop?.();
+        app.fetchAndDisplayLyrics(track.artist, track.title, {
+            path: track.path,
+            duration: track.duration || 0,
+            album: track.album || ''
+        });
+        app.updateMediaSessionMetadata();
+        app.syncMediaPosition?.(true);
+
+        // 如果是随机播放，从队列中移除当前已开始播放的这首歌，防止之后再次随机到它
+        if (app.playModes[app.currentPlayMode] === 'shuffle') {
+            const activeList = app.currentFilteredTracks || app.playlist;
+            const posInActiveList = activeList.indexOf(track);
+            if (posInActiveList !== -1) {
+                const queueIndex = app.shuffleQueue.indexOf(posInActiveList);
+                if (queueIndex !== -1) app.shuffleQueue.splice(queueIndex, 1);
+            }
+        }
+
+        if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
+    };
+
     app.syncTrackIndexByPath = (path) => {
         if (!path) return;
         const normalizedPath = app.normalizePathForCompare(path);
-        const index = app.playlist.findIndex(t => app.normalizePathForCompare(t.path) === normalizedPath);
-        if (index !== -1) {
-            console.log('[Music.js] Syncing track index to:', index, 'path:', normalizedPath);
-            app.currentTrackIndex = index;
-            const track = app.playlist[index];
-            app.pendingTrackPath = track.path;
-            app.isTrackLoading = false; // gapless 切歌后后端已经加载好了，重置加载标志
-            app.engineTrackPath = track.path;
-            app.rememberPlayed(track);
-            app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
-            app.trackArtist.textContent = track.artist || '未知艺术家';
-            app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
-            
-            const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
-            if (track.albumArt) {
-                const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
-                app.albumArt.style.backgroundImage = albumArtUrl;
-                app.updateBlurredBackground(albumArtUrl);
-            } else {
-                app.albumArt.style.backgroundImage = defaultArtUrl;
-                app.updateBlurredBackground('none');
-            }
-            
-            app.renderPlaylist(app.currentFilteredTracks);
-            app.scrollCurrentTrackToSidebarTop?.();
-            app.fetchAndDisplayLyrics(track.artist, track.title, {
-                path: track.path,
-                duration: track.duration || 0,
-                album: track.album || ''
-            });
-            app.updateMediaSessionMetadata();
-            app.syncMediaPosition?.(true);
-
-            // 如果是随机播放，从队列中移除当前已开始播放的这首歌，防止之后再次随机到它
-            if (app.playModes[app.currentPlayMode] === 'shuffle') {
-                const activeList = app.currentFilteredTracks || app.playlist;
-                const posInActiveList = activeList.indexOf(track);
-                if (posInActiveList !== -1) {
-                    const queueIndex = app.shuffleQueue.indexOf(posInActiveList);
-                    if (queueIndex !== -1) {
-                        console.log('[Music.js] Removing synced track from shuffle queue at index:', queueIndex);
-                        app.shuffleQueue.splice(queueIndex, 1);
-                    }
-                }
-            }
-
-            if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
-        } else {
-            // 路径匹配失败 —— 尝试文件名模糊匹配作为降级
-            // 后端可能返回带 \\?\ 前缀或不同斜杠方向的路径
+        let index = app.playlist.findIndex(t => app.normalizePathForCompare(t.path) === normalizedPath);
+        if (index === -1) {
+            // 后端可能返回带 \\?\ 前缀或不同斜杠方向的路径：退回按文件名匹配
             const fileName = normalizedPath ? normalizedPath.split('/').pop() : null;
-            if (fileName) {
-                const fuzzyIndex = app.playlist.findIndex(t => {
-                    const tNorm = app.normalizePathForCompare(t.path);
-                    return tNorm && tNorm.split('/').pop() === fileName;
-                });
-                if (fuzzyIndex !== -1) {
-                    console.log('[Music.js] Syncing track index (fuzzy match) to:', fuzzyIndex);
-                    app.currentTrackIndex = fuzzyIndex;
-                    const track = app.playlist[fuzzyIndex];
-                    app.pendingTrackPath = track.path;
-                    app.isTrackLoading = false;
-                    app.engineTrackPath = track.path;
-                    app.rememberPlayed(track);
-                    app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
-                    app.trackArtist.textContent = track.artist || '未知艺术家';
-                    app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
-                    
-                    const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
-                    if (track.albumArt) {
-                        const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
-                        app.albumArt.style.backgroundImage = albumArtUrl;
-                        app.updateBlurredBackground(albumArtUrl);
-                    } else {
-                        app.albumArt.style.backgroundImage = defaultArtUrl;
-                        app.updateBlurredBackground('none');
-                    }
-                    
-                    app.renderPlaylist(app.currentFilteredTracks);
-                    app.scrollCurrentTrackToSidebarTop?.();
-                    app.fetchAndDisplayLyrics(track.artist, track.title, {
-                        path: track.path,
-                        duration: track.duration || 0,
-                        album: track.album || ''
-                    });
-                    app.updateMediaSessionMetadata();
-                    app.syncMediaPosition?.(true);
-
-                    // 同样处理模糊匹配的情况
-                    if (app.playModes[app.currentPlayMode] === 'shuffle') {
-                        const activeList = app.currentFilteredTracks || app.playlist;
-                        const posInActiveList = activeList.indexOf(track);
-                        if (posInActiveList !== -1) {
-                            const queueIndex = app.shuffleQueue.indexOf(posInActiveList);
-                            if (queueIndex !== -1) {
-                                console.log('[Music.js] Removing synced track (fuzzy) from shuffle queue at index:', queueIndex);
-                                app.shuffleQueue.splice(queueIndex, 1);
-                            }
-                        }
-                    }
-
-                    if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
-                } else {
-                    console.warn('[Music.js] syncTrackIndexByPath: no match found for', normalizedPath);
-                }
-            } else {
-                console.warn('[Music.js] syncTrackIndexByPath: no match found for', path);
-            }
+            if (fileName) index = app.playlist.findIndex(t => {
+                const tNorm = app.normalizePathForCompare(t.path);
+                return tNorm && tNorm.split('/').pop() === fileName;
+            });
         }
+        if (index === -1) {
+            console.warn('[Music.js] syncTrackIndexByPath: no match found for', path);
+            return;
+        }
+        console.log('[Music.js] Syncing track index to:', index);
+        adoptSwitchedTrack(index);
     };
 
     const syncTrackIndexByPath = app.syncTrackIndexByPath;

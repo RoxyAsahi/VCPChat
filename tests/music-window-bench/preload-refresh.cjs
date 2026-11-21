@@ -83,7 +83,8 @@ const FAKE = () => {
     await page.evaluate(() => app.queueRemove(0));
     await settle();
 
-    await page.evaluate(() => app.removeTrackInScope(2, null));
+    // 移除前有确认框（MusicDialog）；这里直接确认。
+    await page.evaluate(() => { if (window.MusicDialog) window.MusicDialog.confirm = async () => true; return app.removeTrackInScope(2, null); });
     await settle();
     pending = await page.evaluate(() => window.__pending);
     check('removing the preloaded song preloads the one after it', pending === 'D:\\Music\\t3.flac', pending);

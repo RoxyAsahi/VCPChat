@@ -322,8 +322,8 @@ test('music player repositions the sidebar after normal and gapless track change
     const renderThenPosition = /app\.renderPlaylist\(app\.currentFilteredTracks\);\s*app\.scrollCurrentTrackToSidebarTop\?\.\(\);/g;
     assert.equal(
         Array.from(source.matchAll(renderThenPosition)).length,
-        3,
-        'normal load plus exact and fuzzy gapless synchronization must reposition the current track'
+        2,
+        'normal load and the gapless switch (exact or by file name) must reposition the current track'
     );
 });
 
