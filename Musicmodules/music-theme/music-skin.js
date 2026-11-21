@@ -83,7 +83,7 @@
             const hasTrack = Boolean(track) && app.trackTitle?.textContent !== '未选择歌曲';
             document.body.classList.toggle('music-has-track', hasTrack);
             if (!hasTrack) {
-                setText('file-number', 'FILE NUMBER: TRK-0000');
+                setText('file-number', '', '');
                 setText('album', '曲目档案', '曲目档案');
                 for (const name of ['format', 'sample-rate', 'bit-depth', 'bitrate', 'specs']) setText(name, '');
                 lastPath = null;
@@ -91,7 +91,10 @@
             }
             const changed = path !== lastPath;
             lastPath = path;
-            setText('file-number', `FILE NUMBER: ${fileNumber(track)}`);
+            // 标题上方一行写这首在列表里排第几（原来是按路径算的假档案号，用户看不出意思）
+            const total = Array.isArray(app.playlist) ? app.playlist.length : 0;
+            const nth = Number(app.currentTrackIndex) + 1;
+            setText('file-number', total > 0 && nth > 0 ? `第 ${nth} / ${total} 首` : '', '');
             setText('album', track.album || '未分类', '未分类');
             setText('format', format(track));
             setText('sample-rate', sampleRate(track));

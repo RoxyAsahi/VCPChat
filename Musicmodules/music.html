@@ -67,7 +67,7 @@
     <div id="player-background"></div>
     <!-- music-archive: 曲目档案阵列主视图（内容由 music-archive/archive-view.js 生成） -->
     <div id="music-archive-view" class="music-archive-view" hidden></div>
-    <button id="music-archive-return" class="archive-return" type="button" title="回到档案阵列">ARCHIVE ↙</button>
+    <button id="music-archive-return" class="archive-return" type="button" title="回到档案阵列">阵列视图 ↙</button>
     <!-- /music-archive -->
 
     <div class="music-player-container">
@@ -127,7 +127,7 @@
             <!-- 上方的播放器核心控制区 -->
             <div class="music-player glass-panel">
                 <div class="track-file-head" aria-hidden="true">
-                    <span class="track-file-kicker">TRACK DATABASE</span>
+                    <span class="track-file-kicker">专辑</span>
                     <span class="track-file-slash">/</span>
                     <span class="track-file-album" data-track-field="album">曲目档案</span>
                 </div>
@@ -136,7 +136,7 @@
                         <div class="album-art"></div>
                     </div>
                     <div class="track-details">
-                        <div class="track-file-number" data-track-field="file-number">FILE NUMBER: TRK-0000</div>
+                        <div class="track-file-number" data-track-field="file-number"></div>
                         <div class="track-title">未选择歌曲</div>
                         <div class="track-rule" aria-hidden="true"><i></i></div>
                         <div class="track-artist">未知艺术家</div>
@@ -152,10 +152,10 @@
                 </div>
 
                 <dl class="track-specs" aria-label="音频规格">
-                    <div><dt>FORMAT</dt><dd data-track-field="format">—</dd></div>
-                    <div><dt>SAMPLE RATE</dt><dd data-track-field="sample-rate">—</dd></div>
-                    <div><dt>BIT DEPTH</dt><dd data-track-field="bit-depth">—</dd></div>
-                    <div><dt>BITRATE</dt><dd data-track-field="bitrate">—</dd></div>
+                    <div><dt>格式</dt><dd data-track-field="format">—</dd></div>
+                    <div><dt>采样率</dt><dd data-track-field="sample-rate">—</dd></div>
+                    <div><dt>位深</dt><dd data-track-field="bit-depth">—</dd></div>
+                    <div><dt>码率</dt><dd data-track-field="bitrate">—</dd></div>
                 </dl>
 
                 <div class="progress-section">
@@ -222,7 +222,6 @@
             <div class="settings-container glass-panel acoustic-drawer" id="acoustic-drawer">
                 <button class="acoustic-drawer-toggle" type="button" aria-expanded="false"
                     aria-controls="acoustic-drawer-body">
-                    <span class="acoustic-drawer-kicker">ACOUSTIC PROCESSING</span>
                     <span class="acoustic-drawer-title">声学处理</span>
                     <span class="acoustic-drawer-summary" data-acoustic-summary></span>
                     <svg class="acoustic-drawer-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
@@ -586,7 +585,6 @@
         <div class="right-sidebar">
             <div id="lyrics-container" class="lyrics-container glass-panel">
                 <div class="lyrics-head" aria-hidden="true">
-                    <span class="lyrics-head-kicker">LYRICS</span>
                     <span class="lyrics-head-title">歌词</span>
                 </div>
                 <!-- 歌词渲染区域 -->
@@ -703,8 +701,7 @@
             <div class="music-stage-cover" role="img"></div>
             <div class="music-stage-track-copy">
                 <div class="music-stage-track-kicker" aria-hidden="true">
-                    <span>TRACK DATABASE</span>
-                    <span class="music-stage-track-file" data-track-field="file-number">FILE NUMBER: TRK-0000</span>
+                    <span class="music-stage-track-file" data-track-field="file-number"></span>
                 </div>
                 <div class="music-stage-track-title">未选择歌曲</div>
                 <div class="music-stage-track-rule" aria-hidden="true"><i></i></div>
