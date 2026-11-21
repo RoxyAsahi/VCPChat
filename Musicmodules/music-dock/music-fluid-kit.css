@@ -737,7 +737,7 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 }
 :is(.context-menu, .context-submenu, .archive-batch-menu, .archive-list-sort-menu) > .mf-trail.mf-on { transform: none; }
 :is(.context-menu, .context-submenu):has(> .mf-trail.mf-on) :is(.context-menu-item, .submenu-item):hover,
-:is(.archive-batch-menu, .archive-list-sort-menu):has(> .mf-trail.mf-on) > button:hover { background: none; }
+:is(.archive-batch-menu, .archive-list-sort-menu):has(> .mf-trail.mf-on) > button:is(:hover, :focus-visible) { background: none; }
 /* 键盘移到菜单项上：不要全局那圈硬描边，换成和输入框一样的一圈强调色细光 */
 :is(.archive-batch-menu, .archive-list-sort-menu) > button:focus-visible:not(#messageInput) {
   outline: none;
@@ -786,3 +786,8 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 #modal-song-list:has(> .mf-trail.mf-on) > .music-modal-song-item:not(.in-playlist):hover,
 .webdav-file-list:has(> .mf-trail.mf-on) > .webdav-file-item:hover,
 .webdav-server-list:has(> .mf-trail.mf-on) > .webdav-server-item:not(.active):hover { background: none; }
+/* 键盘焦点：那一汪跟着焦点走时，焦点提示画在它身上（一圈强调色细光），不再在按钮外面另套一个方框 */
+:is(.archive-nav, .archive-callout-acts):has(> button:focus-visible) > .mf-trail.mf-on {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
+}
+#music-archive-view :is(.archive-nav, .archive-callout-acts):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
