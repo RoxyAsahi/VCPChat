@@ -190,6 +190,22 @@ test('command palette parses --filters and ranks title hits above artist hits', 
     dom.window.close();
 });
 
+test('queue heading uses the playing playlist\'s current name after it is renamed', async () => {
+    const { doc, app, dock } = setup();
+    try {
+        const [, b] = app.playlist;
+        app.getUpNext = () => ({ manual: [], context: [b] });
+        app.currentFilteredTracks = [b];
+        app.filteredPlaylistSource = { type: 'playlist', id: '7', name: '通勤' };
+        app.customPlaylists = [{ id: '7', name: '早上通勤', tracks: [b.path] }];
+        app.playbackSourceName = () => app.customPlaylists.find((p) => p.id === app.filteredPlaylistSource.id)?.name || app.filteredPlaylistSource.name;
+        dock.openPanel('播放列表');
+        assert.equal(doc.querySelector('.md-qhd span:first-child').textContent, '接着播放 · 早上通勤');
+    } finally {
+        dock.destroy?.();
+    }
+});
+
 test('queue page shows now playing, the manual layer and the real upcoming order, and edits the manual layer', async () => {
     const { window, doc, app, dock, calls } = setup();
     try {

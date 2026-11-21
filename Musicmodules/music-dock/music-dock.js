@@ -1229,7 +1229,7 @@
             if (up.context.length) {
                 const mode = playMode();
                 const radio = app.radio && app.radio.list === app.currentFilteredTracks ? app.radio.label : '';
-                const name = radio || app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
+                const name = radio || (app.playbackSourceName ? app.playbackSourceName() : app.filteredPlaylistSource?.name) || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
                 const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
                 push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
                 up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
@@ -1309,7 +1309,7 @@
         let prebuilt = null;
         let prebuildTimer = 0;
         const queueSig = () => [currentTrack()?.path, app.currentFilteredTracks, app.currentFilteredTracks?.length,
-            app.filteredPlaylistSource, app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
+            app.filteredPlaylistSource, app.playbackSourceName?.(), app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
         const prebuiltFresh = () => Boolean(prebuilt) && performance.now() - prebuilt.at < 8000
             && queueSig().every((value, index) => value === prebuilt.sig[index]);
         const schedulePrebuild = () => {
@@ -2194,6 +2194,20 @@
                 cleanups.push(() => { if (app.showPlaybackNotice !== baseNotice) app.showPlaybackNotice = baseNotice; });
             }
             const bridge = app.api;
+            // 扫描结束的那句话。扫描本身失败时以前也说「扫描完成，没有找到音乐文件」，
+            // 像是文件夹空了；读不出来的文件也一声不吭地少了。
+            const scanOutcomeToast = (data) => {
+                if (data && data.failed) {
+                    const reason = (global.MusicErrorText || ((m, f) => f))(data.error, '').replace(/^：/, '');
+                    return { kind: 'error', message: `扫描没有完成${reason ? `（${reason}）` : ''}，曲库保持原样` };
+                }
+                const count = Array.isArray(data) ? data.length : (Array.isArray(data?.tracks) ? data.tracks.length : 0);
+                const unread = Number(data?.stats?.failed) || 0;
+                const skipped = unread ? `，另有 ${unread} 个文件读不出来（可能损坏或格式不支持），已跳过` : '';
+                if (!count) return { kind: unread ? 'error' : 'success', message: unread ? `扫描完成，没有读出音乐文件${skipped}` : '扫描完成，没有找到音乐文件' };
+                return { kind: 'success', message: `扫描完成，这个文件夹里有 ${count} 首${skipped}` };
+            };
+            app.scanOutcomeToast = scanOutcomeToast;
             if (bridge?.onMusicScanProgress) {
                 bridge.onMusicScanStart?.(() => {
                     if (!state.destroyed) toast.show({ id: 'scan', kind: 'progress', message: '正在扫描音乐文件夹…', delay: 300 });
@@ -2206,9 +2220,8 @@
                 });
                 bridge.onMusicScanComplete?.((data) => {
                     if (state.destroyed) return;
-                    const count = Array.isArray(data) ? data.length : (Array.isArray(data?.tracks) ? data.tracks.length : 0);
                     toast.dismiss('scan');
-                    toast.show({ kind: 'success', message: count ? `扫描完成，这个文件夹里有 ${count} 首` : '扫描完成，没有找到音乐文件' });
+                    toast.show(scanOutcomeToast(data));
                 });
             }
         }

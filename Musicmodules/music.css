@@ -1872,6 +1872,9 @@ body.sidebar-is-scrolling .sidebar-playlist li {
     border-radius: 10px;
     cursor: pointer;
     transition: background 0.2s ease;
+    /* 曲库大时专辑能有上千个：看不见的不排版，封面也等滚到了才读 */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 42px; /* 内容高，不含上下 padding */
 }
 
 .category-item:hover {
@@ -2354,6 +2357,9 @@ body.light-theme .dialog-btn.cancel {
     padding: 10px 20px;
     cursor: pointer;
     transition: background 0.15s ease;
+    /* 编辑歌单时列表是整个曲库（几千行）：看不见的行不排版，打开和每次搜索都快一截 */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 36px; /* 内容高，不含上下 padding */
 }
 
 .music-modal-song-item:hover {
@@ -2996,3 +3002,13 @@ body.light-theme .dialog-btn.cancel {
 #noise-shaper-section.is-inactive > .block-content {
     opacity: 0.45;
 }
+
+/* 引擎没能按设置打开输出（独占打不开、声卡不在了）时，设备下面说一句实际在用什么 */
+.output-fallback-note {
+    grid-column: 1 / -1;
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--music-text-secondary);
+}
+.output-fallback-note[hidden] { display: none; }

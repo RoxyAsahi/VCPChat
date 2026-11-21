@@ -57,19 +57,28 @@ function setupLyrics(app) {
 
         // 先按原始标题读取，兼容历史上以“歌名.flac”保存的缓存；
         // 未命中时再读取规范化标题，新下载一律不携带音频扩展名。
-        let cached = await app.api.getMusicLyrics({
-            artist,
-            title: rawTitle,
-            rawObject: true
-        });
-        if (requestToken !== app.lyricsRequestToken) return;
-        if (!cached && normalizedTitle && normalizedTitle !== rawTitle) {
+        let cached = null;
+        try {
             cached = await app.api.getMusicLyrics({
                 artist,
-                title: normalizedTitle,
+                title: rawTitle,
                 rawObject: true
             });
             if (requestToken !== app.lyricsRequestToken) return;
+            if (!cached && normalizedTitle && normalizedTitle !== rawTitle) {
+                cached = await app.api.getMusicLyrics({
+                    artist,
+                    title: normalizedTitle,
+                    rawObject: true
+                });
+                if (requestToken !== app.lyricsRequestToken) return;
+            }
+        } catch (error) {
+            // 读本地歌词本身出错：以前停在「正在加载歌词…」不动
+            if (requestToken !== app.lyricsRequestToken) return;
+            console.error('Failed to read saved lyrics:', error);
+            app.lyricsList.innerHTML = '<li class="no-lyrics">歌词读取失败，可以点「获取歌词」重新找一份</li>';
+            return;
         }
 
         if (cached) {
@@ -78,6 +87,11 @@ function setupLyrics(app) {
                 app.currentLyrics = app.normalizeStructuredLyrics(cached);
             } else if (typeof cached === 'string') {
                 app.currentLyrics = app.parseLrc(cached);
+            }
+            if (!app.currentLyrics.length) {
+                // 有歌词文件，但里面一句带时间的都没有（纯文本歌词、乱码、只有标题信息）：以前歌词区一片空白
+                app.lyricsList.innerHTML = '<li class="no-lyrics">这份歌词没有时间轴，没法跟着歌走；可以点「获取歌词」换一份</li>';
+                return;
             }
             app.renderLyrics();
         } else {
@@ -157,7 +171,8 @@ function setupLyrics(app) {
                     } else if (typeof fetched === 'string') {
                         app.currentLyrics = app.parseLrc(fetched);
                     }
-                    app.renderLyrics();
+                    if (app.currentLyrics.length) app.renderLyrics();
+                    else app.lyricsList.innerHTML = '<li class="no-lyrics">暂无歌词</li>';
                 } else if (failed) {
                     app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败，检查网络后重新播放这首</li>';
                 } else {
@@ -167,7 +182,7 @@ function setupLyrics(app) {
             } catch (error) {
                 if (requestToken !== app.lyricsRequestToken) return;
                 console.error('Failed to fetch lyrics from network:', error);
-                app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败</li>';
+                app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败，检查网络后重新播放这首</li>';
             }
         }
     };

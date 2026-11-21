@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.playlist.push(track);
             trackIndex = app.playlist.length - 1;
             app.renderPlaylist(app.currentFilteredTracks);
-            await app.api?.saveMusicPlaylist?.(app.playlist);
+            await app.saveLibrary();
         }
 
         await app.loadTrack(trackIndex, true);
@@ -736,8 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
         app.lyricsFetchSearchBtn.onclick = searchLyricsCandidates;
         app.lyricsFetchClose.onclick = closeLyricsFetchModal;
         // 点击遮罩不关闭；仅允许通过 Esc 或 × 主动关闭窗口。
+        // 中文输入法选词时按的回车、Esc 是给输入法的（isComposing），不算确定或关闭。
         app.lyricsFetchTitle.onkeydown = app.lyricsFetchArtist.onkeydown = (event) => {
-            if (event.key === 'Enter') searchLyricsCandidates();
+            if (event.key === 'Enter' && !event.isComposing) searchLyricsCandidates();
         };
         app.lyricsFetchApply.onclick = async () => {
             const track = app.playlist[app.lyricsFetchTrackIndex];
@@ -913,10 +914,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         app.loadAvailableIrPresets();
-        app.irLoadBtn.onclick = async () => {
-            const filePath = await app.api.selectMusicIrFile();
-            if (filePath) app.loadIrFile(filePath);
-        };
+        app.irLoadBtn.onclick = () => app.pickIrFile();
 
         // --- IR Help Tip Logic ---
         const irHelpIcon = document.getElementById('ir-help-icon');
@@ -1025,14 +1023,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = app.playlistNameInput.value.trim();
             if (name && app.pendingAddToPlaylist) { app.pendingAddToPlaylist(name); app.hidePlaylistDialog(); }
         };
-        app.playlistNameInput.onkeydown = (e) => { if (e.key === 'Enter') app.dialogConfirm.click(); if (e.key === 'Escape') app.dialogCancel.click(); };
+        app.playlistNameInput.onkeydown = (e) => {
+            if (e.isComposing) return; // 输入法还在选词：回车是把拼音上屏，不是确定
+            if (e.key === 'Enter') app.dialogConfirm.click();
+            if (e.key === 'Escape') app.dialogCancel.click();
+        };
 
         app.modalCloseBtn.onclick = app.modalDoneBtn.onclick = () => { app.playlistEditModal.classList.remove('visible'); if (app.currentSidebarView === 'playlists') app.renderSidebarContent('playlists'); };
         app.modalSearchInput.oninput = (e) => { app.modalSearchQuery = e.target.value; app.renderModalSongList(); };
 
         document.addEventListener('click', (e) => { if (!app.contextMenu.contains(e.target)) app.contextMenu.classList.remove('visible'); });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && app.lyricsFetchModal.classList.contains('visible')) closeLyricsFetchModal();
+            if (e.key === 'Escape' && !e.isComposing && app.lyricsFetchModal.classList.contains('visible')) closeLyricsFetchModal();
         });
         // ── 右键菜单的作用范围 ──
         // 「从列表中移除」要按右键时所在的视图决定删哪里，而不是按上一次从哪里点播。
@@ -1131,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (next >= 0) app.loadTrack(next, wasPlaying);
                 else { app.pauseTrack?.(); app.currentTrackIndex = Math.min(index, app.playlist.length - 1); }
             }
-            app.api?.saveMusicPlaylist?.(app.playlist);
+            app.saveLibrary();
             app.archiveView?.refresh?.();
             if (!wasCurrent) app.refreshPreload?.();
             notify(`已从曲库列表移除「${name}」`, { label: '撤销', run: () => {
@@ -1145,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     app.currentFilteredTracks = list;
                 }
                 if (app.currentFilteredTracks && view) app.renderPlaylist(app.currentFilteredTracks); else app.renderPlaylist();
-                app.api?.saveMusicPlaylist?.(app.playlist);
+                app.saveLibrary();
                 app.archiveView?.refresh?.();
                 app.refreshPreload?.();
             } });
@@ -1201,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         app.searchInput.onkeydown = (e) => {
-            if (e.key === 'Enter' && app.isSemanticSearchActive) {
+            if (e.key === 'Enter' && !e.isComposing && app.isSemanticSearchActive) {
                 const query = app.searchInput.value.trim();
                 if (query) app.performSemanticSearch(query);
             }
@@ -1238,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.api.onMusicScanStart(() => { app.loadingIndicator.style.display = 'flex'; app.scanProgressContainer.style.display = 'none'; });
         app.api.onMusicScanProgress((data) => {
             app.scanProgressContainer.style.display = 'block';
-            const percent = (data.current / data.total) * 100;
+            const percent = data.total > 0 ? Math.min(100, (data.current / data.total) * 100) : 0;
             app.scanProgressBar.style.width = `${percent}%`;
             app.scanProgressLabel.textContent = `正在扫描: ${data.current} / ${data.total}`;
         });
@@ -1325,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (at !== -1) app.currentTrackIndex = at;
             }
             app.renderPlaylist(); app.renderSidebarContent(app.currentSidebarView);
-            app.api.saveMusicPlaylist(app.playlist);
+            app.saveLibrary();
         });
         if (app.api?.onThemeUpdated) {
             app.api.onThemeUpdated((theme) => app.applyTheme(theme));
@@ -1354,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     app.updateUIWithState = (state, options = {}) => {
         if (!state) return;
+        app.syncOutputFallback?.(state);
         // 切歌加载期间引擎报的还是上一首（或已停止）的状态，写进界面会让进度条和按钮乱跳。
         if (app.isTrackLoading && !options.force) return;
         app.lastKnownCurrentTime = state.current_time; app.lastKnownDuration = state.duration;
@@ -1432,6 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.deviceSelect.value = s.device_id === null ? 'default' : s.device_id;
         app.wasapiSwitch._programmaticUpdate = true; app.wasapiSwitch.checked = s.exclusive_mode;
         Promise.resolve().then(() => app.wasapiSwitch._programmaticUpdate = false);
+        app.syncOutputFallback?.(s);
         if (s.eq_enabled !== undefined) {
             app.eqEnabled = s.eq_enabled; app.eqSwitch._programmaticUpdate = true;
             app.eqSwitch.checked = s.eq_enabled;

@@ -300,6 +300,36 @@ impl AtomicPlayerState {
     }
 }
 
+/// Exclusive mode was asked for but could not be opened; playing in shared mode.
+pub const OUTPUT_FELL_BACK_FROM_EXCLUSIVE: u8 = 1;
+/// The chosen output device is gone (unplugged, renumbered); playing on the default.
+pub const OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE: u8 = 2;
+
+/// Names for the `output_fallback` bits, as reported in `/state`.
+pub fn output_fallback_names(bits: u8) -> Vec<&'static str> {
+    let mut names = Vec::new();
+    if bits & OUTPUT_FELL_BACK_FROM_EXCLUSIVE != 0 { names.push("exclusive"); }
+    if bits & OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE != 0 { names.push("device"); }
+    names
+}
+
+/// Where the chosen output device is in the current list. A name, when known,
+/// wins over the saved position (positions shift as devices come and go).
+/// Returns the index to open and whether the chosen device was missing.
+pub fn resolve_output_device(names: &[String], wanted_name: Option<&str>, wanted_id: Option<usize>) -> (Option<usize>, bool) {
+    if let Some(name) = wanted_name {
+        return match names.iter().position(|n| n == name) {
+            Some(i) => (Some(i), false),
+            None => (None, true),
+        };
+    }
+    match wanted_id {
+        Some(id) if id < names.len() => (Some(id), false),
+        Some(_) => (None, true),
+        None => (None, false),
+    }
+}
+
 /// Shared state between audio thread and main thread
 pub struct SharedState {
     pub state: AtomicPlayerState,
@@ -319,7 +349,14 @@ pub struct SharedState {
     pub fade_target: std::sync::atomic::AtomicU32,
     pub fade_gain: std::sync::atomic::AtomicU32,
     pub exclusive_mode: AtomicBool,
+    /// What the last stream open had to fall back from (`OUTPUT_FELL_BACK_*` bits).
+    /// Without this the UI keeps showing exclusive mode / the chosen device
+    /// while the engine is actually playing shared / on the default device.
+    pub output_fallback: AtomicU8,
     pub device_id: std::sync::atomic::AtomicI64,
+    /// Name of the chosen device; when set, the stream is opened on the device
+    /// with this name wherever it now sits in the list (`device_id` is updated).
+    pub device_name: RwLock<Option<String>>,
     pub volume: std::sync::atomic::AtomicU64,
     pub file_path: RwLock<Option<String>>,
     pub eq_type: RwLock<String>,
@@ -406,7 +443,9 @@ impl SharedState {
             fade_target: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fade_gain: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             exclusive_mode: AtomicBool::new(false),
+            output_fallback: AtomicU8::new(0),
             device_id: std::sync::atomic::AtomicI64::new(-1),
+            device_name: RwLock::new(None),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
             file_path: RwLock::new(None),
             eq_type: RwLock::new("IIR".to_string()),
