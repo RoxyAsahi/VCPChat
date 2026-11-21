@@ -741,3 +741,19 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.list-open .archive-list-foot i { font-size: 18px; }
 .archive-hud.list-open .archive-list-foot span { font-size: 14px; }
 .archive-hud.narrow.list-open .archive-list, .archive-hud.narrow.short.list-open .archive-list { top: 196px; }
+/* 检索词在引号里面截断，右引号总露着 */
+.archive-brand-q { display: inline-block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+/* 检索没有结果：中间不再显示检索前那首的说明和翻页，只留目录里的「没有找到」 */
+.archive-hud.no-match .archive-callout, .archive-hud.no-match .archive-rows, .archive-hud.no-match .archive-lanes, .archive-hud.no-match .archive-cover { visibility: hidden; }
+/* 键盘提示：平时不常驻（字小、压在阵列上看不清），用键盘操作时才出现，鼠标一动就收起；字号也放大一档 */
+.archive-hint { font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.archive-hud.kbd .archive-hint { opacity: 1; }
+/* 歌词栏和中间说明块、右下换组各占各的：说明块收窄，和歌词栏之间留出 50px 以上，分隔线不再连成一条；
+   歌词栏底边在所有宽度下都抬到换组箭头上面（原来只有中等宽度这样做，宽窗口会压住「分组 07/19」） */
+.archive-lyrics { bottom: calc(205px + var(--archive-dock-lift, 0px)); }
+.archive-hud.has-lyrics .archive-callout { width: 430px; }
+.archive-hud.has-lyrics .archive-summary { width: 372px; }
+.archive-hud.has-lyrics .archive-rule { width: 373px; }
+.archive-hud.mid.has-lyrics .archive-callout { width: min(430px, calc(100% - 520px - 470px - 40px)); }
+.archive-hud.mid.has-lyrics .archive-summary { width: calc(100% - 58px); }
+.archive-hud.mid.has-lyrics .archive-rule { width: calc(100% - 57px); }
