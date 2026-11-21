@@ -757,3 +757,5 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.mid.has-lyrics .archive-callout { width: min(430px, calc(100% - 520px - 470px - 40px)); }
 .archive-hud.mid.has-lyrics .archive-summary { width: calc(100% - 58px); }
 .archive-hud.mid.has-lyrics .archive-rule { width: calc(100% - 57px); }
+/* 窄而矮的窗口（如 960×640）：右下的换组箭头会压在说明块的分隔线上，挪到左下角（矮窗口下那里的大号计数已经收起），贴着底栏上方 */
+.archive-hud.narrow.short .archive-lanes { left: 59px; right: auto; bottom: 22px; } /* 在 .archive-bottom 里，底栏抬高已经算过一次 */
