@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         crossfeedMixSlider: document.getElementById('crossfeed-mix-slider'),
         crossfeedMixValue: document.getElementById('crossfeed-mix-value'),
         dynamicLoudnessSwitch: document.getElementById('dynamic-loudness-switch'),
+        crossfadeSelect: document.getElementById('crossfade-select'),
         dynamicLoudnessStrengthSlider: document.getElementById('dynamic-loudness-strength-slider'),
         dynamicLoudnessStrengthValue: document.getElementById('dynamic-loudness-strength-value'),
         dynamicLoudnessFactor: document.getElementById('dynamic-loudness-factor'),
@@ -1504,6 +1505,13 @@ document.addEventListener('DOMContentLoaded', () => {
             app.updateDynamicLoudnessStrengthDisplay();
             app.updateDynamicLoudnessSettings(); // Sync to engine
         }
+        // 旧引擎不认识 crossfade_ms：没有这个字段就不显示，免得开关点了没反应
+        const crossfadeBlock = document.getElementById('crossfade-section');
+        if (crossfadeBlock) crossfadeBlock.style.display = s.crossfade_ms === undefined ? 'none' : '';
+        if (s.crossfade_ms !== undefined && app.crossfadeSelect) {
+            const ms = String(s.crossfade_ms);
+            app.crossfadeSelect.value = [...app.crossfadeSelect.options].some((o) => o.value === ms) ? ms : '0';
+        }
     };
 
     app.setPlayMode = (modeOrIndex) => {
@@ -1561,6 +1569,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         crossfeed_mix: app.crossfeedMix,
                         dynamic_loudness_enabled: app.dynamicLoudnessEnabled,
                         dynamic_loudness_strength: app.dynamicLoudnessStrength,
+                        crossfade_ms: parseInt(app.crossfadeSelect?.value, 10) || 0,
                         eq_type: app.eqTypeSelect?.value || 'IIR',
                         eq_enabled: app.eqSwitch?.checked ?? false,
                         eq_bands: app.buildEqBandsPayload(),

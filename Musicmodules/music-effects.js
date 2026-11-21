@@ -233,6 +233,9 @@ function setupEffects(app) {
         app.saveSettings();
     };
 
+    // --- 切歌交叉淡入：引擎在曲尾和预载好的下一首做等功率交叉，时长随设置一起保存 ---
+    app.crossfadeSelect?.addEventListener('change', () => app.saveSettings());
+
     app.updateDynamicLoudnessStrengthDisplay = () => { app.dynamicLoudnessStrengthValue.textContent = app.dynamicLoudnessStrengthSlider.value + '%'; };
 
     // --- Noise Shaper ---

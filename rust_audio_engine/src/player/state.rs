@@ -339,6 +339,12 @@ pub struct SharedState {
     pub pending_channels: AtomicU64,
     pub pending_file_path: RwLock<Option<String>>,
     pub needs_preload: AtomicBool,
+    /// Crossfade length in milliseconds (0 = off: plain gapless join).
+    pub crossfade_ms: AtomicU64,
+    /// Frame of the current buffer where a crossfade into the pending track began
+    /// (u64::MAX = none). Latched at the window start so the incoming track always
+    /// starts from its first frame.
+    pub crossfade_from: AtomicU64,
     pub pending_ready: AtomicBool,
     pub dsp_reset_pending: AtomicBool,
     /// Signal to cancel ongoing preload thread (Defect 31 fix)
@@ -414,6 +420,8 @@ impl SharedState {
             pending_channels: AtomicU64::new(2),
             pending_file_path: RwLock::new(None),
             needs_preload: AtomicBool::new(false),
+            crossfade_ms: AtomicU64::new(0),
+            crossfade_from: AtomicU64::new(u64::MAX),
             pending_ready: AtomicBool::new(false),
             dsp_reset_pending: AtomicBool::new(false),
             cancel_preload_signal: AtomicBool::new(false),

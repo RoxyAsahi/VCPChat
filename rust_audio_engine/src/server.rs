@@ -373,6 +373,8 @@ pub struct StateResponse {
     dynamic_loudness_enabled: bool,
     dynamic_loudness_strength: f64,
     dynamic_loudness_factor: f64,
+    // Crossfade between tracks (ms, 0 = off)
+    crossfade_ms: u64,
     // Noise shaper fields
     output_bits: u32,
     noise_shaper_curve: String,
@@ -574,6 +576,9 @@ fn apply_settings_to_player(player: &mut AudioPlayer, settings: &PersistentSetti
     // Dynamic Loudness
     player.set_dynamic_loudness_enabled(settings.dynamic_loudness_enabled);
     player.set_dynamic_loudness_strength(settings.dynamic_loudness_strength);
+
+    // Crossfade
+    player.shared_state().crossfade_ms.store(u64::from(settings.crossfade_ms.min(12_000)), std::sync::atomic::Ordering::Relaxed);
     
     // Resampling
     player.target_sample_rate = settings.target_samplerate;
@@ -690,6 +695,7 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
         // Dynamic Loudness fields
         dynamic_loudness_enabled: player.is_dynamic_loudness_enabled(),
         dynamic_loudness_strength: player.get_dynamic_loudness_strength(),
+        crossfade_ms: player.shared_state().crossfade_ms.load(std::sync::atomic::Ordering::Relaxed),
         dynamic_loudness_factor: player.get_dynamic_loudness_factor(),
         // Noise shaper fields
         output_bits: player.get_output_bits(),

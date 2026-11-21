@@ -48,6 +48,9 @@ pub struct PersistentSettings {
     // Dynamic Loudness
     pub dynamic_loudness_enabled: bool,
     pub dynamic_loudness_strength: f64,
+
+    // Crossfade between tracks (0 = off, plain gapless)
+    pub crossfade_ms: u32,
     
     // Resampling
     pub target_samplerate: Option<u32>,
@@ -80,6 +83,7 @@ impl Default for PersistentSettings {
             crossfeed_mix: 0.3,
             dynamic_loudness_enabled: false,
             dynamic_loudness_strength: 1.0,
+            crossfade_ms: 0,
             target_samplerate: None,
             resample_quality: "hq".to_string(),
             use_cache: false,
@@ -213,6 +217,9 @@ impl SettingsManager {
         if let Some(dynamic_loudness_enabled) = update.dynamic_loudness_enabled {
             self.settings.dynamic_loudness_enabled = dynamic_loudness_enabled;
         }
+        if let Some(crossfade_ms) = update.crossfade_ms {
+            self.settings.crossfade_ms = crossfade_ms.min(12_000);
+        }
         if let Some(dynamic_loudness_strength) = update.dynamic_loudness_strength {
             self.settings.dynamic_loudness_strength = dynamic_loudness_strength;
         }
@@ -262,6 +269,7 @@ pub struct PersistentSettingsUpdate {
     pub crossfeed_mix: Option<f64>,
     pub dynamic_loudness_enabled: Option<bool>,
     pub dynamic_loudness_strength: Option<f64>,
+    pub crossfade_ms: Option<u32>,
     pub target_samplerate: Option<Option<u32>>,
     pub resample_quality: Option<String>,
     pub use_cache: Option<bool>,

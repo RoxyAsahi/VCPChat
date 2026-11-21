@@ -7,6 +7,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use rtrb::Producer;
+use super::track_buffer::TrackBuffer;
 
 use super::state::{SharedState, PlayerState,
     EVENT_TRACK_CHANGED, EVENT_NEEDS_PRELOAD_RESET, EVENT_PLAYBACK_ENDED};
@@ -397,6 +398,37 @@ fn convolve_interleaved_ir(a: &[f64], b: &[f64], channels: usize) -> Result<Vec<
 // AUDIO CALLBACK
 // ============================================================================
 
+/// Crossfade length in source frames of the current track (0 = off).
+fn crossfade_frames(shared: &SharedState) -> usize {
+    let ms = shared.crossfade_ms.load(Ordering::Relaxed);
+    (ms * shared.sample_rate.load(Ordering::Relaxed) / 1000) as usize
+}
+
+/// Equal-power crossfade of the block in `buf` (outgoing track, starting `offset`
+/// frames into the window) with the first frames of `next`. Appends the incoming
+/// frames behind the outgoing ones inside the same pre-allocated buffer (capacity is
+/// 8192 frames, blocks are at most 4096), mixes, then truncates: no allocation.
+fn mix_crossfade(buf: &mut Vec<f64>, next: &TrackBuffer, offset: usize, window: usize, channels: usize) {
+    let n = buf.len();
+    let frames = n / channels;
+    if buf.capacity() < n * 2 || next.channels() != channels {
+        return;
+    }
+    next.extend_into(offset, frames, buf);
+    buf.resize(n + frames * channels, 0.0); // a still-decoding next track fades in from silence
+    let (out, inc) = buf.split_at_mut(n);
+    for f in 0..frames {
+        let t = ((offset + f) as f64 + 0.5) / window as f64;
+        let angle = t.clamp(0.0, 1.0) * std::f64::consts::FRAC_PI_2;
+        let (g_in, g_out) = angle.sin_cos();
+        for c in 0..channels {
+            let i = f * channels + c;
+            out[i] = out[i] * g_out + inc[i] * g_in;
+        }
+    }
+    buf.truncate(n);
+}
+
 /// Frames for a full 0↔1 fade (~8 ms at 48 kHz). Short enough to feel
 /// instant, long enough to remove the click of a hard stop/start.
 pub const FADE_FRAMES: f32 = 384.0;
@@ -501,7 +533,7 @@ pub fn audio_callback_lockfree(
     let sr = shared.sample_rate.load(Ordering::Relaxed) as usize;
     let remaining_frames = total.saturating_sub(current_pos);
     if remaining_frames > 0
-        && remaining_frames < sr * 5
+        && remaining_frames < sr * 5 + crossfade_frames(shared)
         && !shared.pending_ready.load(Ordering::Relaxed)
         && !shared.needs_preload.load(Ordering::Acquire)
     {
@@ -544,7 +576,10 @@ pub fn audio_callback_lockfree(
                 shared.total_frames.store(next_frames, Ordering::Relaxed);
                 shared.sample_rate.store(next_sr, Ordering::Relaxed);
                 shared.channels.store(next_ch, Ordering::Relaxed);
-                shared.position_frames.store(0, Ordering::Relaxed);
+                // After a crossfade the incoming track has already played its first frames.
+                let faded_from = shared.crossfade_from.swap(u64::MAX, Ordering::Relaxed);
+                let start = if faded_from < total as u64 && crossfade_frames(shared) > 0 { (total as u64 - faded_from).min(next_frames) } else { 0 };
+                shared.position_frames.store(start, Ordering::Relaxed);
 
                 shared.pending_ready.store(false, Ordering::Release);
                 shared.needs_preload.store(false, Ordering::Relaxed);
@@ -627,7 +662,22 @@ pub fn audio_callback_lockfree(
         // Clamp frames_to_read to pre-allocated buffer capacity to prevent
         // heap allocation inside the audio callback (P0-3 fix)
         let max_frames_from_capacity = process_buf.capacity() / channels;
-        let frames_wanted = source_frames_needed.min(available_source).min(4096).min(max_frames_from_capacity);
+        let mut frames_wanted = source_frames_needed.min(available_source).min(4096).min(max_frames_from_capacity);
+
+        // Crossfade window: the last `xf` frames of a complete track overlap the start
+        // of the preloaded next one. A block never straddles the window start, so the
+        // decision (fade or plain gapless) is taken exactly once, at its first frame.
+        let xf = crossfade_frames(shared).min(total / 2);
+        let window_start = total - xf;
+        if xf > 0 && complete && current_pos < window_start {
+            frames_wanted = frames_wanted.min(window_start - current_pos);
+        }
+        if xf > 0 && complete && current_pos == window_start {
+            let next_ok = shared.pending_ready.load(Ordering::Acquire)
+                && shared.pending_sample_rate.load(Ordering::Relaxed) == shared.sample_rate.load(Ordering::Relaxed)
+                && shared.pending_channels.load(Ordering::Relaxed) as usize == channels;
+            shared.crossfade_from.store(if next_ok { window_start as u64 } else { u64::MAX }, Ordering::Relaxed);
+        }
 
         process_buf.clear();
         let frames_to_read = if buf.channels() == channels {
@@ -637,6 +687,12 @@ pub fn audio_callback_lockfree(
         };
         if frames_to_read == 0 {
             break;
+        }
+
+        if xf > 0 && shared.crossfade_from.load(Ordering::Relaxed) == window_start as u64 && current_pos >= window_start {
+            if let Some(next) = shared.pending_buffer.load().as_ref() {
+                mix_crossfade(process_buf, next, current_pos - window_start, xf, channels);
+            }
         }
 
         // Source position is committed only after every DSP/rate stage accepts
@@ -1091,6 +1147,57 @@ mod tests {
         // What is left is the loudness stage re-applying the (equal) target gain: < -70 dB.
         let e = max_join_error();
         assert!(e < 2e-4, "join error {e}");
+    }
+
+    #[test]
+    fn crossfade_overlaps_the_next_track_and_hands_over_its_position() {
+        const A: usize = 8_000;
+        const B: usize = 9_000;
+        const XF: usize = 1_984; // 45 ms at 44.1 kHz
+        let mut harness = StreamingHarness::new();
+        harness.shared.crossfade_ms.store(45, Ordering::Relaxed);
+        harness.shared.audio_buffer.store(TrackBuffer::from_samples(vec![0.4; A * 2], 2));
+        harness.shared.pending_buffer.store(Some(TrackBuffer::from_samples(vec![-0.4; B * 2], 2)));
+        harness.shared.pending_total_frames.store(B as u64, Ordering::Relaxed);
+        harness.shared.pending_sample_rate.store(44_100, Ordering::Relaxed);
+        harness.shared.pending_channels.store(2, Ordering::Relaxed);
+        harness.shared.pending_ready.store(true, Ordering::Release);
+
+        // Pull frame by frame-ish blocks until the first track is over.
+        let mut source = Vec::new();
+        let mut block = vec![0.0; 500 * 2];
+        while source.len() < (A + 2000) * 2 {
+            harness.render(&mut block);
+            source.extend_from_slice(&block);
+        }
+        // The swap happened at the end of A: the incoming track already played XF frames.
+        assert!(harness.position() >= XF as u64 && harness.position() < (XF + 2500) as u64,
+            "position after swap {}", harness.position());
+        let left: Vec<f64> = source.chunks(2).map(|f| f[0]).collect();
+        // The chain adds a little latency, so look for the crossing rather than a fixed frame:
+        // the level goes from the outgoing (+) to the incoming (-) track inside the window,
+        // not at the end of A as a plain join would.
+        assert!(left[1000] > 0.1, "outgoing before the window");
+        let crossing = (A - XF..A).find(|&i| left[i] < 0.0).expect("incoming takes over inside the window");
+        assert!(crossing < A - XF / 4, "crossing at {crossing}, window {}..{A}", A - XF);
+        assert!(left[A + 1000] < -0.1, "only the next track after the window");
+        // Equal-power curve: no jump between neighbouring samples inside the window.
+        let worst = left[A - XF..A + 50].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f64::max);
+        assert!(worst < 0.01, "step inside the crossfade {worst}");
+    }
+
+    #[test]
+    fn crossfade_off_keeps_the_plain_gapless_join() {
+        let mut harness = StreamingHarness::new();
+        harness.shared.audio_buffer.store(TrackBuffer::from_samples(vec![0.4; 3_000 * 2], 2));
+        harness.shared.pending_buffer.store(Some(TrackBuffer::from_samples(vec![-0.4; 3_000 * 2], 2)));
+        harness.shared.pending_total_frames.store(3_000, Ordering::Relaxed);
+        harness.shared.pending_sample_rate.store(44_100, Ordering::Relaxed);
+        harness.shared.pending_channels.store(2, Ordering::Relaxed);
+        harness.shared.pending_ready.store(true, Ordering::Release);
+        let mut block = vec![0.0; 1000 * 2];
+        for _ in 0..4 { harness.render(&mut block); }
+        assert_eq!(harness.position(), 1_000, "next track starts from its first frame");
     }
 
     #[test]
