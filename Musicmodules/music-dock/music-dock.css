@@ -1472,6 +1472,10 @@ body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .3); }
   translate: var(--md-shift, 0px) 0;
   transition: translate .52s cubic-bezier(.32, .72, 0, 1);
 }
+/* 播放条的长短也跟着布局变（目录开着时缩短，见 music-dock.js 的 syncShift）：宽度和位置一起滑，流体层每帧跟着量 */
+#music-dock-root .md-dock { transition: translate .52s cubic-bezier(.32, .72, 0, 1), width .52s cubic-bezier(.32, .72, 0, 1); }
+/* 播放条挪到目录右边以后，目录不用再给它让出底部那一段，一直拉到窗口底 */
+body.music-dock-beside-list #music-archive-view .archive-hud.list-open .archive-list { bottom: 30px; }
 body.music-reduce-motion #music-dock-root .md-dock,
 body.music-reduce-motion .md-fluid,
 body.music-reduce-motion .md-mist { transition: none; }
