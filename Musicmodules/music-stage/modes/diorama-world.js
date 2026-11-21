@@ -4286,7 +4286,7 @@
                     waterMat.uniforms.lampPos.value[i].set(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, anchor.y,
                         f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
                 }
-                waterMat.uniforms.lampPower.value[i] = saving ? 0 : power;
+                waterMat.uniforms.lampPower.value[i] = power;
             }
         };
         const setPalette = (palette = {}) => {
@@ -4556,7 +4556,11 @@
             starMat.uniforms.accent.value = accent;
             applyWarmth(pose.state.warmth ?? 0.5, pose.state.openness, audio.energy);
             // Lamps spread wider in the wet air.
-            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3);
+            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3)
+                * (saving ? 1.35 : 1);
+            // The saving tier has no lens bloom to spread the lamps' light;
+            // a wider halo stands in for it.
+            haloMat.uniforms.size.value = saving ? 2.8 : 1.6;
             reflectionEnabled = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
             waterMat.uniforms.strength.value = reflectionEnabled ? clamp(tuning.waterStrength ?? 1, 0, 2) : 0;
             const spacing = 16 / clamp(tuning.stationIntensity ?? 1, 0.5, 2);
