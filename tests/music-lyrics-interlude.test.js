@@ -58,3 +58,31 @@ test('lyricIndexAt is a binary search matching the old linear scan', () => {
         assert.equal(app.lyricIndexAt(t, lines), linear, `t=${t}`);
     }
 });
+
+test('two lines in the same script close together stay two lines; a translation is still paired', () => {
+    const app = setup();
+    const lines = app.parseLrc([
+        '[00:10.00]我们走吧',
+        '[00:10.60]不要回头',
+        '[00:20.00]君の名は',
+        '[00:20.30]你的名字',
+        '[00:30.00]Hello there',
+        '[00:30.00]你好',
+        '[00:40.00]run run',
+        '[00:40.50]run again'
+    ].join('\n'));
+    assert.deepEqual(Array.from(lines, (l) => [l.original, l.translation]), [
+        ['我们走吧', ''], ['不要回头', ''],
+        ['君の名は', '你的名字'],
+        ['Hello there', '你好'],
+        ['run run', ''], ['run again', '']
+    ]);
+});
+
+test('the [offset:] tag shifts every timestamp, positive means earlier', () => {
+    const app = setup();
+    const lines = app.parseLrc('[offset:+500]\n[00:10.00]一\n[00:20.00]二');
+    assert.deepEqual(Array.from(lines, (l) => l.time), [9.5, 19.5]);
+    const later = app.parseLrc('[offset:-1000]\n[00:10.00]一');
+    assert.equal(later[0].time, 11);
+});
