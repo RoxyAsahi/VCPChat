@@ -199,7 +199,10 @@ function setupWebDav(app) {
                     app.webdavImportBtn.textContent = `扫描失败：${result?.message || '服务器没有响应'}`;
                 }
             } catch (err) {
-                alert('扫描出错: ' + err.message);
+                // 和服务器没响应时一样，把原因写在导入按钮上，不弹系统提示框。
+                app.webdavScannedTracks = [];
+                app.webdavImportBtn.disabled = true;
+                app.webdavImportBtn.textContent = `扫描出错：${err?.message || '未知原因'}`;
             } finally {
                 unsubscribeProgress?.();
             }

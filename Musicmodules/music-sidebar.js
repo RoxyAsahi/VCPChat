@@ -82,10 +82,13 @@ function setupSidebar(app) {
                     <button class="edit-btn" title="编辑歌单" aria-label="编辑歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="delete-btn" title="删除歌单" aria-label="删除歌单"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
                 div.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); app.openPlaylistEditModal(pl.id); });
                 div.querySelector('.delete-btn').addEventListener('click', (e) => {
-                    e.stopPropagation(); if (confirm(`确认删除 "${pl.name}"?`)) {
+                    e.stopPropagation();
+                    const ask = { title: `删除歌单「${pl.name}」？`, message: '只删除这个歌单，里面的歌还在曲库里。', confirmText: '删除', danger: true };
+                    Promise.resolve(window.MusicDialog ? window.MusicDialog.confirm(ask) : confirm(ask.title)).then((ok) => {
+                        if (!ok) return;
                         app.customPlaylists = app.customPlaylists.filter(p => p.id !== pl.id);
                         app.saveCustomPlaylists(); app.renderSidebarContent('playlists');
-                    }
+                    });
                 });
                 div.addEventListener('click', () => {
                     app.filteredPlaylistSource = { type: 'playlist', name: pl.name, id: pl.id };
@@ -115,6 +118,9 @@ function setupSidebar(app) {
             const rect = app.contextMenu.getBoundingClientRect();
             if (rect.right > window.innerWidth) app.contextMenu.style.left = `${window.innerWidth - rect.width - 10}px`;
             if (rect.bottom > window.innerHeight) app.contextMenu.style.top = `${window.innerHeight - rect.height - 10}px`;
+            // 菜单比窗口剩下的空间还高、或按键打开时锚点在可视区外：贴住上边，不顶出窗口。
+            if (app.contextMenu.getBoundingClientRect().top < 10) app.contextMenu.style.top = '10px';
+            if (rect.left < 10) app.contextMenu.style.left = '10px';
             // 从按下右键的那一点长出来
             window.MusicFluid?.bud(app.contextMenu, { x, y });
         });
@@ -141,7 +147,7 @@ function setupSidebar(app) {
     app.openPlaylistEditModal = (id) => {
         const pl = app.customPlaylists.find(p => p.id === id); if (!pl) return;
         app.editingPlaylistId = id; app.modalSearchQuery = ''; app.lastModalClickIndex = -1;
-        app.modalSearchInput.value = ''; app.modalPlaylistTitle.textContent = `编辑: ${pl.name}`;
+        app.modalSearchInput.value = ''; app.modalPlaylistTitle.textContent = `编辑歌单「${pl.name}」`;
         app.renderModalSongList(); app.playlistEditModal.classList.add('visible');
     };
 

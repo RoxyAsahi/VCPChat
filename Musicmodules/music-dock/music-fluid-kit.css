@@ -135,9 +135,19 @@ body.light-theme .dialog-btn {
 body.light-theme .dialog-btn.confirm { background: var(--mf-ink); color: #1c1b19; }
 body.light-theme .dialog-btn.confirm { color: #fcfcfd; }
 .dialog-btn.confirm:hover { background: color-mix(in srgb, var(--mf-ink) 86%, var(--mf-tint)); }
+/* 取消是中性的退路，只换字色；红色只留给真正会删东西的确认按钮（.danger） */
 .dialog-btn.cancel,
-body.light-theme .dialog-btn.cancel { background: transparent; color: var(--ar-danger, #dc3c3c); }
-.dialog-btn.cancel:hover { background: color-mix(in srgb, var(--ar-danger, #dc3c3c) 10%, transparent); }
+body.light-theme .dialog-btn.cancel { background: transparent; color: var(--mf-ink2); }
+.dialog-btn.cancel:hover { background: var(--mf-hover); color: var(--mf-ink); }
+.dialog-btn.confirm.danger,
+body.light-theme .dialog-btn.confirm.danger { background: var(--ar-danger, #dc3c3c); color: #fff; }
+.dialog-btn.confirm.danger:hover { background: color-mix(in srgb, var(--ar-danger, #dc3c3c) 88%, #000); }
+/* 弹窗底栏左边是计数、右边只有一个按钮时，按钮按字宽，不拉满整行 */
+.music-modal-footer > .modal-count + .dialog-btn { flex: 0 0 auto; min-width: 96px; }
+/* MusicDialog.confirm：标题一行、说明一段，按钮和「新建歌单」一样左右对半 */
+.music-dialog .dialog { width: min(360px, calc(100vw - 48px)); }
+.music-dialog .dialog h3 { margin: 0 0 8px; line-height: 1.45; overflow-wrap: anywhere; }
+.music-dialog .music-dialog-msg { margin: 0; color: var(--mf-ink2); font-size: 13px; line-height: 1.6; }
 body .dialog-btn:disabled,
 body .dialog-btn.confirm:disabled,
 body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); color: var(--mf-ink2); opacity: 1; cursor: default; }
