@@ -567,6 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
         };
 
+        const errText = (err, fallback) => (window.MusicErrorText ? window.MusicErrorText(err, fallback) : (err?.message || err || fallback));
         const setLyricsFetchStatus = (message = '', type = '') => {
             app.lyricsFetchStatus.textContent = message;
             app.lyricsFetchStatus.className = `lyrics-fetch-status${type ? ` ${type}` : ''}`;
@@ -683,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.lyricsFetchCandidates = [];
             app.lyricsFetchSelection.textContent = '尚未选择歌词版本';
             app.lyricsFetchResults.innerHTML = '<div class="music-modal-empty"><div class="spinner"></div><div>正在并行搜索并检测歌词格式...</div></div>';
-            setLyricsFetchStatus('正在连接网易云、QQ 音乐、酷狗与 AMLL...');
+            setLyricsFetchStatus('正在连接网易云、QQ 音乐、酷狗与 AMLL…');
 
             try {
                 const result = await app.api.searchMusicLyricsCandidates({
@@ -698,14 +699,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 setLyricsFetchStatus(
                     result?.success
                         ? `找到 ${app.lyricsFetchCandidates.length} 个可用版本`
-                        : (result?.message || '歌词搜索失败'),
+                        : errText(result?.message, '歌词搜索失败'),
                     result?.success ? 'success' : 'error'
                 );
             } catch (error) {
                 if (requestToken !== app.lyricsFetchRequestToken) return;
                 app.lyricsFetchCandidates = [];
                 renderLyricsCandidates();
-                setLyricsFetchStatus(error?.message || '歌词搜索失败', 'error');
+                setLyricsFetchStatus(errText(error, '歌词搜索失败'), 'error');
             } finally {
                 if (requestToken === app.lyricsFetchRequestToken) {
                     app.lyricsFetchSearchBtn.disabled = false;
@@ -747,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (app.pendingTrackPath === track.path) app.lyricsRequestToken++;
             app.lyricsFetchApply.disabled = true;
             app.lyricsFetchSearchBtn.disabled = true;
-            setLyricsFetchStatus('正在覆盖当前歌词文件...');
+            setLyricsFetchStatus('正在覆盖当前歌词文件…');
             try {
                 const result = await app.api.applyMusicLyricsCandidate({
                     candidateKey: app.selectedLyricsCandidateKey,
@@ -756,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (requestToken !== app.lyricsFetchRequestToken) return;
                 if (!result?.success) {
-                    setLyricsFetchStatus(result?.message || '覆盖歌词失败', 'error');
+                    setLyricsFetchStatus(errText(result?.message, '覆盖歌词失败'), 'error');
                     app.lyricsFetchApply.disabled = false;
                     return;
                 }
@@ -771,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 获取成功后保留窗口及结果，由用户主动关闭。
             } catch (error) {
                 if (requestToken !== app.lyricsFetchRequestToken) return;
-                setLyricsFetchStatus(error?.message || '覆盖歌词失败', 'error');
+                setLyricsFetchStatus(errText(error, '覆盖歌词失败'), 'error');
                 app.lyricsFetchApply.disabled = false;
             } finally {
                 if (requestToken === app.lyricsFetchRequestToken) app.lyricsFetchSearchBtn.disabled = false;

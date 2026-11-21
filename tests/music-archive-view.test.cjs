@@ -1459,6 +1459,21 @@ test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡�
     f.close();
 });
 
+test('取出详情时按顶栏「目录」：放回卡片并打开目录，不会把目录关掉', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    const btn = doc.querySelector('.archive-nav [data-act="list"]');
+    if (btn.getAttribute('aria-pressed') !== 'true') btn.click();
+    assert.equal(btn.getAttribute('aria-pressed'), 'true');
+    f.view.openDetail();
+    btn.click();
+    assert.equal(f.view.detailOpen, false);
+    assert.equal(btn.getAttribute('aria-pressed'), 'true', '目录还开着');
+    btn.click();
+    assert.equal(btn.getAttribute('aria-pressed'), 'false', '不在详情里时照常开关');
+    f.close();
+});
+
 test('取出详情里的「喜欢」：有喜欢功能才显示，点了切换状态，外面改了也跟着变', () => {
     const f = fixture();
     const doc = f.w.document;

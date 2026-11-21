@@ -3554,9 +3554,12 @@
                         // On paper the line is written in ink: pale and waiting,
                         // then full and deep as it is sung; the translation in a
                         // quiet grey beneath. No colour, so nothing reads as dirt.
-                        uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, 0.22);
+                        // Shown small and thin over a pale sky, these need more weight
+                        // than on a page of print: waiting text and the translation
+                        // were both under 2:1 against the sky.
+                        uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, 0.12);
                         uniforms.sungMain.value.copy(colors.ink).multiplyScalar(0.8);
-                        uniforms.sub.value.copy(colors.muted).lerp(colors.ink, 0.15);
+                        uniforms.sub.value.copy(colors.muted).lerp(colors.ink, 0.55);
                     } else {
                         uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, 0.15);
                         uniforms.sungMain.value.copy(colors.accent).lerp(colors.ink, 0.28);

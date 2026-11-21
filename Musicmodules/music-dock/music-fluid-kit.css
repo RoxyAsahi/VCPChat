@@ -150,7 +150,7 @@ body.light-theme .dialog-btn.confirm.danger { background: var(--ar-danger, #dc3c
 .music-dialog .music-dialog-msg { margin: 0; color: var(--mf-ink2); font-size: 13px; line-height: 1.6; }
 body .dialog-btn:disabled,
 body .dialog-btn.confirm:disabled,
-body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); color: var(--mf-ink2); opacity: 1; cursor: default; }
+body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); color: var(--mf-ink2); opacity: .5; cursor: default; }
 :is(.dialog, .music-modal) input:is([type="text"], [type="url"], [type="password"], :not([type])) {
   border: 0;
   border-radius: 14px;
@@ -1173,3 +1173,8 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
   font-size: 13px;
   text-align: center;
 }
+
+/* 表单控件默认不继承字体，弹窗里的输入框和按钮会落到 Arial，和标题的字体对不上 */
+:is(.music-modal-overlay, .dialog-overlay) :is(input, button, textarea, select) { font-family: inherit; }
+/* 添加服务器：字段名写在框上面，输进内容后也看得到这一格是什么 */
+#webdav-server-dialog .music-field-label { display: block; margin: 0 0 4px 2px; color: var(--mf-ink2); font-size: 12px; text-align: left; }

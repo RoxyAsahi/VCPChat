@@ -1860,9 +1860,13 @@
         // 以前这里是「舞台调制」子页；现在只是打开控制页并滚到舞台那一段。
         function openStageSettings() {
             openPanel('控制');
-            const top = el.tuneSec.offsetTop - 8;
+            // offsetTop counts from the panel, not from the scrolling body below its header,
+            // so it overshot by the header height and hid the section title and first label.
             const scroller = el.ext.parentElement;
-            if (scroller && top > 0) scroller.scrollTop = top;
+            if (scroller) {
+                const top = el.tuneSec.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8;
+                if (top > 0) scroller.scrollTop = top;
+            }
             el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
         }
         function closePop() { state.scenesOpen = false; state.sleepOpen = false; }
@@ -2194,8 +2198,16 @@
         // 不会比以后每次都慢一大截。真打开时照常重画，这里画的东西不会被直接拿来用。
         const warmTimer = setTimeout(() => {
             const run = () => { if (!state.panelOpen && !state.destroyed) renderBody(); };
-            if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 4000 });
-            else run();
+            // 停着的音效卡从来没排过版（content-visibility:hidden 从一开始就跳过了它），第一次切到声音页要把
+            // 六七百个元素的样式和排版一口气算完。空闲时让它短暂「可见」一次把这些算掉，再收回去：之后停着也留着结果。
+            const warmFx = () => {
+                if (state.destroyed || !el.fxScroll.classList.contains('md-fx-park')) return;
+                el.fxScroll.classList.add('md-fx-warm');
+                void el.fxScroll.firstElementChild?.getBoundingClientRect();
+                el.fxScroll.classList.remove('md-fx-warm');
+            };
+            const idle = (fn) => (typeof global.requestIdleCallback === 'function' ? global.requestIdleCallback(fn, { timeout: 4000 }) : fn());
+            idle(() => { run(); idle(warmFx); });
         }, 2500);
         cleanups.push(() => clearTimeout(warmTimer));
         kickProgress();

@@ -167,7 +167,7 @@ body.music-stage-active #custom-title-bar {
     color: var(--ar-accent-text);
 }
 
-/* 导入：一行小字，「IMPORT 本地 ／ 云端导入」，不再是两个实心按钮 */
+/* 导入：一行小字，「导入 本地 ／ 云端导入」，不再是两个实心按钮 */
 .sidebar-action-btns {
     align-items: baseline;
     gap: 0;
@@ -175,7 +175,7 @@ body.music-stage-active #custom-title-bar {
 }
 
 .sidebar-action-btns::before {
-    content: "IMPORT";
+    content: "导入";
     margin-right: 14px;
     color: var(--ar-muted);
     font-family: var(--mt-font-label);
@@ -765,7 +765,7 @@ body.music-dock-on .music-player .controls {
 /* 一行栏头：小字、名字、当前状态，底下一条细线；不铺底色 */
 .acoustic-drawer-toggle {
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
+    grid-template-columns: auto 1fr auto;
     align-items: baseline;
     column-gap: 10px;
     width: auto;
@@ -1284,7 +1284,7 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 .music-list-head {
     display: grid;
     /* 第一格对齐行号那一列，放「添加时间」排序；后三格和每行的三列对齐 */
-    grid-template-columns: 24px minmax(0, 1fr) minmax(0, .8fr) 52px;
+    grid-template-columns: 24px minmax(0, 1.8fr) minmax(0, 1fr) 52px;
     align-items: end;
     column-gap: 12px;
     padding: 6px 16px 6px 16px;
@@ -1351,7 +1351,8 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 
 .sidebar-playlist li[data-cols="1"] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) 22px 52px;
+    /* 标题比歌手长得多：标题栏多分一些，「海の見える街」这种不再被截成「海の見え…」 */
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) 22px 52px;
     column-gap: 12px;
     align-items: center;
 }
@@ -1432,7 +1433,7 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 
 /* ---------- 空状态：搜不到、歌单是空的时候说一句，不留白 ---------- */
 #playlist:empty::after {
-    content: "NO RESULT ／ 没有匹配的曲目";
+    content: "没有匹配的曲目";
     display: block;
     padding: 18px 16px;
     font-size: 12px;
@@ -1565,3 +1566,7 @@ body.light-theme .dialog-btn.cancel {
     background: transparent;
     color: var(--ar-ink);
 }
+
+/* 经典视图栏头：没有歌时不显示「专辑 ／ …」 */
+body:not(.music-has-track) .track-file-head { visibility: hidden; }
+.track-file-number:empty { display: none; }

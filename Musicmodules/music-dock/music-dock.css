@@ -1682,6 +1682,17 @@ body.music-reduce-motion .mtst-layer { transition: none; }
 }
 #music-dock-root { --md-dr-glass: rgba(40, 40, 45, .88); }
 body.light-theme #music-dock-root { --md-dr-glass: rgba(252, 252, 253, .92); }
+/* 窄窗里抽屉铺满整个宽度，内容贴着左边：底色也要铺满（标准档的 480px 宽度在这里不适用），
+   也不能从右往左淡出，否则左边一列的设置项文字压在舞台的曲目卡片和切换条上。 */
+@media (max-width: 639.98px) {
+  #music-dock-root .md-drbg,
+  #music-dock-root:not(.md-q-ultimate) .md-drbg {
+    width: 100vw;
+    background:
+      radial-gradient(420px 360px at 100% 0%, color-mix(in srgb, var(--md-accent) 14%, transparent), transparent 70%),
+      var(--md-dr-glass, var(--md-glass));
+  }
+}
 #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 0 10px 1px rgba(255, 255, 255, .35); }
 #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .5); }
 body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 2px 10px rgba(40, 30, 20, .16), 0 0 0 .5px rgba(40, 30, 20, .06); }
@@ -1715,3 +1726,5 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
   visibility: hidden;
   pointer-events: none;
 }
+/* 空闲预热那一下（music-dock.js warmFx）：照常算样式和排版，但仍不占地方、看不见 */
+#music-dock-root .md-fx-sc.md-fx-park.md-fx-warm { content-visibility: visible; }
