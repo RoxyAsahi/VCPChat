@@ -67,6 +67,9 @@ body.music-dock-on .music-player .controls {
   --md-fl-ring: #fff;
 }
 body.light-theme #music-dock-root {
+  /* 浅色抽屉底接近白：次要字 .62/.42 只有 4.3/2.5:1，小字要到 4.5:1 以上 */
+  --md-t2: rgba(var(--md-tp-rgb), .74);
+  --md-t3: rgba(var(--md-tp-rgb), .66);
   --md-fl-ink: #2a2522;
   --md-fl-ink2: rgba(42, 37, 34, .82); /* 奶黄底上要到 4.5:1：.6 只有 2.4–3.4，按封面取的最深黄底（约 225,170,80）算 .82 也够 */
   --md-fl-ink-rgb: 42, 37, 34;

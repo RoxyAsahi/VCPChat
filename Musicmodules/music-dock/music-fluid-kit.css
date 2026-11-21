@@ -15,7 +15,7 @@
 body.light-theme {
   --mf-fill: rgba(252, 252, 253, .95);
   --mf-ink: #1c1b19;
-  --mf-ink2: rgba(28, 27, 25, .5);
+  --mf-ink2: rgba(28, 27, 25, .66); /* 弹窗白底上 .5 只有 3.3:1，小字要到 4.5:1 */
   --mf-hover: rgba(28, 22, 16, .06);
   --mf-rule: rgba(28, 22, 16, .08);
   --mf-glow: inset 0 0 0 .5px rgba(40, 28, 16, .06), 0 20px 44px -18px rgba(70, 48, 26, .3), 0 0 26px -8px rgba(70, 48, 26, .18);
