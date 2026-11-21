@@ -238,7 +238,9 @@ test('the canvas shaders for a lens-less tier are compiled in the background bef
         extensions: { has: (name) => parallel && name === 'KHR_parallel_shader_compile' },
         getRenderTarget: () => null,
         setRenderTarget(target) { this.target = target; },
-        compileAsync(scene) { compiled.push([scene, this.target]); return Promise.resolve(); },
+        compileAsync() { throw new Error('the renderer\'s own wait is not used'); },
+        compile(scene) { compiled.push([scene, this.target]); return new Set([{}]); },
+        properties: { get: () => ({ currentProgram: { isReady: () => true } }) },
         getContext: () => null,
         info: { programs: [] }
     });

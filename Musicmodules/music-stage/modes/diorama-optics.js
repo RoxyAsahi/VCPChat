@@ -207,8 +207,7 @@
                     for (const [shader, destination] of [[prefilter, probe], [down, probe], [up, probe], [material, null]]) {
                         quad.material = shader;
                         renderer.setRenderTarget(destination);
-                        if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
-                        else renderer.compile(scene, camera);
+                        await global.MusicStageModeUtils.compileReady(renderer, scene, camera);
                         if (dead) return;
                     }
                 } catch (error) {
