@@ -190,6 +190,30 @@ test('command palette parses --filters and ranks title hits above artist hits', 
     dom.window.close();
 });
 
+test('Tab stays inside the open panel: from the tabs it wraps to the close button and back into the panel', async () => {
+    const { window, doc, dock } = setup((app, win) => { win.Element.prototype.getClientRects = function () { return [{}]; }; });
+    try {
+        dock.openPanel('控制');
+        const tab = doc.querySelector('[data-md="tabs"] [aria-selected="true"]');
+        assert.equal(doc.activeElement, tab, 'opening focuses the current tab');
+        const press = (shiftKey = false) => {
+            const event = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+            doc.activeElement.dispatchEvent(event);
+            return event.defaultPrevented;
+        };
+        assert.equal(press(), true);
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '关闭面板', 'after the tabs comes the close button, not the page behind');
+        press();
+        const pnl = doc.getElementById('music-dock-panel');
+        assert.ok(pnl.contains(doc.activeElement), 'then back to the top of the panel');
+        press(true);
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '关闭面板');
+        dock.closePanel?.();
+    } finally {
+        dock.destroy?.();
+    }
+});
+
 test('queue heading uses the playing playlist\'s current name after it is renamed', async () => {
     const { doc, app, dock } = setup();
     try {

@@ -1907,6 +1907,25 @@
             else if (state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
+        // 抽屉开着时 Tab 在抽屉里转一圈（内容 → 页签 → 关闭钮 → 回到内容）。
+        // 页签排在抽屉最后，以前从页签再按 Tab 就跑到抽屉后面的档案页去了，抽屉还开着，焦点却看不见。
+        const panelStops = () => {
+            const inPanel = [...el.pnl.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')]
+                .filter((n) => n.tabIndex >= 0 && !n.disabled && !n.closest('[hidden], [inert], [aria-hidden="true"]')
+                    && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden');
+            return el.handle && el.handle.getClientRects().length ? inPanel.concat(el.handle) : inPanel;
+        };
+        listen(document, 'keydown', (event) => {
+            if (event.key !== 'Tab' || event.defaultPrevented || !state.panelOpen || event.altKey || event.ctrlKey || event.metaKey) return;
+            const active = document.activeElement;
+            if (!active || !(el.pnl.contains(active) || el.hdl.contains(active))) return;
+            const stops = panelStops();
+            if (!stops.length) return;
+            const at = stops.indexOf(active);
+            const next = at === -1 ? stops[0] : stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length];
+            event.preventDefault();
+            next.focus({ preventScroll: false });
+        });
 
         // ───────── 状态订阅 ─────────
         const observers = [];
