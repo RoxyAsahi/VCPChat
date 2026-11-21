@@ -188,33 +188,49 @@ function setupSidebar(app) {
                 return a.index - b.index;
             })
             .map(item => item.track);
-        app.modalSongList.innerHTML = sortedFiltered.length === 0 ? '<div class="music-modal-empty">没有匹配的歌曲</div>' : '';
-        const frag = document.createDocumentFragment();
-        sortedFiltered.forEach((t, i) => {
-            const isIn = selectedPaths.has(t.path);
-            const div = document.createElement('div'); div.className = `music-modal-song-item${isIn ? ' in-playlist' : ''}`;
-            div.dataset.path = t.path; div.dataset.index = i;
-            div.innerHTML = `<div class="music-modal-song-checkbox"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg></div>
-                             <div class="music-modal-song-info"><div class="music-modal-song-title">${esc(app.stripAudioExtension(t.title)||'未知标题')}</div><div class="music-modal-song-artist">${esc(t.artist||'未知艺术家')}</div></div>`;
-            div.addEventListener('click', (e) => {
-                if (e.shiftKey && app.lastModalClickIndex !== -1) {
-                    const [s, eIdx] = [Math.min(app.lastModalClickIndex, i), Math.max(app.lastModalClickIndex, i)];
-                    const targetState = !pl.tracks.includes(t.path);
-                    for (let j = s; j <= eIdx; j++) {
-                        const path = sortedFiltered[j].path;
-                        if (targetState && !pl.tracks.includes(path)) pl.tracks.push(path);
-                        else if (!targetState && pl.tracks.includes(path)) pl.tracks.splice(pl.tracks.indexOf(path), 1);
-                    }
-                    app.saveCustomPlaylists(); app.renderModalSongList();
-                } else {
-                    const idx = pl.tracks.indexOf(t.path);
-                    if (idx === -1) pl.tracks.push(t.path); else pl.tracks.splice(idx, 1);
-                    app.saveCustomPlaylists(); div.classList.toggle('in-playlist');
-                }
-                app.lastModalClickIndex = i; app.modalCount.textContent = `${pl.tracks.length} 首已添加`;
-            });
-            frag.appendChild(div);
-        });
-        app.modalSongList.appendChild(frag); app.modalCount.textContent = `${pl.tracks.length} 首已添加`;
+        // 一次拼好整张列表再写进去，点击交给列表本身（以前每行各建三层元素、各挂一个监听，5000 首打开、每敲一个字都要重建半秒多）
+        app.modalRows = sortedFiltered;
+        app.lastModalClickIndex = -1; // 行号换了一套：Shift 连选从下一次单击重新算起
+        app.modalSongList.innerHTML = sortedFiltered.length === 0 ? '<div class="music-modal-empty">没有匹配的歌曲</div>'
+            : sortedFiltered.map((t, i) => `<div class="music-modal-song-item${selectedPaths.has(t.path) ? ' in-playlist' : ''}" data-index="${i}">`
+                + `<div class="music-modal-song-checkbox"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg></div>`
+                + `<div class="music-modal-song-info"><div class="music-modal-song-title">${esc(app.stripAudioExtension(t.title) || '未知标题')}</div><div class="music-modal-song-artist">${esc(t.artist || '未知艺术家')}</div></div></div>`).join('');
+        app.modalCount.textContent = `${pl.tracks.length} 首已添加`;
+        if (!modalListsWired.has(app.modalSongList)) {
+            modalListsWired.add(app.modalSongList);
+            app.modalSongList.addEventListener('click', onModalSongClick);
+        }
     };
+
+    const modalListsWired = new WeakSet();
+    // 勾选、取消勾选（按住 Shift 连选一段）：只改这几行的样子，不重建列表，也不把勾上的歌挪到顶上
+    function onModalSongClick(e) {
+        const row = e.target.closest?.('.music-modal-song-item');
+        if (!row || !app.modalSongList.contains(row)) return;
+        const pl = app.customPlaylists.find(p => p.id === app.editingPlaylistId);
+        const rows = app.modalRows || [];
+        const i = Number(row.dataset.index);
+        const t = rows[i];
+        if (!pl || !t) return;
+        const items = app.modalSongList.children;
+        const paint = (j) => { const el = items[j]; if (el) el.classList.toggle('in-playlist', pl.tracks.includes(rows[j].path)); };
+        if (e.shiftKey && app.lastModalClickIndex !== -1 && rows[app.lastModalClickIndex]) {
+            const [s, eIdx] = [Math.min(app.lastModalClickIndex, i), Math.max(app.lastModalClickIndex, i)];
+            const targetState = !pl.tracks.includes(t.path);
+            const inList = new Set(pl.tracks);
+            for (let j = s; j <= eIdx; j++) {
+                const path = rows[j].path;
+                if (targetState && !inList.has(path)) { pl.tracks.push(path); inList.add(path); }
+                else if (!targetState && inList.has(path)) { inList.delete(path); }
+            }
+            if (!targetState) { const keep = pl.tracks.filter((p) => inList.has(p)); pl.tracks.length = 0; pl.tracks.push(...keep); }
+            for (let j = s; j <= eIdx; j++) paint(j);
+        } else {
+            const idx = pl.tracks.indexOf(t.path);
+            if (idx === -1) pl.tracks.push(t.path); else pl.tracks.splice(idx, 1);
+            paint(i);
+        }
+        app.saveCustomPlaylists();
+        app.lastModalClickIndex = i; app.modalCount.textContent = `${pl.tracks.length} 首已添加`;
+    }
 }
