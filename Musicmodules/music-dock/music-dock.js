@@ -2144,6 +2144,14 @@
         if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => { syncFluid(); syncGlow(); }));
         // 字体和布局稳定后再量一次（流体层要对齐按钮的真实位置）。
         requestAnimationFrame(() => { if (!state.destroyed) animateCapsule(); });
+        // 预热抽屉：窗口空下来以后，在藏着的抽屉里把当前页签画一遍。第一次打开时样式规则和排版都已经算过一回，
+        // 不会比以后每次都慢一大截。真打开时照常重画，这里画的东西不会被直接拿来用。
+        const warmTimer = setTimeout(() => {
+            const run = () => { if (!state.panelOpen && !state.destroyed) renderBody(); };
+            if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 4000 });
+            else run();
+        }, 2500);
+        cleanups.push(() => clearTimeout(warmTimer));
         kickProgress();
         lastPlaying = app.isPlaying === true;
         lastStage = stageActive();
