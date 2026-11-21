@@ -29,6 +29,7 @@
             <span class="archive-glyph-search" aria-hidden="true"></span>
             <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目">
             <span class="archive-key" aria-hidden="true">/</span>
+            <button type="button" class="archive-list-clear" data-l="clear" aria-label="清除检索" title="清除检索（Esc）"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             <div class="archive-list-recentq mf-glass" data-l="recentQ" role="listbox" aria-label="最近检索" hidden></div>
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
@@ -774,6 +775,17 @@
                 // 有检索词时第一条就是最可能的结果，直接选中，回车即可播放
                 if (state.query.trim()) edgeRow(false);
             }, 30); // 570 首时一次检索约 5–15ms，去抖只为合并连续按键，不再让人等
+        });
+        // 有检索词时右边出现 ✕：点一下清空，焦点留在输入框里接着打字（显示 / 隐藏只靠 CSS 的 :placeholder-shown）
+        r.clear?.addEventListener('mousedown', (e) => e.preventDefault());
+        r.clear?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!r.input.value) return;
+            r.input.value = '';
+            flushQuery();
+            r.input.focus();
+            paintRecentQ();
         });
         r.input.addEventListener('focus', paintRecentQ);
         r.input.addEventListener('input', paintRecentQ);

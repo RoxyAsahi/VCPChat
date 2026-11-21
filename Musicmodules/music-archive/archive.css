@@ -284,6 +284,11 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-search input::placeholder { color: var(--ar-muted); opacity: .8; }
 .archive-list-search input::-webkit-search-cancel-button { display: none; }
 .archive-list-search:focus-within .archive-key { opacity: 0; }
+.archive-list-clear { display: grid; place-items: center; width: 24px; height: 24px; margin: -4px -4px -4px 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ar-muted); cursor: pointer; transition: color .12s, background-color .12s; }
+.archive-list-clear:hover { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+.archive-list-clear:active { transform: scale(.92); }
+.archive-list-search input:placeholder-shown ~ .archive-list-clear { display: none; }
+.archive-list-search input:not(:placeholder-shown) ~ .archive-key { display: none; }
 .archive-list-search { position: relative; z-index: 6; } /* 浮层要盖住下面的分类行（检索框自己是一个独立层叠上下文） */
 /* 最近检索：检索框聚焦且为空时，在框下面浮出一块共用玻璃（不挤动下面的分类和目录） */
 .archive-list-recentq { position: absolute; left: -12px; right: -12px; top: calc(100% + 8px); z-index: 30; padding: 6px; font-size: 13px; cursor: default; }
@@ -430,6 +435,12 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-row .rt { grid-auto-flow: column; align-items: center; }
 .archive-list-row .rt .lk { text-decoration: none; font-size: 12px; color: var(--ar-accent-text, var(--ar-accent)); opacity: .9; }
 .archive-list-row:hover .tx em, .archive-list-row:hover .rt { color: var(--ar-ink); }
+/* 悬停整行铺一层很淡的底，按下再深一点（和 Apple Music / Spotify 的行一样）；左边多铺 10px 把悬停出现的播放钮也包进来 */
+.archive-list-row { --row-wash: transparent; border-radius: 8px; background: var(--row-wash); box-shadow: -10px 0 0 var(--row-wash); transition: background-color .12s, box-shadow .12s; }
+.archive-list-row:hover { --row-wash: color-mix(in srgb, var(--ar-ink) 5%, transparent); }
+.archive-list-row:active { --row-wash: color-mix(in srgb, var(--ar-ink) 9%, transparent); }
+.archive-list-row .go:active { transform: scale(.92); }
+.archive-list.grabbing .archive-list-row, .archive-list.has-multi .archive-list-row:not(:hover) { --row-wash: transparent; }
 /* 选中：说明块同款记号，左边实心小方块 + 一条细线延伸到行尾 */
 .archive-list-row.on .tx b { font-weight: 750; }
 .archive-list-row.on::before { content: ""; position: absolute; left: 0; top: 4px; width: 6px; height: 6px; background: var(--ar-square); }
