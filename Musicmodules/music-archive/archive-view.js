@@ -1187,6 +1187,7 @@
                     floor: v('--ar-floor', '#192125'),
                     badge: v('--ar-badge', '#5d676b'),
                     groove: v('--ar-groove', '#4a5559'),
+                    accent: v('--ar-accent', '#c8a15a'),
                     font: v('--mt-font-archive', 'sans-serif')
                 },
                 dark: !document.body.classList.contains('light-theme')

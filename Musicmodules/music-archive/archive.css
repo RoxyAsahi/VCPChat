@@ -185,7 +185,12 @@ body.music-reduce-motion .archive-scan-bar i { transition: none; }
 #music-archive-view.is-empty .archive-counter,
 #music-archive-view.is-empty .archive-rows,
 #music-archive-view.is-empty .archive-lanes,
-#music-archive-view.is-empty .archive-hint { display: none; }
+#music-archive-view.is-empty .archive-hint,
+#music-archive-view.is-empty .archive-brand-play,
+#music-archive-view.is-empty .archive-list-foot,
+#music-archive-view.is-empty .archive-queue { display: none; }
+/* 曲库空时中间已经说明了怎么办，目录里不再重复一遍 */
+#music-archive-view.is-empty .archive-list-empty { visibility: hidden; }
 
 /* 窄窗口（宽度不到 1500 个设计像素）：只留标题、档案说明、计数和歌单切换 */
 .archive-hud.narrow .archive-nav > [data-act="search"] .archive-key { display: none; }
