@@ -184,8 +184,18 @@ function setupUI(app) {
             renderNow(filtered);
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
+    // 列表空着时那句话（样式表里 #playlist:empty::after 显示它）：
+    // 曲库本身是空的就告诉人去哪添加，别说「没有匹配」；搜不到才说没有匹配。
+    const emptyText = (songs) => {
+        if (songs.length) return null;
+        if (!app.playlist.length) return '曲库里还没有歌曲，点上面的「本地」或「云端导入」添加';
+        if (String(app.searchInput?.value || '').trim()) return '没有匹配的曲目';
+        return '这里还没有歌曲';
+    };
     const renderNow = (filtered) => {
         const songs = filtered || app.playlist;
+        const empty = emptyText(songs);
+        if (empty) app.playlistEl.dataset.emptyText = empty; else delete app.playlistEl.dataset.emptyText;
         const unchanged = renderedBase === app.playlist
             && renderedBaseLength === app.playlist.length
             && shownSongs.length === songs.length
