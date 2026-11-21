@@ -6,7 +6,7 @@
 //     不再绕回这一组开头。提示条上可以一键关掉；整个曲库顺序播放、单曲循环、随机时不接。
 // 挑歌只用本机的曲目信息和听歌记录（music-stats.js），不联网。
 //
-// 对外：app.startRadio(trackOrIndex)、app.autoplay.enabled（读写，存本机）、
+// 对外：app.startRadio(trackOrIndex)、app.dailyMix()、app.neverPlayed()、app.autoplay.enabled（读写，存本机）、
 //       app.radio（正在放的电台：{ seed, label } 或 null）。纯函数 pickSimilar 供测试。
 
 (function (global) {
@@ -24,7 +24,7 @@
      * 打分：同歌手 3、同专辑 1.5、同流派 1、常听 0..2、喜欢 1.5、跳得多的往后，再加一点随机让每次不一样；
      * 然后控制同一歌手不超过三分之一、同一专辑不超过 3 首，避免一串全是同一张专辑。
      */
-    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, random = Math.random } = {}) {
+    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, novelty = () => 0, random = Math.random } = {}) {
         const seedArtists = new Map();
         const seedAlbums = new Set();
         const seedGenres = new Set();
@@ -45,6 +45,7 @@
             if (norm(t.genre) && seedGenres.has(norm(t.genre))) s += 1;
             s += 2 * affinity(t);
             if (liked(t)) s += 1.5;
+            s += novelty(t); // 每日推荐里给没听过的歌一点加分，让曲库里沉着的歌浮上来
             s += 1.2 * random();
             scored.push([s, t]);
         }
@@ -123,6 +124,50 @@
             app.playFromContext(list, app.playlist.indexOf(track), { origin: 'radio', render: false });
             toast(`已开始${app.radio.label}：${list.length} 首，快放完时会自己续上`);
             return true;
+        };
+
+        // ---- 每日推荐（Spotify 的 Daily Mix）：以最常听、最近听的几首为种子，同一天结果不变；
+        //      大约三分之一是还没听过的歌。没有听歌记录时用最近播放；都没有就随机。
+        const seeded = (seedText) => {
+            let h = 2166136261;
+            for (const ch of seedText) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+            return () => { h += 0x6D2B79F5; let x = h; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+        };
+        const byPaths = (paths) => {
+            const want = new Map((app.playlist || []).map((t) => [norm(String(t.path).replace(/\\/g, '/')), t]));
+            return paths.map((p) => want.get(norm(String(p).replace(/\\/g, '/')))).filter(Boolean);
+        };
+        let mixCache = { key: '', list: [] };
+        app.dailyMix = ({ size = 30 } = {}) => {
+            const lib = app.playlist || [];
+            const day = new Date().toISOString().slice(0, 10);
+            const key = day + '|' + lib.length + '|' + size;
+            if (mixCache.key === key) return mixCache.list;
+            const stats = app.musicStats;
+            let seeds = byPaths(stats ? stats.top(8, { minPlays: 1 }) : []);
+            if (seeds.length < 3) {
+                let recent = [];
+                try { recent = JSON.parse(global.localStorage?.getItem('musicArchiveRecent') || '[]'); } catch (e) { recent = []; }
+                seeds = seeds.concat(byPaths(recent.slice(0, 8)).filter((t) => !seeds.includes(t)));
+            }
+            const random = seeded(day + '|' + lib.length);
+            const list = pickSimilar(lib, seeds, {
+                size,
+                exclude: new Set(byPaths(stats ? stats.lastPlayed(15) : [])),
+                affinity: (t) => app.musicStats?.affinity?.(t) || 0,
+                liked: (t) => Boolean(app.isLiked?.(t)),
+                novelty: (t) => (stats && !stats.get(t) ? 1.6 : 0),
+                random
+            });
+            mixCache = { key, list };
+            return list;
+        };
+        // 还没听过的歌：随机一批（同一天不变），按歌手打散
+        app.neverPlayed = ({ size = 30 } = {}) => {
+            const stats = app.musicStats;
+            const lib = (app.playlist || []).filter((t) => t && t.path && !(stats && stats.get(t)));
+            const random = seeded('never|' + new Date().toISOString().slice(0, 10));
+            return pickSimilar(lib, [], { size, random });
         };
 
         // ---- 每换一首检查：电台快放完就续；一组放到最后一首就接上相似的歌 ----

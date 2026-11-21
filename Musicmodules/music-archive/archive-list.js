@@ -13,7 +13,7 @@
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];
-    const KINDS = [['all', '全部', 'ALL'], ['artist', '歌手', 'ARTIST'], ['album', '专辑', 'ALBUM'], ['playlist', '歌单', 'LIST'], ['recent', '最近', 'RECENT']];
+    const KINDS = [['all', '全部', 'ALL'], ['artist', '歌手', 'ARTIST'], ['album', '专辑', 'ALBUM'], ['playlist', '歌单', 'LIST'], ['recent', '为你', 'FOR YOU']];
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
     const fmtTime = (sec) => {
@@ -224,16 +224,19 @@
         };
         // 目录收起时量不到宽度；展开、窗口变宽窄、字体换好时再落一次位
         if (typeof global.ResizeObserver === 'function' && r.kinds) new global.ResizeObserver(() => placeKindMark()).observe(r.kinds);
-        // 「最近」里接在最近播放后面的两组，数据来自听歌记录（music-stats.js）
+        // 「为你」：最近播放后面接每日推荐、最常听、很久没听、还没听过（听歌记录 music-stats.js + 挑歌 music-radio.js）
         const statsSections = () => {
             const stats = app.musicStats;
             if (!stats) return [];
             const byPath = new Map();
             tracks().forEach((t, i) => { const k = String(t && t.path || '').replace(/\\/g, '/').toLowerCase(); if (k && !byPath.has(k)) byPath.set(k, i); });
             const idx = (paths) => paths.map((p) => byPath.get(String(p).replace(/\\/g, '/').toLowerCase())).filter((i) => i !== undefined);
+            const idxOf = (list) => list.map((t) => tracks().indexOf(t)).filter((i) => i >= 0);
             return [
+                { label: '每日推荐', key: 'recent:daily', items: app.dailyMix ? idxOf(app.dailyMix()) : [] },
                 { label: '最常听', key: 'recent:top', items: idx(stats.top(30)) },
-                { label: '很久没听', key: 'recent:forgotten', items: idx(stats.forgotten({ limit: 30 })) }
+                { label: '很久没听', key: 'recent:forgotten', items: idx(stats.forgotten({ limit: 30 })) },
+                { label: '还没听过', key: 'recent:new', items: app.neverPlayed ? idxOf(app.neverPlayed()) : [] }
             ];
         };
         const rebuild = ({ steady = false } = {}) => {
