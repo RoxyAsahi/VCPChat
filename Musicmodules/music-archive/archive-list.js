@@ -777,7 +777,7 @@
          * 把歌拖到歌单上：拖起目录里的行时，目录下方出现各个歌单（和「新建歌单」），松手即加入。
          * 数据还是播放器的 app.customPlaylists，存盘用它的 saveCustomPlaylists；改完通知档案页重排。
          */
-        const manage = { confirm: null, drag: null };
+        const manage = { confirm: null, drag: null, dragPl: null };
         const playlists = () => (Array.isArray(app.customPlaylists) ? app.customPlaylists : []);
         const playlistOfHead = (row) => {
             if (!row || row.type !== 'head' || state.kind !== 'playlist') return null;
@@ -936,6 +936,37 @@
             commitPlaylists();
             toast(`已从歌单「${pl.name}」移除 ${n} 首`, { label: '撤销', run: () => { pl.tracks = before; commitPlaylists(); } });
         };
+        /*
+         * 歌单里拖动排序：把拖着的几首（按目录顺序）挪到目标那首的前面或后面。
+         * 歌单里存的是路径；比较时和建目录时一样，统一斜杠、不分大小写。
+         */
+        const normPath = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
+        const reorderPlaylist = (pl, indices, targetI, after) => {
+            if (!pl || !Array.isArray(pl.tracks)) return false;
+            const moving = new Set(indices.map((i) => normPath((tracks()[i] || {}).path)));
+            const target = normPath((tracks()[targetI] || {}).path);
+            if (!target || moving.has(target)) return false;
+            const before = pl.tracks.slice();
+            const moved = before.filter((p) => moving.has(normPath(p)));
+            if (!moved.length) return false;
+            const rest = before.filter((p) => !moving.has(normPath(p)));
+            const at = rest.findIndex((p) => normPath(p) === target);
+            if (at === -1) return false;
+            rest.splice(after ? at + 1 : at, 0, ...moved);
+            if (rest.every((p, n) => p === before[n])) return false;
+            pl.tracks = rest;
+            commitPlaylists();
+            toast(`已调整「${pl.name}」的顺序`, { label: '撤销', run: () => { pl.tracks = before; commitPlaylists(); } });
+            return true;
+        };
+        const headOf = (k) => { let h = -1; for (const hk of state.heads) { if (hk <= k) h = hk; else break; } return h; };
+        /* 正在拖的歌都来自同一个歌单、而且没在检索时，才能在这个歌单里排序 */
+        const reorderScope = (row) => {
+            if (state.kind !== 'playlist' || state.query.trim() || !row) return null;
+            const k = state.rows.indexOf(row);
+            return k >= 0 ? playlistOfHead(state.rows[headOf(k)]) : null;
+        };
+
         /* 从曲库列表移除（磁盘上的文件不动）。正在放的那首不移除，免得打断播放 */
         const removeFromLibraryBatch = (indices) => {
             const lib = app.playlist;
@@ -1079,7 +1110,8 @@
             manage.drag = null;
             r.shelf.hidden = true;
             el.classList.remove('dragging');
-            el.querySelectorAll('.drop-over').forEach((n) => n.classList.remove('drop-over'));
+            el.querySelectorAll('.drop-over, .drop-before, .drop-after').forEach((n) => n.classList.remove('drop-over', 'drop-before', 'drop-after'));
+            manage.dragPl = null;
             closeCapDrop();
         };
         /*
@@ -1131,17 +1163,33 @@
             const cap = capHit(e.clientX, e.clientY);
             if (cap) return cap;
             const under = typeof document.elementFromPoint === 'function' && Number.isFinite(e.clientX) ? document.elementFromPoint(e.clientX, e.clientY) : null;
+            const node = manage.dragPl && under?.closest?.('.archive-list-row');
+            if (node && r.viewport.contains(node)) {
+                const k = Number(node.dataset.k);
+                const row = state.rows[k];
+                if (row && row.type === 'track' && playlistOfHead(state.rows[headOf(k)]) === manage.dragPl) {
+                    const box = node.getBoundingClientRect();
+                    const after = e.clientY > box.top + box.height / 2;
+                    return { node, cls: after ? 'drop-after' : 'drop-before', reorder: { pl: manage.dragPl, i: row.i, after } };
+                }
+            }
             return dropTarget(under || e.target);
         };
         const paintOver = (hit) => {
-            el.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
-            capDrop?.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
-            if (hit) hit.node.classList.add('drop-over');
+            const cls = hit ? hit.cls || 'drop-over' : '';
+            const clear = (n) => { for (const c of ['drop-over', 'drop-before', 'drop-after']) if (!hit || n !== hit.node || c !== cls) n.classList.remove(c); };
+            el.querySelectorAll('.drop-over, .drop-before, .drop-after').forEach(clear);
+            capDrop?.querySelectorAll('.drop-over').forEach(clear);
+            if (hit) hit.node.classList.add(cls);
         };
         const moveGhost = (e) => { if (ghost) ghost.style.transform = `translate(${(e.clientX || 0) + 14}px, ${(e.clientY || 0) + 12}px)`; };
         const startCarry = (row, e) => {
             manage.drag = dragIndices(row);
             openShelf();
+            // 在歌单分类里拖：拖的几首都在这个歌单里，就可以直接在歌单里上下挪
+            const pl = reorderScope(row);
+            const plPaths = pl ? new Set((pl.tracks || []).map(normPath)) : null;
+            manage.dragPl = plPaths && manage.drag.every((i) => plPaths.has(normPath((tracks()[i] || {}).path))) ? pl : null;
             ghost = document.createElement('div');
             ghost.className = 'archive-drag-ghost';
             const first = tracks()[manage.drag[0]] || {};
@@ -1155,6 +1203,7 @@
             ghost = null;
             closeShelf();
             if (!hit || !indices) return;
+            if (hit.reorder) { reorderPlaylist(hit.reorder.pl, indices, hit.reorder.i, hit.reorder.after); return; }
             if (hit.q) { queueBatch(indices, hit.q === 'next'); return; }
             if (hit.pl === 'new') {
                 const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
