@@ -98,3 +98,24 @@ test('refreshing the device list keeps the device the engine is using selected',
     await app.populateDeviceList(false);
     assert.equal(select.value, 'default');
 });
+
+test('an output change the engine rejects puts the old device and switch back, and choosing it again retries', async () => {
+    const { app } = setup();
+    const sent = [];
+    const notices = [];
+    app.showPlaybackNotice = (m) => notices.push(m);
+    app.api.configureMusicOutput = async (cfg) => { sent.push(cfg); return { status: 'error', message: 'fetch failed' }; };
+    app.populateDeviceList = async () => {}; // 列表重建另有测试，这里只看选中项
+    app.currentDeviceId = null; app.useWasapiExclusive = false;
+    app.deviceSelect.value = '3'; app.wasapiSwitch.checked = true;
+    await app.configureOutput();
+    assert.equal(app.currentDeviceId, null, 'still on the default device');
+    assert.equal(app.useWasapiExclusive, false);
+    assert.equal(app.wasapiSwitch.checked, false, 'the exclusive switch springs back');
+    assert.equal(String(app.deviceSelect.value), 'default', 'the list shows the device that is really playing');
+    assert.equal(notices.length, 1);
+    assert.match(notices[0], /^切换输出没有成功：/);
+    app.deviceSelect.value = '3';
+    await app.configureOutput();
+    assert.equal(sent.length, 2, 'choosing the same device again sends it again');
+});

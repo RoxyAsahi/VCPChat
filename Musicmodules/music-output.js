@@ -94,6 +94,7 @@ function setupOutput(app) {
         app.deviceSelect.disabled = true;
         app.wasapiSwitch.disabled = true;
 
+        const previous = { device: app.currentDeviceId, exclusive: app.useWasapiExclusive };
         try {
             app.currentDeviceId = selectedId;
             app.useWasapiExclusive = useExc;
@@ -102,6 +103,15 @@ function setupOutput(app) {
                 exclusive: app.useWasapiExclusive
             });
             if (result?.status === 'success') app.syncOutputFallback(result.state);
+            else {
+                // 引擎没换成（没连上、旧引擎不认）：界面退回原来的设备和开关，不然显示的是没生效的新设备，
+                // 再选一次同一个还会被上面「没变化」直接挡掉，怎么也换不过去。
+                app.currentDeviceId = previous.device;
+                app.useWasapiExclusive = previous.exclusive;
+                app.wasapiSwitch.checked = previous.exclusive;
+                const reason = result?.message ? (globalThis.MusicErrorText ? globalThis.MusicErrorText(result.message, '音频引擎没有响应') : result.message) : '音频引擎没有响应';
+                app.showPlaybackNotice?.(`切换输出没有成功：${reason}`);
+            }
             app.checkOutputFallbackSoon();
             await app.populateDeviceList(false);
             app.deviceSelect.value = app.currentDeviceId === null ? 'default' : app.currentDeviceId;

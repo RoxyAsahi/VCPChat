@@ -183,16 +183,19 @@ function setupVisualizer(app) {
                         app._gaplessJustSwitched = false;
                         return;
                     }
-                    console.log('[Music.js] Playback ended, moving to next track');
-                    // 停止轮询，防止 pollState 中的状态更新与 nextTrack 冲突
-                    app.stopStatePolling();
-                    app.isPlaying = false;
-                    app.playPauseBtn.classList.remove('is-playing');
-                    app.nextTrack();
+                    // 停止轮询，防止 pollState 中的状态更新与 nextTrack 冲突（在 handlePlaybackEnded 里）
+                    if (app.handlePlaybackEnded) app.handlePlaybackEnded('push');
+                    else {
+                        app.stopStatePolling();
+                        app.isPlaying = false;
+                        app.playPauseBtn.classList.remove('is-playing');
+                        app.nextTrack();
+                    }
                 } else if (message.type === 'track_changed') {
                     console.log('[Music.js] Gapless track changed:', message.file_path);
                     // 设置 gapless 切歌标志，抑制紧随其后的 playback_ended 事件
                     app._gaplessJustSwitched = true;
+                    app.endedHandledForLoad = null; // 无缝切过去的这首放完时也要能往下切
                     // 安全兜底：如果 playback_ended 没有紧跟着来，在一定时间后清除标志
                     clearTimeout(app._gaplessSwitchTimer);
                     app._gaplessSwitchTimer = setTimeout(() => {
