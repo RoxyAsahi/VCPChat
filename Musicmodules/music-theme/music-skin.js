@@ -68,7 +68,12 @@
     window.setupMusicSkin = (app) => {
         const fields = (name) => document.querySelectorAll(`[data-track-field="${name}"]`);
         const setText = (name, value, empty = '—') => {
-            for (const el of fields(name)) el.textContent = value || empty;
+            for (const el of fields(name)) {
+                el.textContent = value || empty;
+                // 规格栏里读不出来的项（只剩一个「—」）整格收起，不摆一排破折号
+                const cell = el.closest('.track-specs > div');
+                if (cell) cell.hidden = !value && (!empty || empty === '—');
+            }
         };
 
         const currentTrack = () => {
