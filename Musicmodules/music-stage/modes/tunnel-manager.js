@@ -3327,14 +3327,15 @@
                 colors.accentHex,
                 colors.secondaryHex,
                 scale.toFixed(2),
-                res
+                res,
+                settings?.lyricFont
             ]);
 
             if (cacheKey === glyphCacheKey) return;
             clearGlyphStage();
             glyphCacheKey = cacheKey;
 
-            const fontFamily = '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const fontFamily = U.lyricFont(settings?.lyricFont);
             const mainFont = `600 80px ${fontFamily}`;
             const subFont = `500 35px ${fontFamily}`;
             measureCtx.font = mainFont;
@@ -3622,6 +3623,22 @@
         /* ------------------------------------------------------------------------
          * 主题调色板同步
          * ------------------------------------------------------------------------ */
+        // The cover's colour leans the nebula's hues; planets, lyrics and
+        // lightness stay the theme's.
+        const cover = U.createCoverTint(T);
+        let coverBase = null;
+        const applyCover = () => {
+            if (!coverBase) return;
+            const w = cover.weight * (coverBase.paper ? 0.5 : 1);
+            const lean = (target, base, amount, floor) => cover.towardHue(target.copy(base), w * amount, floor);
+            // The cool nebula wears the cover's hue outright from the default
+            // amount up; the warm side only leans to it.
+            lean(skyMat.uniforms.uColorA.value, coverBase.skyA, 2, 0.8);
+            lean(skyMat.uniforms.uColorB.value, coverBase.skyB, 0.3, 0.6);
+            lean(fieldMat.uniforms.uNebulaA.value, coverBase.nebulaA, 2, 0.8);
+            lean(fieldMat.uniforms.uNebulaB.value, coverBase.nebulaB, 0.3, 0.6);
+            lean(filamentMat.uniforms.uColorA.value, coverBase.filamentA, 1.4, 0.6);
+        };
         const setPalette = (palette) => {
             stagePalette = palette || {};
             const colors = parsePalette();
@@ -3660,6 +3677,13 @@
             filamentMat.uniforms.uColorA.value.copy(colors.secondary);
             filamentMat.uniforms.uColorB.value.copy(colors.accent);
             filamentMat.uniforms.uColorC.value.copy(colors.muted);
+            coverBase = {
+                paper,
+                skyA: sky.uColorA.value.clone(), skyB: sky.uColorB.value.clone(),
+                nebulaA: fieldMat.uniforms.uNebulaA.value.clone(), nebulaB: fieldMat.uniforms.uNebulaB.value.clone(),
+                filamentA: filamentMat.uniforms.uColorA.value.clone()
+            };
+            applyCover();
 
             streakMat.uniforms.uColorA.value.copy(colors.ink);
             streakMat.uniforms.uColorB.value.copy(colors.secondary);
@@ -3755,7 +3779,8 @@
 
             // 1. 采样导演状态与确定性航道弧长
             const actState = timeline.sampleState(time);
-            const activeLine = frame?.activeLine || null;
+            // Marker lines ("●●●", "//") time a break; they are not shown.
+            const activeLine = frame?.activeLine && R.readableText(frame.activeLine.fullText) ? frame.activeLine : null;
             const lineIdx = activeLine?.index ?? -1;
             const shot = (lineIdx >= 0 && timeline.lineShots[lineIdx]) ? timeline.lineShots[lineIdx] : null;
 
@@ -3932,6 +3957,8 @@
             const showStarfield = settings.starfield !== false;
             fieldPoints.visible = showStarfield;
             skyDome.visible = showStarfield;
+            cover.settle(settingVal('coverTint', 0.5), performance.now());
+            applyCover();
             const sky = skyMat.uniforms;
             sky.uTime.value = settings.reducedMotion ? 0 : time;
             sky.uJourney.value = clamp(time / Math.max(1, timeline.duration));
@@ -4243,6 +4270,8 @@
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
+            setCoverColour: hex => cover.set(hex),
+            coverSettling: () => cover.settling(),
             prepare,
             update,
             resize(w, h, ratio) {
@@ -4425,12 +4454,17 @@
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
             // The track length often arrives a moment after the track itself; the
             // journey has to be compiled for the whole song, not just its lyrics.
-            const nextDuration = Math.round(finiteNumber(frame.duration, 0));
+            // Nothing chosen yet: plan an ordinary journey, so the waiting
+            // picture is its opening rather than the end of a zero-length one.
+            const knownDuration = Math.round(finiteNumber(frame.duration, 0));
+            const nextDuration = knownDuration > 0 || frame.lines?.length ? knownDuration : 240;
             const songChanged = source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration;
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
+            world?.setCoverColour?.(services?.app?.stageCoverColour);
+            // A paused stage still finishes easing into a new cover's colour.
             const still = !frame.isPlaying && lastTime !== null
-                && finiteNumber(frame.playbackTime, 0) === lastTime;
+                && finiteNumber(frame.playbackTime, 0) === lastTime && !world?.coverSettling?.();
             if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             applyQuality();

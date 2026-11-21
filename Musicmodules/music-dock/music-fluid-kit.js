@@ -335,6 +335,17 @@
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
+        { row: '#modal-song-list', item: '#modal-song-list > .music-modal-song-item', key: 'pl-songs', axis: 'xy', pad: 0 },
+        { row: '.webdav-file-list', item: '.webdav-file-list > .webdav-file-item', key: 'dav-files', axis: 'xy', pad: 0 },
+        { row: '.webdav-server-list', item: '.webdav-server-list > .webdav-server-item', key: 'dav-servers', axis: 'xy', pad: 0 },
+        { row: '.archive-detail-more', item: '.archive-detail-more li > button', key: 'ar-more', axis: 'xy', pad: 0 },
+        { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
+        { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
+        // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
+        { row: '.context-submenu', item: '.context-submenu .submenu-item', key: 'ctx-sub', axis: 'y', pad: 0 },
+        { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
+        { row: '.archive-batch-menu', item: '.archive-batch-menu > button', key: 'ar-batch', axis: 'y', pad: 0 },
+        { row: '.archive-list-sort-menu', item: '.archive-list-sort-menu > button', key: 'ar-sort', axis: 'y', pad: 0 },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -351,16 +362,14 @@
         // 按钮在这一排里的位置；排可能被整体缩放（档案页会按窗口大小缩放），所以按排自己的尺寸换算回去
         const placeIn = (row, btn, t) => {
             const rr = row.getBoundingClientRect(), br = btn.getBoundingClientRect();
-            if (t.axis === 'y') {
-                const k = rr.height ? row.offsetHeight / rr.height : 1;
-                return { top: (br.top - rr.top) * k + row.scrollTop - t.pad, height: br.height * k + t.pad * 2 };
-            }
-            const k = rr.width ? row.offsetWidth / rr.width : 1;
-            return { left: (br.left - rr.left) * k + row.scrollLeft - t.pad, width: br.width * k + t.pad * 2 };
+            const ky = rr.height ? row.offsetHeight / rr.height : 1;
+            const kx = rr.width ? row.offsetWidth / rr.width : 1;
+            return {
+                top: (br.top - rr.top) * ky + row.scrollTop - t.pad, height: br.height * ky + t.pad * 2,
+                left: (br.left - rr.left) * kx + row.scrollLeft - t.pad, width: br.width * kx + t.pad * 2,
+            };
         };
-        doc.addEventListener('pointerover', (event) => {
-            const target = event.target;
-            if (!(target instanceof global.Element)) return;
+        const follow = (target) => {
             for (const t of TRAILS) {
                 const btn = target.closest(t.item);
                 const row = btn?.closest(t.row);
@@ -368,11 +377,50 @@
                 const drop = dropOf(row);
                 const fresh = !drop.classList.contains('mf-on');
                 if (fresh) slides.delete(t.key);
-                slide(drop, placeIn(row, btn, t), { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
+                const to = placeIn(row, btn, t);
+                // 两列的列表（axis: 'xy'）横竖各流各的，斜着过去时像一滴被拉长再收拢
+                if (fresh) { slides.delete(`${t.key}:x`); slides.delete(`${t.key}:y`); }
+                if (t.axis === 'xy') {
+                    slide(drop, to, { key: `${t.key}:x`, axis: 'x', lead: 160, trail: 320 });
+                    slide(drop, to, { key: `${t.key}:y`, axis: 'y', lead: 160, trail: 320 });
+                } else {
+                    slide(drop, to, { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
+                }
                 drop.classList.add('mf-on');
                 return;
             }
+        };
+        doc.addEventListener('pointerover', (event) => {
+            if (event.target instanceof global.Element) follow(event.target);
         }, true);
+        // 用键盘（Tab、方向键）在一排里移动时，那一汪也跟着焦点流过去；鼠标点出来的焦点不算
+        doc.addEventListener('focusin', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            let visible = false;
+            try { visible = target.matches(':focus-visible'); } catch (_) { /* 老内核 */ }
+            if (visible) follow(target);
+        }, true);
+        doc.addEventListener('focusout', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            for (const t of TRAILS) {
+                const row = target.closest(t.row);
+                if (!row) continue;
+                const next = event.relatedTarget;
+                if (next instanceof global.Node && row.contains(next)) return;
+                if (row.matches(':hover')) return;
+                row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
+                return;
+            }
+        }, true);
+        // 菜单每次重新打开（右键、点排序按钮……）：上次留下的那一汪先收掉，免得一打开就停在旧的位置
+        const MENUS = ':is(.context-menu, .context-submenu, .archive-batch-menu, .archive-list-sort-menu) > .mf-trail.mf-on';
+        const clearMenus = (keep) => {
+            for (const drop of doc.querySelectorAll(MENUS)) if (!keep || !drop.parentElement.contains(keep)) drop.classList.remove('mf-on');
+        };
+        doc.addEventListener('contextmenu', () => clearMenus(null), true);
+        doc.addEventListener('pointerdown', (event) => clearMenus(event.target instanceof global.Node ? event.target : null), true);
         // 在按钮之间的空隙里不算离开；指针出了整排才淡掉
         doc.addEventListener('pointerout', (event) => {
             const target = event.target;

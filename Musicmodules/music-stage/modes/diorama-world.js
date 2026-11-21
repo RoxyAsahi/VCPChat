@@ -4286,7 +4286,7 @@
                     waterMat.uniforms.lampPos.value[i].set(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, anchor.y,
                         f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
                 }
-                waterMat.uniforms.lampPower.value[i] = saving ? 0 : power;
+                waterMat.uniforms.lampPower.value[i] = power;
             }
         };
         const setPalette = (palette = {}) => {
@@ -4432,8 +4432,29 @@
                 horizon: skyMat.uniforms.horizon.value.clone(),
                 night: skyMat.uniforms.night.value.clone(),
                 hemi: hemisphere.color.clone(), hemiIntensity: hemisphere.intensity,
-                lamp: lamp.clone(), warm: lamp.clone(), cold: tertiary.clone()
+                lamp: lamp.clone(), warm: lamp.clone(), cold: tertiary.clone(),
+                auroraGreen: skyMat.uniforms.auroraGreen.value.clone(),
+                auroraViolet: skyMat.uniforms.auroraViolet.value.clone()
             };
+            applyCover();
+        };
+        // The cover's colour leans the sky's hues (see createCoverTint): how
+        // light or dark the sky is stays the theme's, and the lyrics' colours
+        // are never touched.
+        const cover = global.MusicStageModeUtils.createCoverTint(T);
+        const towardHue = cover.towardHue;
+        const setCoverColour = hex => cover.set(hex);
+        const coverSettling = () => cover.settling();
+        const settleCover = (amount, now) => { cover.settle(amount, now); applyCover(); };
+        const applyCover = () => {
+            if (!palBase) return;
+            const w = cover.weight * (palBase.light ? 0.5 : 1);
+            skyMat.uniforms.auroraGreen.value.copy(palBase.auroraGreen);
+            skyMat.uniforms.auroraViolet.value.copy(palBase.auroraViolet);
+            // The main aurora band wears the cover's hue outright from the
+            // default amount up; the second band only leans to it.
+            towardHue(skyMat.uniforms.auroraGreen.value, w * 2, 0.8);
+            towardHue(skyMat.uniforms.auroraViolet.value, w * 0.5, 0.6);
         };
         // Warmth 0..1 → bias -1 (cold, open chorus) .. +1 (warm, tightening pre-chorus).
         // Everything is re-derived from the palette baseline, so no state accumulates.
@@ -4446,6 +4467,7 @@
             const k = palBase.light ? 0.5 : 1;
             scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5)
                 .lerp(skyMat.uniforms.sunset.value, liveDusk * 0.3);
+            towardHue(scratch, cover.weight * (palBase.light ? 0.15 : 0.4), 0.35);
             skyMat.uniforms.horizon.value.copy(scratch);
             waterMat.uniforms.fogTint.value.copy(scratch);
             if (scene.fog) {
@@ -4458,6 +4480,7 @@
             }
             skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k)
                 .lerp(palBase.overcast, rainLevel * 0.3);
+            towardHue(skyMat.uniforms.night.value, cover.weight * (palBase.light ? 0.1 : 0.45), 0.3);
             hemisphere.color.copy(palBase.hemi).lerp(toward, amount * 0.16 * k);
             hemisphere.intensity = palBase.hemiIntensity * (1 + Math.max(0, -bias) * 0.12) * (1 - rainLevel * 0.2);
             // The moon goes behind the rain clouds, and its path on the water with it.
@@ -4554,9 +4577,14 @@
             liveAccent = accent;
             skyMat.uniforms.accent.value = accent;
             starMat.uniforms.accent.value = accent;
+            settleCover(tuning.coverTint ?? 0.5, performance.now());
             applyWarmth(pose.state.warmth ?? 0.5, pose.state.openness, audio.energy);
             // Lamps spread wider in the wet air.
-            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3);
+            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3)
+                * (saving ? 1.35 : 1);
+            // The saving tier has no lens bloom to spread the lamps' light;
+            // a wider halo stands in for it.
+            haloMat.uniforms.size.value = saving ? 2.8 : 1.6;
             reflectionEnabled = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
             waterMat.uniforms.strength.value = reflectionEnabled ? clamp(tuning.waterStrength ?? 1, 0, 2) : 0;
             const spacing = 16 / clamp(tuning.stationIntensity ?? 1, 0.5, 2);
@@ -5560,6 +5588,7 @@
         setPalette();
         return {
             update, setPalette, renderReflection, updateCabin, prepareEnvironment,
+            setCoverColour, coverSettling,
             // How hard it is raining (0..1), for any shader that shows it.
             rain: rainAmount,
             setPixelRatio(ratio) {
@@ -5569,7 +5598,7 @@
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
             snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
                 wading, splashTriangles: splash.visible ? splashGeometry.drawRange.count / 3 : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
-                warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
+                warmth: liveWarmth, accent: liveAccent, coverWeight: cover.weight, coverTarget: cover.target, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
                 cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible, cabReal: cabReal.value,

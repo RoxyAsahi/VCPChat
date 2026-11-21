@@ -462,8 +462,118 @@
         };
     };
 
+    // The faces a 3D stage can write its lyrics in. Each list starts with the
+    // face Windows ships, then the usual macOS and open-source equivalents.
+    const LYRIC_FONTS = Object.freeze({
+        sans: '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Segoe UI",sans-serif',
+        serif: '"SimSun","Songti SC","Noto Serif CJK SC","Source Han Serif SC",serif',
+        kai: '"KaiTi","STKaiti","Kaiti SC","AR PL UKai CN",serif'
+    });
+    const lyricFont = key => LYRIC_FONTS[key] || LYRIC_FONTS.sans;
+
+    // The colour a cover is "about": the hue with the most vivid area,
+    // averaged over the pixels of that hue. A grey, black or white cover has
+    // no such colour and gives null, so the stage keeps its theme's sky.
+    const coverColour = (image) => {
+        if (!image) return null;
+        const size = 32;
+        let data;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.drawImage(image, 0, 0, size, size);
+            data = context.getImageData(0, 0, size, size).data;
+        } catch (_) { return null; }
+        return dominantHue(data);
+    };
+    const dominantHue = (data) => {
+        const BINS = 18;
+        const bins = Array.from({ length: BINS }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+        let total = 0, count = 0;
+        for (let i = 0; i + 2 < data.length; i += 4) {
+            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const l = (max + min) / 2, d = max - min;
+            count++;
+            if (d < 0.08) continue;
+            const s = d / (1 - Math.abs(2 * l - 1) || 1);
+            let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            h = (h * 60 + 360) % 360;
+            // Vivid and mid-tone counts; near-black and near-white hardly do.
+            const w = s * s * Math.max(0, 1 - Math.abs(l - 0.5) * 1.6);
+            const bin = bins[Math.floor(h / (360 / BINS)) % BINS];
+            bin.w += w; bin.r += r * w; bin.g += g * w; bin.b += b * w;
+            total += w;
+        }
+        // Spread each bin over its neighbours so a hue on a bin edge is not split.
+        let best = -1, bestW = 0;
+        bins.forEach((bin, i) => {
+            const w = bin.w + 0.5 * (bins[(i + 1) % BINS].w + bins[(i + BINS - 1) % BINS].w);
+            if (w > bestW) { bestW = w; best = i; }
+        });
+        if (best < 0 || !count || total / count < 0.03) return null;
+        const bin = bins[best];
+        if (!bin.w) return null;
+        const hex = [bin.r, bin.g, bin.b]
+            .map(v => Math.round(Math.min(1, v / bin.w) * 255).toString(16).padStart(2, '0')).join('');
+        return '#' + hex;
+    };
+
+    // A 3D stage's hold on the cover's colour: set() it whenever the song
+    // may have changed, settle() it once a drawn frame, and towardHue() any
+    // colour to lean it to the cover's hue by the eased weight, keeping
+    // that colour's own lightness. Weight and hue both ease over about two
+    // seconds of wall-clock time, so a song change glides, never cuts.
+    const createCoverTint = (THREE) => {
+        const state = { target: null, colour: new THREE.Color(), next: null, weight: 0, aim: 0, at: 0 };
+        const coverHsl = {}, toneHsl = {}, scratch = new THREE.Color();
+        const close = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 0.003;
+        return {
+            get weight() { return state.weight; },
+            get target() { return state.target; },
+            set(hex) {
+                const next = typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : null;
+                if (next === state.target) return;
+                state.target = next;
+                if (!next) return;
+                state.next = new THREE.Color(next);
+                // Coming from no colour: start from this one, just faded in.
+                if (state.weight < 0.01) state.colour.copy(state.next);
+            },
+            settle(amount, now) {
+                const dt = state.at ? Math.min(0.25, Math.max(0, (now - state.at) / 1000)) : 1;
+                state.at = now;
+                const k = 1 - Math.exp(-dt * 1.6);
+                state.aim = state.target ? clamp(Number(amount) || 0, 0, 1) : 0;
+                state.weight += (state.aim - state.weight) * k;
+                if (Math.abs(state.aim - state.weight) < 0.002) state.weight = state.aim;
+                if (state.target && state.next) {
+                    state.colour.lerp(state.next, k);
+                    if (close(state.colour, state.next)) state.colour.copy(state.next);
+                }
+                state.colour.getHSL(coverHsl);
+                return state.weight;
+            },
+            settling: () => Math.abs(state.aim - state.weight) > 0.002
+                || Boolean(state.target && state.next && !close(state.colour, state.next)),
+            // Mixed straight across, not round the colour wheel: a partial
+            // turn from teal toward red would land on green, a hue in
+            // neither. Weights near 1 are for what should wear the cover's
+            // hue; small ones only warm or cool a colour.
+            towardHue(colour, weight, satFloor = 0) {
+                if (!(weight > 0)) return colour;
+                colour.getHSL(toneHsl);
+                scratch.setHSL(coverHsl.h, Math.max(toneHsl.s, coverHsl.s * satFloor), toneHsl.l);
+                return colour.lerp(scratch, Math.min(1, weight));
+            }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         watchOverlay,
+        coverColour, dominantHue, createCoverTint,
+        lyricFont,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, durationChanged,
