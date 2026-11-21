@@ -488,3 +488,15 @@ body.light-theme .dialog-btn { transition: background-color .15s, transform .34s
 .mtst .mtst-act { transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
 .mtst .mtst-act:active { transform: scale(.92, .88); transition-duration: .1s; }
 body.music-reduce-motion :is(#music-dock-root .md-ib, .dialog-btn, .mtst .mtst-act):active { transform: none; }
+
+/* ───────── 档案「取出」卡片：外形不动，只换按下和点亮的动作 ─────────
+ * 方框按钮是档案的结构，保持原样；按下时压扁、松手回弹，和别处同一条曲线。
+ * 卡片上的心形点亮时，和底栏的心一样先压扁再鼓起来（mf-like-pop）。 */
+.archive-detail-actions > button,
+.archive-detail-like { transition: background .2s, color .2s, border-color .2s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.archive-detail-actions > button:active:not(:disabled) { transform: scale(.96, .92); transition-duration: .1s; }
+.archive-detail-like:active { transform: scale(.88); transition-duration: .1s; }
+.archive-detail-like > span { display: inline-block; }
+.archive-detail-like[aria-pressed="true"] > span { animation: mf-like-pop .52s cubic-bezier(.34, 1.4, .5, 1); }
+body.music-reduce-motion :is(.archive-detail-actions > button, .archive-detail-like):active { transform: none; }
+body.music-reduce-motion .archive-detail-like[aria-pressed="true"] > span { animation: none; }
