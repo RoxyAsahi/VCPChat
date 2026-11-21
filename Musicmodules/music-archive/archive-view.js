@@ -538,6 +538,28 @@
             if (map.size > max) map.delete(map.keys().next().value);
             return value;
         };
+        /* 取出详情的卡面贴图不直接用原图：几千像素的内嵌封面一旦画进贴图，解码后的整张图（一张几十 MB）会跟着
+           缓存里的图片对象一直留着。改成在后台缩成最长边 512 的画布（卡面贴图就是 512）再交给场景，
+           原图对象只留着没解码的文件数据。只在取出详情时才缩，平时翻歌不多花解码 */
+        const COVER_MAX = 512;
+        const smallCover = (entry) => {
+            if (entry.small) return Promise.resolve(entry.small);
+            const img = entry.img;
+            const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+            if (Math.max(w, h) <= COVER_MAX || typeof global.createImageBitmap !== 'function') return Promise.resolve(img);
+            if (entry.shrinking) return entry.shrinking;
+            const k = COVER_MAX / Math.max(w, h);
+            const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+            entry.shrinking = global.createImageBitmap(img, { resizeWidth: cw, resizeHeight: ch, resizeQuality: 'high' }).then((bmp) => {
+                const c = document.createElement('canvas');
+                c.width = cw; c.height = ch;
+                c.getContext('2d').drawImage(bmp, 0, 0);
+                bmp.close?.();
+                entry.small = c; entry.shrinking = null;
+                return c;
+            }).catch(() => { entry.shrinking = null; return img; }); // 缩不了就用原图
+            return entry.shrinking;
+        };
         const probeDir = (dir) => {
             const entry = capped(state.dirCovers, dir, { url: null }, 256);
             let k = 0;
@@ -724,7 +746,19 @@
             if (!t) return;
             const url = coverOf(t);
             const entry = url ? state.coverCache.get(url) : null;
-            if (entry && entry.ok) { state.scene.setCover(url, entry.img); kick(); return; }
+            if (entry && entry.ok) {
+                if (entry.small || Math.max(entry.img.naturalWidth || 0, entry.img.naturalHeight || 0) <= COVER_MAX || typeof global.createImageBitmap !== 'function') {
+                    state.scene.setCover(url, entry.small || entry.img); kick(); return;
+                }
+                // 大图：缩好之前先放写着曲名的素色卡面，缩好再换上（期间换了歌就不换）
+                if (state.scene.detail) state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
+                smallCover(entry).then((src) => {
+                    if (!detailOpen || !state.scene || coverOf(selectedTrack()) !== url) return;
+                    state.scene.setCover(url, src); kick();
+                });
+                kick();
+                return;
+            }
             if (entry && entry.ok === null) {
                 entry.img.addEventListener('load', syncDetailCover, { once: true });
                 entry.img.addEventListener('error', syncDetailCover, { once: true });
