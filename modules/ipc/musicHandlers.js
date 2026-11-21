@@ -190,6 +190,12 @@ function createOrFocusMusicWindow() {
             pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
 
+        // 从资源管理器把歌曲或图片拖进窗口时，Chromium 默认会跳转去打开那个文件，整个播放器被换掉、
+        // 播放状态全丢。音乐窗口只该停在自己的页面上。
+        musicWindow.webContents.on('will-navigate', (event, url) => {
+            if (!/\/Musicmodules\/music\.html(?:[?#]|$)/.test(String(url).replace(/\\/g, '/'))) event.preventDefault();
+        });
+
         musicWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error(`[Music] Music window failed to load: ${errorDescription} (code: ${errorCode})`);
             rejectWindowCreation(new Error(`Music window failed to load: ${errorDescription}`));

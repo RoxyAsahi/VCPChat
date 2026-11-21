@@ -713,7 +713,7 @@
                         }
                         node.mat.uniforms.hopStart.value = picked;
                     }
-                    node.mat.uniforms.hop.value = R.clamp(audio.impact);
+                    node.mat.uniforms.hop.value = R.clamp(audio.impact) * R.clamp(tuning.lyricHop ?? 1, 0, 2);
                     const reflected = node.group.userData.reflectedSubtitle;
                     const subtitle = node.group.userData.subtitle;
                     const reflectionOn = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
