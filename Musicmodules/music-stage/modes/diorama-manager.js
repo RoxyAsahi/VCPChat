@@ -228,10 +228,12 @@
             const outdoors = 1 - R.clamp(pose.cabinView || 0);
             // Opening inside the saloon: no sky to come down from; the dissolve does it.
             if (arriving && outdoors < 0.5) arriving = 0;
-            // Advance by drawn frames, at most a thirtieth of a second each, so
-            // the rebuild's long first frame cannot swallow the move.
+            // Advance by real time, but a frame that took longer than a quarter
+            // second (the rebuild's first frame) counts for a thirtieth, so it
+            // cannot swallow the move; on a slow machine the move still keeps time.
             const now = performance.now();
-            const step = Math.min(1 / 30, Math.max(0, (now - (tiltClock || now)) / 1000));
+            const gap = Math.max(0, (now - (tiltClock || now)) / 1000);
+            const step = gap > 0.25 ? 1 / 30 : Math.min(0.1, gap);
             tiltClock = leaving || arriving ? now : 0;
             if (leaving) leaving.tilt = Math.min(1, (leaving.tilt || 0) + step / LEAVE_TILT_S);
             if (arriving) arriving = Math.min(1, arriving + step / ARRIVE_TILT_S);
