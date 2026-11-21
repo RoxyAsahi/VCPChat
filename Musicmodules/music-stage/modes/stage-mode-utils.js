@@ -165,7 +165,7 @@
         let frames = 0;
         let steady = 0;
         let patience = 900;
-        let longRun = 0;
+        let longRun = 0, strikes = 0;
         let derivedFrom = null, derived = null, derivedDrop = 0;
         const taken = () => LADDER.slice(0, rung);
         const scaleSteps = () => taken().filter(step => step === 'scale').length;
@@ -198,7 +198,7 @@
                 return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * this.factor);
             },
             // Start again from the top, e.g. after the listener chose a tier.
-            reset() { rung = 0; frames = 0; steady = 0; patience = 900; },
+            reset() { rung = 0; frames = 0; steady = 0; patience = 900; strikes = 0; },
             // Feed the time of every drawn frame, and the interval the frame
             // cap aims for. Returns true when the drawing changed.
             tick(now, aim = 0) {
@@ -220,10 +220,16 @@
                 const slow = Math.max(23, aim * 1.3);
                 const fast = Math.max(17.6, aim * 1.08);
                 if (average > slow && rung < LADDER.length) {
-                    rung += 1;
                     frames = 0; steady = 0;
+                    // A tier drop does not come back by itself, so a moment of
+                    // load (a song change, another app busy) must not cause it:
+                    // it takes two slow judgements in a row.
+                    if (LADDER[rung] === 'tier' && ++strikes < 2) return false;
+                    strikes = 0;
+                    rung += 1;
                     return true;
                 }
+                strikes = 0;
                 // A dropped tier caps the frame rate lower, so the frame times can no
                 // longer show whether it would cope: it stays down until the
                 // listener picks a tier again (reset).
