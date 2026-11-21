@@ -111,7 +111,12 @@
         <div class="md-stage-in md-tune" data-md="tune-slot"></div>
         <button class="md-fold" type="button" data-md="tune-more" aria-expanded="false" hidden></button>
       </section>
+      <section class="md-grp md-play-grp" data-md="play-sec" aria-label="播放" hidden>
+        <div class="md-grp-h"><b>播放</b></div>
+        <div class="md-fx-sc md-moved" data-md="play-slot"></div>
+      </section>
       <div class="md-tab md-tab2" data-md="body2"></div>
+      <div class="md-fx-sc md-moved" data-md="disp-slot"></div>
       <div class="md-stage-in" data-md="common-slot"></div>
       <section class="md-grp md-adv">
         <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
@@ -170,6 +175,9 @@
             tabs: $('[data-md="tabs"]'),
             ext: $('[data-md="ext"]'),
             body2: $('[data-md="body2"]'),
+            playSec: $('[data-md="play-sec"]'),
+            playSlot: $('[data-md="play-slot"]'),
+            dispSlot: $('[data-md="disp-slot"]'),
             tuneSec: $('[data-md="tune-sec"]'),
             tuneTitle: $('[data-md="tune-title"]'),
             tuneHint: $('[data-md="tune-hint"]'),
@@ -1150,6 +1158,7 @@
             }
             el.body.innerHTML = html;
             renderExt(tab === '控制');
+            syncMoved(tab === '控制');
             syncFx(tab === '声音');
             placeMarks(el.body);
             placeMarks(el.body2);
@@ -1664,6 +1673,7 @@
             state.panelOpen = false;
             closePop();
             syncFx(false);
+            syncMoved(false);
             el.pnl.classList.remove('md-open');
             el.pnl.setAttribute('aria-hidden', 'true');
             el.hdl.classList.remove('md-open');
@@ -1890,6 +1900,28 @@
             if (inDrawer) el.fxScroll.appendChild(dspCard);
             else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
+        // 音效卡里有三个开关和声音无关：「放完接着放相似的歌」归到控制页新开的「播放」组，「桌面歌词」「旧版界面（原版）」
+        // 归到「显示」组。控制页开着时把这三行原样搬进来（appendChild，id、事件、设置键都不变），离开控制页或关面板就放回原处，
+        // 所以经典视图里的音效卡照旧完整；抽屉声音页里由 CSS 不再显示这三行。
+        // var：renderBody 可能在这里之前就被调用（预画），那时还没收集到这三行，直接跳过即可。
+        var movedRows = [['autoplay-switch', 'play'], ['desktop-lyrics-switch', 'disp'], ['legacy-ui-switch', 'disp']]
+            .map(([id, where]) => {
+                const item = document.getElementById(id)?.closest('.setting-item');
+                return item ? { item, where, parent: item.parentNode, next: item.nextSibling } : null;
+            }).filter(Boolean);
+        var movedIn = false;
+        function syncMoved(show) {
+            if (!movedRows) return;
+            show = Boolean(show && state.panelOpen);
+            if (show === movedIn) return;
+            movedIn = show;
+            for (const row of movedRows) {
+                if (show) (row.where === 'play' ? el.playSlot : el.dispSlot).appendChild(row.item);
+                else if (row.parent) row.parent.insertBefore(row.item, row.next && row.next.parentNode === row.parent ? row.next : null);
+            }
+            el.playSec.hidden = !(show && movedRows.some((row) => row.where === 'play'));
+        }
+        cleanups.push(() => syncMoved(false));
         // 「音效设置」原来是抽屉里的子页，现在就是声音页；这两个名字留给命令面板和外面的调用。
         function openSheet() { openPanel('声音'); }
         function closeSheet() { syncFx(false); }
