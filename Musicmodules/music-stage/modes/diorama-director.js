@@ -126,7 +126,9 @@
         // screen up for a name. They are left to the lyric panel.
         const credit = line => CREDIT.test(String(line.fullText ?? line.text ?? ''));
         const firstSung = sorted.findIndex(line => !credit(line));
-        const lines = firstSung > 0 ? sorted.slice(firstSung) : sorted;
+        // Marker lines ("●●●", "//") time a break; they get no screen.
+        const lines = (firstSung > 0 ? sorted.slice(firstSung) : sorted)
+            .filter(line => R.readableText(line.fullText ?? line.text));
         const seed = String(input.trackId || 'last-train');
         const lastEnd = lines.reduce((end, line) => Math.max(end, vocalEnd(line),
             finiteNumber(line.renderHints?.renderEndTime, 0)), 0);

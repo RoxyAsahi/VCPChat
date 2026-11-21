@@ -8,7 +8,12 @@
 
     const { clamp, DisposableScope } = Runtime;
 
-    const fileUrl = (path) => path ? `file://${String(path).replace(/\\/g, '/')}` : '';
+    // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
+    const fileUrl = (path) => {
+        if (!path) return '';
+        const p = String(path).replace(/\\/g, '/');
+        return 'file://' + encodeURI(p.startsWith('/') ? p : '/' + p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    };
 
     const resolveThemeAssetValue = (value) => {
         if (typeof value !== 'string' || !value.includes('url(')) return value;
@@ -207,6 +212,8 @@
                 { key: 'motionAmount', label: '运动幅度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'audioReactivity', label: '空间音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'lyricFont', label: '歌词字体', type: 'select', options: [['sans', '黑体'], ['serif', '宋体（明朝）'], ['kai', '楷体']] },
+                { key: 'coverTint', label: '天色随封面（封面的主色染进天空与极光，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: 'x' },
                 { key: 'showParticles', label: '天球星空', type: 'toggle' },
                 { key: 'geometryMode', label: '取景方式', type: 'select', options: [['clouds', '电影取景'], ['corridor', '全幅取景']] },
                 { key: 'cabinFrame', label: '车窗前景（侧望窗外时淡入）', type: 'toggle' },
@@ -293,10 +300,12 @@
                 { key: 'dissolveAmount', label: '点阵消散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'textHoldRatio', label: '歌词驻留', type: 'range', min: 0, max: 0.8, step: 0.05, unit: '%' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'lyricFont', label: '歌词字体', type: 'select', options: [['sans', '黑体'], ['serif', '宋体（明朝）'], ['kai', '楷体']] },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
                 { key: 'glow', label: '点阵辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+                { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'coverTint', label: '星云随封面（封面的主色染进星云，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: 'x' }
             ]
         });
         const state = {
@@ -744,6 +753,8 @@
             }
 
             const show = (image) => {
+                // The 3D stages may take the cover's colour into their sky.
+                app.stageCoverColour = image ? global.MusicStageModeUtils?.coverColour?.(image) ?? null : null;
                 if (softNext && softCurrent) paintSoft(softNext, image, 46, 1.45);
                 // A layer with no picture is still a blurred layer to the compositor.
                 elements.backdropNext.classList.toggle('is-empty', !nextUrl);
@@ -757,7 +768,14 @@
                     state.backgroundTimer = null;
                 }, 850);
             };
-            if (!nextUrl || !softNext || !softCurrent) { show(null); return; }
+            if (!nextUrl) { show(null); return; }
+            if (!softNext || !softCurrent) {
+                show(null);
+                loadImage(nextUrl).then((image) => {
+                    if (!state.destroyed && state.coverUrl === nextUrl) app.stageCoverColour = global.MusicStageModeUtils?.coverColour?.(image) ?? null;
+                });
+                return;
+            }
             loadImage(nextUrl).then((image) => {
                 if (!state.destroyed && state.coverUrl === nextUrl) show(image);
             });

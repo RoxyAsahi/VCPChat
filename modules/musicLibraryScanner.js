@@ -15,6 +15,7 @@ const { Worker } = require('worker_threads');
 const { repairTrackTags } = require('./musicTagText');
 
 const SUPPORTED_FORMATS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a']);
+const isAudioFile = (file) => SUPPORTED_FORMATS.has(path.extname(String(file)).toLowerCase());
 const WORKER_FILE = path.join(__dirname, 'musicScannerWorker.js');
 const DEFAULTS = {
     batchSize: 64,
@@ -82,7 +83,8 @@ async function reusable(known, stat, coverSeen) {
 
 /**
  * @param {object} options
- * @param {string} options.folderPath
+ * @param {string} [options.folderPath]
+ * @param {string[]} [options.filePaths]  给了就只读这些音频文件，不遍历 folderPath
  * @param {string} options.coverCachePath
  * @param {Iterable<object>} [options.knownTracks]  上次保存的曲目（带 mtimeMs、size 的可以免解析）
  * @param {(info: {total: number, folderPath: string}) => void} [options.onStart]
@@ -93,7 +95,7 @@ async function reusable(known, stat, coverSeen) {
  */
 async function scanFolder(options) {
     const {
-        folderPath, coverCachePath, knownTracks, onStart, onProgress, onBatch, signal,
+        folderPath, filePaths, coverCachePath, knownTracks, onStart, onProgress, onBatch, signal,
         workerCount = defaultWorkerCount(), workerFile = WORKER_FILE
     } = options;
     const tune = { ...DEFAULTS, ...options.tuning };
@@ -102,7 +104,10 @@ async function scanFolder(options) {
     // 读不了的目录（拔掉的移动硬盘、没权限、正被别的程序占着）：里面上次扫到的曲目原样留着，
     // 不当成「文件已删除」。解析失败的曲目同理沿用上次的结果。
     const unreadable = [];
-    const files = await collectAudioFiles(folderPath, { signal, unreadable });
+    // filePaths：只读这几个文件（拖进窗口的单曲），不遍历文件夹
+    const files = Array.isArray(filePaths)
+        ? [...new Set(filePaths.filter((f) => typeof f === 'string' && isAudioFile(f)))]
+        : await collectAudioFiles(folderPath, { signal, unreadable });
     const total = files.length;
     onStart?.({ total, folderPath });
     const stats = { total, parsed: 0, reused: 0, failed: 0, kept: 0, unreadable: unreadable.length, elapsedMs: 0, aborted: false };

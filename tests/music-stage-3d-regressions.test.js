@@ -120,7 +120,7 @@ test('mode settings keep their own ranges', () => {
     dom.window.close();
 });
 
-test('the sung-word hop has its own strength on the two 3D stages only', () => {
+test('the sung-word hop and the lyric face are settings of the two 3D stages only', () => {
     const dom = createDom();
     const { MusicStageConfig: Config } = loadStage(dom);
     assert.equal(Config.get().modes.diorama.lyricHop, 1);
@@ -130,6 +130,52 @@ test('the sung-word hop has its own strength on the two 3D stages only', () => {
     Config.setModePatch('tunnel', { lyricHop: 0 });
     assert.equal(Config.get().modes.tunnel.lyricHop, 0);
     assert.equal(Config.get().modes.luminous.lyricHop, undefined);
+    assert.equal(Config.get().modes.diorama.lyricFont, 'sans');
+    Config.setModePatch('diorama', { lyricFont: 'serif' });
+    assert.equal(Config.get().modes.diorama.lyricFont, 'serif');
+    Config.setModePatch('tunnel', { lyricFont: 'comic' });
+    assert.equal(Config.get().modes.tunnel.lyricFont, 'sans');
+    assert.equal(Config.get().modes.luminous.lyricFont, undefined);
+    dom.window.close();
+});
+
+test('the 3D stages take the cover\'s most vivid hue into their sky, and a grey cover gives none', () => {
+    const dom = createDom();
+    const { MusicStageConfig: Config, MusicStageModeUtils: U } = loadStage(dom);
+    assert.equal(Config.get().modes.diorama.coverTint, 0.5);
+    Config.setModePatch('diorama', { coverTint: 3 });
+    assert.equal(Config.get().modes.diorama.coverTint, 1);
+    assert.equal(Config.get().modes.tunnel.coverTint, 0.5);
+    assert.equal(Config.get().modes.luminous.coverTint, undefined);
+    const pixels = (list) => Uint8ClampedArray.from(list.flatMap(([r, g, b]) => [r, g, b, 255]));
+    // A red square on black: black has no hue, so red is the colour.
+    const red = pixels([...Array(30).fill([200, 40, 60]), ...Array(70).fill([0, 0, 0])]);
+    assert.equal(U.dominantHue(red), '#c8283c');
+    // Mostly sky blue with a sand strip: the larger vivid area wins.
+    const sky = pixels([...Array(60).fill([90, 160, 230]), ...Array(40).fill([232, 216, 176])]);
+    assert.equal(U.dominantHue(sky), '#5aa0e6');
+    // Greys, black and white only.
+    const grey = pixels(Array.from({ length: 100 }, (_, i) => [i * 2.5, i * 2.5, i * 2.5]));
+    assert.equal(U.dominantHue(grey), null);
+    dom.window.close();
+});
+
+test('marker lines and placeholder translations never reach a 3D stage', () => {
+    const dom = createDom();
+    const { MusicStageRuntime: R, MusicStageDioramaDirector: Director } = loadStage(dom, 'Musicmodules/music-stage/modes/diorama-director.js');
+    assert.equal(R.readableText('●●●'), false);
+    assert.equal(R.readableText(' // '), false);
+    assert.equal(R.readableText('——'), false);
+    assert.equal(R.readableText('海'), true);
+    assert.equal(R.readableText('Love 2'), true);
+    assert.equal(R.resolveSupplementalText({ translation: '//' }), '');
+    assert.equal(R.resolveSupplementalText({ translation: ' Sea ' }), 'Sea');
+    const lines = R.normalizeLines([
+        { time: 10, original: '清晨的站台' }, { time: 14, original: '●●●' },
+        { time: 30, original: '//' }, { time: 34, original: '列车带走昨夜的梦' }
+    ]);
+    const timeline = Director.compile({ lines, trackId: 't', duration: 60 });
+    assert.deepEqual(timeline.lines.map(line => line.fullText), ['清晨的站台', '列车带走昨夜的梦']);
     dom.window.close();
 });
 

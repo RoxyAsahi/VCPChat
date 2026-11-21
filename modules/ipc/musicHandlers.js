@@ -1,9 +1,10 @@
 // modules/ipc/musicHandlers.js
 
-const { ipcMain, BrowserWindow, dialog } = require('electron');
+const electron = require('electron');
+const { ipcMain, BrowserWindow, dialog } = electron;
 const path = require('path');
 const fs = require('fs-extra');
-const { scanFolder } = require('../musicLibraryScanner');
+const { scanFolder, SUPPORTED_FORMATS } = require('../musicLibraryScanner');
 const lyricFetcher = require('../lyricFetcher'); // Import the new lyric fetcher
 const webdavManager = require('../webdavManager'); // WebDAV support
 const windowService = require('../services/windowService');
@@ -12,6 +13,7 @@ const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPat
 const audioEngineEndpoint = require('../services/audioEngineEndpoint');
 const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
+const windowBounds = require('../musicWindowBounds');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -31,12 +33,26 @@ let mainWindow = null; // To be initialized
 let openChildWindows = []; // To be initialized
 let MUSIC_PLAYLIST_FILE;
 let MUSIC_COVER_CACHE_DIR;
+let MUSIC_WINDOW_BOUNDS_FILE;
 let LYRIC_DIR;
 let startAudioEngine; // To hold the function from main.js
 let stopAudioEngine; // To hold the function from main.js
 let musicWindowPromise = null; // To handle concurrent window creation requests
 let pendingPlaybackForNewWindow = null; // 用于在新窗口创建时传递待播放曲目及可选演出模式
 let ipcHandlersRegistered = false;
+const MUSIC_CRASH_LIMIT = 3;
+const MUSIC_CRASH_WINDOW_MS = 60 * 1000;
+
+function restoreMusicWindowBounds(limits) {
+    if (!MUSIC_WINDOW_BOUNDS_FILE) return null;
+    const saved = windowBounds.readSavedBounds(MUSIC_WINDOW_BOUNDS_FILE);
+    if (!saved) return null;
+    let workAreas = [];
+    try {
+        workAreas = (electron.screen?.getAllDisplays?.() || []).map((d) => d.workArea);
+    } catch (_) { /* 屏幕信息拿不到就用默认位置 */ }
+    return windowBounds.restoreBounds(saved, workAreas, limits);
+}
 
 // --- Singleton Music Window Creation Function ---
 function createOrFocusMusicWindow() {
@@ -106,9 +122,12 @@ function createOrFocusMusicWindow() {
         }
 
         console.log('[Music] Creating new music window instance.');
+        // 回到上次关窗时的位置和大小；那块屏不在了或窗口跑到屏幕外，就用默认位置居中
+        const restored = restoreMusicWindowBounds({ minWidth: 420, minHeight: 600 });
         musicWindow = new BrowserWindow({
-            width: 1280,
-            height: 700,
+            width: restored?.width || 1280,
+            height: restored?.height || 700,
+            ...(restored ? { x: restored.x, y: restored.y } : {}),
             minWidth: 420,
             minHeight: 600,
             title: '音乐播放器',
@@ -133,6 +152,7 @@ function createOrFocusMusicWindow() {
         musicWindow.setMenu(null);
 
         musicWindow.once('ready-to-show', () => {
+            if (restored?.maximized) musicWindow.maximize();
             musicWindow.show();
             musicCapsuleState = { ...musicCapsuleState, open: true };
             publishMusicCapsule();
@@ -159,6 +179,7 @@ function createOrFocusMusicWindow() {
         ipcMain.on('music-renderer-ready', readyHandler);
 
         musicWindow.on('close', (event) => {
+            if (MUSIC_WINDOW_BOUNDS_FILE) windowBounds.writeSavedBounds(MUSIC_WINDOW_BOUNDS_FILE, musicWindow);
             if (process.platform === 'darwin' && !require('electron').app.isQuitting) {
                 event.preventDefault();
                 musicWindow.hide();
@@ -200,6 +221,28 @@ function createOrFocusMusicWindow() {
             console.error(`[Music] Music window failed to load: ${errorDescription} (code: ${errorCode})`);
             rejectWindowCreation(new Error(`Music window failed to load: ${errorDescription}`));
         });
+
+        // 页面进程崩了（显卡驱动重置、内存不够）：窗口没有系统边框，标题栏和按钮都在页面里，
+        // 崩了以后关不掉、也停不了，引擎却还在放。先暂停，再把页面重新载入，它会回到上次的歌和进度。
+        // 一分钟里崩到第 4 次就不再重来，直接关窗口（关窗口会停播），免得页面本身有问题时无限崩溃。
+        const crashedWindow = musicWindow;
+        let crashTimes = [];
+        crashedWindow.webContents.on('render-process-gone', (_event, details) => {
+            const reason = details?.reason || 'unknown';
+            console.error(`[Music] Music window renderer gone: ${reason}`);
+            if (reason === 'clean-exit' || crashedWindow.isDestroyed()) return;
+            audioEngineApi('/pause', 'POST').catch(() => {});
+            musicCapsuleState = { ...musicCapsuleState, playing: false };
+            publishMusicCapsule();
+            musicGrooveBus.publish({ playing: false });
+            const now = Date.now();
+            crashTimes = crashTimes.filter((at) => now - at < MUSIC_CRASH_WINDOW_MS).concat(now);
+            if (crashTimes.length > MUSIC_CRASH_LIMIT) {
+                crashedWindow.close();
+                return;
+            }
+            setTimeout(() => { if (!crashedWindow.isDestroyed()) crashedWindow.reload(); }, 250);
+        });
     });
 
     return musicWindowPromise;
@@ -224,6 +267,45 @@ async function followTrackChange(state) {
         album: String(info.album || '').slice(0, 512) || '未知专辑',
         path: trackPath
     };
+}
+
+// 扫一个文件夹（或几首单曲），把进度和结果发回发起的窗口。只给 filePaths 时 folderPath 为空：
+// 窗口收到后只加不删（不会把「没扫到」的歌当成被删了）。
+async function runLibraryScan(event, { folderPath = null, filePaths } = {}) {
+    const sendToRequester = (channel, payload) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+            event.sender.send(channel, payload);
+        }
+    };
+
+    // 窗口在扫描中途关掉就停下，不替一个已经不在的窗口把整个文件夹读完。
+    const abort = new AbortController();
+    const onGone = () => abort.abort();
+    event.sender.once('destroyed', onGone);
+
+    try {
+        // 上次保存的歌单里带着文件大小和修改时间；没动过的文件不用再读一遍。
+        const knownTracks = await readPlaylistFile();
+        const scanned = await scanFolder({
+            folderPath,
+            filePaths,
+            coverCachePath: MUSIC_COVER_CACHE_DIR,
+            knownTracks,
+            signal: abort.signal,
+            onStart: (info) => sendToRequester('music-scan-start', info),
+            onProgress: (info) => sendToRequester('music-scan-progress', info),
+            onBatch: (tracks) => sendToRequester('music-scan-batch', { tracks, folderPath })
+        });
+        console.log(`[Music] Scan of ${folderPath || `${filePaths?.length || 0} files`}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
+        if (!scanned.stats.aborted) {
+            sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
+        }
+    } catch (err) {
+        console.error("Error during music scan:", err);
+        sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
+    } finally {
+        if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
+    }
 }
 
 // --- Playlist file helpers ---
@@ -493,6 +575,7 @@ function initialize(options) {
     const APP_DATA_ROOT_IN_PROJECT = options.APP_DATA_ROOT_IN_PROJECT;
     MUSIC_PLAYLIST_FILE = path.join(APP_DATA_ROOT_IN_PROJECT, 'songlist.json');
     MUSIC_COVER_CACHE_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'MusicCoverCache');
+    MUSIC_WINDOW_BOUNDS_FILE = path.join(APP_DATA_ROOT_IN_PROJECT, 'music-window-bounds.json');
     LYRIC_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'lyric');
 
     if (ipcHandlersRegistered) {
@@ -824,40 +907,23 @@ function initialize(options) {
                 return;
             }
 
-            const folderPath = result.filePaths[0];
-            const sendToRequester = (channel, payload) => {
-                if (event.sender && !event.sender.isDestroyed()) {
-                    event.sender.send(channel, payload);
-                }
-            };
+            await runLibraryScan(event, { folderPath: result.filePaths[0] });
+        });
 
-            // 窗口在扫描中途关掉就停下，不替一个已经不在的窗口把整个文件夹读完。
-            const abort = new AbortController();
-            const onGone = () => abort.abort();
-            event.sender.once('destroyed', onGone);
-
-            try {
-                // 上次保存的歌单里带着文件大小和修改时间；没动过的文件不用再读一遍。
-                const knownTracks = await readPlaylistFile();
-                const scanned = await scanFolder({
-                    folderPath,
-                    coverCachePath: MUSIC_COVER_CACHE_DIR,
-                    knownTracks,
-                    signal: abort.signal,
-                    onStart: (info) => sendToRequester('music-scan-start', info),
-                    onProgress: (info) => sendToRequester('music-scan-progress', info),
-                    onBatch: (tracks) => sendToRequester('music-scan-batch', { tracks, folderPath })
-                });
-                console.log(`[Music] Scan of ${folderPath}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
-                if (!scanned.stats.aborted) {
-                    sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
-                }
-            } catch (err) {
-                console.error("Error during music scan:", err);
-                sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
-            } finally {
-                if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
+        // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
+        ipcMain.handle('music-add-paths', async (event, paths) => {
+            if (!Array.isArray(paths)) return { added: 0 };
+            const folders = [];
+            const files = [];
+            for (const raw of paths.slice(0, 2000)) {
+                if (typeof raw !== 'string' || !path.isAbsolute(raw)) continue;
+                const stat = await fs.stat(raw).catch(() => null);
+                if (stat?.isDirectory()) folders.push(raw);
+                else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
+            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
+            if (files.length) await runLibraryScan(event, { filePaths: files });
+            return { folders: folders.length, files: files.length };
         });
 
         ipcMain.handle('get-music-playlist', () => readPlaylistFile());
@@ -939,13 +1005,23 @@ function initialize(options) {
             }
         });
 
-        ipcMain.handle('music-share-track', (event, filePath) => {
+        ipcMain.handle('music-share-track', async (event, filePath) => {
+            // 聊天附件只收本地文件：远程（WebDAV）曲目和已经不在磁盘上的文件在这里就说清楚，
+            // 不然要到聊天窗口里才弹一个看不懂的「附加失败」。
+            if (typeof filePath !== 'string' || /^https?:\/\//i.test(filePath)) {
+                return { success: false, message: '远程曲目不能作为附件分享' };
+            }
+            if (!(await fs.pathExists(filePath))) {
+                return { success: false, message: '这首歌的文件已经不在原来的位置了' };
+            }
             if (mainWindow && !mainWindow.isDestroyed()) {
                 console.log(`[Music] Forwarding shared file to renderer: ${filePath}`);
                 mainWindow.webContents.send('add-file-to-input', filePath);
                 if (mainWindow.isMinimized()) mainWindow.restore();
                 mainWindow.focus();
+                return { success: true };
             }
+            return { success: false, message: '主窗口没有打开' };
         });
 
         ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject }) => {

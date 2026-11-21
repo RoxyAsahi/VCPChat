@@ -112,9 +112,10 @@
             }, 800 * 2 ** contextRetries++);
         };
         // Settings that force the journey, lyric layout and events to be rebuilt.
+        const IDLE_DURATION = 240;
         const REBUILD_KEYS = ['cameraSpeed', 'motionAmount', 'animationIntensity', 'reducedMotion',
             'cameraCuts', 'aspect', 'lyricCarrier', 'showTranslation', 'fireworks',
-            'narrativeStations', 'stationIntensity'];
+            'narrativeStations', 'stationIntensity', 'lyricFont'];
         const update = (frame, force = false) => {
             if (mode.destroyed || mode.suspended) return;
             latest = frame;
@@ -125,12 +126,18 @@
             }
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
+            world.setCoverColour?.(services?.app?.stageCoverColour);
+            // A paused stage still finishes easing into a new cover's colour.
             const still = !frame.isPlaying && lastTime !== null
-                && R.finiteNumber(frame.playbackTime) === lastTime;
+                && R.finiteNumber(frame.playbackTime) === lastTime && !world.coverSettling?.();
             if (!force && !dirty && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             const nextIdentity = frame.track?.path || frame.track?.title || 'last-train';
-            const nextDuration = R.finiteNumber(frame.duration, R.finiteNumber(frame.track?.duration));
+            // Nothing chosen yet (or a length not known yet): plan an ordinary
+            // journey so the waiting picture is a platform at dusk, not the
+            // terminus fog of an eight-second line.
+            const knownDuration = R.finiteNumber(frame.duration, R.finiteNumber(frame.track?.duration));
+            const nextDuration = knownDuration > 0 || frame.lines?.length ? knownDuration : IDLE_DURATION;
             const settings = options();
             const nextOptions = JSON.stringify(REBUILD_KEYS.map(key => settings[key]));
             const nextPalette = JSON.stringify(palette());

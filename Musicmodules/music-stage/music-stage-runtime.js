@@ -140,9 +140,15 @@
         return normalized;
     };
 
+    // Lyric files carry marker lines and placeholder translations ("//",
+    // "●●●", dashes) that time a break but are not text. A string counts as
+    // text only if it holds a letter or a digit, in any script.
+    const readableText = (text) => /[\p{L}\p{N}]/u.test(String(text ?? ''));
+
     const resolveSupplementalText = (line) => {
-        const translation = String(line?.translation ?? '').trim();
-        const romanization = String(line?.romanization ?? '').trim();
+        const keep = text => { const value = String(text ?? '').trim(); return readableText(value) ? value : ''; };
+        const translation = keep(line?.translation);
+        const romanization = keep(line?.romanization);
         if (translation && romanization && translation !== romanization) {
             return `${romanization}\n${translation}`;
         }
@@ -586,6 +592,7 @@
         seededRandom,
         splitGraphemes,
         normalizeLines,
+        readableText,
         buildFallbackWords,
         buildGlyphTimeline,
         resolveSupplementalText,
