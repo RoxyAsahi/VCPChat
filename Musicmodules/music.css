@@ -565,19 +565,6 @@ body.light-theme .album-art {
     transition: width 0.1s linear;
 }
 
-/* 流式播放时解码没跟上：进度条呼吸，提示在缓冲而不是卡住。 */
-body.music-buffering .progress {
-    animation: music-buffering-pulse 1s ease-in-out infinite;
-}
-
-@keyframes music-buffering-pulse {
-    50% { opacity: 0.45; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    body.music-buffering .progress { animation: none; opacity: 0.6; }
-}
-
 .time-display {
     display: flex;
     justify-content: space-between;

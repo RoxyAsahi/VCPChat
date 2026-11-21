@@ -1359,19 +1359,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // 跳转造成的大幅位移不算“在播”
             advancing = moved > 0.02 && moved < (nowMs - prev.at) / 1000 + 1;
         }
-        // 引擎推送的状态带指令序号确认过（options.confirmed），不需要靠进度推断，也不需要防抖。
-        const enginePlaying = options.confirmed
-            ? state.is_playing === true
-            : state.is_playing === true || (state.is_paused !== true && advancing);
+        const enginePlaying = state.is_playing === true || (state.is_paused !== true && advancing);
         if (enginePlaying === app.isPlaying) {
             app.stateMismatchPolls = 0;
             if (enginePlaying === app.expectedPlayingState) app.isChangingState = false;
-        } else if (options.confirmed) {
-            app.stateMismatchPolls = 0;
-            app.isChangingState = false;
-            app.playIntent = enginePlaying;
-            app.applyPlayingUi(enginePlaying);
-            if (app.isPlaying) app.startStatePolling(); else app.stopStatePolling();
         } else if (options.force) {
             app.stateMismatchPolls = 0;
             // 刚加载好的曲目一定是停止状态；用户想播放时由 loadTrack 接着发播放指令，这里不改按钮。

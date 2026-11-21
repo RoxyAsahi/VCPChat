@@ -1267,7 +1267,7 @@
             state.lastCurrentTimeText = currentTimeText;
             elements.currentTime.textContent = currentTimeText;
             holdSeek(target, commit);
-            if (commit && duration > 0) await (app.seekTo ? app.seekTo(target) : app.api?.seekMusic?.(target));
+            if (commit && duration > 0) await app.api?.seekMusic?.(target);
         };
 
         const updateTheme = () => {
@@ -1579,7 +1579,7 @@
             target = clamp(target, 0, duration);
             state.seekHold = null;
             holdSeek(target, true);
-            if (app.seekTo) app.seekTo(target); else app.api?.seekMusic?.(target);
+            app.api?.seekMusic?.(target);
         });
         scope.listen(global, 'keydown', onKeyDown);
         // Dragging a window edge fires resize many times a frame, and each

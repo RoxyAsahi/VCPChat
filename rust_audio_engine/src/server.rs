@@ -328,18 +328,6 @@ pub struct StateResponse {
     is_playing: bool,
     is_paused: bool,
     is_loading: bool,
-    /// Playing but starved, waiting for the streaming decoder.
-    is_buffering: bool,
-    /// Seconds of the current track decoded so far.
-    buffered: f64,
-    /// False while a streamed track is still decoding (duration is an estimate).
-    decode_complete: bool,
-    /// Id of the latest load request; `load_complete` events carry the same id.
-    load_id: u64,
-    /// Sequence number of the newest control command accepted by the engine.
-    cmd_seq: u64,
-    /// Newest command sequence number that has taken effect on the audio thread.
-    applied_seq: u64,
     duration: f64,
     current_time: f64,
     file_path: Option<String>,
@@ -651,13 +639,6 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
         is_playing: state == PlayerState::Playing,
         is_paused: state == PlayerState::Paused,
         is_loading: shared.is_loading.load(std::sync::atomic::Ordering::Acquire),
-        is_buffering: state == PlayerState::Playing
-            && shared.buffering.load(std::sync::atomic::Ordering::Relaxed),
-        buffered: shared.buffered_secs(),
-        decode_complete: shared.decode_complete(),
-        load_id: shared.load_generation.load(std::sync::atomic::Ordering::Acquire),
-        cmd_seq: shared.cmd_seq.load(std::sync::atomic::Ordering::Acquire),
-        applied_seq: shared.applied_seq.load(std::sync::atomic::Ordering::Acquire),
         duration: shared.duration_secs(),
         current_time: shared.current_time_secs(),
         file_path,
