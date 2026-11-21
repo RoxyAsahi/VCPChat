@@ -136,6 +136,8 @@
                 { id: 'volume-up', group: '音量', icon: 'volume-2', title: '音量 +10%', desc: `现在 ${Math.round(v * 100)}%`, words: 'volume up louder 音量 大 yinliang', run: () => setVolume(readVolume() + 0.1), keepOpen: true },
                 { id: 'volume-down', group: '音量', icon: 'volume-1', title: '音量 −10%', desc: `现在 ${Math.round(v * 100)}%`, words: 'volume down quieter 音量 小 yinliang', run: () => setVolume(readVolume() - 0.1), keepOpen: true },
                 { id: 'mute', group: '音量', icon: v > 0.001 ? 'volume-x' : 'volume-2', title: v > 0.001 ? '静音' : '取消静音', words: 'mute 静音 jingyin', run: () => (toggleMute ? toggleMute() : setVolume(v > 0.001 ? 0 : 0.7)) },
+                ...(app.startRadio && app.playlist?.[app.currentTrackIndex] ? [{ id: 'radio', group: '播放', icon: 'radio', title: '从当前这首开电台', desc: '接着放曲库里相似的歌', words: 'radio station 电台 相似 diantai', run: () => app.startRadio(app.currentTrackIndex) }] : []),
+                ...(app.autoplay ? [{ id: 'autoplay', group: '播放', icon: 'infinity', title: app.autoplay.enabled ? '关闭自动续播' : '打开自动续播', desc: '一组放完接着放相似的歌', words: 'autoplay continue 续播 自动 xubo', run: () => { app.autoplay.enabled = !app.autoplay.enabled; } }] : []),
                 { id: 'stage', group: '舞台', icon: 'captions', title: inStage ? '离开歌词舞台' : '进入歌词舞台', words: 'stage lyrics 舞台 歌词 wutai geci', run: toggleStage },
                 panelCmd('封面', 'image', 'cover 封面 fengmian'),
                 panelCmd('歌词', 'file-text', 'lyrics 歌词 geci'),

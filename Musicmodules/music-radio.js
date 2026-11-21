@@ -180,6 +180,14 @@
             };
         }
 
+        // 抽屉「声音」页里的开关
+        const sw = doc?.getElementById?.('autoplay-switch');
+        if (sw) {
+            sw.checked = enabled;
+            sw.addEventListener('change', () => { app.autoplay.enabled = sw.checked; });
+            doc.addEventListener('music-autoplay-change', (e) => { sw.checked = Boolean(e.detail?.enabled); });
+        }
+
         // ---- 右键菜单：从这首开电台 ----
         const menu = app.contextMenu;
         if (menu && doc && !menu.querySelector('[data-action="start-radio"]')) {
