@@ -508,7 +508,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 app.loadTrack(initialIndex, false)
                     .then(() => {
                         // 加载期间用户没换歌，才跳回上次的进度
-                        if (resume && resume.time > 1 && app.currentTrackIndex === initialIndex && !app.playIntent) app.seekTo(resume.time);
+                        const total = Number(app.lastKnownDuration) || 0;
+                        if (resume && resume.time > 1 && !(total > 0 && resume.time > total - 3)
+                            && app.currentTrackIndex === initialIndex && !app.playIntent) app.seekTo(resume.time);
                     })
                     .catch(error => console.error('[Music] Initial track load failed:', error));
                 restoreQueueAfterSidebar = !pendingTrack;

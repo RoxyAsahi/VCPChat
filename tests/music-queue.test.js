@@ -508,3 +508,15 @@ test('switching play mode after a preload re-fills the engine slot for the new m
     app.nextTrack();
     assert.equal(app.playlist[app.currentTrackIndex].path, picked, 'next plays what was preloaded');
 });
+
+test('session: a saved position in the last seconds, or past a now-shorter file, restarts the track from the top', () => {
+    const next = setup();
+    next.app.playlist[1].duration = 240;
+    next.app.playlist[2].duration = 180;
+    next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/m/1.flac', time: 238.5 }));
+    assert.deepEqual({ ...next.app.sessionStartPoint() }, { index: 1, time: 0 }, 'last seconds start from 0');
+    next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/m/2.flac', time: 300 }));
+    assert.deepEqual({ ...next.app.sessionStartPoint() }, { index: 2, time: 0 }, 'past the end starts from 0');
+    next.context.localStorage.setItem('musicSession', JSON.stringify({ v: 1, track: 'C:/m/2.flac', time: 90 }));
+    assert.deepEqual({ ...next.app.sessionStartPoint() }, { index: 2, time: 90 }, 'a normal position is kept');
+});

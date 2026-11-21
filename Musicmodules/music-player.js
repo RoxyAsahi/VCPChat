@@ -1009,7 +1009,12 @@ function setupPlayer(app) {
         const map = byPathMap();
         const track = lookup(map, session.track);
         const index = track ? app.playlist.indexOf(track) : -1;
-        return index === -1 ? null : { index, time: Math.max(0, Number(session.time) || 0) };
+        if (index === -1) return null;
+        // 上次停在最后几秒，或者文件换成了更短的版本：别跳到结尾（一按播放就切走、进度显示超过总长），从头开始。
+        let time = Math.max(0, Number(session.time) || 0);
+        const duration = Number(track.duration) || 0;
+        if (duration > 0 && time > duration - 3) time = 0;
+        return { index, time };
     };
     let sessionTimer = null;
     const scheduleSessionSave = () => {
