@@ -433,6 +433,7 @@
             refs.ticks.querySelector('.archive-ticks-tip').textContent = count ? tickTip(current) : '';
         };
 
+        let searchCtx = null;   // 目录检索中：{ q, n }
         const renderHud = (force = false) => {
             const col = column();
             if (!col) return;
@@ -451,9 +452,16 @@
             refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
             // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
             const letterCol = col.kind === 'letter';
-            refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-            refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+            if (searchCtx) {
+                // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
+                refs.ctxName.textContent = '检索「' + searchCtx.q + '」';
+                refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
+            } else {
+                refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
+                refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+            }
             refs.playCol.disabled = !count;
+            refs.playCol.hidden = Boolean(searchCtx);
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -1187,6 +1195,7 @@
                     floor: v('--ar-floor', '#192125'),
                     badge: v('--ar-badge', '#5d676b'),
                     groove: v('--ar-groove', '#4a5559'),
+                    accent: v('--ar-accent', '#c8a15a'),
                     font: v('--mt-font-archive', 'sans-serif')
                 },
                 dark: !document.body.classList.contains('light-theme')
@@ -1726,6 +1735,7 @@
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
+                onResults: (q, n) => { searchCtx = q ? { q, n } : null; renderHud(); },
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });

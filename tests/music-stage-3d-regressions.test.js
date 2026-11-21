@@ -257,3 +257,27 @@ test('the canvas shaders for a lens-less tier are compiled in the background bef
     assert.equal(U.warmLensless(T, renderer(false), scene, camera, { steps: 1 }, 'standard'), true);
     assert.equal(compiled.length, 1);
 });
+
+
+test('the handover veil reads the 3D picture back at most four times a second while waiting', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const root = dom.window.document.createElement('div');
+    const veil = U.createHandoverVeil(root);
+    const canvas = root.querySelector('canvas');
+    let reads = 0;
+    canvas.getContext = () => ({ drawImage() { reads += 1; } });
+    let now = 1000;
+    dom.window.performance.now = () => now;
+    const source = { width: 640, height: 360 };
+    for (let i = 0; i < 60; i++) { veil.capture(source); now += 16.7; }
+    assert.ok(veil.captured);
+    assert.equal(reads, 4, 'one second at 60 fps: four reads');
+    // A theme switch needs exactly the picture on screen now.
+    veil.capture(source, { every: 0 });
+    assert.equal(reads, 5);
+    // A new size is read at once.
+    veil.capture({ width: 800, height: 450 });
+    assert.equal(reads, 6);
+    veil.destroy();
+});

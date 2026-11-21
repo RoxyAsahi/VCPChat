@@ -155,6 +155,7 @@
             offsets: [],
             heads: [],          // 分组标题在 rows 里的下标
             count: 0,
+            lastReported: '', lastCount: -1,
             selected: -1,       // 曲库下标
             selectedRow: -1,    // rows 里的下标
             rendered: new Map(),
@@ -225,6 +226,9 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
+            // 告诉档案页当前检索词和结果数（左上标题跟着显示）
+            const q0 = state.query.trim();
+            if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count); }
             if (!out.count) {
                 // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
                 const q = state.query.trim();
