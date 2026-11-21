@@ -68,7 +68,7 @@ body.music-dock-on .music-player .controls {
 }
 body.light-theme #music-dock-root {
   --md-fl-ink: #2a2522;
-  --md-fl-ink2: rgba(42, 37, 34, .6);
+  --md-fl-ink2: rgba(42, 37, 34, .82); /* 奶黄底上要到 4.5:1：.6 只有 2.4–3.4，按封面取的最深黄底（约 225,170,80）算 .82 也够 */
   --md-fl-ink-rgb: 42, 37, 34;
   --md-fl-pb-bg: #2a2522;
   --md-fl-pb-fg: #fff;
