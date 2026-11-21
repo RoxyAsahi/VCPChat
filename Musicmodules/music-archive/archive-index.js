@@ -424,10 +424,10 @@
     /*
      * 目录列表的行：{ type: 'head', label, key } 或 { type: 'track', i, ctx }。
      * ctx 是这一行在阵列里对应的列 id（选中时相机跟到那一列）。
-     * kind: all | artist | album | playlist | recent。有检索词时 all 按得分排成一组。
+     * kind: all | artist | album | playlist | recent（recent 后面再接 sections：[{ label, key, items }]）。有检索词时 all 按得分排成一组。
      * columnOfGroup(g)：首字母分组对应的列 id（阵列按首字母拆列时用），没有就用 'all'。
      */
-    const listRows = ({ tracks, playlists = [], recent = [], index, kind = 'all', query = '', columnOfGroup = null, spec = null }) => {
+    const listRows = ({ tracks, playlists = [], recent = [], sections = [], index, kind = 'all', query = '', columnOfGroup = null, spec = null }) => {
         const list = Array.isArray(tracks) ? tracks : [];
         const q = String(query || '').trim();
         const rows = [];
@@ -443,6 +443,14 @@
             const hits = q ? index.query(q, { only: pool }) : pool;
             if (hits.length) head('最近播放', 'recent', hits.length);
             hits.forEach((i) => push(i, 'recent'));
+            // 听歌记录给的几组（最常听、很久没听……）：同一首可以出现在几组里，ctx 区分
+            for (const sec of sections || []) {
+                const items = (sec && sec.items || []).filter((i) => i >= 0 && i < list.length);
+                const got = q ? index.query(q, { only: items }) : items;
+                if (!got.length) continue;
+                head(String(sec.label), String(sec.key), got.length);
+                got.forEach((i) => push(i, String(sec.key)));
+            }
             return { rows, count };
         }
         if (kind === 'playlist') {

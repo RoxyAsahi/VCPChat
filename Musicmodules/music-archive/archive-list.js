@@ -224,6 +224,18 @@
         };
         // 目录收起时量不到宽度；展开、窗口变宽窄、字体换好时再落一次位
         if (typeof global.ResizeObserver === 'function' && r.kinds) new global.ResizeObserver(() => placeKindMark()).observe(r.kinds);
+        // 「最近」里接在最近播放后面的两组，数据来自听歌记录（music-stats.js）
+        const statsSections = () => {
+            const stats = app.musicStats;
+            if (!stats) return [];
+            const byPath = new Map();
+            tracks().forEach((t, i) => { const k = String(t && t.path || '').replace(/\\/g, '/').toLowerCase(); if (k && !byPath.has(k)) byPath.set(k, i); });
+            const idx = (paths) => paths.map((p) => byPath.get(String(p).replace(/\\/g, '/').toLowerCase())).filter((i) => i !== undefined);
+            return [
+                { label: '最常听', key: 'recent:top', items: idx(stats.top(30)) },
+                { label: '很久没听', key: 'recent:forgotten', items: idx(stats.forgotten({ limit: 30 })) }
+            ];
+        };
         const rebuild = ({ steady = false } = {}) => {
             const index = opts.getIndex();
             if (!index) return;
@@ -241,7 +253,7 @@
                 }
             }
             const out = Index.listRows({
-                tracks: tracks(), playlists: app.customPlaylists, recent: opts.getRecent(), index,
+                tracks: tracks(), playlists: app.customPlaylists, recent: opts.getRecent(), sections: state.kind === 'recent' ? statsSections() : [], index,
                 kind: state.kind, query: state.query, columnOfGroup: opts.columnOfGroup, spec: opts.getSpec?.() || null
             });
             state.rows = out.rows;
@@ -419,7 +431,14 @@
             if (!t) return '';
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             const meta = [t.artist, t.album].filter(Boolean).join(' · ');
-            return meta ? `${title}\n${meta}` : title;
+            const s = app.musicStats?.get?.(t);
+            let heard = '';
+            if (s && s.plays > 0) {
+                const days = Math.floor((Date.now() - s.last) / 86400000);
+                const when = days <= 0 ? '今天' : days === 1 ? '昨天' : days < 30 ? days + ' 天前' : new Date(s.last).toLocaleDateString('zh-CN');
+                heard = `听过 ${s.plays} 次 · 上次${when}`;
+            }
+            return [title, meta, heard].filter(Boolean).join('\n');
         };
         /* 哪些分组标题下有正在放的歌：按「正在放的那首 + 这一版目录」缓存，滚动时不重复扫 */
         let liveCache = { playing: null, rows: null, heads: new Set() };
@@ -1559,6 +1578,12 @@
         // 放不出来的歌标灰（播放器在加载失败 / 恢复时发这个事件）
         document.addEventListener('music-track-health', () => { for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k); });
         // 喜欢 / 取消喜欢：行尾的小心形要重画（行内容是按需生成的，扔掉已画的行让它重建）
+        // 听歌记录变了：「最近」那页的最常听 / 很久没听跟着更新（攒一下再重排，不在播放中途频繁重建）
+        let statsTimer = null;
+        document.addEventListener('music-stats-change', () => {
+            if (state.kind !== 'recent' || statsTimer) return;
+            statsTimer = setTimeout(() => { statsTimer = null; if (state.kind === 'recent') rebuild({ steady: true }); }, 800);
+        });
         document.addEventListener('music-like-change', () => { for (const node of state.rendered.values()) node.remove(); state.rendered.clear(); render(); });
 
         const setPlaying = (i) => {
