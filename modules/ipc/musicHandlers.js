@@ -22,6 +22,19 @@ let musicWindow = null;
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
+
+// 音乐窗口有两套页面：新版 Musicmodules/，和上游原版 Musicmodules-legacy/（原样保留，可随时切回）。
+// 用哪套看设置里的 musicLegacyUI；两套共用同一个主进程、预加载和音频引擎。
+const MUSIC_PAGES = {
+    current: path.join(__dirname, '..', '..', 'Musicmodules', 'music.html'),
+    legacy: path.join(__dirname, '..', '..', 'Musicmodules-legacy', 'music.html')
+};
+async function readLegacyUISetting() {
+    try { return (await settingsManager?.readSettings())?.musicLegacyUI === true; } catch (e) { return false; }
+}
+async function musicPageFile() {
+    return (await readLegacyUISetting()) ? MUSIC_PAGES.legacy : MUSIC_PAGES.current;
+}
 const getMusicCapsuleSnapshot = () => ({ ...musicCapsuleState, musicInfoInjectionEnabled });
 function publishMusicCapsule() {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -145,7 +158,7 @@ function createOrFocusMusicWindow() {
             show: false
         });
 
-        musicWindow.loadFile(path.join(__dirname, '..', '..', 'Musicmodules', 'music.html'));
+        musicWindow.loadFile(await musicPageFile());
         windowService.attachWindow(WINDOW_APP_IDS.MUSIC, musicWindow);
 
         openChildWindows.push(musicWindow);
@@ -599,6 +612,21 @@ function initialize(options) {
             } catch (error) {
                 console.error("[Music] Failed to open or focus music window from IPC:", error);
             }
+        });
+
+        // 新版 / 旧版（原版）界面切换：存进设置，音乐窗口开着就当场换成另一套页面
+        ipcMain.handle('music-get-legacy-ui', () => readLegacyUISetting());
+        ipcMain.handle('music-set-legacy-ui', async (event, enabled) => {
+            if (!settingsManager) throw new Error('设置管理器未初始化。');
+            const legacy = enabled === true;
+            const result = await settingsManager.updateSettings(current => ({ ...current, musicLegacyUI: legacy }));
+            if (!result.success) throw new Error(result.error || '保存界面设置失败。');
+            if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
+                setImmediate(() => {
+                    if (musicWindow && !musicWindow.isDestroyed()) musicWindow.loadFile(legacy ? MUSIC_PAGES.legacy : MUSIC_PAGES.current);
+                });
+            }
+            return legacy;
         });
 
         // --- 前端初始化时拉取待播放请求（解决新窗口点歌竞态问题）---

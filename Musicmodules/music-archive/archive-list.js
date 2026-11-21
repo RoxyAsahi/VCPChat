@@ -229,13 +229,15 @@
         // 「为你」：最近播放后面接每日推荐、最常听、很久没听、还没听过（听歌记录 music-stats.js + 挑歌 music-radio.js）
         const statsSections = () => {
             const stats = app.musicStats;
-            if (!stats) return [];
+            const idxOf = (list) => list.map((t) => tracks().indexOf(t)).filter((i) => i >= 0);
+            // 每日推荐不依赖听歌记录（没有记录时按曲库挑），先放上
+            const daily = { label: '每日推荐', key: 'recent:daily', items: app.dailyMix ? idxOf(app.dailyMix()) : [] };
+            if (!stats) return [daily];
             const byPath = new Map();
             tracks().forEach((t, i) => { const k = String(t && t.path || '').replace(/\\/g, '/').toLowerCase(); if (k && !byPath.has(k)) byPath.set(k, i); });
             const idx = (paths) => paths.map((p) => byPath.get(String(p).replace(/\\/g, '/').toLowerCase())).filter((i) => i !== undefined);
-            const idxOf = (list) => list.map((t) => tracks().indexOf(t)).filter((i) => i >= 0);
             return [
-                { label: '每日推荐', key: 'recent:daily', items: app.dailyMix ? idxOf(app.dailyMix()) : [] },
+                daily,
                 { label: '最常听', key: 'recent:top', items: idx(stats.top(30)) },
                 { label: '很久没听', key: 'recent:forgotten', items: idx(stats.forgotten({ limit: 30 })) },
                 { label: '还没听过', key: 'recent:new', items: app.neverPlayed ? idxOf(app.neverPlayed()) : [] }

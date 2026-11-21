@@ -461,6 +461,13 @@ function setupPlayer(app) {
         playHistory.push(track);
         if (playHistory.length > 200) playHistory.shift();
     };
+    // 播放过的（不含正在放的这首），旧的在前、最近的在后；队列页顶上的「播放过的」用
+    app.getHistory = (limit = 30) => {
+        const current = app.playlist[app.currentTrackIndex];
+        const list = playHistory.slice();
+        while (list.length && list[list.length - 1] === current) list.pop();
+        return list.filter((t) => app.playlist.includes(t)).slice(-limit);
+    };
 
     // ───────── 播放队列 ─────────
     // 两层：手动层（「下一首播放」插到最前，「加入队列」排到最后）先放完，再回到上下文层
