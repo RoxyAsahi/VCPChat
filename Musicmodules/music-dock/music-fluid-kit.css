@@ -756,3 +756,18 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 }
 #music-dock-root :is(.md-quick-g, .md-slots) > .mf-trail.mf-on { transform: none; }
 #music-dock-root :is(.md-quick-g, .md-slots):has(> .mf-trail.mf-on) > .md-slot:hover { background: none; }
+
+/* ───────── 曲目详情卡下面「同专辑 / 这位歌手」的两列小列表 ─────────
+ * 手底下那一行背后一汪浅玻璃；两列之间斜着移动时，横竖各自流过去。行本身的细线和样子不变。 */
+.archive-detail-more { position: relative; isolation: isolate; }
+.archive-detail-more > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  height: 0;
+  border-radius: 12px;
+  margin-left: -10px;
+  padding: 0 10px;
+  box-sizing: content-box;
+  transform: scale(.94, .7);
+}
+.archive-detail-more > .mf-trail.mf-on { transform: none; }

@@ -335,6 +335,7 @@
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
+        { row: '.archive-detail-more', item: '.archive-detail-more li > button', key: 'ar-more', axis: 'xy', pad: 0 },
         { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
         { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
         // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
@@ -358,12 +359,12 @@
         // 按钮在这一排里的位置；排可能被整体缩放（档案页会按窗口大小缩放），所以按排自己的尺寸换算回去
         const placeIn = (row, btn, t) => {
             const rr = row.getBoundingClientRect(), br = btn.getBoundingClientRect();
-            if (t.axis === 'y') {
-                const k = rr.height ? row.offsetHeight / rr.height : 1;
-                return { top: (br.top - rr.top) * k + row.scrollTop - t.pad, height: br.height * k + t.pad * 2 };
-            }
-            const k = rr.width ? row.offsetWidth / rr.width : 1;
-            return { left: (br.left - rr.left) * k + row.scrollLeft - t.pad, width: br.width * k + t.pad * 2 };
+            const ky = rr.height ? row.offsetHeight / rr.height : 1;
+            const kx = rr.width ? row.offsetWidth / rr.width : 1;
+            return {
+                top: (br.top - rr.top) * ky + row.scrollTop - t.pad, height: br.height * ky + t.pad * 2,
+                left: (br.left - rr.left) * kx + row.scrollLeft - t.pad, width: br.width * kx + t.pad * 2,
+            };
         };
         doc.addEventListener('pointerover', (event) => {
             const target = event.target;
@@ -375,7 +376,15 @@
                 const drop = dropOf(row);
                 const fresh = !drop.classList.contains('mf-on');
                 if (fresh) slides.delete(t.key);
-                slide(drop, placeIn(row, btn, t), { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
+                const to = placeIn(row, btn, t);
+                // 两列的列表（axis: 'xy'）横竖各流各的，斜着过去时像一滴被拉长再收拢
+                if (fresh) { slides.delete(`${t.key}:x`); slides.delete(`${t.key}:y`); }
+                if (t.axis === 'xy') {
+                    slide(drop, to, { key: `${t.key}:x`, axis: 'x', lead: 160, trail: 320 });
+                    slide(drop, to, { key: `${t.key}:y`, axis: 'y', lead: 160, trail: 320 });
+                } else {
+                    slide(drop, to, { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
+                }
                 drop.classList.add('mf-on');
                 return;
             }
