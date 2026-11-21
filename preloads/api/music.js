@@ -18,6 +18,9 @@ module.exports = {
         publishMusicCapsuleState: send('music-capsule-publish', 'state'),
         publishMusicGroove: send('music-groove-publish', 'payload'),
         getMusicPendingTrack: invoke('music-get-pending-track'),
+        // 新版 / 旧版（上游原版）音乐界面
+        getMusicLegacyUI: invoke('music-get-legacy-ui'),
+        setMusicLegacyUI: invoke('music-set-legacy-ui', 'enabled'),
 
         // 播放列表
         getMusicPlaylist: invoke('get-music-playlist'),
