@@ -338,6 +338,8 @@
         // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
         { row: '.context-submenu', item: '.context-submenu .submenu-item', key: 'ctx-sub', axis: 'y', pad: 0 },
         { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
+        { row: '.archive-batch-menu', item: '.archive-batch-menu > button', key: 'ar-batch', axis: 'y', pad: 0 },
+        { row: '.archive-list-sort-menu', item: '.archive-list-sort-menu > button', key: 'ar-sort', axis: 'y', pad: 0 },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -376,10 +378,13 @@
                 return;
             }
         }, true);
-        // 右键菜单每次在新的地方打开：上次留下的那一汪先收掉，免得一打开就停在旧的位置
-        doc.addEventListener('contextmenu', () => {
-            for (const drop of doc.querySelectorAll(':is(.context-menu, .context-submenu) > .mf-trail.mf-on')) drop.classList.remove('mf-on');
-        }, true);
+        // 菜单每次重新打开（右键、点排序按钮……）：上次留下的那一汪先收掉，免得一打开就停在旧的位置
+        const MENUS = ':is(.context-menu, .context-submenu, .archive-batch-menu, .archive-list-sort-menu) > .mf-trail.mf-on';
+        const clearMenus = (keep) => {
+            for (const drop of doc.querySelectorAll(MENUS)) if (!keep || !drop.parentElement.contains(keep)) drop.classList.remove('mf-on');
+        };
+        doc.addEventListener('contextmenu', () => clearMenus(null), true);
+        doc.addEventListener('pointerdown', (event) => clearMenus(event.target instanceof global.Node ? event.target : null), true);
         // 在按钮之间的空隙里不算离开；指针出了整排才淡掉
         doc.addEventListener('pointerout', (event) => {
             const target = event.target;
