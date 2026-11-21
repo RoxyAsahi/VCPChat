@@ -113,6 +113,10 @@ const FAKE = ({ n }) => {
     }, 3000));
     rows.push(await profiledMeasure('classic view', () => document.querySelector('[data-act="classic"]')?.click(), 2000));
     rows.push(await profiledMeasure('playing, classic, 5 s', async () => { await app.playTrack?.(); await new Promise((r) => setTimeout(r, 5000)); }, 100));
+    rows.push(await profiledMeasure('classic search: type "live"', async () => {
+        for (const s of ['l', 'li', 'liv', 'live']) { app.searchInput.value = s; app.searchInput.dispatchEvent(new Event('input')); await new Promise((r) => setTimeout(r, 120)); }
+    }, 2000));
+    rows.push(await profiledMeasure('classic search: clear', () => { app.searchInput.value = ''; app.searchInput.dispatchEvent(new Event('input')); }, 2000));
     rows.push(await profiledMeasure('next track x5 (classic)', async () => { for (let i = 0; i < 5; i++) { app.nextTrack(); await new Promise((r) => setTimeout(r, 150)); } }, 2000));
     console.log(errors.length ? 'page errors: ' + errors.join(' | ') : 'no page errors');
     if (args.out) require('node:fs').writeFileSync(args.out, JSON.stringify({ n: N, cpu: CPU, rows }, null, 2));
