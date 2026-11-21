@@ -49,3 +49,21 @@ test('the reason helper keeps Chinese messages and hides English internals', () 
     assert.equal(app.webdavReason('', '服务器没有响应'), '服务器没有响应');
     dom.window.close();
 });
+
+test('a server that refuses the connection says so plainly, and the folder can be retried in place', async () => {
+    const { dom, app, doc } = load();
+    let calls = 0;
+    app.api = { listWebdavDirectory: async () => { calls++; throw new Error("Error invoking remote method 'webdav-list-directory': Error: connect ECONNREFUSED 192.168.1.5:5005"); } };
+    await app.browseWebDav('/m');
+    const text = doc.getElementById('files').textContent;
+    assert.match(text, /连不上服务器，检查网络或 WebDAV 地址/);
+    assert.doesNotMatch(text, /：.*：/, 'one reason, not two stacked with colons');
+    const retry = doc.querySelector('#files .webdav-retry-btn');
+    assert.ok(retry, 'a retry button is offered');
+    app.api.listWebdavDirectory = async () => { calls++; return { status: 'success', entries: [{ name: 'a.flac', href: '/m/a.flac', isDir: false }] }; };
+    retry.click();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls, 2);
+    assert.doesNotMatch(doc.getElementById('files').textContent, /打不开/);
+    dom.window.close();
+});

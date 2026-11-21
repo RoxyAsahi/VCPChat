@@ -11,6 +11,8 @@ function setupWebDav(app) {
             .replace(/^HTTP error:\s*/i, '').trim();
         if (!raw) return fallback;
         if (/\b404\b/.test(raw)) return notFound;
+        // 主进程连 WebDAV 时 Node 抛的网络错误（connect ECONNREFUSED 等）：以前落到通用说明，拼出「服务器没有响应：连不上服务」
+        if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|getaddrinfo|socket hang up/i.test(raw)) return '连不上服务器，检查网络或 WebDAV 地址';
         const described = typeof describeEngineError === 'function' ? describeEngineError(raw) : raw;
         if (/[\u4e00-\u9fff]/.test(described)) return described;
         return window.MusicErrorText ? window.MusicErrorText(raw, fallback) : fallback;
@@ -81,6 +83,13 @@ function setupWebDav(app) {
         if (app.webdavCurrentPath !== dirPath) return; // 这期间已经点进别的文件夹
         if (!result || result.status !== 'success') {
             app.webdavFileList.innerHTML = `<div class="no-lyrics" style="padding:20px;">打不开这个文件夹：${esc(webdavReason(result?.message, '服务器没有响应'))}</div>`;
+            // 网络恢复后不用关掉弹窗重进，点一下再试
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'webdav-retry-btn';
+            retry.textContent = '重试';
+            retry.addEventListener('click', () => app.browseWebDav(dirPath));
+            app.webdavFileList.firstElementChild.appendChild(retry);
             return;
         }
         const entries = result.entries.filter((entry) => {
