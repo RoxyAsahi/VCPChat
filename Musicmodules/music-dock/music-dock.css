@@ -1323,8 +1323,10 @@ body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
   opacity: 1 !important;
 }
 #music-dock-root .md-fx-sc .setting-row.full-width { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
-#music-dock-root .md-fx-sc .setting-item:has(.slider-with-value) { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
-#music-dock-root .md-fx-sc .slider-with-value { display: grid; grid-template-columns: minmax(0, 1fr) 56px; align-items: center; column-gap: 12px; width: 100%; }
+/* 滑条和控制页一样排：名字在左、数值在同一行右边，滑条在下面占满一整行 */
+#music-dock-root .md-fx-sc .setting-item:has(.slider-with-value) { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+#music-dock-root .md-fx-sc .slider-with-value { display: contents; }
+#music-dock-root .md-fx-sc .slider-with-value input[type="range"] { grid-column: 1 / -1; grid-row: 2; width: 100%; margin: 0; }
 #music-dock-root .md-fx-sc .slider-with-value span,
 #music-dock-root .md-fx-sc [id$="-value"] {
   justify-self: end;
