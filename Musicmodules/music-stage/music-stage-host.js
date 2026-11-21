@@ -396,11 +396,24 @@
                 button.classList.toggle('is-active', selected);
                 button.setAttribute('aria-pressed', String(selected));
             });
+            revealActiveMode();
 
             if (state.active) {
                 state.lastFrame = Runtime.createFrame(app, performance.now());
                 state.modeInstance.updateFrame(state.lastFrame);
             }
+        };
+
+        // The switcher scrolls sideways in narrow windows; keep the selected
+        // stage in view instead of leaving it clipped off either end.
+        const revealActiveMode = () => {
+            const bar = elements.modeSwitcher;
+            const button = bar?.querySelector('.music-stage-mode-button.is-active');
+            if (!button || bar.scrollWidth <= bar.clientWidth + 1) return;
+            const start = button.offsetLeft - 8;
+            const end = button.offsetLeft + button.offsetWidth + 8;
+            if (start < bar.scrollLeft) bar.scrollLeft = start;
+            else if (end > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = end - bar.clientWidth;
         };
 
         const renderModeButtons = () => {
@@ -420,6 +433,7 @@
                 fragment.appendChild(button);
             });
             elements.modeSwitcher.replaceChildren(fragment);
+            revealActiveMode();
         };
 
         const formatTuningValue = (definition, value) => {

@@ -2674,7 +2674,14 @@ body.light-theme .music-stage-settings-card option {
     left: 8%;
     right: 8%;
     z-index: 1;
+    /* Right side: the track card owns the top-left corner. */
+    text-align: right;
     pointer-events: none;
+}
+
+/* Inside the auto-directed stage the director cue already names the scene. */
+.starborn-performance-layer .tempera-kicker {
+    display: none;
 }
 
 .music-stage-mode-tempera > .tempera-translation {
@@ -3072,6 +3079,20 @@ body.light-theme .music-stage-settings-card option {
 }
 
 /* Fume native article world: transforms are evaluated by the playback clock, not CSS transitions. */
+/* Neighbouring lines fade out before they reach the mode switcher and track card. */
+.fume-article-frame {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    /* Second layer clears a band behind the translation line (.fume-article-subtitle). */
+    --fume-sub-mask: linear-gradient(to top, #000 0, #000 calc(23% - 24px), transparent calc(23% - 4px),
+        transparent calc(23% + 60px), #000 calc(23% + 90px));
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 56px, #000 150px), var(--fume-sub-mask);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 56px, #000 150px), var(--fume-sub-mask);
+    mask-composite: intersect;
+}
 .fume-article-world {
     position: absolute;
     left: 0;

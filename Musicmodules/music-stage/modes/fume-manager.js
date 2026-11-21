@@ -14,11 +14,14 @@
         const mode = makeModeBase('fume', '浮名', container, services);
         const canvas = createElement('canvas', 'fume-canvas');
         const world = createElement('div', 'fume-article-world');
+        // Screen-space frame so the page can fade out under the top chrome.
+        const frame = createElement('div', 'fume-article-frame');
+        frame.appendChild(world);
         const translation = createElement('div', 'stage-translation fume-article-subtitle');
         const heading = createElement('div', 'fume-article-heading');
         const empty = createElement('div', 'fume-article-empty', '等待音乐');
         const interlude = createInterludeVisualizer({ className: 'stage-interlude-fume' });
-        mode.root.append(canvas, world, heading, translation, empty, interlude.root);
+        mode.root.append(canvas, frame, heading, translation, empty, interlude.root);
         mode.scope.add(() => interlude.destroy());
         const context = canvas.getContext('2d');
         const reduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -152,10 +155,25 @@
             wanted.forEach(i => { if (!mounted.has(i)) mountBlock(blocks[i]); });
         };
 
+        // Reading zoom, capped so the whole line block fits across the viewport.
+        const MARGIN = 28;
+        const readScale = block => Math.min(
+            clamp(Math.min(width, height) * 0.09 / block.fontSize, 0.9, 2),
+            Math.max(0.5, (width - MARGIN * 2) / block.width)
+        );
+        // Follow the reading head, but never pan so far that the current block
+        // runs off either side of the window (narrow windows cut lines otherwise).
+        const keepBlock = (block, pose) => {
+            const reach = (width * 0.5 - MARGIN) / pose.scale;
+            const low = block.x + block.width - reach, high = block.x + reach;
+            if (low <= high) pose.x = clamp(pose.x, low, high);
+            return pose;
+        };
+
         const focusAt = (block, time, stepped = false) => {
             const glyphs = block.glyphLayout;
-            const scale = clamp(Math.min(width, height) * 0.09 / block.fontSize, 0.9, 2);
-            if (!glyphs.length) return { x: block.x + block.width / 2, y: block.y + block.height / 2, scale };
+            const scale = readScale(block);
+            if (!glyphs.length) return keepBlock(block, { x: block.x + block.width / 2, y: block.y + block.height / 2, scale });
             // Binary search the actual measured reading head, including whitespace timings.
             let low = 0, high = glyphs.length - 1, index = 0;
             while (low <= high) {
@@ -166,7 +184,7 @@
             const a = glyphs[index], b = glyphs[Math.min(index + 1, glyphs.length - 1)];
             const interval = b.start - a.start;
             const blend = stepped || interval <= 0 ? 0 : clamp((time - a.start) / interval);
-            return { x: block.x + a.x + (b.x - a.x) * blend, y: block.y + a.y + (b.y - a.y) * blend, scale };
+            return keepBlock(block, { x: block.x + a.x + (b.x - a.x) * blend, y: block.y + a.y + (b.y - a.y) * blend, scale });
         };
 
         const readingFocus = (block, time, stepped) => {
@@ -183,7 +201,7 @@
                 const wraps = Math.abs(dy) > block.fontSize * 0.5;
                 const interval = Math.max(0, b.start - a.start);
                 const screenDistance = Math.hypot(dx, dy)
-                    * clamp(Math.min(width, height) * 0.09 / block.fontSize, 0.9, 2);
+                    * readScale(block);
                 // A long-word line return must not finish within a single synthetic glyph.
                 const window = wraps
                     ? clamp(0.65 + screenDistance / 1400, 0.65, 1.25)
@@ -193,8 +211,8 @@
                 x += dx * progress;
                 y += dy * progress;
             }
-            const scale = clamp(Math.min(width, height) * 0.09 / block.fontSize, 0.9, 2);
-            return { x: block.x + x, y: block.y + y, scale };
+            const scale = readScale(block);
+            return keepBlock(block, { x: block.x + x, y: block.y + y, scale });
         };
 
         const overview = () => ({

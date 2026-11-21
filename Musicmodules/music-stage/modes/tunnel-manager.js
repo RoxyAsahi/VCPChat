@@ -3908,7 +3908,8 @@
                 const glyphAlpha = alive ? solidIn * solidOut : 0;
 
                 lyricAnchorGroup.position.set(stageX, stageY, stageZ);
-                const aspectScale = Math.min(1, Math.max(0.42, viewportAspect * 0.68));
+                // Narrow windows shrink the text less than the frame, so lines stay readable.
+                const aspectScale = Math.min(1, Math.max(0.6, viewportAspect * 0.92));
                 lyricAnchorGroup.scale.setScalar(aspectScale);
 
                 // 歌词平面面向相机并保留微幅电影级欧拉倾角
