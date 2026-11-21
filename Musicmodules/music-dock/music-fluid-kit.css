@@ -488,3 +488,177 @@ body.light-theme .dialog-btn { transition: background-color .15s, transform .34s
 .mtst .mtst-act { transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
 .mtst .mtst-act:active { transform: scale(.92, .88); transition-duration: .1s; }
 body.music-reduce-motion :is(#music-dock-root .md-ib, .dialog-btn, .mtst .mtst-act):active { transform: none; }
+
+/* ───────── 档案「取出」卡片：外形不动，只换按下和点亮的动作 ─────────
+ * 方框按钮是档案的结构，保持原样；按下时压扁、松手回弹，和别处同一条曲线。
+ * 卡片上的心形点亮时，和底栏的心一样先压扁再鼓起来（mf-like-pop）。 */
+.archive-detail-actions > button,
+.archive-detail-like { transition: background .2s, color .2s, border-color .2s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.archive-detail-actions > button:active:not(:disabled) { transform: scale(.96, .92); transition-duration: .1s; }
+.archive-detail-like:active { transform: scale(.88); transition-duration: .1s; }
+.archive-detail-like > span { display: inline-block; }
+.archive-detail-like[aria-pressed="true"] > span { animation: mf-like-pop .52s cubic-bezier(.34, 1.4, .5, 1); }
+body.music-reduce-motion :is(.archive-detail-actions > button, .archive-detail-like):active { transform: none; }
+body.music-reduce-motion .archive-detail-like[aria-pressed="true"] > span { animation: none; }
+
+/* ───────── 歌单编辑弹窗里的歌曲列表 ─────────
+ * 列表区不再另铺一层底色，和弹窗是同一块玻璃；每一行是圆角的一汪，已在歌单里的那几行从左边透出强调色光，
+ * 勾选框是圆的，勾上时被强调色填满。 */
+.music-modal-overlay .music-modal-content { background: transparent; padding: 8px; }
+.music-modal-overlay .music-modal-search { border-color: var(--mf-rule); }
+.music-modal-overlay .music-modal-search input { border: 0; border-radius: 9999px; background: var(--mf-hover); color: var(--mf-ink); }
+.music-modal-overlay .music-modal-search input:focus { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent); }
+.music-modal-overlay .music-modal-song-item { border-radius: 14px; padding: 9px 14px; color: var(--mf-ink); }
+.music-modal-overlay .music-modal-song-item:hover { background: var(--mf-hover); }
+.music-modal-overlay .music-modal-song-item.in-playlist {
+  background:
+    radial-gradient(70% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 18%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.music-modal-overlay .music-modal-song-checkbox {
+  border-radius: 9999px;
+  border: 1.5px solid var(--mf-ink2);
+  transition: background-color .2s ease, border-color .2s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.music-modal-overlay .music-modal-song-item.in-playlist .music-modal-song-checkbox { background: var(--mf-tint); border-color: var(--mf-tint); color: #fff; }
+.music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: scale(.84); transition-duration: .1s; }
+body.music-reduce-motion .music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: none; }
+
+/* ───────── 云端导入（WebDAV）弹窗 ─────────
+ * 左边服务器、右边文件，都和弹窗是同一块玻璃：分隔线换成玻璃里的细线，每一行是圆角的一汪。
+ * 选中的服务器和音频文件从左边透出强调色光；路径上的每一级是一颗小胶囊，按下时压扁回弹。 */
+.webdav-modal .webdav-server-panel { border-right-color: var(--mf-rule); }
+.webdav-modal :is(.webdav-breadcrumb, .webdav-file-actions) { border-color: var(--mf-rule); }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item) {
+  border-radius: 14px;
+  color: var(--mf-ink);
+  transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.webdav-modal .webdav-file-item { margin: 1px 8px; padding: 8px 14px; }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item):hover { background: var(--mf-hover); }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item.is-dir, .webdav-file-item.is-audio):active { transform: scale(.98, .94); transition-duration: .1s; }
+.webdav-modal .webdav-server-item.active {
+  color: var(--mf-ink);
+  background:
+    radial-gradient(80% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 24%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.webdav-modal .webdav-file-item.is-audio { color: var(--mf-ink); }
+.webdav-modal .webdav-file-item.is-audio .webdav-file-icon { color: var(--mf-tint); }
+.webdav-modal .webdav-server-remove {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 9999px;
+  color: var(--mf-ink2);
+  transition: background-color .15s, color .15s, opacity .15s;
+}
+.webdav-modal .webdav-server-remove:hover { background: var(--mf-hover); color: #e5484d; }
+.webdav-modal .webdav-crumb {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  color: var(--mf-ink);
+  opacity: 1;
+  transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.webdav-modal .webdav-crumb:hover { background: var(--mf-hover); text-decoration: none; }
+.webdav-modal .webdav-crumb:last-child { background: color-mix(in srgb, var(--mf-tint) 16%, transparent); }
+.webdav-modal .webdav-crumb:active { transform: scale(.92); transition-duration: .1s; }
+body.music-reduce-motion .webdav-modal :is(.webdav-server-item, .webdav-file-item, .webdav-crumb):active { transform: none; }
+
+/* ───────── 获取歌词版本：候选卡片 ─────────
+ * 卡片不再描边、不再另铺暗底，是玻璃里圆角的一汪；悬停时亮一点，不再往上跳。
+ * 选中的那张从左边透出强调色光，圆点被强调色填满时先压一下再鼓出来。分隔线换成玻璃里的细线。 */
+.lyrics-fetch-modal :is(.lyrics-fetch-legend, .lyrics-fetch-footer) { border-color: var(--mf-rule); }
+.lyrics-fetch-modal .lyrics-candidate {
+  border: 0;
+  border-radius: 18px;
+  background: var(--mf-hover);
+  box-shadow: none;
+  transition: background-color .18s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.lyrics-fetch-modal .lyrics-candidate:hover {
+  transform: none;
+  background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--mf-hover);
+}
+.lyrics-fetch-modal .lyrics-candidate:active { transform: scale(.985, .96); transition-duration: .1s; }
+.lyrics-fetch-modal .lyrics-candidate.selected {
+  box-shadow: none;
+  background:
+    radial-gradient(60% 180% at 0% 50%, color-mix(in srgb, var(--mf-tint) 26%, transparent), transparent 72%),
+    var(--mf-hover);
+}
+.lyrics-fetch-modal .lyrics-candidate:focus-visible:not(#messageInput) {
+  outline: none;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
+}
+.lyrics-fetch-modal .lyrics-candidate-radio { border: 1.5px solid var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-candidate.selected .lyrics-candidate-radio {
+  border-color: var(--mf-tint);
+  background: var(--mf-tint);
+  box-shadow: inset 0 0 0 3.5px var(--mf-fill);
+  animation: mf-like-pop .46s cubic-bezier(.34, 1.4, .5, 1);
+}
+.lyrics-fetch-modal :is(.lyrics-candidate-title) { color: var(--mf-ink); }
+.lyrics-fetch-modal :is(.lyrics-candidate-meta, .lyrics-candidate-preview) { color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-source-badge { background: var(--mf-hover); color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-candidate-score { color: var(--mf-tint); }
+body.music-reduce-motion .lyrics-fetch-modal .lyrics-candidate:active { transform: none; }
+body.music-reduce-motion .lyrics-fetch-modal .lyrics-candidate.selected .lyrics-candidate-radio { animation: none; }
+.lyrics-fetch-modal .lyrics-feature-badge { background: var(--mf-hover); color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(56, 217, 150, .16); color: #62e5aa; }
+body.light-theme .lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(26, 160, 104, .12); color: #11865a; }
+.lyrics-fetch-modal .lyrics-feature-badge.translation { color: var(--mf-tint); }
+
+/* ───────── 弹窗里的输入框 ─────────
+ * 不描边，是玻璃里一汪圆角的浅坑；聚焦时坑底亮一点，四周凝出一圈强调色细光，过渡带一点回弹。
+ * 新建歌单、添加云端服务器、获取歌词版本里的输入框都用这一种。 */
+:is(.dialog, .lyrics-fetch-search) input {
+  border: 0;
+  border-radius: 14px;
+  background: var(--mf-hover);
+  color: var(--mf-ink);
+  box-shadow: 0 0 0 0 transparent;
+  transition: background-color .18s ease, box-shadow .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+:is(.dialog, .lyrics-fetch-search) input::placeholder { color: var(--mf-ink2); }
+:is(.dialog, .lyrics-fetch-search) input:is(:focus, :focus-visible):not(#messageInput) {
+  outline: none;
+  background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--mf-hover);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 62%, transparent), 0 0 14px -2px color-mix(in srgb, var(--mf-tint) 40%, transparent);
+}
+body.music-reduce-motion :is(.dialog, .lyrics-fetch-search) input { transition: none; }
+
+/* ───────── 顶部的「音频引擎没有启动」提示 ─────────
+ * 不再是红描边的方框：一块和别处一样的玻璃，红色从左边里面透出来，标题前一颗小红点，出现后呼吸几下就停（不常驻动画，省电）。
+ * 出现时从窗口顶边正中滴下来再鼓满（music-fluid-kit.js 里的 watchNotices）。 */
+.audio-engine-notice {
+  border: 0;
+  border-radius: 20px;
+  padding: 11px 18px 11px 34px;
+  color: var(--mf-ink);
+  background:
+    radial-gradient(70% 160% at 0% 30%, rgba(229, 72, 77, .2), transparent 70%),
+    var(--mf-fill);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .35), 0 0 0 .5px var(--mf-rule);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+.audio-engine-notice-title { position: relative; }
+.audio-engine-notice-title::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: .5em;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #e5484d;
+  box-shadow: 0 0 10px rgba(229, 72, 77, .7);
+  animation: mf-notice-breathe 2.4s ease-in-out 5;
+}
+.audio-engine-notice-detail { color: var(--mf-ink2); }
+@keyframes mf-notice-breathe { 50% { opacity: .45; transform: scale(.8); } }
+body.music-fl-low .audio-engine-notice { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before { animation: none; }

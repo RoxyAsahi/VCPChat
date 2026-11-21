@@ -310,7 +310,23 @@
         }
     };
 
-    const start = () => { watchDialogs(); watchMenus(); };
+    // 顶部的「音频引擎没有启动」提示：出现时从窗口顶边正中滴下来再鼓满
+    const watchNotices = () => {
+        const doc = global.document;
+        const node = doc.getElementById('audio-engine-notice');
+        if (!node || typeof global.MutationObserver !== 'function') return;
+        let shown = !node.hidden;
+        new global.MutationObserver(() => {
+            const now = !node.hidden;
+            if (now === shown) return;
+            shown = now;
+            if (!now) { cancel(node); return; }
+            const r = node.getBoundingClientRect();
+            bud(node, { x: r.left + r.width / 2, y: 0 }, { duration: 520 });
+        }).observe(node, { attributes: true, attributeFilter: ['hidden'] });
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 

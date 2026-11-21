@@ -3226,6 +3226,30 @@
             `
         });
         const fadingGlyphMaterial = glyphMaterial.clone();
+        // Words are drawn over whatever the flight passes, and a pale planet
+        // or ring going by behind a line eats its contrast. A soft shade of
+        // the page colour sits behind the line: on empty sky it disappears,
+        // over a lit body it keeps the words standing off it.
+        const glyphScrim = new T.Mesh(new T.PlaneGeometry(1, 1), new T.ShaderMaterial({
+            transparent: true, depthTest: false, depthWrite: false,
+            uniforms: { color: { value: new T.Color() }, alpha: { value: 0 }, aspect: { value: 4 } },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform vec3 color; uniform float alpha, aspect; varying vec2 vUv;
+                void main() {
+                    vec2 p = abs(vUv - 0.5) * 2.0;
+                    float edge = 1.0 / aspect;
+                    float d = length(max(vec2(p.x - (1.0 - edge * 1.6), p.y - 0.45), 0.0)
+                        / vec2(edge * 1.6, 0.55));
+                    float shade = 1.0 - smoothstep(0.0, 1.0, d);
+                    gl_FragColor = vec4(color, alpha * shade);
+                    #include <colorspace_fragment>
+                }`
+        }));
+        glyphScrim.renderOrder = 29;
+        glyphScrim.frustumCulled = false;
+        glyphScrim.visible = false;
+        glyphStage.add(glyphScrim);
         // A hidden stand-in carries the glyph material from the start, so it is
         // compiled with the rest of the scene and not at the first lyric.
         const glyphWarmup = new T.Mesh(new T.PlaneGeometry(1, 1), glyphMaterial);
@@ -3268,6 +3292,7 @@
 
         const clearGlyphStage = () => {
             glyphStarts = []; glyphEnd = -Infinity;
+            glyphScrim.visible = false;
             if (glyphMesh) {
                 glyphStage.remove(glyphMesh);
                 glyphMesh.geometry.dispose();
@@ -3511,6 +3536,18 @@
                     glyphMesh.frustumCulled = false;
                     glyphMesh.renderOrder = 30;
                     glyphStage.add(glyphMesh);
+                    let left = Infinity, right = -Infinity;
+                    cells.forEach(cell => {
+                        const half = cell.w * unit * cell.fit * 0.5;
+                        left = Math.min(left, cell.cx - half); right = Math.max(right, cell.cx + half);
+                    });
+                    const padX = (glyphTop - glyphBottom) * 0.55, padY = (glyphTop - glyphBottom) * 0.45;
+                    const scrimW = right - left + padX * 2, scrimH = glyphTop - glyphBottom + padY * 2;
+                    glyphScrim.scale.set(scrimW, scrimH, 1);
+                    glyphScrim.position.set((left + right) / 2, (glyphTop + glyphBottom) / 2, -0.01);
+                    glyphScrim.material.uniforms.aspect.value = Math.max(1, scrimW / scrimH);
+                    glyphScrim.material.uniforms.color.value.copy(colors.background);
+                    glyphScrim.visible = true;
 
                     // 一次性采样整张图集的 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
                     const pixelW = glyphCanvas.width;
@@ -3833,6 +3870,7 @@
                 glyphMaterial.uniforms.time.value = time;
                 glyphMaterial.uniforms.alpha.value = glyphAlpha;
                 glyphMaterial.uniforms.motion.value = motionAmount;
+                glyphScrim.material.uniforms.alpha.value = glyphAlpha * (stagePalette.light ? 0.4 : 0.6);
                 // A hit in the music picks the word being sung (or the last one
                 // begun, between words) and keeps it through the fall.
                 if (audioState.onsets !== glyphOnsets) {
@@ -3851,6 +3889,7 @@
                     fadingGlyphMaterial.uniforms.time.value = time;
                     fadingGlyphMaterial.uniforms.alpha.value = fadingGlyph.alpha * (1 - handoffProgress);
                 }
+                if (glyphMesh) glyphScrim.position.y = (glyphTop + glyphBottom) / 2 + glyphMesh.position.y;
                 const releaseIn = smooth(exitPhase / 0.22);
                 const releaseOut = 1 - smooth((exitPhase - 0.58) / 0.42);
                 // Hand over from particles to type at entry and leave room for the line to fade before release.
