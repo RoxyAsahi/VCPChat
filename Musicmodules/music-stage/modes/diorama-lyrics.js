@@ -215,6 +215,7 @@
                 constellation: { value: constellation ? 1 : 0 },
                 entrance: { value: 1 }, departure: { value: 0 },
                 motion: { value: 0 }, style: { value: style }, waterEcho: { value: 0 },
+                hop: { value: 0 }, hopStart: { value: -1 },
                 // Dark strokes blended over a pale sky in linear light come out
                 // far paler than their opacity suggests, so by day the words
                 // still to be sung are laid on more heavily.
@@ -226,7 +227,7 @@
             },
             vertexShader: `
                 attribute vec3 glyphTiming;
-                uniform float time,motion,constellation,entrance,departure,style,waterEcho;
+                uniform float time,motion,constellation,entrance,departure,style,waterEcho,hop,hopStart;
                 varying vec2 vUv;
                 void main(){
                     vUv=uv;
@@ -242,6 +243,8 @@
                     p.y+=motion*(emphasis*mix(0.012,0.055,constellation)
                         -incoming*mix(0.045,0.38,constellation)
                         +departure*constellation*0.2);
+                    // The word being sung when the music hits hops and settles.
+                    p.y+=motion*hop*step(abs(glyphTiming.x-hopStart),0.001)*mix(0.05,0.16,constellation);
                     p.z+=motion*constellation*(incoming*(0.3+glyphTiming.z*0.45)
                         -departure*(0.5+glyphTiming.z*0.25));
                     p.x+=motion*constellation*(incoming*0.08-departure*0.14)
@@ -699,6 +702,18 @@
                     node.mat.uniforms.time.value = time;
                     node.mat.uniforms.glow.value = R.clamp(tuning.glow ?? 1, 0, 2);
                     node.mat.uniforms.vocal.value = R.clamp(audio.vocal);
+                    // A hit in the music picks the word being sung (or the last
+                    // one begun, between words) and keeps it through the fall,
+                    // so moving on to the next word does not cut the hop short.
+                    if (node.onsets !== audio.onsets) {
+                        node.onsets = audio.onsets;
+                        let picked = -1;
+                        if (time >= node.phrase.start && time < node.phrase.end) {
+                            for (const glyph of node.phrase.glyphs) if (glyph.startTime <= time) picked = glyph.startTime;
+                        }
+                        node.mat.uniforms.hopStart.value = picked;
+                    }
+                    node.mat.uniforms.hop.value = R.clamp(audio.impact);
                     const reflected = node.group.userData.reflectedSubtitle;
                     const subtitle = node.group.userData.subtitle;
                     const reflectionOn = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
@@ -731,6 +746,8 @@
                                 * (1 - D.smooth((time - node.phrase.end - 0.5) / 2.8))
                                 * node.mat.uniforms.fade.value * 0.18 : 0;
                         node.echoMat.uniforms.time.value = time;
+                        node.echoMat.uniforms.hop.value = node.mat.uniforms.hop.value;
+                        node.echoMat.uniforms.hopStart.value = node.mat.uniforms.hopStart.value;
                         node.echoMat.uniforms.fade.value = echoFade;
                         node.echo.visible = echoFade > 0;
                     }
@@ -810,6 +827,8 @@
                                         + (node.style === 2 ? incoming * 0.2 - departure * 0.28 : 0)),
                                 attributes.position.getY(v) + amount
                                     * (emphasis * (sky ? 0.055 : 0.012)
+                                        + uniforms.hop.value * (Math.abs(start - uniforms.hopStart.value) <= 0.001
+                                            ? (sky ? 0.16 : 0.05) : 0)
                                         - incoming * (sky ? 0.38 : 0.045) + departure * sky * 0.2),
                                 attributes.position.getZ(v) + amount * sky
                                     * (incoming * (0.3 + order * 0.45) - departure * (0.5 + order * 0.25))
