@@ -1882,6 +1882,7 @@
             ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
             ['Ctrl + L', '档案页里定位当前播放'],
             ['Alt + ↑ / ↓', '档案页歌单里把选中的歌上移 / 下移一位'],
+            ['Delete', '档案页歌单里移除选中的歌（可撤销）'],
             ['/', '档案页里打开检索'],
             ['字母 / 数字', '档案页里直接打字就是检索目录'],
             ['?', '打开这张快捷键表（档案页里用 Ctrl + K 搜「快捷键」）'],
@@ -1894,10 +1895,14 @@
             && app.archiveView?.mode === 'archive';
         let helpEl = null;
         const helpOpen = () => Boolean(helpEl && !helpEl.hidden);
+        let helpFrom = null;
         const closeHelp = () => {
             if (!helpOpen()) return;
+            // 合上时流回最后按下的地方（点了关闭就流回那颗按钮），键盘关就流回打开时那一点
+            const snap = global.MusicFluid?.snapshot(helpEl.querySelector('.md-keys-box'));
             helpEl.classList.remove('md-open');
             helpEl.hidden = true;
+            if (snap) global.MusicFluid.melt(snap, global.MusicFluid.recentPress() || helpFrom, { duration: 300 });
         };
         const openHelp = () => {
             if (!helpEl) {
@@ -1921,6 +1926,7 @@
                 void box.offsetWidth;
                 box.style.transition = '';
                 const from = global.MusicFluid.recentPress() || { x: global.innerWidth / 2, y: global.innerHeight - 60 };
+                helpFrom = from;
                 global.MusicFluid.bud(box, from, { duration: 480 });
             } else {
                 requestAnimationFrame(() => helpEl.classList.add('md-open'));

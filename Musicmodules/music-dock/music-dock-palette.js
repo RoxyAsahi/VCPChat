@@ -416,6 +416,12 @@
             row.classList.add('md-act');
             row.setAttribute('aria-selected', 'true');
             input.setAttribute('aria-activedescendant', row.id);
+            // 选中的那一行背后是一滴玻璃，上下键换行时流过去（共用套件；列表重画也接着上一次的位置流）
+            if (global.MusicFluid?.slide) {
+                let drop = list.querySelector(':scope > .md-cmd-drop');
+                if (!drop) { drop = document.createElement('i'); drop.className = 'md-cmd-drop'; drop.setAttribute('aria-hidden', 'true'); list.appendChild(drop); }
+                global.MusicFluid.slide(drop, { top: row.offsetTop, height: row.offsetHeight }, { key: 'md-cmd', axis: 'y', lead: 140, trail: 300 });
+            }
             foot.hidden = !state.items[state.active]?.queueable;
             if (scroll) row.scrollIntoView?.({ block: 'nearest' });
         };

@@ -1365,6 +1365,8 @@
             r.sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sort === mode)));
         };
         const sortOpen = () => !r.sortMenu.hidden;
+        // 排序菜单合上时缩回一滴流回点的那一项（共用套件）
+        global.MusicFluid?.watchPop?.(r.sortMenu);
         const closeSort = ({ focus = false } = {}) => {
             if (!sortOpen()) return;
             r.sortMenu.hidden = true;

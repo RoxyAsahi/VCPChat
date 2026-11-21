@@ -1,6 +1,7 @@
 // 音乐窗口里「手碰得到的东西」共用的一套流体动作。
 //
 //   MusicFluid.bud(el, origin)      弹出层从触发的那一点长出来：先是一滴，拉出细颈，再鼓成整块，内容随后显现
+//   MusicFluid.melt(snap, to)       关掉时反过来：整块缩回一滴流回那一点（snap 来自 MusicFluid.snapshot(el)，打开时记下）
 //   MusicFluid.enabled()            降低动态、节能档时为 false（只淡入，不画液体）
 //
 // 外观在 music-fluid-kit.css：.mf-glass 是奶白（深色下烟灰）的厚玻璃，颜色从里面透出来，发光不投硬影，没有描边。
@@ -120,6 +121,62 @@
         });
     }
 
+    // 关掉的时候反过来：整块缩回一滴，流回原来那一点再没掉。
+    // 弹出层这时往往已经隐藏（量不到大小），所以传它打开时的样子：snap = MusicFluid.snapshot(el)。
+    function snapshot(el) {
+        if (!el || !el.isConnected) return null;
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        const cs = global.getComputedStyle(el);
+        let z = parseInt(cs.zIndex, 10) || 0;
+        for (let node = el.parentElement; node && node !== el.ownerDocument.body; node = node.parentElement) {
+            z = Math.max(z, parseInt(global.getComputedStyle(node).zIndex, 10) || 0);
+        }
+        return {
+            doc: el.ownerDocument,
+            rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            radius: Math.min(rect.height / 2, parseFloat(cs.borderTopLeftRadius) || 16),
+            fill: cs.getPropertyValue('--mf-fill').trim() || cs.backgroundColor || 'rgba(128,128,128,.9)',
+            z: z || 1000
+        };
+    }
+    function melt(snap, origin, { duration = 300 } = {}) {
+        const to = pointOf(origin);
+        if (!snap || !to || !enabled()) return Promise.resolve();
+        const { rect, radius, fill } = snap;
+        const layer = overlay(snap.doc, snap.z);
+        layer.drop.setAttribute('fill', fill);
+        layer.body.setAttribute('fill', fill);
+        const end = { x: to.x - 12, y: to.y - 12, w: 24, h: 24 };
+        const lagX = Math.abs(rect.left + rect.width / 2 - to.x) < Math.abs(rect.top + rect.height / 2 - to.y);
+        const easeIn = (t) => t * t;
+        return new Promise((resolve) => {
+            const clock = () => global.performance?.now?.() ?? Date.now();
+            const t0 = clock();
+            let frame = 0;
+            const step = () => {
+                const t = Math.min(1, (clock() - t0) / duration);
+                // 远的那个方向先收，近的那个方向晚一点才跟上，像被吸回去
+                const e = easeIn(t);
+                const eLag = easeIn(Math.max(0, (t - 0.12) / 0.88));
+                const ex = lagX ? eLag : e, ey = lagX ? e : eLag;
+                const x = lerp(rect.left, end.x, ex), y = lerp(rect.top, end.y, ey);
+                const w = lerp(rect.width, end.w, ex), h = lerp(rect.height, end.h, ey);
+                const b = layer.body;
+                b.setAttribute('x', x.toFixed(1)); b.setAttribute('y', y.toFixed(1));
+                b.setAttribute('width', Math.max(0, w).toFixed(1)); b.setAttribute('height', Math.max(0, h).toFixed(1));
+                b.setAttribute('rx', Math.min(lerp(radius, Math.min(w, h) / 2, e), h / 2, w / 2).toFixed(1));
+                const d = layer.drop;
+                d.setAttribute('cx', to.x.toFixed(1)); d.setAttribute('cy', to.y.toFixed(1));
+                d.setAttribute('r', Math.max(0, 13 * Math.sin(Math.PI * Math.max(0, (t - 0.35) / 0.65))).toFixed(1));
+                layer.svg.style.opacity = t < 0.6 ? '1' : String(Math.max(0, 1 - (t - 0.6) / 0.4));
+                if (t >= 1) { global.cancelAnimationFrame(frame); layer.svg.remove(); resolve(); return; }
+                frame = global.requestAnimationFrame(step);
+            };
+            step();
+        });
+    }
+
     // 选中标记（分段开关里那块、页签下那条）换位置时像一滴液体流过去：
     // 前沿先到，后沿慢半拍才跟上，中途被拉长，到了再收成原来的宽度。
     // 位置是相对父元素的 left/width（像素）。第一次放、降低动态时直接落位。
@@ -183,6 +240,7 @@
         doc.addEventListener('pointerdown', (event) => { lastPress = { x: event.clientX, y: event.clientY, at: Date.now() }; }, true);
         const isOpen = (node) => node.classList.contains('visible') || node.classList.contains('active');
         const seen = new WeakMap();
+        const opened = new WeakMap();
         const check = (node) => {
             const open = isOpen(node);
             if (open && !seen.get(node)) {
@@ -190,7 +248,18 @@
                 // 键盘打开（没有最近的按下）就从窗口底部中间、播放条的位置长出来
                 const fresh = lastPress && Date.now() - lastPress.at < 1500;
                 const from = fresh ? lastPress : { x: global.innerWidth / 2, y: global.innerHeight - 60 };
-                if (panel) global.requestAnimationFrame?.(() => bud(panel, from, { duration: 520 }));
+                if (panel) {
+                    global.requestAnimationFrame?.(() => bud(panel, from, { duration: 520 }).then(() => {
+                        // 记下打开后的样子和从哪里长出来，关的时候按原路流回去
+                        if (node.isConnected && isOpen(node)) opened.set(node, { snap: snapshot(panel), from });
+                    }));
+                }
+            } else if (!open && seen.get(node)) {
+                const was = opened.get(node);
+                opened.delete(node);
+                // 关的时候流回最后一次按下的地方（点了「取消」就流回那颗按钮），没有就流回打开时那一点
+                const fresh = lastPress && Date.now() - lastPress.at < 1500 ? lastPress : null;
+                if (was?.snap) melt(was.snap, fresh || was.from, { duration: 320 });
             }
             seen.set(node, open);
         };
@@ -202,11 +271,51 @@
             observer.observe(node, { attributes: true, attributeFilter: ['class'] });
         }
     };
-    if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', watchDialogs, { once: true });
-    else watchDialogs();
+    // ───────── 菜单：合上时缩回一滴，流回刚点的那一项 ─────────
+    // 菜单打开时由各处自己调 bud；这里只看着它什么时候合上。打开后等长完再记下样子（关得太快就不画）。
+    // isOpen(node) 判断开着没有；右键菜单是 visible 类，档案排序菜单是 hidden 属性。
+    const watched = new WeakSet();
+    function watchPop(node, isOpen = (n) => !n.hidden) {
+        if (!node || watched.has(node) || typeof global.MutationObserver !== 'function') return;
+        watched.add(node);
+        let open = isOpen(node);
+        let snap = null;
+        let timer = 0;
+        const remember = () => { timer = 0; if (isOpen(node)) snap = snapshot(node); };
+        if (open) timer = global.setTimeout(remember, DURATION + 40);
+        new global.MutationObserver(() => {
+            const now = isOpen(node);
+            if (now === open) {
+                // 开着的时候换了位置（又在别处右键）：等新位置长完再重新记
+                if (now) { snap = null; global.clearTimeout(timer); timer = global.setTimeout(remember, DURATION + 40); }
+                return;
+            }
+            open = now;
+            if (now) {
+                snap = null;
+                global.clearTimeout(timer);
+                timer = global.setTimeout(remember, DURATION + 40);
+                return;
+            }
+            global.clearTimeout(timer);
+            timer = 0;
+            const fresh = lastPress && Date.now() - lastPress.at < 1500 ? lastPress : null;
+            if (snap && fresh) melt(snap, fresh, { duration: 260 });
+            snap = null;
+        }).observe(node, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    }
+    const watchMenus = () => {
+        for (const node of global.document.querySelectorAll('.context-menu')) {
+            watchPop(node, (n) => n.classList.contains('visible') && n.style.display !== 'none');
+        }
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); };
+    if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
 
     // 最近 1.5 秒内按下指针的那一点；键盘打开的东西拿不到时返回 null，由调用方决定从哪里长
     const recentPress = () => (lastPress && Date.now() - lastPress.at < 1500 ? { x: lastPress.x, y: lastPress.y } : null);
 
-    global.MusicFluid = Object.freeze({ bud, slide, cancel, enabled, recentPress });
+    global.MusicFluid = Object.freeze({ bud, melt, snapshot, watchPop, slide, cancel, enabled, recentPress });
 })(typeof window !== 'undefined' ? window : globalThis);
