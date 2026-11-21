@@ -443,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupElectronHandlers();
         window.setupMusicLikes?.(app); // 「喜欢」：右键菜单那一项要包在上面的菜单入口外面
         window.setupMusicGoto?.(app); // 右键「转到歌手 / 转到专辑」
+        window.setupMusicSleep?.(app); // 定时关闭（入口在底栏抽屉）
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 

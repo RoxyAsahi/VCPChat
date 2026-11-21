@@ -31,7 +31,7 @@
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity;
         const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
         const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
@@ -228,10 +228,12 @@
             const outdoors = 1 - R.clamp(pose.cabinView || 0);
             // Opening inside the saloon: no sky to come down from; the dissolve does it.
             if (arriving && outdoors < 0.5) arriving = 0;
-            // Advance by drawn frames, at most a thirtieth of a second each, so
-            // the rebuild's long first frame cannot swallow the move.
+            // Advance by real time, but a frame that took longer than a quarter
+            // second (the rebuild's first frame) counts for a thirtieth, so it
+            // cannot swallow the move; on a slow machine the move still keeps time.
             const now = performance.now();
-            const step = Math.min(1 / 30, Math.max(0, (now - (tiltClock || now)) / 1000));
+            const gap = Math.max(0, (now - (tiltClock || now)) / 1000);
+            const step = gap > 0.25 ? 1 / 30 : Math.min(0.1, gap);
             tiltClock = leaving || arriving ? now : 0;
             if (leaving) leaving.tilt = Math.min(1, (leaving.tilt || 0) + step / LEAVE_TILT_S);
             if (arriving) arriving = Math.min(1, arriving + step / ARRIVE_TILT_S);
@@ -345,6 +347,17 @@
                 leaving = null;
                 arriving = 1e-6;
                 lyrics?.setVisible(true);
+            }
+            // A jump within the song (the progress bar, a skip of a few
+            // seconds) dissolves from where the ride was instead of cutting.
+            const at = R.finiteNumber(frame.playbackTime);
+            if (initialized && latest && lastTime !== null && !leaving && !arriving && !themeHold
+                && frame.lines === source && Math.abs(at - lastTime) > 2 && !options().reducedMotion
+                && performance.now() - lastJumpAt > 600) {
+                lastJumpAt = performance.now();
+                themeHold = true;
+                try { update({ ...latest, playbackTime: lastTime }, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 450; }
             }
             update(frame);
         };

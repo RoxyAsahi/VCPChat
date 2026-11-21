@@ -278,6 +278,31 @@
             return lo;
         };
 
+        /*
+         * 检索时把命中的字标出来（字面命中才标；拼音首字母这类命中不标，免得标错位置）。
+         * 检索词按空格拆开，每段各自标；大小写不分。
+         */
+        const markHit = (text) => {
+            const words = state.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            if (!words.length) return esc(text);
+            const low = String(text).toLowerCase();
+            const hit = new Uint8Array(low.length);
+            for (const w of words) {
+                for (let at = low.indexOf(w); at !== -1; at = low.indexOf(w, at + w.length)) hit.fill(1, at, at + w.length);
+            }
+            let out = '';
+            for (let a = 0; a < low.length;) {
+                let b = a;
+                while (b < low.length && hit[b] === hit[a]) b++;
+                const part = esc(String(text).slice(a, b));
+                out += hit[a] ? `<mark>${part}</mark>` : part;
+                a = b;
+            }
+            return out;
+        };
+        /* 分组标题上「播放这一组」：歌手、专辑、歌单、检索结果都有；首字母分隔和「全部」没有 */
+        const groupPlayable = (row) => row && row.type === 'head' && !isLetter(row) && state.kind !== 'all';
+
         const rowHtml = (row, k) => {
             if (row.type === 'head') {
                 if (isLetter(row)) return letterHtml(row);
@@ -285,7 +310,8 @@
                 if (pl && manage.confirm === String(pl.id)) {
                     return `<span>删除「${esc(pl.name)}」？</span><button type="button" data-pl="delete-yes">删除</button><button type="button" data-pl="delete-no">取消</button>`;
                 }
-                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`
+                const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
+                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>${gp}`
                     + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
             }
             const t = tracks()[row.i] || {};
@@ -295,7 +321,7 @@
             const liked = typeof app.isLiked === 'function' && app.isLiked(t);
             return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
                 + '<button type="button" class="go" data-go tabindex="-1" aria-label="播放"><svg viewBox="0 0 12 12" aria-hidden="true"><path class="go-play" d="M3 1.6v8.8L10.2 6z"/><path class="go-pause" d="M2.6 1.8h2.4v8.4H2.6zM7 1.8h2.4v8.4H7z"/></svg></button>'
-                + `<span class="tx"><b>${esc(title)}</b><em>${esc(meta)}</em></span>`
+                + `<span class="tx"><b>${markHit(title)}</b><em>${markHit(meta)}</em></span>`
                 + `<span class="rt">${liked ? '<s class="lk" title="喜欢" aria-label="喜欢">♥</s>' : ''}${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
         };
 
@@ -678,6 +704,17 @@
         r.viewport.addEventListener('scroll', schedule, { passive: true });
         r.viewport.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
         r.viewport.addEventListener('click', (e) => {
+            const gplay = e.target.closest('[data-gplay]');
+            if (gplay) {
+                const h = Number(gplay.closest('.archive-list-group')?.dataset.k);
+                const first = state.rows[h + 1];
+                if (!first || first.type !== 'track') return;
+                e.stopPropagation();
+                clearMulti();
+                pickRow(h + 1);
+                opts.onPlay(first.i, first.ctx, { stage: false, group: groupOf(h + 1) });
+                return;
+            }
             const node = e.target.closest('.archive-list-row');
             if (!node) return;
             // 行首悬停出现的播放键：点它直接播这首；已经是正在放的这首就暂停 / 继续
@@ -965,6 +1002,7 @@
             menu.setAttribute('role', 'menu');
             menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
             menu.innerHTML = `<header>已选 ${indices.length} 首</header>`
+                + item('play', '播放所选')
                 + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
                 + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
@@ -988,7 +1026,14 @@
                     return;
                 }
                 closeBatchMenu({ focus: true });
-                if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
+                if (act === 'play') {
+                    // 播放所选：只放这几首，按目录里的顺序，队列名叫「所选 N 首」
+                    const k = findRow(indices[0], null);
+                    const row = state.rows[k];
+                    clearMulti();
+                    if (row) pickRow(k);
+                    opts.onPlay(indices[0], row ? row.ctx : null, { stage: false, group: { name: `所选 ${indices.length} 首`, items: indices.slice() } });
+                } else if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
                 else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
                 else if (act === 'pl-new') {

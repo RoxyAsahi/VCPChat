@@ -171,7 +171,7 @@ test('3D modes draw to a pixel budget and step down while frames are slow', () =
     scale.tick(now);
     assert.equal(run(16.7, 600), 0, 'a held frame rate changes nothing');
     assert.equal(run(4000, 3), 0, 'a hidden window is not a slow renderer');
-    assert.ok(run(33.3, 200) >= 1, 'thirty frames a second steps down');
+    assert.ok(run(33.3, 100) >= 1, 'thirty frames a second steps down');
     assert.ok(scale.factor < 1 && scale.factor >= 0.55);
     assert.ok(scale.ratio('standard', 2560, 1440) < large);
     const low = scale.factor;
@@ -216,6 +216,10 @@ test('3D stages step down pixels, then a tier, and only get pixels back on their
     assert.equal(scale.steps, 2);
     assert.equal(scale.quality('standard'), 'standard');
     assert.ok(scale.factor < 0.75);
+    // One slow judgement more is not enough to give up an effect tier: a song
+    // change or another busy app can do that for a second.
+    for (let i = 0; i < 50; i++) { now += 33; assert.equal(scale.tick(now, 16.7), false); }
+    assert.equal(scale.quality('standard'), 'standard');
     // Still slow: the tier below (no lens, 30 fps cap).
     assert.ok(run(33, 16.7));
     assert.equal(scale.quality('standard'), 'energy-saving');
