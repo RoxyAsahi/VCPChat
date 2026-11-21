@@ -523,3 +523,46 @@ body.music-reduce-motion .archive-detail-like[aria-pressed="true"] > span { anim
 .music-modal-overlay .music-modal-song-item.in-playlist .music-modal-song-checkbox { background: var(--mf-tint); border-color: var(--mf-tint); color: #fff; }
 .music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: scale(.84); transition-duration: .1s; }
 body.music-reduce-motion .music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: none; }
+
+/* ───────── 云端导入（WebDAV）弹窗 ─────────
+ * 左边服务器、右边文件，都和弹窗是同一块玻璃：分隔线换成玻璃里的细线，每一行是圆角的一汪。
+ * 选中的服务器和音频文件从左边透出强调色光；路径上的每一级是一颗小胶囊，按下时压扁回弹。 */
+.webdav-modal .webdav-server-panel { border-right-color: var(--mf-rule); }
+.webdav-modal :is(.webdav-breadcrumb, .webdav-file-actions) { border-color: var(--mf-rule); }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item) {
+  border-radius: 14px;
+  color: var(--mf-ink);
+  transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.webdav-modal .webdav-file-item { margin: 1px 8px; padding: 8px 14px; }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item):hover { background: var(--mf-hover); }
+.webdav-modal :is(.webdav-server-item, .webdav-file-item.is-dir, .webdav-file-item.is-audio):active { transform: scale(.98, .94); transition-duration: .1s; }
+.webdav-modal .webdav-server-item.active {
+  color: var(--mf-ink);
+  background:
+    radial-gradient(80% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 24%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.webdav-modal .webdav-file-item.is-audio { color: var(--mf-ink); }
+.webdav-modal .webdav-file-item.is-audio .webdav-file-icon { color: var(--mf-tint); }
+.webdav-modal .webdav-server-remove {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 9999px;
+  color: var(--mf-ink2);
+  transition: background-color .15s, color .15s, opacity .15s;
+}
+.webdav-modal .webdav-server-remove:hover { background: var(--mf-hover); color: #e5484d; }
+.webdav-modal .webdav-crumb {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  color: var(--mf-ink);
+  opacity: 1;
+  transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.webdav-modal .webdav-crumb:hover { background: var(--mf-hover); text-decoration: none; }
+.webdav-modal .webdav-crumb:last-child { background: color-mix(in srgb, var(--mf-tint) 16%, transparent); }
+.webdav-modal .webdav-crumb:active { transform: scale(.92); transition-duration: .1s; }
+body.music-reduce-motion .webdav-modal :is(.webdav-server-item, .webdav-file-item, .webdav-crumb):active { transform: none; }
