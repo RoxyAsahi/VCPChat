@@ -23,7 +23,15 @@
             const v = parseFloat(app.volumeSlider?.value);
             return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
         };
-        const engineVolume = (v) => { try { app.api?.setMusicVolume?.(v); } catch (e) { /* 引擎没连上 */ } };
+        // 和音量滑块走同一条「只发最新值」的通道：渐弱的请求和还原音量的请求各走各的连接，
+        // 先发的晚到时会把还原盖掉，取消定时后音量一直停在渐弱到的那一档。
+        const engineVolume = (v) => {
+            try {
+                if (!app.api?.setMusicVolume) return;
+                if (app.sendLatest) app.sendLatest('volume', () => app.api.setMusicVolume(v));
+                else app.api.setMusicVolume(v);
+            } catch (e) { /* 引擎没连上 */ }
+        };
         const state = () => ({
             mode,
             endsAt: mode === 'time' ? endsAt : 0,
