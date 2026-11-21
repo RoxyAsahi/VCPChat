@@ -1153,11 +1153,13 @@
             refs.listBtn?.setAttribute('aria-pressed', String(open));
             if (persist) { listPref = open ? '1' : '0'; try { localStorage.setItem(LIST_KEY, listPref); } catch (e) { /* 只是记住 */ } }
             if (open) { list.render(); syncList(); }
+            // 设置抽屉开着时目录开合会换档（见 resize 里的 midBeside）
+            if (lastInset) resize();
         };
-        const applyListDefault = () => {
+        const applyListDefault = (narrow = isNarrow()) => {
             // 宽窗口默认打开，窄窗口默认收起（用户手动开过就按记住的）
             if (listPref === '1' || listPref === '0') setListOpen(listPref === '1', { persist: false });
-            else setListOpen(!isNarrow(), { persist: false });
+            else setListOpen(!narrow, { persist: false });
         };
 
         /* 列表选中某首：在对应的列里找到它，相机飞过去 */
@@ -1346,24 +1348,49 @@
 
         const TINY_W = 760, NARROW_W = 1300, MID_W = 1720;
         const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
+        // 右侧设置抽屉开着时，首页让出它占的那一条：整层按剩下的宽度重新排版（宽窄分档也按剩下的宽度算），
+        // 标题、导航、说明块、封面、资料卡都挪到抽屉左边，不被盖住。用排版位置量，不受抽屉滑入的 transform 影响。
+        const drawerInset = (w) => {
+            // 底栏自己算好了让位宽度就用它的
+            const given = Number(app.musicDock?.roomRight);
+            if (Number.isFinite(given) && app.musicDock && 'roomRight' in app.musicDock) return given > 0 && given < w * 0.6 ? Math.round(given) : 0;
+            const pnl = document.querySelector('#music-dock-root .md-pnl');
+            if (!pnl || !pnl.classList.contains('md-open') || !pnl.offsetWidth) return 0;
+            let left = 0;
+            for (let el = pnl; el; el = el.offsetParent) left += el.offsetLeft;
+            const inset = Math.round(root.getBoundingClientRect().right - left);
+            // 窄窗口里抽屉铺满整个窗口：那时不让位，照原样被盖住
+            return inset > 0 && inset < w * 0.6 ? inset : 0;
+        };
+        let lastInset = 0;
+        let lastFullNarrow = null;
         const resize = () => {
-            const w = root.clientWidth || global.innerWidth;
+            const full = root.clientWidth || global.innerWidth;
+            const inset = drawerInset(full);
+            lastInset = inset;
+            const w = full - inset;
             const h = root.clientHeight || global.innerHeight;
             const sc = hudScale(h);
+            refs.hud.classList.toggle('beside-drawer', inset > 0);
             refs.hud.style.width = (w / sc) + 'px';
             refs.hud.style.height = (h / sc) + 'px';
             refs.hud.style.transform = `scale(${sc})`;
             refs.hud.classList.toggle('short', h / sc < 900);
-            const wasNarrow = refs.hud.classList.contains('narrow');
             // 窄：只留阵列和说明块；中等（笔记本常见的 1280×800 就在这档）：目录照常开着，说明块挪到目录右边
-            refs.hud.classList.toggle('narrow', w / sc < NARROW_W);
-            refs.hud.classList.toggle('mid', w / sc >= NARROW_W && w / sc < MID_W);
+            // 设置抽屉让位后剩下的宽度落进窄档、目录又开着：窄档的目录会盖住说明块，改用中档那种「目录 + 右边说明块」的摆法
+            const midBeside = inset > 0 && listOpen() && w / sc >= 900 && w / sc < NARROW_W;
+            refs.hud.classList.toggle('narrow', w / sc < NARROW_W && !midBeside);
+            refs.hud.classList.toggle('mid', (w / sc >= NARROW_W && w / sc < MID_W) || midBeside);
+            refs.hud.classList.toggle('squeeze', midBeside);
             // 很窄（音乐窗口最小 420 宽时就在这档）：右上的导航挤到标题上、分组切换压在曲名上，改成另一种摆法。
             refs.hud.classList.toggle('tiny', w / sc < TINY_W);
-            if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
+            // 目录默认开合按整窗宽度判断：打开设置抽屉让位变窄时不顺手把目录收起来
+            const fullNarrow = full / sc < NARROW_W;
+            if (list && lastFullNarrow !== null && fullNarrow !== lastFullNarrow && listPref !== '1' && listPref !== '0') applyListDefault(fullNarrow);
+            lastFullNarrow = fullNarrow;
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
-            state.scene?.resize(w, h);
+            state.scene?.resize(full, h);
             syncDetailRoom(sc);
             if (detailOpen) syncDetailEnd();
             syncLyrics();
@@ -1785,6 +1812,18 @@
             kick();
         });
         bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
+        // 设置抽屉开合：抽屉的 class 一变就看让位宽度变没变，变了才重排
+        const dockRoot = document.getElementById('music-dock-root');
+        let drawerFrame = 0;
+        const drawerObserver = dockRoot ? new MutationObserver((records) => {
+            if (!records.some((r) => r.target.classList?.contains('md-pnl')) || drawerFrame) return;
+            drawerFrame = requestAnimationFrame(() => {
+                drawerFrame = 0;
+                if (state.destroyed || !isShown()) return;
+                if (drawerInset(root.clientWidth || global.innerWidth) !== lastInset) resize();
+            });
+        }) : null;
+        drawerObserver?.observe(dockRoot, { subtree: true, attributes: true, attributeFilter: ['class'] });
         const unsubscribeQuality = stageConfig && stageConfig.subscribe ? stageConfig.subscribe(() => { if (isShown()) { ensureScene(); kick(); } }) : null;
         const onMotion = () => {
             syncMotionClass();
@@ -1809,6 +1848,8 @@
             savePlace();
             state.destroyed = true;
             clearInterval(clockTimer);
+            drawerObserver?.disconnect();
+            cancelAnimationFrame(drawerFrame);
             clearTimeout(scan.timer);
             clearTimeout(bootTimer);
             clearTimeout(listTimer);
