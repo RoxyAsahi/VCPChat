@@ -1553,8 +1553,8 @@
             state.scene?.touch();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
-            // 鼠标滚轮一格就是一张（不累计余量）；触控板的小增量照常累计，惯性交给系统
-            const notch = e.deltaMode !== 0 || (Math.abs(e.deltaX) < 1 && Math.abs(e.deltaY) >= 50 && Number.isInteger(e.deltaY));
+            // 鼠标滚轮一格就是一张（不累计余量，系统缩放 125%/150% 时也认得出）；触控板的小增量照常累计，惯性交给系统
+            const notch = Model.isWheelNotch(e, global.devicePixelRatio);
             if (horizontal) {
                 const n = notch ? Math.sign(e.shiftKey ? e.deltaY : e.deltaX) : wheelLanes((e.shiftKey ? e.deltaY : e.deltaX) * unit, e.timeStamp);
                 if (n) stepLane(n);

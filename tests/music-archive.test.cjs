@@ -73,6 +73,17 @@ test('滚轮累计到阈值才走一格，停顿后清零，一次最多 6 格',
     assert.equal(w(5000, 1020), 6);
 });
 
+test('认得出鼠标滚轮的一格：系统缩放 125%/150% 下的小数像素也算一格，触控板的小增量不算', () => {
+    const ev = (deltaY, deltaX = 0, deltaMode = 0) => ({ deltaY, deltaX, deltaMode });
+    assert.equal(M.isWheelNotch(ev(100), 1), true);
+    assert.equal(M.isWheelNotch(ev(-100 / 1.5), 1.5), true);     // 150% 缩放：66.67
+    assert.equal(M.isWheelNotch(ev(100 / 1.25), 1.25), true);    // 125% 缩放：80
+    assert.equal(M.isWheelNotch(ev(3, 0, 1), 1), true);          // 按行
+    assert.equal(M.isWheelNotch(ev(12.5), 1.5), false);          // 触控板小增量
+    assert.equal(M.isWheelNotch(ev(57.31), 1.5), false);         // 触控板快速一划，乘回缩放也不是整数
+    assert.equal(M.isWheelNotch(ev(100, 4), 1), false);          // 斜着划（有横向分量）
+});
+
 test('几千首歌建列也很快', () => {
     const many = Array.from({ length: 5000 }, (_, i) => ({ path: '/m/' + i, title: 't' + i, album: 'al' + (i % 300) }));
     const pls = Array.from({ length: 30 }, (_, k) => ({ id: k, name: 'p' + k, tracks: many.slice(k * 100, k * 100 + 200).map((t) => t.path) }));
