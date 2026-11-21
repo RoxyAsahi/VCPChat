@@ -83,6 +83,7 @@
     </div></div>
     <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
     <div class="md-slots">
+      <button class="md-slot md-sleep" type="button" data-md="sleep" hidden>${icon('moon', 14)}<span data-md="sleep-t"></span></button>
       <button class="md-slot md-like" type="button" data-md="like" aria-label="喜欢" aria-pressed="false" title="喜欢（L）" hidden>${icon('heart', 18)}</button>
       <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、歌词舞台、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
     </div>
@@ -131,6 +132,8 @@
             quickGroup: $('.md-quick-g'),
             more: $('[data-md="more"]'),
             like: $('[data-md="like"]'),
+            sleep: $('[data-md="sleep"]'),
+            sleepT: $('[data-md="sleep-t"]'),
             cap: $('.md-cap'),
             play: $('[data-md="play"]'),
             prev: $('[data-md="prev"]'),
@@ -181,6 +184,7 @@
             panelOpen: false,
             tab: '控制',
             scenesOpen: false,
+            sleepOpen: false,
             tuneAll: false,
             dragging: null,
             lastTimeText: '',
@@ -537,6 +541,70 @@
             if (!show && state.volOpen) setVolumeOpen(false);
             fluid?.setQuick(show, show ? el.quickGroup.getBoundingClientRect() : null);
         };
+        // ───────── 定时关闭 ─────────
+        // 逻辑在 music-sleep.js（app.sleepTimer）；这里只画入口：控制页第三块开关、展开的时长选项、底栏上的剩余时间。
+        // 接口不在时什么都不出现。提示条由 music-sleep.js 自己弹，这里不重复。
+        const SLEEP_CHOICES = Object.freeze([['off', '关'], ['15', '15 分钟'], ['30', '30 分钟'], ['45', '45 分钟'], ['60', '60 分钟'], ['90', '90 分钟'], ['track', '播完这首']]);
+        const sleepAvailable = () => typeof app.sleepTimer?.state === 'function';
+        const sleepState = () => { try { return app.sleepTimer.state() || { mode: 'off' }; } catch (e) { return { mode: 'off' }; } };
+        const sleepClock = (sec) => {
+            const s = Math.max(0, Math.round(Number(sec) || 0));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const r = s % 60;
+            return h ? `${h}:${m < 10 ? '0' : ''}${m}:${r < 10 ? '0' : ''}${r}` : `${m}:${r < 10 ? '0' : ''}${r}`;
+        };
+        const sleepText = (st) => st.mode === 'time' ? `${sleepClock(st.remaining)} 后停` : st.mode === 'track' ? '播完这首停' : '定时关闭';
+        const sleepTileHtml = () => {
+            const st = sleepState();
+            const on = st.mode !== 'off';
+            return `<button class="md-tile${on ? ' md-lit' : ''}" type="button" data-act="sleep-pick" aria-expanded="${state.sleepOpen}" aria-controls="music-dock-sleep" aria-label="定时关闭：${on ? sleepText(st) : '关'}">`
+                + `<span class="md-ti">${icon('moon', 18)}</span><span class="md-slp-v">${sleepText(st)}</span></button>`;
+        };
+        const sleepChipsHtml = () => {
+            const st = sleepState();
+            const cur = st.mode === 'track' ? 'track' : st.mode === 'off' ? 'off' : '';
+            return `<div class="md-slp" id="music-dock-sleep" role="group" aria-label="定时关闭">${SLEEP_CHOICES.map(([v, label]) => (
+                `<button class="md-chip${v === cur ? ' md-lit' : ''}" type="button" data-act="sleep-set" data-v="${v}" aria-pressed="${v === cur}">${label}</button>`
+            )).join('')}</div>`;
+        };
+        // 倒计时只改文字，不重画整页（不打断正在点的东西）
+        const paintSleep = () => {
+            if (!el.sleep || !sleepAvailable()) return;
+            const st = sleepState();
+            const on = st.mode !== 'off';
+            el.sleep.hidden = !on;
+            if (on) {
+                const text = st.mode === 'time' ? sleepClock(st.remaining) : '本曲';
+                if (el.sleepT.textContent !== text) el.sleepT.textContent = text;
+                el.sleep.title = `${sleepText(st)}：点一下调整`;
+                el.sleep.setAttribute('aria-label', `定时关闭，${sleepText(st)}`);
+            }
+            const tile = el.body.querySelector('[data-act="sleep-pick"]');
+            if (tile) {
+                tile.classList.toggle('md-lit', on);
+                const v = tile.querySelector('.md-slp-v');
+                if (v && v.textContent !== sleepText(st)) v.textContent = sleepText(st);
+            }
+            const chips = el.body.querySelector('.md-slp');
+            if (chips) {
+                const cur = st.mode === 'track' ? 'track' : st.mode === 'off' ? 'off' : '';
+                chips.querySelectorAll('[data-v]').forEach((b) => { const lit = b.dataset.v === cur; b.classList.toggle('md-lit', lit); b.setAttribute('aria-pressed', String(lit)); });
+            }
+        };
+        if (el.sleep) {
+            listen(document, 'music-sleep-change', paintSleep);
+            listen(el.sleep, 'click', (event) => {
+                // 底栏上的剩余时间：点一下打开控制页，时长选项直接展开
+                event.stopPropagation();
+                openPanel('控制');
+                state.sleepOpen = true;
+                renderBody();
+                const chips = el.body.querySelector('.md-slp');
+                if (chips) global.MusicFluid?.bud(chips, el.sleep, { duration: 460 });
+            });
+        }
+
         // ───────── 喜欢 ─────────
         // 心形：喜欢的接口在（music-likes.js）才显示。点一下切换，点亮时像一滴液体鼓起来、外面荡开一圈；
         // 别处（档案菜单、快捷键）改了喜欢，靠 music-like-change 同步。
@@ -875,6 +943,7 @@
             el.pArtist.textContent = artist;
             el.cap.classList.toggle('md-notrack', !track);
             paintLike();
+            paintSleep();
             const coverCss = cover ? `url("${cover.replace(/"/g, '%22')}")` : '';
             el.pCover.innerHTML = cover ? '' : icon('music', 18);
             el.pCover.style.backgroundImage = coverCss;
@@ -1025,10 +1094,12 @@
                 html += `<div class="md-vol"><button class="md-ib md-m" type="button" data-act="mute" data-icon="${volumeIcon(v)}" aria-label="静音">${icon(volumeIcon(v), 17)}</button>`
                     + `<div class="md-sld" role="slider" tabindex="0" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v * 100)}"><span class="md-sld-tr"><i class="md-sld-fill" style="transform:scaleX(${v})"></i></span><span class="md-sld-kn" style="left:calc(${v} * (100% - 16px))"></span></div>`
                     + `<span class="md-pct">${Math.round(v * 100)}%</span></div>`;
-                html += '<div class="md-tiles md-tiles-2">'
+                const sleepOn = sleepAvailable();
+                html += `<div class="md-tiles${sleepOn ? '' : ' md-tiles-2'}">`
                     + `<button class="md-tile${mode !== 'repeat' ? ' md-lit' : ''}" type="button" data-act="mode"><span class="md-ti">${icon(MODE_ICONS[mode] || 'repeat', 18)}</span><span>${MODE_LABELS[mode] || '播放模式'}</span></button>`
                     + `<button class="md-tile${inStage ? ' md-lit' : ''}" type="button" data-act="stage" aria-pressed="${inStage}"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>`
-                    + '</div><div class="md-sep"></div>';
+                    + (sleepOn ? sleepTileHtml() : '')
+                    + '</div>' + (sleepOn && state.sleepOpen ? sleepChipsHtml() : '') + '<div class="md-sep"></div>';
                 if (scene) {
                     // 舞台一行：左右箭头直接换；点中间在原地展开全部舞台（不再进子页）。
                     const open = state.scenesOpen;
@@ -1346,6 +1417,21 @@
                 if (next) app.stageHost?.setMode?.(next.id);
                 syncGlow();
                 renderBody();
+            } else if (act === 'sleep-pick') {
+                state.sleepOpen = !state.sleepOpen;
+                renderBody();
+                const pick = el.body.querySelector('[data-act="sleep-pick"]');
+                pick?.focus({ preventScroll: true });
+                const chips = state.sleepOpen && el.body.querySelector('.md-slp');
+                if (chips && pick) global.MusicFluid?.bud(chips, pick, { duration: 400 });
+            } else if (act === 'sleep-set') {
+                const v = target.dataset.v;
+                if (v === 'off') app.sleepTimer?.cancel?.();
+                else if (v === 'track') app.sleepTimer?.setTrackEnd?.();
+                else app.sleepTimer?.set?.(Number(v));
+                state.sleepOpen = false;
+                renderBody();
+                el.body.querySelector('[data-act="sleep-pick"]')?.focus({ preventScroll: true });
             } else if (act === 'scene-pick') {
                 state.scenesOpen = !state.scenesOpen;
                 renderBody();
@@ -1656,7 +1742,7 @@
             if (scroller && top > 0) scroller.scrollTop = top;
             el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
         }
-        function closePop() { state.scenesOpen = false; }
+        function closePop() { state.scenesOpen = false; state.sleepOpen = false; }
 
         // 声音页：原来的音效卡片整块搬进来（appendChild，不重建），离开这一页或关掉面板时放回原处，事件和引用都不变。
         const dspCard = document.querySelector('.settings-container');
@@ -1683,7 +1769,8 @@
         }, true);
         listen(document, 'keydown', (event) => {
             if (event.key !== 'Escape' || event.target?.closest?.('.md-cmd') || palette?.isOpen) return;
-            if (state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
+            if (state.sleepOpen && !state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="sleep-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
+            else if (state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
 
