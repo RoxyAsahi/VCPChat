@@ -683,7 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.lyricsFetchCandidates = [];
             app.lyricsFetchSelection.textContent = '尚未选择歌词版本';
             app.lyricsFetchResults.innerHTML = '<div class="music-modal-empty"><div class="spinner"></div><div>正在并行搜索并检测歌词格式...</div></div>';
-            setLyricsFetchStatus('正在连接网易云、QQ 音乐、酷狗与 AMLL...');
+            setLyricsFetchStatus('正在连接网易云、QQ 音乐、酷狗与 AMLL…');
 
             try {
                 const result = await app.api.searchMusicLyricsCandidates({
@@ -747,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (app.pendingTrackPath === track.path) app.lyricsRequestToken++;
             app.lyricsFetchApply.disabled = true;
             app.lyricsFetchSearchBtn.disabled = true;
-            setLyricsFetchStatus('正在覆盖当前歌词文件...');
+            setLyricsFetchStatus('正在覆盖当前歌词文件…');
             try {
                 const result = await app.api.applyMusicLyricsCandidate({
                     candidateKey: app.selectedLyricsCandidateKey,

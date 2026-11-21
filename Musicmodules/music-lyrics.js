@@ -691,7 +691,7 @@ function setupLyrics(app) {
         app.targetScrollY = 0;
         app.lyricUserScrolling = false;
         if (app.lyricUserScrollTimer) clearTimeout(app.lyricUserScrollTimer);
-        app.lyricsList.innerHTML = '<li class="no-lyrics">加载歌词中...</li>';
+        app.lyricsList.innerHTML = '<li class="no-lyrics">正在加载歌词…</li>';
         app.lyricsList.style.transform = 'translate3d(0, 0px, 0)';
     };
 }

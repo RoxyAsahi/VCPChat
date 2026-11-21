@@ -52,7 +52,7 @@ function setupWebDav(app) {
 
     app.browseWebDav = async (dirPath) => {
         if (!app.activeWebDavServer || !app.api?.listWebdavDirectory) return;
-        app.webdavFileList.innerHTML = '<div class="no-lyrics" style="padding:20px;">加载中...</div>';
+        app.webdavFileList.innerHTML = '<div class="no-lyrics" style="padding:20px;">加载中…</div>';
         app.webdavCurrentPath = dirPath;
         app.renderWebDavBreadcrumb(dirPath);
         const result = await app.api.listWebdavDirectory({
@@ -160,7 +160,7 @@ function setupWebDav(app) {
             const username = document.getElementById('webdav-server-username').value.trim();
             const password = document.getElementById('webdav-server-password').value;
             if (!url) { app.webdavDialogStatus.textContent = '请输入 URL'; return; }
-            app.webdavDialogStatus.textContent = '测试中...';
+            app.webdavDialogStatus.textContent = '测试中…';
             const result = await app.api.testWebdavConnection({ url, username, password });
             app.webdavDialogStatus.style.color = result.status === 'success' ? 'var(--music-highlight)' : '#e55';
             app.webdavDialogStatus.textContent = result.message;
@@ -179,9 +179,9 @@ function setupWebDav(app) {
         app.webdavScanBtn?.addEventListener('click', async () => {
             if (!app.activeWebDavServer || !app.api?.scanWebdavAudio) return;
             app.webdavScanBtn.disabled = true;
-            app.webdavScanBtn.textContent = '扫描中...';
+            app.webdavScanBtn.textContent = '扫描中…';
             const unsubscribeProgress = app.api.onWebdavScanProgress?.(({ count }) => {
-                app.webdavScanBtn.textContent = `已找到 ${count} 首...`;
+                app.webdavScanBtn.textContent = `已找到 ${count} 首…`;
             });
             try {
                 const result = await app.api.scanWebdavAudio({

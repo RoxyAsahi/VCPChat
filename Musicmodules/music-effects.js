@@ -141,7 +141,7 @@ function setupEffects(app) {
 
     app.loadIrFile = async (filePath) => {
         if (!app.api?.musicLoadIr) return;
-        app.updateIrStatus('加载中...', 'idle');
+        app.updateIrStatus('加载中…', 'idle');
         try {
             const result = await app.api.musicLoadIr({ path: filePath });
             if (result.status === 'success') {
