@@ -791,3 +791,7 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.tiny.short .archive-lanes { left: auto; right: 59px; top: 98px; bottom: auto; gap: 8px; }
 .archive-hud.tiny .archive-lanes > div { display: none; }
 .archive-hud.tiny .archive-brand { width: calc(100% - 118px - 110px); }
+
+/* 键盘提示放大到 12px 后，在宽档靠下限（1600×900 一类）会一直伸到右下页脚「正在播放」上面；
+   改到页脚上面一行，并且不超过说明块右边 */
+.archive-hint { bottom: 62px; max-width: calc(100% - var(--ar-col) - 59px); overflow: hidden; text-overflow: ellipsis; }
