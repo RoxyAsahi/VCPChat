@@ -74,3 +74,24 @@ test('radio from a track starts with it and refills near the end', async () => {
     assert.ok(app.currentFilteredTracks.length > n);
     assert.equal(app.radio.list, app.currentFilteredTracks);
 });
+
+test('daily mix is stable within a day and leans on unplayed songs; never-played excludes played ones', () => {
+    const { app } = setup();
+    const played = new Set(lib.slice(0, 6));
+    app.musicStats = {
+        top: () => lib.slice(0, 3).map((t) => t.path),
+        lastPlayed: () => lib.slice(0, 2).map((t) => t.path),
+        get: (t) => (played.has(t) ? { plays: 3 } : null),
+        affinity: (t) => (played.has(t) ? 0.5 : 0)
+    };
+    globalThis.localStorage = { getItem: () => null };
+    const a = app.dailyMix();
+    const b = app.dailyMix({ size: 30 });
+    assert.equal(a, b);
+    assert.equal(a.length, 30);
+    assert.ok(!a.includes(lib[0]) && !a.includes(lib[1]), 'just-played songs are left out');
+    assert.ok(a.filter((t) => !played.has(t)).length >= 10, 'about a third or more are unplayed');
+    const fresh = app.neverPlayed({ size: 10 });
+    assert.equal(fresh.length, 10);
+    assert.ok(fresh.every((t) => !played.has(t)));
+});
