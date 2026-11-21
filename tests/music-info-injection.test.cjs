@@ -80,6 +80,10 @@ test('actual request injection block gates current music but preserves system pr
                 messages, settings: { musicInfoInjectionEnabled: enabled, agentMusicControl: control },
                 getMusicState: () => ({ currentSongInfo: { title: '歌曲', artist: '艺术家', album: '专辑' } }),
                 fs: { pathExists: async () => true, readJson: async () => [{ title: '列表曲目' }] },
+                require: (name) => {
+                    assert.equal(name, '../musicPlaylistPrompt');
+                    return { playlistPrompt: async () => require('../modules/musicPlaylistPrompt').formatPlaylistPrompt([{ title: '列表曲目' }]) };
+                },
                 path, APP_DATA_ROOT_IN_PROJECT: os.tmpdir(), console
             });
             await vm.runInContext(`(async () => { ${block} })()`, context);

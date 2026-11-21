@@ -7,6 +7,8 @@ function setupPlayer(app) {
         const track = app.playlist[app.currentTrackIndex];
         const state = {
             title: track ? app.stripAudioExtension(track.title) || '未知标题' : '',
+            artist: track?.artist || '',
+            album: track?.album || '',
             trackKey: track?.path || '',
             playing: app.isPlaying === true
         };

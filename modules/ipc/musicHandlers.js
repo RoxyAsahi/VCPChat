@@ -199,6 +199,27 @@ function createOrFocusMusicWindow() {
     return musicWindowPromise;
 }
 
+// 无缝切到下一首时不走 music-load，「当前播放」注入会一直报上一首。
+// 窗口每次换歌都会发胶囊状态，按它的路径跟上；新窗口顺带给出歌手和专辑，旧窗口只给路径时从曲库里查。
+async function followTrackChange(state) {
+    const trackPath = typeof state?.trackKey === 'string' ? state.trackKey : '';
+    if (!trackPath || currentSongInfo?.path === trackPath) return;
+    let info = null;
+    if (typeof state.artist === 'string' || typeof state.album === 'string') {
+        info = { title: state.title, artist: state.artist, album: state.album };
+    } else {
+        const track = (await readPlaylistFile()).find(t => t && t.path === trackPath);
+        info = track ? { title: track.title, artist: track.artist, album: track.album } : { title: state.title };
+    }
+    if (!musicWindow || musicCapsuleState.trackKey !== trackPath) return; // 查曲库期间又换了歌或窗口关了
+    currentSongInfo = {
+        title: String(info.title || '').slice(0, 512) || '未知标题',
+        artist: String(info.artist || '').slice(0, 512) || '未知艺术家',
+        album: String(info.album || '').slice(0, 512) || '未知专辑',
+        path: trackPath
+    };
+}
+
 // --- Playlist file helpers ---
 async function readPlaylistFile() {
     try {
@@ -523,6 +544,7 @@ function initialize(options) {
             };
             publishMusicCapsule();
             if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
+            followTrackChange(state).catch(() => {});
         });
         ipcMain.on('music-capsule-command', (event, command) => {
             if (!mainWindow || event.sender !== mainWindow.webContents) return;
@@ -556,32 +578,25 @@ function initialize(options) {
                 currentSongInfo = {
                     title: track.title || '未知标题',
                     artist: track.artist || '未知艺术家',
-                    album: track.album || '未知专辑'
+                    album: track.album || '未知专辑',
+                    path: track.path
                 };
                 
                 // 检查是否是 WebDAV 远程曲目
                 if (track.isRemote || track.path.startsWith('http://') || track.path.startsWith('https://')) {
-                    // 如果有 serverId，使用它获取凭据
-                    if (track.serverId) {
+                    // 按 serverId 取账号；没有或服务器已删时，按地址落在哪台服务器下面（路径边界、最长前缀）。
+                    // 原来按纯前缀取第一台：同一台 NAS 上 /dav 和 /dav2 两个服务器时会拿错账号。
+                    const creds = webdavManager.credentialsForTrack?.({ serverId: track.serverId, path: track.path });
+                    if (creds?.username && creds?.password) {
                         return await webdavManager.configureAndLoad({
                             url: track.path,
-                            serverId: track.serverId
+                            username: creds.username,
+                            password: creds.password
                         });
                     }
-                    // 否则尝试通过 URL 匹配服务器
-                    const path = track.path;
-                    const matchingServer = webdavManager.listServers().find(s => {
-                        return path.startsWith(s.url);
-                    });
-                    if (matchingServer) {
-                        const creds = webdavManager.getServerCredentials(matchingServer.id);
-                        if (creds) {
-                            return await webdavManager.configureAndLoad({
-                                url: track.path,
-                                username: creds.username,
-                                password: creds.password
-                            });
-                        }
+                    if (track.serverId) {
+                        // 服务器已删：交给 configureAndLoad 给出明确的提示
+                        return await webdavManager.configureAndLoad({ url: track.path, serverId: track.serverId });
                     }
                 }
                 
@@ -964,8 +979,8 @@ function initialize(options) {
             for (const lrcPath of possibleLrcPaths) {
                 try {
                     if (await fs.pathExists(lrcPath)) {
-                        const content = await fs.readFile(lrcPath, 'utf-8');
-                        return content;
+                        // 自己放进歌词目录的 .lrc 常是 GBK 或带 BOM 的 UTF-8/UTF-16
+                        return require('../lyrics/decodeLyricText').decodeLyricText(await fs.readFile(lrcPath));
                     }
                 } catch (error) {
                     console.error(`[Music] Error reading lyric file ${lrcPath}:`, error);
