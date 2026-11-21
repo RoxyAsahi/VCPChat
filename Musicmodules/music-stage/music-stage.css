@@ -54,10 +54,14 @@ body {
 body.music-stage-active .music-player-container {
     opacity: 0;
     transform: scale(1.025);
-    pointer-events: none;
-    /* 淡出结束后彻底不参与绘制和合成，舞台期间不再为看不见的普通界面付帧时间。 */
-    visibility: hidden;
-    transition: opacity 0.38s ease, transform 0.5s var(--stage-ease), visibility 0s linear 0.5s;
+    /* 这里不写 pointer-events: none：它会继承，进舞台那一下曲库每一行都要重算样式。
+     * 进舞台后点不到普通界面，是因为舞台根节点从这一刻起就整屏接住指针（见 .music-stage 下面那条）。 */
+    /* 淡出结束后彻底不参与样式、排版、绘制和合成，舞台期间不再为看不见的普通界面付帧时间。
+     * 用 content-visibility 而不是 visibility：visibility 会继承，进舞台那一下要把曲库里
+     * 每一行都重新算一遍样式；content-visibility 不继承，到点直接跳过整棵子树。 */
+    content-visibility: hidden;
+    transition: opacity 0.38s ease, transform 0.5s var(--stage-ease), content-visibility 0s linear 0.5s;
+    transition-behavior: allow-discrete;
 }
 
 /* 标题栏始终是舞台唯一模式出口；进入舞台后只保留圆形切换键与窗口控制。 */
@@ -119,6 +123,11 @@ body.music-stage-active #player-background {
     pointer-events: none;
     transition: opacity 0.38s ease, transform 0.55s var(--stage-ease);
     isolation: isolate;
+}
+
+/* 进舞台的第一帧舞台还没加 is-visible，也先接住指针，挡住下面正在淡出的普通界面。 */
+body.music-stage-active .music-stage {
+    pointer-events: auto;
 }
 
 .music-stage.is-visible {

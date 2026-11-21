@@ -1236,7 +1236,9 @@
                 return `<div class="md-qhd" role="presentation" style="${style}"><span>${escapeHtml(row.label)}</span><em>${row.count}</em>`
                     + (row.clear ? '<span class="md-g"></span><button class="md-qclr" type="button" data-qact="clear">清空</button>' : '') + '</div>';
             }
-            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`;
+            const dur = queueDuration(row.track);
+            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`
+                + (dur && row.type !== 'now' ? `<span class="md-qdur">${dur}</span>` : '');
             if (row.type === 'now') {
                 return `<div class="md-qi md-cur md-now" role="listitem" style="${style}">${text}<span class="md-g"></span><span class="md-qtag">正在播放</span></div>`;
             }
@@ -1256,6 +1258,23 @@
                 + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
         };
 
+        // 队列每行右边的时长：曲目自带的优先；没带的用档案页记下的（播放过一次就有，存在本机同一个键里）
+        let qDurs = null, qDursAt = 0;
+        const queueDuration = (t) => {
+            let sec = Number(t?.duration) > 0 ? Number(t.duration) : 0;
+            if (!sec && t?.path) {
+                const now = performance.now();
+                if (!qDurs || now - qDursAt > 5000) {
+                    try { qDurs = JSON.parse(localStorage.getItem('musicArchiveDurations') || '{}') || {}; } catch (e) { qDurs = {}; }
+                    qDursAt = now;
+                }
+                sec = Number(qDurs[t.path]) || 0;
+            }
+            sec = Math.round(sec);
+            if (!(sec > 0)) return '';
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = String(sec % 60).padStart(2, '0');
+            return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
+        };
         function renderQueueWindow(scroller, force = false) {
             if (state.queueDrag?.active) return; // 拖动时别重建行
             const rows = state.queueRows || [];
@@ -1402,7 +1421,12 @@
                 return;
             }
             if (state.lyricsSource !== app.currentLyrics) { renderBody(); return; }
-            const index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            let index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            // 暂停着打开（比如重开窗口停在 0:08）时歌词模块不更新当前行，这里按进度自己找一次，不然一行都不亮
+            if (index < 0 && !app.isPlaying && typeof app.lyricIndexAt === 'function' && currentTime() > 0) {
+                const at = app.lyricIndexAt(currentTime());
+                if (Number.isInteger(at)) index = at;
+            }
             if (!force && index === state.lyricIndex) return;
             box.querySelector('p.md-on')?.classList.remove('md-on');
             state.lyricIndex = index;
@@ -1847,12 +1871,19 @@
         const dspCard = document.querySelector('.settings-container');
         const dspHome = dspCard ? { parent: dspCard.parentNode, next: dspCard.nextSibling } : null;
         let fxIn = false;
+        // 声音页不用 display:none 藏：那样每次切过来都要把整张音效卡（四百来个元素）重算样式、重新排版。
+        // 首页（档案页）盖住音效卡原来的位置时，卡就留在抽屉里「停着」（md-fx-park：content-visibility:hidden，
+        // 不占地方但保住排版），切到声音页只是把它亮出来。经典视图要用原处的卡，才送回去。
+        const archiveOn = () => document.body.classList.contains('music-archive-on');
         function syncFx(show) {
             show = Boolean(show && dspCard && state.panelOpen);
-            el.fxScroll.hidden = !show;
-            if (show === fxIn) return;
-            fxIn = show;
-            if (show) el.fxScroll.appendChild(dspCard);
+            const park = !show && Boolean(dspCard) && archiveOn();
+            el.fxScroll.hidden = !show && !park;
+            el.fxScroll.classList.toggle('md-fx-park', park);
+            const inDrawer = show || park;
+            if (inDrawer === fxIn) return;
+            fxIn = inDrawer;
+            if (inDrawer) el.fxScroll.appendChild(dspCard);
             else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
         // 「音效设置」原来是抽屉里的子页，现在就是声音页；这两个名字留给命令面板和外面的调用。
@@ -1881,6 +1912,9 @@
             observer.observe(target, options);
             observers.push(observer);
         };
+        // 首页和经典视图来回切时，停着的音效卡跟着挪：首页留在抽屉里，经典视图送回原处。
+        if (dspCard) observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => { if (!(state.panelOpen && state.tab === '声音')) syncFx(false); });
+        if (dspCard) syncFx(false);
         let lastPlaying = null;
         let lastStage = null;
         let lastTheme = null;
@@ -2156,6 +2190,14 @@
         if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => { syncFluid(); syncGlow(); }));
         // 字体和布局稳定后再量一次（流体层要对齐按钮的真实位置）。
         requestAnimationFrame(() => { if (!state.destroyed) animateCapsule(); });
+        // 预热抽屉：窗口空下来以后，在藏着的抽屉里把当前页签画一遍。第一次打开时样式规则和排版都已经算过一回，
+        // 不会比以后每次都慢一大截。真打开时照常重画，这里画的东西不会被直接拿来用。
+        const warmTimer = setTimeout(() => {
+            const run = () => { if (!state.panelOpen && !state.destroyed) renderBody(); };
+            if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 4000 });
+            else run();
+        }, 2500);
+        cleanups.push(() => clearTimeout(warmTimer));
         kickProgress();
         lastPlaying = app.isPlaying === true;
         lastStage = stageActive();

@@ -290,7 +290,7 @@
             const q0 = state.query.trim();
             // 有检索词、有结果时给「存为智能歌单」（多选时让给多选说明）
             r.saveSmart.hidden = !(q0 && out.count && app.createSmartPlaylist) || multi.size > 1;
-            if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count); }
+            if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count, out.rows.find((row) => row.type === 'track') || null); }
             if (!out.count) {
                 // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
                 const q = state.query.trim();
@@ -1599,6 +1599,8 @@
             if (!auto) { try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ } }
             r.viewport.scrollTop = 0;
             rebuild();
+            // 用户自己换的分类告诉档案页，阵列和左上标题跟过去（跟着阵列自动切的不回传，免得来回切）
+            if (!auto) opts.onKind?.(kind);
             const k = findRow(state.selected, null);
             if (k >= 0) state.selectedRow = k;
             const back = kindScroll.get(kind);
