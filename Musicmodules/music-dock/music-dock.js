@@ -1349,7 +1349,11 @@
             } else if (act === 'scene-pick') {
                 state.scenesOpen = !state.scenesOpen;
                 renderBody();
-                el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
+                const pick = el.body.querySelector('[data-act="scene-pick"]');
+                pick?.focus({ preventScroll: true });
+                // 展开的舞台格子从「舞台」那颗按钮里长出来（共用套件；降低动态、节能档时只淡入）
+                const grid = state.scenesOpen && el.body.querySelector('.md-scn');
+                if (grid && pick) global.MusicFluid?.bud(grid, pick, { duration: 420 });
             } else if (target.dataset.mode && target.closest('.md-scn')) {
                 app.stageHost?.setMode?.(target.dataset.mode);
                 syncGlow();

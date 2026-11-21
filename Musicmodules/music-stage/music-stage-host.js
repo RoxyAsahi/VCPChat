@@ -841,10 +841,23 @@
                 verticalBand: Math.ceil(inset + verticalAmplitude + 24) };
         };
 
+        // Reading the stage's size every frame forces a layout every frame;
+        // keep it from the resize observer and read it only when unknown.
+        let rootSize = null;
+        if (global.ResizeObserver) {
+            const observer = new global.ResizeObserver(() => { rootSize = null; });
+            observer.observe(root);
+            scope.add(() => observer.disconnect());
+        }
+        const stageSize = () => {
+            if (!rootSize || !global.ResizeObserver) rootSize = { width: root.clientWidth, height: root.clientHeight };
+            return rootSize;
+        };
         const resizeEdgeCanvas = (frame) => {
             if (!edgeContext) return false;
-            const width = Math.max(1, root.clientWidth);
-            const height = Math.max(1, root.clientHeight);
+            const size = stageSize();
+            const width = Math.max(1, size.width);
+            const height = Math.max(1, size.height);
             // A glowing line gains nothing from more than this.
             const dpr = Math.min(1.5, frame.viewport?.dpr || global.devicePixelRatio || 1);
             if (
@@ -1550,6 +1563,7 @@
         });
         scope.listen(global, 'keydown', onKeyDown);
         scope.listen(global, 'resize', () => {
+            rootSize = null;
             edgeCanvasState.width = 0;
             edgeCanvasState.height = 0;
             const viewport = {
