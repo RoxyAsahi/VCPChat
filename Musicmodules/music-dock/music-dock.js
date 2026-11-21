@@ -1847,12 +1847,19 @@
         const dspCard = document.querySelector('.settings-container');
         const dspHome = dspCard ? { parent: dspCard.parentNode, next: dspCard.nextSibling } : null;
         let fxIn = false;
+        // 声音页不用 display:none 藏：那样每次切过来都要把整张音效卡（四百来个元素）重算样式、重新排版。
+        // 首页（档案页）盖住音效卡原来的位置时，卡就留在抽屉里「停着」（md-fx-park：content-visibility:hidden，
+        // 不占地方但保住排版），切到声音页只是把它亮出来。经典视图要用原处的卡，才送回去。
+        const archiveOn = () => document.body.classList.contains('music-archive-on');
         function syncFx(show) {
             show = Boolean(show && dspCard && state.panelOpen);
-            el.fxScroll.hidden = !show;
-            if (show === fxIn) return;
-            fxIn = show;
-            if (show) el.fxScroll.appendChild(dspCard);
+            const park = !show && Boolean(dspCard) && archiveOn();
+            el.fxScroll.hidden = !show && !park;
+            el.fxScroll.classList.toggle('md-fx-park', park);
+            const inDrawer = show || park;
+            if (inDrawer === fxIn) return;
+            fxIn = inDrawer;
+            if (inDrawer) el.fxScroll.appendChild(dspCard);
             else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
         // 「音效设置」原来是抽屉里的子页，现在就是声音页；这两个名字留给命令面板和外面的调用。
@@ -1881,6 +1888,9 @@
             observer.observe(target, options);
             observers.push(observer);
         };
+        // 首页和经典视图来回切时，停着的音效卡跟着挪：首页留在抽屉里，经典视图送回原处。
+        if (dspCard) observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => { if (!(state.panelOpen && state.tab === '声音')) syncFx(false); });
+        if (dspCard) syncFx(false);
         let lastPlaying = null;
         let lastStage = null;
         let lastTheme = null;

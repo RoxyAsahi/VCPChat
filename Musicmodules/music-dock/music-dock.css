@@ -1699,3 +1699,16 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
 /* 队列页顶上「播放过的」：比接下来要放的淡一些，悬停时恢复 */
 .md-qi.md-hist { opacity: .55; transition: opacity .2s; }
 .md-qi.md-hist:hover, .md-qi.md-hist:focus-within { opacity: 1; }
+
+/* 声音页的音效卡在抽屉里停着时（music-dock.js syncFx）：不占地方、不画，但排版留着，切过来不用整张重排 */
+#music-dock-root .md-fx-sc.md-fx-park {
+  content-visibility: hidden;
+  contain-intrinsic-size: auto none;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
