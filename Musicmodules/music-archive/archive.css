@@ -356,6 +356,12 @@ body.light-theme .archive-list { --glow: .85; }
 
 /* 歌手、专辑、歌单的分组：一行 eyebrow 小字 */
 .archive-list-group { position: absolute; left: var(--gutter); right: 0; top: 0; height: 40px; display: flex; align-items: flex-end; gap: 12px; padding-bottom: 6px; font-size: 12px; letter-spacing: 1.3px; color: var(--ar-muted); white-space: nowrap; }
+/* 正在放的歌所在的那一组：组名前一个强调色小点，播放中轻轻呼吸 */
+.archive-list-group.has-playing > span:first-child::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: var(--ar-accent, var(--ar-ink)); }
+.archive-list-group.live-on > span:first-child::before { animation: archive-live-dot 1.6s ease-in-out infinite; }
+@keyframes archive-live-dot { 50% { opacity: .35; } }
+body.music-reduce-motion .archive-list-group.live-on > span:first-child::before { animation: none; }
+@media (prefers-reduced-motion: reduce) { .archive-list-group.live-on > span:first-child::before { animation: none; } }
 .archive-list-group span { overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; }
 .archive-list-group i { font-style: normal; font-size: 11px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
