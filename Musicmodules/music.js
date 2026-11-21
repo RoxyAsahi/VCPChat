@@ -913,10 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         app.loadAvailableIrPresets();
-        app.irLoadBtn.onclick = async () => {
-            const filePath = await app.api.selectMusicIrFile();
-            if (filePath) app.loadIrFile(filePath);
-        };
+        app.irLoadBtn.onclick = () => app.pickIrFile();
 
         // --- IR Help Tip Logic ---
         const irHelpIcon = document.getElementById('ir-help-icon');

@@ -159,6 +159,22 @@ function setupEffects(app) {
         }
     };
 
+    // 选 IR 文件。取消了选择时，开关和下拉要回到实际状态：没有加载着的 IR 就不能显示「开」或「自定义」。
+    app.pickIrFile = async () => {
+        let filePath = null;
+        try { filePath = await app.api?.selectMusicIrFile?.(); } catch (e) { filePath = null; }
+        if (filePath) return app.loadIrFile(filePath);
+        if (!app.irLoadedPath) {
+            app.irEnabled = false;
+            app.irSwitch.checked = false;
+            if (app.irPresetSelect?.value === 'custom') {
+                app.irPresetSelect.value = '';
+                if (app.irLoadBtn) app.irLoadBtn.style.display = 'none';
+            }
+        }
+        return undefined;
+    };
+
     app.unloadIr = async () => {
         if (!app.api?.musicUnloadIr) return;
         try {
