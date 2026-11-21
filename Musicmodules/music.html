@@ -78,7 +78,7 @@
             <!-- 顶部操作区 -->
             <div class="sidebar-actions">
                 <div class="search-wrapper">
-                    <input type="text" id="search-input" placeholder="搜索歌曲...">
+                    <input type="text" id="search-input" placeholder="搜索歌曲">
                     <button id="semantic-search-btn" title="开启语义搜索 (AI)">
                         <svg viewBox="0 0 24 24" width="16" height="16">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z" fill="currentColor"/>
@@ -867,10 +867,10 @@
     <div id="webdav-server-dialog" class="dialog-overlay">
         <div class="dialog glass-panel">
             <h3>添加 WebDAV 服务器</h3>
-            <input type="text" id="webdav-server-name" placeholder="名称 (如：我的 NAS)" style="margin-bottom:8px;">
-            <input type="url" id="webdav-server-url" placeholder="URL (如：http://nas.local/dav/)" style="margin-bottom:8px;">
-            <input type="text" id="webdav-server-username" placeholder="用户名 (可选)" style="margin-bottom:8px;">
-            <input type="password" id="webdav-server-password" placeholder="密码 (可选)" style="margin-bottom:8px;">
+            <input type="text" id="webdav-server-name" placeholder="名称，比如「我的 NAS」" style="margin-bottom:8px;">
+            <input type="url" id="webdav-server-url" placeholder="地址，比如 http://nas.local/dav/" style="margin-bottom:8px;">
+            <input type="text" id="webdav-server-username" placeholder="用户名（可不填）" style="margin-bottom:8px;">
+            <input type="password" id="webdav-server-password" placeholder="密码（可不填）" style="margin-bottom:8px;">
             <div class="dialog-actions">
                 <button class="dialog-btn cancel" id="webdav-dialog-cancel">取消</button>
                 <button class="dialog-btn" id="webdav-dialog-test">测试连接</button>
@@ -884,7 +884,7 @@
     <div id="playlist-dialog" class="dialog-overlay">
         <div class="dialog glass-panel">
             <h3>新建歌单</h3>
-            <input type="text" id="playlist-name-input" placeholder="输入歌单名称...">
+            <input type="text" id="playlist-name-input" placeholder="歌单名称">
             <div class="dialog-actions">
                 <button class="dialog-btn cancel" id="dialog-cancel">取消</button>
                 <button class="dialog-btn confirm" id="dialog-confirm">创建</button>
@@ -900,7 +900,7 @@
                 <button class="music-modal-close-btn" id="modal-close-btn">✕</button>
             </div>
             <div class="music-modal-search">
-                <input type="text" id="modal-search-input" placeholder="搜索歌曲...">
+                <input type="text" id="modal-search-input" placeholder="搜索歌曲">
             </div>
             <div class="music-modal-content">
                 <div class="music-modal-song-list" id="modal-song-list">
