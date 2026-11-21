@@ -905,3 +905,6 @@ body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) 
     0 12px 30px -14px rgba(0, 0, 0, .35),
     0 18px 44px -20px color-mix(in srgb, var(--md-fl-tint, var(--mf-tint)) 70%, transparent);
 }
+
+/* 曲目详情卡进出时先不做背后的模糊，停稳以后（mf-detail-still，JS 加）再加上，见 watchDetail */
+#music-archive-view:not(.mf-detail-still) .archive-detail-card { -webkit-backdrop-filter: none; backdrop-filter: none; }

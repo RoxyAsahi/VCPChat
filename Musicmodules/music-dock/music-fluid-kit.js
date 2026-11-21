@@ -496,7 +496,35 @@
         doc.addEventListener('animationend', (e) => { if (e.animationName === 'mf-nudge') e.target.classList.remove('mf-nudge'); });
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); };
+    /* 档案页的曲目详情卡：进出时整块在淡入淡出、往上浮，卡片背后的模糊（backdrop-filter）每一帧都要对整块背景重算，
+     * 慢机器上这段会掉到十几帧。卡片底色本来就九成不透明，模糊只透出一成，所以动的时候先不模糊，停稳以后再加上；
+     * 收起时一开始就去掉。看起来几乎没有差别，动画却不用每帧重算模糊。 */
+    const watchDetail = () => {
+        const doc = global.document;
+        if (typeof global.MutationObserver !== 'function') return;
+        let tries = 0, timer = 0;
+        const attach = () => {
+            const view = doc.getElementById('music-archive-view');
+            const card = view?.querySelector('.archive-detail-card');
+            if (!card) { if (++tries < 60) global.setTimeout(attach, 500); return; }
+            let open = view.classList.contains('is-detail');
+            const settle = () => { global.clearTimeout(timer); timer = 0; if (view.classList.contains('is-detail')) view.classList.add('mf-detail-still'); };
+            if (open) view.classList.add('mf-detail-still');
+            card.addEventListener('transitionend', (e) => { if (e.target === card && e.propertyName === 'transform') settle(); });
+            new global.MutationObserver(() => {
+                const now = view.classList.contains('is-detail');
+                if (now === open) return;
+                open = now;
+                view.classList.remove('mf-detail-still');
+                global.clearTimeout(timer);
+                // 过渡是 .3s 延迟 + .6s；万一没收到 transitionend（降低动态时没有过渡），到点也补上
+                if (now) timer = global.setTimeout(settle, 1000);
+            }).observe(view, { attributes: true, attributeFilter: ['class'] });
+        };
+        attach();
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); watchDetail(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 
