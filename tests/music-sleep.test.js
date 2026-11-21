@@ -62,3 +62,29 @@ test('cancel during the fade restores the volume and stops the timer', () => {
     assert.equal(running(), false);
     assert.equal(events.at(-1).mode, 'off');
 });
+
+test('cancelling during the fade restores the volume after any fade request still in flight, never before it', async () => {
+    const { app, sleep, advance } = setup();
+    const pending = [];
+    const sent = [];
+    app.api.setMusicVolume = (v) => { sent.push(Math.round(v * 100) / 100); return new Promise((resolve) => pending.push(resolve)); };
+    // 与 music-effects.js 的 sendLatest 同样的约定：同一类同时只发一个，排队期间只留最新的
+    const slots = new Map();
+    app.sendLatest = (key, send) => {
+        const slot = slots.get(key);
+        if (slot) { slot.next = send; return slot.done; }
+        const created = { next: null };
+        slots.set(key, created);
+        created.done = (async () => { let cur = send; while (cur) { created.next = null; await cur(); cur = created.next; } slots.delete(key); })();
+        return created.done;
+    };
+    sleep.set(1);
+    advance(55);
+    assert.deepEqual(sent, [0.4]);
+    sleep.cancel();
+    assert.deepEqual(sent, [0.4], 'the restore waits until the fade request has reached the engine');
+    pending.shift()();
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(sent, [0.4, 0.8], 'and is sent right after it, so it is the last value the engine sees');
+    pending.shift()();
+});
