@@ -43,7 +43,11 @@ test('Markdown 保留多语言正文，忽略计时数据，明确提示无歌�
     assert.ok(text.includes('\\# 歌曲'));
     assert.ok(formatCurrentLyrics({
         track: { title: '<script>' }, lines: []
-    }).includes('<script>'));
+    }).includes('&lt;script&gt;'));
+    const angle = formatCurrentLyrics({ track: { title: 'x' }, lines: [{ original: '<img src=x onerror=alert(1)> & <3' }] });
+    assert.ok(!angle.includes('<img') && angle.includes('&lt;img') && angle.includes('&amp; &lt;3'));
+    assert.match(formatCurrentLyrics({ track: { title: '歌曲' }, lines: [], loading: true }), /歌词还在加载/);
+    assert.match(formatCurrentLyrics({ track: { title: '歌曲' }, lines: [{ original: '有词' }], loading: true }), /有词/);
 });
 
 function rendererHarness() {
@@ -82,6 +86,34 @@ test('渲染端按当前路径读取，暂停可读，不泄露音源路径及�
     harness.app.pendingTrackPath = null;
     harness.query();
     assert.equal(harness.sent[2].snapshot.track, null);
+});
+
+test('找词期间报告「还在加载」，找完、被新请求或手选取代后不再报告', async () => {
+    const harness = rendererHarness();
+    let finish;
+    const li = { innerHTML: '' };
+    Object.assign(harness.app, {
+        lyricsList: Object.assign(li, { style: {} }),
+        renderLyrics() {},
+        parseLrc: () => [{ original: '找到了', translation: '', romanization: '' }]
+    });
+    harness.app.api.getMusicLyrics = () => new Promise((resolve) => { finish = resolve; });
+    const loading = () => { harness.query(); return harness.sent.at(-1).snapshot.loading; };
+    const pending = harness.app.fetchAndDisplayLyrics('歌手', '当前歌曲');
+    assert.equal(loading(), true);
+    finish('[00:01]找到了');
+    await pending;
+    assert.equal(loading(), false);
+    assert.equal(harness.sent.at(-1).snapshot.lines[0].original, '找到了');
+
+    // 手选歌词会作废自动请求：之后不能一直报告在加载
+    const again = harness.app.fetchAndDisplayLyrics('歌手', '当前歌曲');
+    assert.equal(loading(), true);
+    harness.app.lyricsRequestToken++;
+    assert.equal(loading(), false);
+    finish(null);
+    await again;
+    assert.equal(loading(), false);
 });
 
 function mainHarness() {
