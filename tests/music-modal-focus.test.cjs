@@ -55,3 +55,21 @@ test('Esc closes the top dialog through its own close or cancel button', async (
     assert.deepEqual(clicks, ['add', 'list'], 'Esc for the input method does not close');
     dom.window.close();
 });
+
+test('closing the playlist editor re-renders the list, and focus still lands on that playlist\'s edit button', async () => {
+    const { dom, window, doc } = setup();
+    await tick(window);
+    const view = doc.getElementById('sidebar-category-view');
+    const render = () => { view.innerHTML = ['a', 'b', 'c'].map((n) => `<div class="category-item"><button class="edit-btn">${n}</button></div>`).join(''); };
+    render();
+    const modal = doc.getElementById('playlist-edit-modal');
+    view.querySelectorAll('.edit-btn')[1].focus();
+    modal.classList.add('visible');
+    await tick(window);
+    assert.ok(modal.contains(doc.activeElement));
+    modal.classList.remove('visible');
+    render(); // music.js 关弹窗时会重画侧栏歌单列表
+    await tick(window);
+    assert.equal(doc.activeElement, view.querySelectorAll('.edit-btn')[1], 'focus returns to the rebuilt button for the same playlist');
+    dom.window.close();
+});

@@ -34,17 +34,32 @@
         target?.focus({ preventScroll: true });
     };
 
+    // 关弹窗时列表常会整块重画（编辑歌单关掉后侧栏歌单列表重建），原来那个按钮已经不在页面上。
+    // 记下它在最近一个带 id 的容器里、同类按钮中的第几个，重画后按位置找回新的那个。
+    const remember = (el) => {
+        const root = el.parentElement?.closest('[id]');
+        const cls = [...el.classList].filter((c) => /^[\w-]+$/.test(c)).map((c) => '.' + c).join('');
+        const sel = el.tagName.toLowerCase() + cls;
+        return { el, root, sel, index: root ? [...root.querySelectorAll(sel)].indexOf(el) : -1 };
+    };
+    const recall = (mark) => {
+        if (!mark) return null;
+        if (mark.el.isConnected) return mark.el;
+        if (!mark.root?.isConnected || mark.index < 0) return null;
+        return mark.root.querySelectorAll(mark.sel)[mark.index] || null;
+    };
+
     const sync = (o) => {
         const open = isOpen(o);
         o.inert = !open;
         if (open && !openers.has(o)) {
             const from = document.activeElement;
-            openers.set(o, from && from !== document.body && !o.contains(from) ? from : null);
+            openers.set(o, from && from !== document.body && !o.contains(from) ? remember(from) : null);
             // 打开的代码可能在去掉 inert 之前就 focus 过（那次会落空），这里补上
             focusInside(o);
             global.requestAnimationFrame?.(() => { if (isOpen(o)) focusInside(o); });
         } else if (!open && openers.has(o)) {
-            const back = openers.get(o);
+            const back = recall(openers.get(o));
             openers.delete(o);
             const lost = document.activeElement === document.body || o.contains(document.activeElement);
             if (lost && back && back.isConnected && !back.closest('[inert], [hidden]')) back.focus({ preventScroll: true });
