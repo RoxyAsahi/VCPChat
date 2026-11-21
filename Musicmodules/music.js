@@ -736,8 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
         app.lyricsFetchSearchBtn.onclick = searchLyricsCandidates;
         app.lyricsFetchClose.onclick = closeLyricsFetchModal;
         // 点击遮罩不关闭；仅允许通过 Esc 或 × 主动关闭窗口。
+        // 中文输入法选词时按的回车、Esc 是给输入法的（isComposing），不算确定或关闭。
         app.lyricsFetchTitle.onkeydown = app.lyricsFetchArtist.onkeydown = (event) => {
-            if (event.key === 'Enter') searchLyricsCandidates();
+            if (event.key === 'Enter' && !event.isComposing) searchLyricsCandidates();
         };
         app.lyricsFetchApply.onclick = async () => {
             const track = app.playlist[app.lyricsFetchTrackIndex];
@@ -1022,14 +1023,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = app.playlistNameInput.value.trim();
             if (name && app.pendingAddToPlaylist) { app.pendingAddToPlaylist(name); app.hidePlaylistDialog(); }
         };
-        app.playlistNameInput.onkeydown = (e) => { if (e.key === 'Enter') app.dialogConfirm.click(); if (e.key === 'Escape') app.dialogCancel.click(); };
+        app.playlistNameInput.onkeydown = (e) => {
+            if (e.isComposing) return; // 输入法还在选词：回车是把拼音上屏，不是确定
+            if (e.key === 'Enter') app.dialogConfirm.click();
+            if (e.key === 'Escape') app.dialogCancel.click();
+        };
 
         app.modalCloseBtn.onclick = app.modalDoneBtn.onclick = () => { app.playlistEditModal.classList.remove('visible'); if (app.currentSidebarView === 'playlists') app.renderSidebarContent('playlists'); };
         app.modalSearchInput.oninput = (e) => { app.modalSearchQuery = e.target.value; app.renderModalSongList(); };
 
         document.addEventListener('click', (e) => { if (!app.contextMenu.contains(e.target)) app.contextMenu.classList.remove('visible'); });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && app.lyricsFetchModal.classList.contains('visible')) closeLyricsFetchModal();
+            if (e.key === 'Escape' && !e.isComposing && app.lyricsFetchModal.classList.contains('visible')) closeLyricsFetchModal();
         });
         // ── 右键菜单的作用范围 ──
         // 「从列表中移除」要按右键时所在的视图决定删哪里，而不是按上一次从哪里点播。
@@ -1198,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         app.searchInput.onkeydown = (e) => {
-            if (e.key === 'Enter' && app.isSemanticSearchActive) {
+            if (e.key === 'Enter' && !e.isComposing && app.isSemanticSearchActive) {
                 const query = app.searchInput.value.trim();
                 if (query) app.performSemanticSearch(query);
             }
