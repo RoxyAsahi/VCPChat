@@ -115,6 +115,7 @@ function setupVisualizer(app) {
         // 端口由主进程启动引擎时探测决定，地址经 getAudioEngineEndpoint 下发；拿不到时退回默认端口。
         const socket = new WebSocket(app.audioEngineWsUrl || "ws://127.0.0.1:63789/ws");
         app.ws = socket;
+        socket.binaryType = 'arraybuffer';
 
         socket.onopen = () => {
             if (app.visualizerDestroyed || app.ws !== socket) {
@@ -131,8 +132,19 @@ function setupVisualizer(app) {
         socket.onmessage = (event) => {
             if (app.visualizerDestroyed || app.ws !== socket) return;
             try {
-                const message = JSON.parse(event.data);
-                if (message.type === 'spectrum_data') {
+                const message = typeof event.data === 'string'
+                    ? JSON.parse(event.data)
+                    : app.decodeEngineBinaryFrame(event.data);
+                if (!message) return;
+                if (message.type === 'hello') {
+                    // 新引擎：频谱改收二进制帧，播放状态改收推送。
+                    if (Array.isArray(message.features) && message.features.includes('spectrum_binary')) {
+                        socket.send(JSON.stringify({ type: 'subscribe', spectrum: 'binary' }));
+                    }
+                    app.handleEngineHello?.(message);
+                } else if (message.type === 'playback_state') {
+                    app.handleEnginePlaybackState?.(message);
+                } else if (message.type === 'spectrum_data') {
                     // 停着的时候只通知一次“没在播”，不再把每一帧频谱都经主进程转发出去。
                     const grooving = app.isPlaying === true && !app.isTrackLoading;
                     if (grooving || app._lastGroovePlaying !== false) {
@@ -199,6 +211,7 @@ function setupVisualizer(app) {
             if (app.ws === socket) {
                 app.ws = null;
                 app.api?.publishMusicGroove?.({ playing: false });
+                app.handleEngineDisconnected?.();
             }
             if (app.visualizerDestroyed || app.visualizerReconnectTimer) return;
             // 切歌、播完这些事件都走这条连接（引擎会攒着，连上再发），断开期间一首歌放完就会静音到重连为止。
@@ -215,6 +228,19 @@ function setupVisualizer(app) {
             if (!app.visualizerDestroyed) console.error('[Music.js] WebSocket error:', err);
             socket.close();
         };
+    };
+
+    // 引擎的二进制帧：[类型 u8][版本 u8][段数 u16 小端][段数 × f32 小端]，类型 1 是频谱。
+    app.decodeEngineBinaryFrame = (buffer) => {
+        if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 4) return null;
+        const view = new DataView(buffer);
+        const kind = view.getUint8(0);
+        const version = view.getUint8(1);
+        const count = view.getUint16(2, true);
+        if (kind !== 1 || version !== 1 || buffer.byteLength < 4 + count * 4) return null;
+        const data = new Array(count);
+        for (let i = 0; i < count; i++) data[i] = view.getFloat32(4 + i * 4, true);
+        return { type: 'spectrum_data', data };
     };
 
     app.destroyVisualizer = () => {
