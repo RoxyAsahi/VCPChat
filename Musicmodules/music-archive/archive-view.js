@@ -31,7 +31,7 @@
         <div class="archive-atmos" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
         <div class="archive-hud" data-ref="hud">
-            <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button></header>
+            <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button><button type="button" class="archive-brand-resume" data-act="resume" data-ref="resume" hidden><span data-ref="resumeLabel">接着听</span> <b data-ref="resumeName"></b> <span data-ref="resumeAt"></span></button></header>
             <nav class="archive-nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
@@ -455,7 +455,7 @@
             const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
             refs.fmeta.textContent = t ? (meta || '未知歌手') : idle;
             refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
-            // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
+            // 按首字母拆开的列，大标题还是「全部曲目」，下面一行写明「首字母 H」，免得把「H · 23 首」读成全部只有 23 首
             const letterCol = col.kind === 'letter';
             if (searchCtx) {
                 // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
@@ -463,10 +463,11 @@
                 refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
             } else {
                 refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-                refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+                refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
             }
             refs.playCol.disabled = !count;
             refs.playCol.hidden = Boolean(searchCtx);
+            renderResume();
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -871,12 +872,62 @@
             select(lane, row);
         };
 
+        /* 接着听：上次没听完的那首（听歌记录给的位置），放在「播放这一组」旁边。
+           正在放的就是它时不显示；播放器已经恢复到这首、只是暂停着，就写「继续播放」 */
+        const resumeInfo = () => {
+            let r = null;
+            try { r = app.musicStats?.resume?.() || null; } catch (e) { r = null; }
+            if (!r || !r.track) return null;
+            const index = tracks().indexOf(r.track);
+            return index < 0 ? null : { index, track: r.track, position: Math.max(0, Number(r.position) || 0) };
+        };
+        const renderResume = () => {
+            const el = refs.resume;
+            if (!el) return;
+            const r = resumeInfo();
+            const isCurrent = r && r.index === app.currentTrackIndex;
+            const show = Boolean(r) && !searchCtx && !(isCurrent && (app.isPlaying || app.playIntent));
+            el.hidden = !show;
+            if (!show) return;
+            const name = Model.stripExtension(r.track.title || '') || '未知标题';
+            refs.resumeLabel.textContent = isCurrent ? '继续播放' : '接着听';
+            refs.resumeName.textContent = name;
+            refs.resumeAt.textContent = fmtDur(r.position);
+            el.title = (isCurrent ? '继续播放「' : '从上次停下的地方接着听「') + name + '」' + (r.position ? '（' + fmtDur(r.position) + '）' : '');
+        };
+        let resumeWait = 0;
+        const playResume = () => {
+            const r = resumeInfo();
+            if (!r) return;
+            if (r.index === app.currentTrackIndex && tracks()[app.currentTrackIndex]) {
+                // 播放器已经停在这首（重开窗口时会恢复到原位置），直接接着放
+                goToTrack(r.index, null, { pulse: false });
+                app.playTrack?.();
+                wantLyrics(true);
+                renderResume();
+                return;
+            }
+            goToTrack(r.index, null, { pulse: false });
+            if (selectedIndex() !== r.index) return;
+            playSelected({ stage: false });
+            if (!(r.position > 1) || typeof app.seekTo !== 'function') return;
+            // 等引擎真的换到这首再跳到原位置；中途换了歌就不跳
+            const path = r.track.path, token = ++resumeWait, until = Date.now() + 8000;
+            const check = () => {
+                if (state.destroyed || token !== resumeWait || app.currentTrackIndex !== r.index) return;
+                if (app.engineTrackPath === path || (app.engineTrackPath === undefined && app.isPlaying)) { app.seekTo(r.position); return; }
+                if (Date.now() < until) global.setTimeout(check, 150);
+            };
+            global.setTimeout(check, 150);
+        };
+
         // 正在播放那张卡：在当前视野里找最近的一格
         const updatePlaying = (force = false) => {
             const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + state.sig;
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
             renderDetail();
+            renderResume();
             // 还没放过歌时底栏不写「正在播放 全部曲目」（没有在播放的东西）
             const queueEl = refs.queue?.parentElement;
             if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
@@ -1523,6 +1574,7 @@
                 switch (btn.dataset.act) {
                     case 'access': playSelected(); break;
                     case 'open-detail': openDetail(); break;
+                    case 'resume': playResume(); break;
                     case 'play-col': {
                         // 从这一组的第一首放起（队列就是这一组，和在阵列里点播同一套规则）
                         const col = column();
@@ -1665,6 +1717,8 @@
         document.addEventListener('visibilitychange', onVisibility);
         const onLikeChange = () => { if (detailOpen) renderDetail(); };
         document.addEventListener('music-like-change', onLikeChange);
+        const onStatsChange = () => renderResume();
+        document.addEventListener('music-stats-change', onStatsChange);
         refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
@@ -1740,6 +1794,7 @@
             document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
             document.removeEventListener('music-like-change', onLikeChange);
+            document.removeEventListener('music-stats-change', onStatsChange);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
             if (typeof unsubscribeQuality === 'function') unsubscribeQuality();
