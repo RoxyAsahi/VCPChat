@@ -1597,25 +1597,88 @@
             setVolume(readVolume() + delta);
         });
 
-        // 右侧抽屉打开时播放条往左让位，右边缘停在抽屉内容左边 24px；放得下就不动。窄窗口抽屉铺满，不让位。
+        // 播放条放在左右两边都空着的那一段里：右边是抽屉（打开时），左边是首页的目录列表（打开时）。
+        // 只有抽屉：右缘停在抽屉内容左边 24px，放得下就不动。目录开着：播放条缩短、挪到目录右边那段的正中，
+        // 目录就能一直拉到窗口底（body.music-dock-beside-list）。窄窗口抽屉铺满、目录收起，不让位。
         const DRAWER_W = 400;
+        const LIST_BAR_MAX = 600;   // 目录开着时播放条最长到这里，比平时短一截
+        const LIST_GAP = 24;        // 和目录右缘之间留的空
+        const listEdge = (vw) => {
+            if (vw < COMPACT_BELOW || stageActive() || app.archiveView?.mode !== 'archive') return 0;
+            const view = document.getElementById('music-archive-view');
+            if (!view || view.classList.contains('is-detail')) return 0;
+            const hud = view.querySelector('.archive-hud');
+            hookHud(hud);
+            const list = hud?.classList.contains('list-open') ? hud.querySelector('.archive-list') : null;
+            if (!list || list.hidden || !list.offsetWidth) return 0;
+            // 用排版位置量，不用 getBoundingClientRect：目录开合时有 transform 补间，量到的是半路上的位置。
+            // 首页整层按窗口高度缩放过（transform: scale），换算回窗口像素。
+            const hr = hud.getBoundingClientRect();
+            const sc = hud.offsetWidth ? hr.width / hud.offsetWidth : 1;
+            const right = hr.left + (list.offsetLeft + list.offsetWidth) * sc;
+            // 目录占了半屏以上（窄窗里另有摆法）就不让位
+            return right > 0 && right < vw * 0.5 ? right : 0;
+        };
+        // 目录开合、取出资料卡、进出舞台、首页和经典视图来回切：都要重新排播放条。合到下一帧一起算。
+        let shiftFrame = 0;
+        const queueShift = () => {
+            if (shiftFrame || state.destroyed) return;
+            shiftFrame = requestAnimationFrame(() => { shiftFrame = 0; if (!state.destroyed) syncShift(); });
+        };
+        let hookedHud = null;
+        let hudObserver = null;
+        function hookHud(hud) {
+            if (!hud || hud === hookedHud) return;
+            hookedHud = hud;
+            hudObserver?.disconnect();
+            hudObserver = new MutationObserver(queueShift);
+            hudObserver.observe(hud, { attributes: true, attributeFilter: ['class'] });
+        }
+        cleanups.push(() => { cancelAnimationFrame(shiftFrame); hudObserver?.disconnect(); hudObserver = null; document.body.classList.remove('music-dock-beside-list'); });
+        let widthTimer = 0;
+        const followWidth = () => {
+            // 宽度有 CSS 过渡；流体层每帧跟着量一次，过渡结束再落一次
+            if (!fluid) return;
+            const end = performance.now() + 560;
+            cancelAnimationFrame(widthTimer);
+            const step = () => {
+                fluid.layout();
+                widthTimer = performance.now() < end && !state.destroyed ? requestAnimationFrame(step) : 0;
+            };
+            widthTimer = requestAnimationFrame(step);
+        };
+        cleanups.push(() => cancelAnimationFrame(widthTimer));
         const syncShift = () => {
             const vw = global.innerWidth || 0;
             const natural = Math.min(640, Math.max(0, vw - 32)); // 和 CSS 的 --md-bar-w 同一个算式
             const open = state.panelOpen && vw >= COMPACT_BELOW;
-            const room = vw - DRAWER_W - 24;                     // 播放条右缘最远能到这里
-            // 窗口不够宽、让位以后会被挤出左边：把播放条收窄（最窄 280），内容按紧凑档收掉「下一首」。
-            const squeezed = open && natural > room - 12;
-            const barW = squeezed ? Math.max(280, room - 12) : natural;
-            const was = host.classList.contains('md-squeeze') ? host.style.getPropertyValue('--md-bar-w') : '';
-            const now = squeezed ? `${Math.round(barW)}px` : '';
-            if (was !== now) {
-                if (squeezed) host.style.setProperty('--md-bar-w', now); else host.style.removeProperty('--md-bar-w');
-                host.classList.toggle('md-squeeze', squeezed);
-                fluid?.layout();
+            const edge = listEdge(vw);
+            const lo = edge ? edge + LIST_GAP : 12;               // 播放条左缘最远能到这里
+            const room = open ? vw - DRAWER_W - 24 : vw - (edge ? 24 : 12); // 播放条右缘最远能到这里
+            const span = room - lo;
+            let barW = natural;
+            let left = vw / 2 - natural / 2;
+            if (edge) {
+                // 目录开着：缩短，放在剩下那段的正中
+                barW = Math.max(280, Math.min(natural, LIST_BAR_MAX, span));
+                left = span >= barW ? lo + (span - barW) / 2 : lo;
+            } else if (open) {
+                // 只有抽屉：窗口不够宽、让位以后会被挤出左边，就把播放条收窄（最窄 280）
+                if (natural > room - 12) barW = Math.max(280, room - 12);
+                // 左缘至少留 12px；实在放不下（窗口很窄）就让抽屉盖住右端，不往左边挤出去。
+                left = vw / 2 - barW / 2 + Math.max(12 - (vw / 2 - barW / 2), Math.min(0, room - (vw / 2 + barW / 2)));
             }
-            // 左缘至少留 12px；实在放不下（窗口很窄）就让抽屉盖住右端，不往左边挤出去。
-            const shift = open && barW ? Math.max(12 - (vw / 2 - barW / 2), Math.min(0, room - (vw / 2 + barW / 2))) : 0;
+            const resized = barW < natural - 0.5;
+            const squeezed = resized && barW < 520;               // 太短才收掉「下一首」
+            const was = host.style.getPropertyValue('--md-bar-w');
+            const now = resized ? `${Math.round(barW)}px` : '';
+            host.classList.toggle('md-squeeze', squeezed);
+            if (was !== now) {
+                if (resized) host.style.setProperty('--md-bar-w', now); else host.style.removeProperty('--md-bar-w');
+                followWidth();
+            }
+            document.body.classList.toggle('music-dock-beside-list', Boolean(edge));
+            const shift = vw > 0 && barW ? left - (vw / 2 - barW / 2) : 0;
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
             // 提示层挂在 body 上：跟着播放条的中心走，宽度不伸进抽屉。
@@ -1967,6 +2030,10 @@
             observer.observe(target, options);
             observers.push(observer);
         };
+        // 播放条的长短和位置跟着布局走（见 syncShift）：进出舞台、首页/经典视图切换在 body 上，取出资料卡在首页根上。
+        observe(document.body, { attributes: true, attributeFilter: ['class'] }, queueShift);
+        observe(document.getElementById('music-archive-view'), { attributes: true, attributeFilter: ['class'] }, queueShift);
+        queueShift();
         // 首页和经典视图来回切时，停着的音效卡跟着挪：首页留在抽屉里，经典视图送回原处。
         if (dspCard) observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => { if (!(state.panelOpen && state.tab === '声音')) syncFx(false); });
         if (dspCard) syncFx(false);
