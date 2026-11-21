@@ -303,6 +303,9 @@
             letters0 = new Map();
             for (const c of letters) for (const g of c.groups) letters0.set(g, c.id);
             const front = [];
+            // 每日推荐（按听歌记录和喜欢挑的 30 首，一天内固定）：放在最前面一列，和最近播放、收藏一样是一组卡
+            const daily = dailyIndices();
+            if (daily.length) front.push({ id: 'daily', kind: 'daily', name: '每日推荐', ref: 'DAILY', items: daily });
             const recent = recentIndices();
             if (recent.length) front.push({ id: 'recent', kind: 'recent', name: '最近播放', ref: 'RECENT FILES', items: recent });
             const fav = favoritePaths();
@@ -313,7 +316,16 @@
             }
             return { columns: [...front, ...letters, ...base.slice(1)], letterOf: letters0 };
         };
-        const columnsKey = () => sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
+        const dailyIndices = () => {
+            let mix = [];
+            try { mix = typeof app.dailyMix === 'function' ? app.dailyMix() || [] : []; } catch (e) { mix = []; }
+            if (!mix.length) return [];
+            const byPath = pathIndex();
+            return mix.map((t) => byPath.get(Model.normalizePath(t && t.path))).filter((i) => i !== undefined);
+        };
+        // 每日推荐跨天会换：日期也算进列的指纹
+        const dailyKey = () => (typeof app.dailyMix === 'function' ? new Date().toISOString().slice(0, 10) : '');
+        const columnsKey = () => dailyKey() + '\n' + sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
         const buildColumns = (prepared = null) => {
             const out = prepared && prepared.cols && prepared.colsKey === columnsKey() && prepared.index === searchIndex ? prepared.cols : computeColumns(searchIndex);
             letterOf = out.letterOf;
@@ -1553,8 +1565,8 @@
             state.scene?.touch();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
-            // 鼠标滚轮一格就是一张（不累计余量）；触控板的小增量照常累计，惯性交给系统
-            const notch = e.deltaMode !== 0 || (Math.abs(e.deltaX) < 1 && Math.abs(e.deltaY) >= 50 && Number.isInteger(e.deltaY));
+            // 鼠标滚轮一格就是一张（不累计余量，系统缩放 125%/150% 时也认得出）；触控板的小增量照常累计，惯性交给系统
+            const notch = Model.isWheelNotch(e, global.devicePixelRatio);
             if (horizontal) {
                 const n = notch ? Math.sign(e.shiftKey ? e.deltaY : e.deltaX) : wheelLanes((e.shiftKey ? e.deltaY : e.deltaX) * unit, e.timeStamp);
                 if (n) stepLane(n);
@@ -1832,6 +1844,11 @@
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
+            // 目录是后加进来的，放在 HUD 最后，Tab 要走完右边所有按钮才到它。挪到左上标题后面，
+            // Tab 顺序就跟看到的一样：标题、播放这一组、目录（搜索框、分类、曲目），再到右边
+            const listEl = refs.hud.querySelector(':scope > .archive-list');
+            const brandEl = refs.hud.querySelector(':scope > .archive-brand');
+            if (listEl && brandEl) brandEl.after(listEl);
         }
         // 右侧滚动歌词（播放器取到歌词时显示；窄窗口、经典视图、播放页里不显示）
         const LyricsLib = global.MusicArchiveLyrics;
