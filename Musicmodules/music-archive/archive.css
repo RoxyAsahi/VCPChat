@@ -354,6 +354,14 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-batch-menu button[data-sure] span { color: var(--ar-accent-text, var(--ar-accent)); font-weight: 600; }
 
 /* 歌单管理：标题右边的重命名、删除（移上去或聚焦时才显出来），就地输入名字，拖歌时目录下方的歌单架 */
+/* 分组标题上的「播放这一组」：悬停这一组的标题才出现，键盘聚焦时也出现 */
+.archive-list-group .gplay { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 7px; border: 0; border-radius: 999px; background: transparent; color: var(--ar-muted); font: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; opacity: 0; transition: opacity .15s, color .12s, background-color .12s; }
+.archive-list-group .gplay svg { width: 9px; height: 9px; fill: currentColor; }
+.archive-list-group:hover .gplay, .archive-list-group .gplay:focus-visible { opacity: 1; color: var(--ar-ink); }
+.archive-list-group .gplay:hover { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+@media (hover: none) { .archive-list-group .gplay { opacity: .8; } }
+/* 检索命中的字：不用底色块，只把字压深并加一道细下划线，跟档案页的墨色一致 */
+.archive-list-row .tx mark { background: none; color: var(--ar-ink); font-weight: 700; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--ar-ink) 45%, transparent); }
 .archive-list-group .acts { margin-left: auto; padding-right: 2px; display: flex; gap: 14px; opacity: 0; transition: opacity .15s; overflow: visible; }
 .archive-list-group:hover .acts, .archive-list-group:focus-within .acts { opacity: 1; }
 .archive-list-group button { font-size: 12px; color: var(--ar-muted); letter-spacing: .6px; }
