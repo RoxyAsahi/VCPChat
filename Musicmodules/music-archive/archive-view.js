@@ -20,7 +20,12 @@
     const SCRIPT_BASE = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
-    const fileUrl = (p) => (p ? 'file://' + String(p).replace(/\\/g, '/').replace(/#/g, '%23') : '');
+    // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
+    const fileUrl = (path) => {
+        if (!path) return '';
+        const p = String(path).replace(/\\/g, '/');
+        return 'file://' + encodeURI(p.startsWith('/') ? p : '/' + p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    };
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>

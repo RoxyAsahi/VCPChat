@@ -24,6 +24,26 @@ function setupUtils(app) {
         });
     };
 
+    // 分享当前曲目到聊天；分享不了（远程曲目、文件已不在）时给个提示。
+    app.shareCurrentTrack = async () => {
+        if (!app.pendingTrackPath || !app.api?.shareMusicTrack) return;
+        try {
+            const result = await app.api.shareMusicTrack(app.pendingTrackPath);
+            if (result && result.success === false && result.message) window.MusicToast?.show?.({ message: result.message });
+        } catch (error) {
+            console.error('[Music] Share failed:', error);
+        }
+    };
+
+    // 本地文件路径转 file:// 地址：空格、中文、%、#、? 都要编码，不然用户名或缓存目录里带这些字符时封面出不来；
+    // 结果里没有引号，可以直接放进 CSS 的 url("...")。
+    app.fileUrl = (filePath) => {
+        if (!filePath) return '';
+        let p = String(filePath).replace(/\\/g, '/');
+        if (!p.startsWith('/')) p = '/' + p;
+        return 'file://' + encodeURI(p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    };
+
     app.formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);

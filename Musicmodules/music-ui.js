@@ -44,7 +44,7 @@ function setupUI(app) {
     app.updateMediaSessionMetadata = () => {
         if (!('mediaSession' in navigator) || app.playlist.length === 0 || !app.playlist[app.currentTrackIndex]) return;
         const t = app.playlist[app.currentTrackIndex];
-        const art = t.albumArt ? `file://${t.albumArt.replace(/\\/g, '/')}` : '';
+        const art = t.albumArt ? app.fileUrl(t.albumArt) : '';
         navigator.mediaSession.metadata = new MediaMetadata({
             title: app.stripAudioExtension(t.title) || '未知标题', artist: t.artist || '未知艺术家',
             album: t.album || 'VCP Music Player', artwork: art ? [{ src: art }] : []
@@ -199,7 +199,7 @@ class WebNowPlayingAdapter {
         const data = {
             player: 'VCP Music Player', state: !t ? 0 : (this.app.isPlaying ? 1 : 2),
             title: t ? this.app.stripAudioExtension(t.title) || '' : 'No Track Loaded', artist: t ? t.artist || '' : '',
-            album: t ? t.album || '' : '', cover: t && t.albumArt ? 'file://' + t.albumArt.replace(/\\/g, '/') : '',
+            album: t ? t.album || '' : '', cover: t && t.albumArt ? this.app.fileUrl(t.albumArt) : '',
             duration: this.app.lastKnownDuration || 0, position: this.app.lastKnownCurrentTime || 0,
             volume: Math.round(parseFloat(this.app.volumeSlider.value) * 100),
             repeat: this.app.playModes[this.app.currentPlayMode] === 'repeat-one' ? 1 : (this.app.playModes[this.app.currentPlayMode] === 'repeat' ? 2 : 0),

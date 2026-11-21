@@ -278,7 +278,7 @@ function setupPlayer(app) {
 
         const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
         if (track.albumArt) {
-            const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
             app.albumArt.style.backgroundImage = albumArtUrl;
             app.updateBlurredBackground(albumArtUrl);
         } else {
@@ -447,6 +447,7 @@ function setupPlayer(app) {
         app.lastKnownCurrentTime = seconds;
         app.lastStateUpdateTime = Date.now();
         app.syncMediaPosition?.(true);
+        app.syncLyricsAfterSeek?.();
         const result = await app.enqueueControl(() => app.api.seekMusic(seconds));
         if (epoch === app.controlEpoch && app.isPlaying) app.startStatePolling();
         return result;
@@ -1142,7 +1143,7 @@ function setupPlayer(app) {
             
             const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
             if (track.albumArt) {
-                const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+                const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
                 app.albumArt.style.backgroundImage = albumArtUrl;
                 app.updateBlurredBackground(albumArtUrl);
             } else {
@@ -1197,7 +1198,7 @@ function setupPlayer(app) {
                     
                     const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
                     if (track.albumArt) {
-                        const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+                        const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
                         app.albumArt.style.backgroundImage = albumArtUrl;
                         app.updateBlurredBackground(albumArtUrl);
                     } else {

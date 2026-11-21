@@ -492,16 +492,17 @@ function setupLyrics(app) {
         app.lyricsContainer.addEventListener('touchstart', handleUserScroll, { passive: true });
     }
 
-    app.animateLyrics = () => {
-        if (app.currentLyrics.length === 0 || !app.isPlaying || app.isTrackLoading) return;
+    // seek 为真时是跳播之后（拖进度条、系统媒体浮层、点歌词行）：暂停中也要重新定位，往回跳一点也照跳。
+    app.animateLyrics = (seek = false) => {
+        if (app.currentLyrics.length === 0 || (!app.isPlaying && !seek) || app.isTrackLoading) return;
 
-        const elapsedTime = (Date.now() - app.lastStateUpdateTime) / 1000;
+        const elapsedTime = app.isPlaying ? (Date.now() - app.lastStateUpdateTime) / 1000 : 0;
         const estimatedTime = app.lastKnownCurrentTime + elapsedTime;
 
         let newLyricIndex = app.lyricIndexAt(estimatedTime);
 
         // 防回滚保护：当音乐正常向前播放时，如果只是一两帧估计时间的微小扰动，禁止行索引后退
-        if (newLyricIndex < app.currentLyricIndex) {
+        if (!seek && newLyricIndex < app.currentLyricIndex) {
             const currentLine = app.currentLyrics[app.currentLyricIndex];
             // 只有当播放进度比当前行开始时间倒退超过 1.5 秒（即用户确实做了拖动进度条倒退 Seek）时才允许回退
             if (currentLine && estimatedTime >= currentLine.time - 1.5) {
@@ -660,6 +661,22 @@ function setupLyrics(app) {
                 app.lyricsList.style.transform = transform;
             }
         }
+    };
+
+    // 跳播后歌词跟上。播放中由频谱循环每帧接着画；暂停时那个循环停着，这里自己补几十帧把滚动走完。
+    let seekFrames = 0;
+    app.syncLyricsAfterSeek = () => {
+        app.animateLyrics(true);
+        if (app.isPlaying || typeof requestAnimationFrame !== 'function') return;
+        const running = seekFrames > 0;
+        seekFrames = 40;
+        if (running) return;
+        const step = () => {
+            if (app.isPlaying || --seekFrames <= 0) { seekFrames = 0; return; }
+            app.animateLyrics(true);
+            requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
     };
 
     app.resetLyrics = () => {
