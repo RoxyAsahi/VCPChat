@@ -455,7 +455,7 @@
             const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
             refs.fmeta.textContent = t ? (meta || '未知歌手') : idle;
             refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
-            // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
+            // 按首字母拆开的列，大标题还是「全部曲目」，下面一行写明「首字母 H」，免得把「H · 23 首」读成全部只有 23 首
             const letterCol = col.kind === 'letter';
             if (searchCtx) {
                 // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
@@ -463,7 +463,7 @@
                 refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
             } else {
                 refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-                refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+                refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
             }
             refs.playCol.disabled = !count;
             refs.playCol.hidden = Boolean(searchCtx);
@@ -1668,8 +1668,15 @@
         refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
+        // body 的 style 每次切歌都会变（底栏按封面取的色调），只有底栏高度变了才影响版面
+        const dockSafe = () => document.body.style.getPropertyValue('--music-dock-safe-bottom');
+        let lastDockSafe = dockSafe();
         const bodyObserver = new MutationObserver(() => {
             const cls = document.body.className;
+            const classChanged = cls !== lastBodyClass;
+            const safe = dockSafe();
+            const safeChanged = safe !== lastDockSafe;
+            lastDockSafe = safe;
             const themeChanged = cls.includes('light-theme') !== lastBodyClass.includes('light-theme');
             const stageChanged = cls.includes('music-stage-active') !== lastBodyClass.includes('music-stage-active');
             const enteringChanged = cls.includes('music-stage-entering') !== lastBodyClass.includes('music-stage-entering');
@@ -1685,7 +1692,9 @@
                 updatePlaying(true);
                 goToPlaying();
             }
-            resize();
+            // 档案页没显示时不排版：经典视图下每次切歌都会走到这里，强制一次样式计算和布局。
+            // 切回档案页时 setMode 会重新 resize。
+            if (isShown() && (classChanged || safeChanged)) resize();
             kick();
         });
         bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });

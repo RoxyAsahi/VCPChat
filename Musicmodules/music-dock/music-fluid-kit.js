@@ -333,11 +333,13 @@
     const TRAILS = [
         { row: '.archive-nav', item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+        { row: '.archive-empty', item: '.archive-empty > button', key: 'archive-empty', axis: 'xy', pad: 12 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
         { row: '#modal-song-list', item: '#modal-song-list > .music-modal-song-item', key: 'pl-songs', axis: 'xy', pad: 0 },
         { row: '.webdav-file-list', item: '.webdav-file-list > .webdav-file-item', key: 'dav-files', axis: 'xy', pad: 0 },
         { row: '.webdav-server-list', item: '.webdav-server-list > .webdav-server-item', key: 'dav-servers', axis: 'xy', pad: 0 },
+        { row: '.archive-lyrics-track', item: '.archive-lyrics-track > p', key: 'ar-lyrics', axis: 'xy', pad: 0 },
         { row: '.archive-detail-more', item: '.archive-detail-more li > button', key: 'ar-more', axis: 'xy', pad: 0 },
         { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
         { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
@@ -346,6 +348,10 @@
         { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
         { row: '.archive-batch-menu', item: '.archive-batch-menu > button', key: 'ar-batch', axis: 'y', pad: 0 },
         { row: '.archive-list-sort-menu', item: '.archive-list-sort-menu > button', key: 'ar-sort', axis: 'y', pad: 0 },
+        // 单独一个按钮（solo）：那一排是一大块，指针离开按钮就淡掉，不等离开整块
+        { row: '.archive-brand', item: '.archive-brand > .archive-brand-play', key: 'ar-brand', axis: 'xy', pad: 10, solo: true },
+        { row: '.archive-detail', item: '.archive-detail > .archive-detail-back', key: 'ar-back', axis: 'xy', pad: 10, solo: true },
+        { row: '.archive-callout', item: '.archive-callout > .archive-file-title', key: 'ar-ftitle', axis: 'xy', pad: 8, solo: true },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -429,14 +435,68 @@
                 const row = target.closest(t.row);
                 if (!row) continue;
                 const next = event.relatedTarget;
-                if (next instanceof global.Node && row.contains(next)) return;
+                const keep = t.solo ? target.closest(t.item) : row;
+                if (keep && next instanceof global.Node && keep.contains(next)) return;
                 row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
                 return;
             }
         }, true);
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); };
+    // ───────── 提示条叠在一起时：来一条、走一条，其余的像液体一样被推开、再落回去 ─────────
+    // 提示条一层一层叠在底栏上方（music-toast.js）；新的一条加进来或旧的一条散掉时，其余几条原本会一下跳到新位置。
+    // 这里记下每条的位置，变动后用独立的 translate 从旧位置弹回新位置，不碰提示条自己的 transform 动画。
+    const watchToasts = () => {
+        const doc = global.document;
+        if (typeof global.MutationObserver !== 'function') return;
+        const tops = new WeakMap();
+        // 量屏幕上的位置：提示层是贴着底边往上长的，条在层里的 offsetTop 不变，层自己在动
+        const record = (layer) => { for (const el of layer.children) tops.set(el, el.getBoundingClientRect().top); };
+        const attach = (layer) => {
+            if (watched.has(layer)) return;
+            watched.add(layer);
+            record(layer);
+            new global.MutationObserver(() => {
+                const motion = enabled() && typeof global.Element?.prototype?.animate === 'function';
+                for (const el of layer.children) {
+                    const before = tops.get(el);
+                    const now = el.getBoundingClientRect().top;
+                    if (motion && before != null && Math.abs(before - now) > 1) {
+                        el.animate([{ translate: `0 ${before - now}px` }, { translate: '0 0' }], { duration: 460, easing: 'cubic-bezier(.34, 1.36, .5, 1)', composite: 'add' });
+                    }
+                    tops.set(el, now);
+                }
+            }).observe(layer, { childList: true });
+        };
+        const scan = () => { for (const layer of doc.querySelectorAll('body > .mtst-layer')) attach(layer); };
+        scan();
+        new global.MutationObserver(scan).observe(doc.body, { childList: true });
+    };
+
+    /* 档案页用方向键选歌、换组时，底部对应的 ↑ ↓ ← → 按钮跟着被「按」一下：朝那个方向轻推再弹回，
+     * 让键盘操作在屏幕上也有手感。只在档案页真的处理了这个键（preventDefault）之后才推。 */
+    const watchArrows = () => {
+        const doc = global.document;
+        const ACTS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+        doc.addEventListener('keydown', (e) => {
+            const act = ACTS[e.key];
+            if (!act || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !enabled()) return;
+            global.setTimeout(() => {
+                if (!e.defaultPrevented) return;
+                const view = doc.getElementById('music-archive-view');
+                if (!view || view.hidden || doc.body.classList.contains('music-stage-active')) return;
+                if (e.target?.closest?.('.archive-list, .context-menu, .archive-batch-menu, .archive-list-sort-menu')) return;
+                const btn = view.querySelector(`.archive-bottom button[data-act="${act}"]`);
+                if (!btn) return;
+                btn.classList.remove('mf-nudge');
+                void btn.offsetWidth;
+                btn.classList.add('mf-nudge');
+            }, 0);
+        });
+        doc.addEventListener('animationend', (e) => { if (e.animationName === 'mf-nudge') e.target.classList.remove('mf-nudge'); });
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 

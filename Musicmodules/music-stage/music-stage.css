@@ -633,6 +633,15 @@ body.music-stage-active #player-background {
     transform: translate(-50%, -50%);
 }
 
+/* Over a 3D scene the notice sits on rails, water or planets: a soft
+   pool of the page colour behind it keeps it readable. */
+body.music-stage-scene-3d .music-stage-empty-notice {
+    padding: 16px 44px;
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--stage-ink) 84%, transparent);
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--stage-bg) 78%, transparent) 40%, transparent);
+}
+
 .music-stage-chrome {
     position: absolute;
     left: 50%;

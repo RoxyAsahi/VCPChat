@@ -3598,13 +3598,15 @@
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
                 lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 },
                 // Where the train wades: its nose, three points down its length and its tail.
-                wake: { value: 0 }, wakePath: { value: Array.from({ length: 5 }, () => new T.Vector2()) } },
+                wake: { value: 0 }, wakePath: { value: Array.from({ length: 5 }, () => new T.Vector2()) },
+                // Rings a hit in the music drops on the water: x, z, song time, strength.
+                pulses: { value: Array.from({ length: 4 }, () => new T.Vector4(0, 0, -1, 0)) } },
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
             fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;uniform vec2 wakePath[5];
-                uniform vec3 lampPos[4];uniform float lampPower[4];
+                uniform vec3 lampPos[4];uniform float lampPower[4];uniform vec4 pulses[4];
                 varying vec4 reflected;varying vec3 world;
                 float h21(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
                 float n21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -3679,6 +3681,14 @@
                         vec2 r=rings(world.xz*1.6,time,0.0)+rings(world.xz*2.3+17.0,time*1.13,5.0)*0.7;
                         g+=r*0.09*rain*nearRings;
                         g+=(vec2(n21(world.xz*7.0+time*3.0),n21(world.zx*6.0-time*2.7))-0.5)*0.05*rain*(1.0-nearRings*0.5);
+                    }
+                    // A hit in the music drops a ring on the water that spreads and dies away.
+                    for(int i=0;i<4;i++){
+                        vec4 q=pulses[i];float age=time-q.z;
+                        if(q.w<=0.0||age<0.0||age>4.0)continue;
+                        vec2 d=world.xz-q.xy;float r=length(d)+0.001;
+                        float x=r-(0.6+age*3.4);
+                        g+=d/r*cos(x*6.0)*exp(-x*x*1.6)*exp(-age*0.85)*q.w*0.16*(1.0-calm*0.5);
                     }
                     // Where the train wades it stirs the mirror up, still or not.
                     float churn=0.0;vec2 stir=vec2(0.0);
@@ -4456,6 +4466,26 @@
             towardHue(skyMat.uniforms.auroraGreen.value, w * 2, 0.8);
             towardHue(skyMat.uniforms.auroraViolet.value, w * 0.5, 0.6);
         };
+        // Beat rings on the water: a strong enough hit drops one a little way
+        // up the line, off to one side, where the camera sees it and its
+        // mirror image break up. Four at a time, oldest replaced first.
+        let pulseOnsets = 0, pulseSlot = 0;
+        const dropPulse = (track, pose, time, audio, motion) => {
+            const pulses = waterMat.uniforms.pulses.value;
+            // A seek back leaves rings dropped "in the future": clear them.
+            pulses.forEach(q => { if (q.z > time + 0.05) q.set(0, 0, -1, 0); });
+            const onsets = audio.onsets || 0;
+            if (onsets === pulseOnsets) return;
+            const fresh = onsets > pulseOnsets;
+            pulseOnsets = onsets;
+            if (!fresh || !motion || !water.visible || clamp(audio.impact) < 0.35 || !track?.at) return;
+            const pick = (k) => { const v = Math.sin(onsets * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+            const at = track.at(pose.distance + 14 + pick(1) * 22);
+            const side = (pick(2) < 0.5 ? -1 : 1) * (4 + pick(3) * 9);
+            pulses[pulseSlot].set(at.position.x + at.right.x * side, at.position.z + at.right.z * side, time,
+                clamp(audio.impact) * Math.min(1.5, motion));
+            pulseSlot = (pulseSlot + 1) % pulses.length;
+        };
         // Warmth 0..1 → bias -1 (cold, open chorus) .. +1 (warm, tightening pre-chorus).
         // Everything is re-derived from the palette baseline, so no state accumulates.
         const applyWarmth = (warmth, openness, energy) => {
@@ -4571,6 +4601,7 @@
                 : (0.5 - 0.5 * Math.cos(phase * Math.PI / 8)) * gain;
             waterMat.uniforms.time.value = time;
             waterMat.uniforms.energy.value = clamp(audio.energy);
+            dropPulse(track, pose, time, audio, tuning.reducedMotion || config.reducedMotion ? 0 : motion);
             updateRain(track, pose, time, tuning, quality);
             // Analytic chapter swell (seek-exact) plus frozen-on-pause audio response.
             const accent = motion ? (timeline.accentAt?.(time) ?? 0) : 0;
@@ -5598,6 +5629,7 @@
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
             snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
                 wading, splashTriangles: splash.visible ? splashGeometry.drawRange.count / 3 : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
+                pulses: waterMat.uniforms.pulses.value.filter(q => q.w > 0).length,
                 warmth: liveWarmth, accent: liveAccent, coverWeight: cover.weight, coverTarget: cover.target, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
