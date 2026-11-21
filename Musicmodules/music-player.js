@@ -1,6 +1,28 @@
 // Musicmodules/music-player.js
 // 核心播放逻辑
 
+// 引擎报错是英文原文（Rust 的错误串），直接拼进提示里看不懂。常见几类换成一句能照着做的中文，
+// 认不出的原样保留，免得把真正的原因藏掉。
+function describeEngineError(raw) {
+    const text = String(raw || '').trim();
+    const t = text.toLowerCase();
+    const rules = [
+        [/private\/internal address/, '这台 WebDAV 服务器在内网，当前音频引擎不允许访问，更新音频引擎后就能放'],
+        [/file not found|no such file|cannot find the (file|path)|系统找不到|os error [23]\b/, '文件不在原来的位置了（被移动、改名，或所在的盘没插上）'],
+        [/access is denied|permission denied|拒绝访问|os error 5\b/, '没有权限读取这个文件'],
+        [/\b401\b|unauthorized/, 'WebDAV 账号或密码不对'],
+        [/\b403\b|forbidden/, 'WebDAV 服务器拒绝了访问'],
+        [/\b404\b/, '服务器上找不到这首歌了'],
+        [/timed out|timeout|error sending request|connection (refused|reset)|dns|failed to lookup/, '连不上服务器，检查网络或 WebDAV 地址'],
+        [/unsupported (format|codec)|no audio track|unsupported feature|probe error/, '不支持这种音频格式'],
+        [/decoded track is empty/, '文件里没有可播放的声音'],
+        [/malformed|invalid data|corrupt|end of stream|unexpected eof|format error|decoder error/, '文件已损坏或不完整'],
+        [/too large for non-range/, '文件太大，服务器又不支持分段下载'],
+    ];
+    for (const [pattern, message] of rules) if (pattern.test(t)) return message;
+    return text;
+}
+
 function setupPlayer(app) {
     let lastCapsuleSnapshot = '';
     app.publishCapsuleState = () => {
@@ -179,9 +201,10 @@ function setupPlayer(app) {
     app.markTrackPlayable = (track) => markFailed(track, '');
     const handleLoadFailure = (track, reason, requestId, wanted) => {
         const name = app.stripAudioExtension(track?.title) || '这首歌';
-        markFailed(track, String(reason).replace(/^加载失败：/, '') || '无法播放');
-        app.showPlaybackNotice(reason);
-        const detail = String(reason).replace(/^加载失败：/, '');
+        const raw = String(reason);
+        const detail = raw.startsWith('加载失败：') ? describeEngineError(raw.slice(5)) : raw;
+        markFailed(track, detail || '无法播放');
+        app.showPlaybackNotice(raw.startsWith('加载失败：') ? `加载失败：${detail}` : raw);
         if (!wanted) {
             failureToast({ message: `无法播放「${name}」：${detail}` });
             return;
