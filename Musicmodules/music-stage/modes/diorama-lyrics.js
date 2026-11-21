@@ -828,7 +828,10 @@
                             * (1 - D.smooth((time - node.phrase.end - 1.6) / 2.4)));
                         sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby * (1 - 0.8 * sign.held));
                     }
-                    if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * node.mat.uniforms.fade.value;
+                    // The glyphs dissolve in the first half of the departure; the
+                    // translation goes with them rather than staying on alone.
+                    if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * node.mat.uniforms.fade.value
+                        * (1 - D.smooth(node.mat.uniforms.departure.value / 0.45));
                     if (node.constellation) keepInFrame(node, camera, frame);
                 }
                 // A malformed/overlapping vocal timeline can still produce two
