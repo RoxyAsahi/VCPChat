@@ -1860,9 +1860,13 @@
         // 以前这里是「舞台调制」子页；现在只是打开控制页并滚到舞台那一段。
         function openStageSettings() {
             openPanel('控制');
-            const top = el.tuneSec.offsetTop - 8;
+            // offsetTop counts from the panel, not from the scrolling body below its header,
+            // so it overshot by the header height and hid the section title and first label.
             const scroller = el.ext.parentElement;
-            if (scroller && top > 0) scroller.scrollTop = top;
+            if (scroller) {
+                const top = el.tuneSec.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8;
+                if (top > 0) scroller.scrollTop = top;
+            }
             el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
         }
         function closePop() { state.scenesOpen = false; state.sleepOpen = false; }
