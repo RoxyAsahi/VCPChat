@@ -3542,8 +3542,11 @@
                     glyphMaterial.uniforms.hopStart.value = -1;
 
                     glyphTexture = new T.CanvasTexture(glyphCanvas);
-                    glyphTexture.generateMipmaps = false;
-                    glyphTexture.minFilter = T.LinearFilter;
+                    // The atlas is drawn large and shown small and slanted; without
+                    // mipmaps the strokes sparkle and break up (worst in ink on paper).
+                    glyphTexture.generateMipmaps = true;
+                    glyphTexture.minFilter = T.LinearMipmapLinearFilter;
+                    glyphTexture.anisotropy = 4;
                     glyphTexture.magFilter = T.LinearFilter;
                     const uniforms = glyphMaterial.uniforms;
                     uniforms.map.value = glyphTexture;
@@ -3747,6 +3750,10 @@
             }));
 
             lyricParticleMat.uniforms.uTint.value.copy(paper ? colors.accent.clone().lerp(new T.Color('#ffffff'), 0.5) : colors.accent);
+            // Added light is invisible on a white page except over the inked
+            // glyphs, where it punched pale holes into the sung words. On paper
+            // the points are laid on like ink instead.
+            lyricParticleMat.blending = paper ? T.NormalBlending : T.AdditiveBlending;
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
             ripples.forEach((r, idx) => r.mat.color.copy(idx % 2 === 0 ? colors.secondary : colors.accent));
             glyphCacheKey = ''; // 触发当前句按新主题重绘

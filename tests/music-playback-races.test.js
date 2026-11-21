@@ -610,3 +610,13 @@ test('a track that failed is remembered with its reason until it plays again', a
     await app.loadTrack(0, false);
     assert.equal(app.failedTracks.has(track), false, 'playing it again clears the mark');
 });
+
+test('a seek to a position that could not be worked out (NaN) is not sent to the engine', async () => {
+    const app = setup();
+    const before = app.calls.length;
+    const result = await app.seekTo(NaN);
+    assert.equal(result.status, 'error');
+    assert.equal(app.calls.slice(before).some(c => c.startsWith('seek')), false, 'the engine would read NaN as 0 and restart the song');
+    await app.seekTo(12);
+    assert.ok(app.calls.slice(before).some(c => c.startsWith('seek')));
+});
