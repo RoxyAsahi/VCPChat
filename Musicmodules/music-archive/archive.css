@@ -720,3 +720,6 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 /* 目录在 DOM 里挪到了标题后面（Tab 顺序），靠层级继续盖在底部那些层上面；检索框得到焦点时下划线换成强调色 */
 .archive-list { z-index: 2; }
 .archive-list-search:focus-within { border-bottom-color: var(--ar-accent); }
+/* 悬停统一：首页上带箭头的文字按钮（播放这一组、播放、详情、接着听）悬停都换成强调色，箭头往前挪 */
+.archive-access, .archive-brand-play, .archive-more, .archive-brand-resume, .archive-nav > button { transition: color .2s; }
+.archive-access:hover { color: var(--ar-accent-text, var(--ar-accent)); }
