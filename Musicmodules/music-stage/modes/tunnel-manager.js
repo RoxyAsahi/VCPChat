@@ -4257,6 +4257,8 @@
         let height = 1;
         let lastTime = null;
         let paletteKey = '';
+        // themeHold: one more picture in the old colours, kept for the dissolve.
+        let themeHold = false, revealMs = 1000;
         // Something other than the clock changed since the last drawn frame.
         let dirty = true;
         let canvasSmoothing = null;
@@ -4385,7 +4387,7 @@
             const settings = tuning();
             const stagePal = services?.app?.stagePalette || {};
             const nextPalette = JSON.stringify(stagePal);
-            if (nextPalette !== paletteKey) {
+            if (nextPalette !== paletteKey && !themeHold) {
                 paletteKey = nextPalette;
                 world?.setPalette?.(stagePal);
             }
@@ -4422,8 +4424,8 @@
                     { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
             } else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving) veil.capture(renderer.domElement);
-            else if (revealPending) { revealPending = false; veil.reveal(1000); }
+            if (leaving || themeHold) veil.capture(renderer.domElement);
+            else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
         };
 
@@ -4512,7 +4514,17 @@
             resize();
             if (latest && initialized) update(latest, true);
         };
-        mode.updateTheme = () => { if (latest && initialized) update(latest, true); };
+        // A new palette dissolves in from the old picture instead of cutting.
+        mode.updateTheme = () => {
+            if (!latest || !initialized) return;
+            if (!leaving && !tuning().reducedMotion
+                && JSON.stringify(services?.app?.stagePalette || {}) !== paletteKey) {
+                themeHold = true;
+                try { update(latest, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 700; }
+            }
+            update(latest, true);
+        };
         const resume = mode.resume;
         mode.resume = () => { resume(); lastTime = null; cap.reset(); if (latest) update(latest, true); };
         // For the settings: how far below the chosen tier it is drawing (cheap, polled).

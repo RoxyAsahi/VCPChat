@@ -30,13 +30,16 @@
         const veil = U.createHandoverVeil(mode.root);
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
+        // themeHold: one more picture in the old colours, kept for the dissolve.
+        let themeHold = false, revealMs = 1000;
         const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
         const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
         const wantsCanvasSmoothing = () => !(Optics()?.active(mode.config) ?? false);
         const onset = R.createAudioOnset();
         const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
-        const palette = () => services?.app?.stagePalette || {};
+        let appliedPalette = null;
+        const palette = () => (themeHold && appliedPalette) || services?.app?.stagePalette || {};
         const dayLens = {};
         // The settings as drawn: the chosen tier, less what the frame rate made it drop.
         const drawn = () => renderScale.config(mode.config);
@@ -149,8 +152,9 @@
                     revealPending = true;
                 }
             }
-            if (nextPalette !== paletteKey) {
-                world.setPalette(palette());
+            if (nextPalette !== paletteKey && !themeHold) {
+                appliedPalette = palette();
+                world.setPalette(appliedPalette);
                 paletteKey = nextPalette;
                 recompile = true;
             }
@@ -272,9 +276,9 @@
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(), lens);
             else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving) veil.capture(renderer.domElement);
+            if (leaving || themeHold) veil.capture(renderer.domElement);
             // Dissolve once the new song's first picture is really there.
-            else if (revealPending) { revealPending = false; veil.reveal(1000); }
+            else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
         };
         const initialize = () => {
@@ -377,7 +381,18 @@
             resize();
             if (latest) update(latest, true);
         };
-        mode.updateTheme = () => { if (latest) update(latest, true); };
+        // Day and night swap the whole sky: dissolve from the old picture
+        // into the new one rather than cutting, as a song change does.
+        mode.updateTheme = () => {
+            if (!latest) return;
+            if (initialized && !leaving && !options().reducedMotion
+                && JSON.stringify(palette()) !== paletteKey) {
+                themeHold = true;
+                try { update(latest, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 700; }
+            }
+            update(latest, true);
+        };
         const resume = mode.resume;
         mode.resume = () => { resume(); cap.reset(); if (latest) update(latest, true); };
         // The layers hold nothing to describe until shaders are warm and the first frame has run.
