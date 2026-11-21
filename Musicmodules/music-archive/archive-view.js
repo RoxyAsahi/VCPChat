@@ -471,8 +471,13 @@
             const letterCol = col.kind === 'letter';
             if (searchCtx) {
                 // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
-                refs.ctxName.textContent = '检索「' + searchCtx.q + '」';
-                refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
+                // 检索词太长时在引号里面截断，右引号总在
+                refs.ctxName.textContent = '';
+                const qEl = document.createElement('span');
+                qEl.className = 'archive-brand-q';
+                qEl.textContent = searchCtx.q;
+                refs.ctxName.append('检索「', qEl, '」');
+                refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果';
             } else if (!tracks().length) {
                 // 空曲库：左上不写「全部曲目 · 0 首」，下面的空状态说明会告诉人怎么加歌
                 refs.ctxName.textContent = '曲库';
@@ -1685,6 +1690,8 @@
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+            // 方向键在阵列里走：右下角的键盘提示这时才出现
+            if (/^Arrow/.test(e.key)) refs.hud.classList.add('kbd');
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
             stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
@@ -1716,6 +1723,8 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        const onPointerKbdOff = () => refs.hud.classList.remove('kbd');
+        root.addEventListener('pointerdown', onPointerKbdOff, true);
         // 取出时 Esc 先把卡放回去（抢在检索、舞台等其他 Esc 之前）
         const onEscCapture = (e) => {
             if (!detailOpen || e.key !== 'Escape' || !isShown() || modalOpen()) return;
@@ -1807,6 +1816,7 @@
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);
+            root.removeEventListener('pointerdown', onPointerKbdOff, true);
             document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
             document.removeEventListener('music-like-change', onLikeChange);
@@ -1825,6 +1835,23 @@
         global.addEventListener('beforeunload', destroy, { once: true });
         global.addEventListener('pagehide', destroy, { once: true });
 
+        /* 目录换了分类（歌单、专辑、为你、全部），阵列跳到对应那一类的列，左上标题和中间说明块说的就是同一件事。
+           已经在那一类的列上就不动；歌手没有对应的列，阵列不动 */
+        const LIST_KIND_COLS = { playlist: ['playlist'], album: ['album'], recent: ['daily', 'recent'], all: ['letter', 'all'] };
+        const followListKind = (kind) => {
+            const want = LIST_KIND_COLS[kind];
+            const n = state.columns.length;
+            if (!want || !n) return;
+            const cur = column();
+            if (cur && want.includes(cur.kind)) return;
+            let target = -1;
+            // 回到「全部」：跳到选中那首所在的字母列，没有就第一列字母
+            const sel = selectedIndex();
+            if (kind === 'all' && sel >= 0) target = state.columns.findIndex((c) => want.includes(c.kind) && c.items.includes(sel));
+            if (target < 0) target = state.columns.findIndex((c) => want.includes(c.kind));
+            if (target < 0) return;
+            stepLane(target - Model.wrap(state.lane, n));
+        };
         if (ListLib && IndexLib) {
             list = ListLib.create({
                 host: refs.hud,
@@ -1840,7 +1867,14 @@
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
-                onResults: (q, n) => { searchCtx = q ? { q, n } : null; renderHud(); },
+                onResults: (q, n, first) => {
+                    searchCtx = q ? { q, n } : null;
+                    refs.hud.classList.toggle('no-match', Boolean(q) && !n);
+                    // 有结果时阵列和中间的说明块跟到第一条结果，免得还停在检索前那首
+                    if (q && first && first.i !== selectedIndex()) goToTrack(first.i, first.ctx, { pulse: false });
+                    renderHud();
+                },
+                onKind: (kind) => followListKind(kind),
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
