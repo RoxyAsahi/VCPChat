@@ -7,6 +7,9 @@ function describeEngineError(raw) {
     const text = String(raw || '').trim();
     const t = text.toLowerCase();
     const rules = [
+        // 主进程连本机音频引擎失败时 Node 只给「fetch failed」：引擎进程退出了，不是网络问题
+        [/^fetch failed$|socket hang up|econnrefused 127\.0\.0\.1|econnrefused ::1|econnrefused localhost/, '连不上音频引擎（可能已经退出），关掉音乐窗口再打开试试'],
+        [/no song loaded/, '还没有加载歌曲'],
         [/private\/internal address/, '这台 WebDAV 服务器在内网，当前音频引擎不允许访问，更新音频引擎后就能放'],
         [/file not found|no such file|cannot find the (file|path)|系统找不到|os error [23]\b/, '文件不在原来的位置了（被移动、改名，或所在的盘没插上）'],
         [/access is denied|permission denied|拒绝访问|os error 5\b/, '没有权限读取这个文件'],
@@ -20,7 +23,8 @@ function describeEngineError(raw) {
         [/too large for non-range/, '文件太大，服务器又不支持分段下载'],
     ];
     for (const [pattern, message] of rules) if (pattern.test(t)) return message;
-    return text;
+    // 主进程的超时说明末尾带着接口路径（「…没有响应（/play）」），给人看时去掉
+    return text.replace(/（\/[\w-]+）$/, '');
 }
 
 function setupPlayer(app) {
@@ -513,7 +517,7 @@ function setupPlayer(app) {
             app.playIntent = false;
             app.isChangingState = false;
             app.applyPlayingUi(false);
-            app.showPlaybackNotice(`播放失败：${result?.message || '音频引擎没有响应'}`);
+            app.showPlaybackNotice(`播放失败：${result?.message ? describeEngineError(result.message) : '音频引擎没有响应'}`);
         }
     };
 
@@ -536,7 +540,7 @@ function setupPlayer(app) {
             app.playIntent = true;
             app.applyPlayingUi(true);
             app.startStatePolling();
-            app.showPlaybackNotice(`暂停失败：${result?.message || '音频引擎没有响应'}`);
+            app.showPlaybackNotice(`暂停失败：${result?.message ? describeEngineError(result.message) : '音频引擎没有响应'}`);
         }
     };
 
