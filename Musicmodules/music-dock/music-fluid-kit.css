@@ -566,3 +566,47 @@ body.music-reduce-motion .music-modal-overlay .music-modal-song-item:active .mus
 .webdav-modal .webdav-crumb:last-child { background: color-mix(in srgb, var(--mf-tint) 16%, transparent); }
 .webdav-modal .webdav-crumb:active { transform: scale(.92); transition-duration: .1s; }
 body.music-reduce-motion .webdav-modal :is(.webdav-server-item, .webdav-file-item, .webdav-crumb):active { transform: none; }
+
+/* ───────── 获取歌词版本：候选卡片 ─────────
+ * 卡片不再描边、不再另铺暗底，是玻璃里圆角的一汪；悬停时亮一点，不再往上跳。
+ * 选中的那张从左边透出强调色光，圆点被强调色填满时先压一下再鼓出来。分隔线换成玻璃里的细线。 */
+.lyrics-fetch-modal :is(.lyrics-fetch-legend, .lyrics-fetch-footer) { border-color: var(--mf-rule); }
+.lyrics-fetch-modal .lyrics-candidate {
+  border: 0;
+  border-radius: 18px;
+  background: var(--mf-hover);
+  box-shadow: none;
+  transition: background-color .18s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.lyrics-fetch-modal .lyrics-candidate:hover {
+  transform: none;
+  background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--mf-hover);
+}
+.lyrics-fetch-modal .lyrics-candidate:active { transform: scale(.985, .96); transition-duration: .1s; }
+.lyrics-fetch-modal .lyrics-candidate.selected {
+  box-shadow: none;
+  background:
+    radial-gradient(60% 180% at 0% 50%, color-mix(in srgb, var(--mf-tint) 26%, transparent), transparent 72%),
+    var(--mf-hover);
+}
+.lyrics-fetch-modal .lyrics-candidate:focus-visible:not(#messageInput) {
+  outline: none;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
+}
+.lyrics-fetch-modal .lyrics-candidate-radio { border: 1.5px solid var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-candidate.selected .lyrics-candidate-radio {
+  border-color: var(--mf-tint);
+  background: var(--mf-tint);
+  box-shadow: inset 0 0 0 3.5px var(--mf-fill);
+  animation: mf-like-pop .46s cubic-bezier(.34, 1.4, .5, 1);
+}
+.lyrics-fetch-modal :is(.lyrics-candidate-title) { color: var(--mf-ink); }
+.lyrics-fetch-modal :is(.lyrics-candidate-meta, .lyrics-candidate-preview) { color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-source-badge { background: var(--mf-hover); color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-candidate-score { color: var(--mf-tint); }
+body.music-reduce-motion .lyrics-fetch-modal .lyrics-candidate:active { transform: none; }
+body.music-reduce-motion .lyrics-fetch-modal .lyrics-candidate.selected .lyrics-candidate-radio { animation: none; }
+.lyrics-fetch-modal .lyrics-feature-badge { background: var(--mf-hover); color: var(--mf-ink2); }
+.lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(56, 217, 150, .16); color: #62e5aa; }
+body.light-theme .lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(26, 160, 104, .12); color: #11865a; }
+.lyrics-fetch-modal .lyrics-feature-badge.translation { color: var(--mf-tint); }
