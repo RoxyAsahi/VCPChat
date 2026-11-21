@@ -782,3 +782,12 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
    长标题给封面让出位置 */
 .archive-hud.narrow .archive-cover { top: -91px; }
 .archive-hud.narrow .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(100% - 59px - 168px - 24px); }
+
+/* 很窄（宽不到 760 设计像素，音乐窗口最小宽度 420 时就是这档）：
+   导航从右上挪到标题上方一行，字小一点；分组切换只留两个箭头，放在「第几首」那一行右边，不再压在曲名上。 */
+.archive-hud.tiny .archive-nav { left: 59px; right: auto; top: 56px; gap: 18px; font-size: 14px; }
+.archive-hud.tiny .archive-nav > [data-act="search"] .archive-key { display: none; }
+.archive-hud.tiny .archive-lanes,
+.archive-hud.tiny.short .archive-lanes { left: auto; right: 59px; top: 98px; bottom: auto; gap: 8px; }
+.archive-hud.tiny .archive-lanes > div { display: none; }
+.archive-hud.tiny .archive-brand { width: calc(100% - 118px - 110px); }
