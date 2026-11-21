@@ -1124,6 +1124,7 @@
                 const rows = buildQueueRows();
                 const upcoming = rows.filter((r) => r.type === 'manual' || r.type === 'ctx').length;
                 html += `<div class="md-qh"><b>播放队列</b><span>${upcoming}</span><span class="md-g"></span>`
+                    + (rows.length > 1 ? `<button class="md-ib" type="button" data-act="q-save" aria-label="把队列存为歌单" title="把队列存为歌单">${icon('list-plus', 15)}</button>` : '')
                     + `<button class="md-ib md-s${playMode() === 'shuffle' ? ' md-lit' : ''}" type="button" data-act="shuffle" aria-label="随机播放" title="随机播放">${icon('shuffle', 15)}</button></div>`
                     + (rows.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${rows.total}px"></div></div>` : '<p class="md-empty">还没有歌曲，用左侧“本地”添加音乐文件夹。</p>');
             } else if (tab === '封面') {
@@ -1168,6 +1169,31 @@
         // 一张表里三段：正在播放 → 手动队列（可拖动排序、移除、清空）→ 接下来会放的上下文
         // （随机时就是洗好的真实顺序）。上下文可能有上千首：只画看得见的那几行。
         const QUEUE_HEAD_H = 36;
+        // 「把队列存为歌单」（Spotify、Feishin 都有）：正在放的 + 接下来播放 + 接着播放的这一组；
+        // 整个曲库顺序播放时只存正在放的和手动排的，不把整库存进去
+        function saveQueueAsPlaylist() {
+            const current = currentTrack();
+            const up = typeof app.getUpNext === 'function' ? app.getUpNext(2000) : { manual: [], context: [] };
+            const list = [current, ...up.manual, ...(app.currentFilteredTracks ? up.context : [])].filter((t) => t && t.path);
+            const paths = [...new Set(list.map((t) => t.path))];
+            if (!paths.length) return;
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const pl = { id: 'q' + Date.now(), name: `队列 ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`, tracks: paths };
+            if (!Array.isArray(app.customPlaylists)) app.customPlaylists = [];
+            app.customPlaylists.push(pl);
+            const refresh = () => {
+                try { app.saveCustomPlaylists?.(); } catch (e) { /* 存不了也先在界面上生效 */ }
+                try { app.archiveView?.refresh?.(); } catch (e) { /* 档案页没开 */ }
+                if (app.currentSidebarView === 'playlists') { try { app.renderSidebarContent?.('playlists'); } catch (e) { /* 旧侧栏 */ } }
+            };
+            refresh();
+            global.MusicToast?.show?.({
+                message: `已存为歌单「${pl.name}」：${paths.length} 首`,
+                action: { label: '撤销', run: () => { const at = app.customPlaylists.indexOf(pl); if (at !== -1) { app.customPlaylists.splice(at, 1); refresh(); } } }
+            });
+        }
+
         function buildQueueRows() {
             const current = currentTrack();
             const up = typeof app.getUpNext === 'function'
@@ -1183,7 +1209,8 @@
             }
             if (up.context.length) {
                 const mode = playMode();
-                const name = app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
+                const radio = app.radio && app.radio.list === app.currentFilteredTracks ? app.radio.label : '';
+                const name = radio || app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
                 const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
                 push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
                 up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
@@ -1419,6 +1446,7 @@
             else if (act === 'lyr-tr') { app.setLyricsTranslation?.(app.lyricsTranslation === false); renderBody(); }
             else if (act === 'lyr-off') { app.shiftLyrics?.(Number(target.dataset.d) || 0); renderBody(); }
             else if (act === 'lyr-off0') { app.setLyricOffset?.(0); renderBody(); }
+            else if (act === 'q-save') saveQueueAsPlaylist();
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
                 toggleMute();
