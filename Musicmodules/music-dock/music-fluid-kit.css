@@ -500,3 +500,26 @@ body.music-reduce-motion :is(#music-dock-root .md-ib, .dialog-btn, .mtst .mtst-a
 .archive-detail-like[aria-pressed="true"] > span { animation: mf-like-pop .52s cubic-bezier(.34, 1.4, .5, 1); }
 body.music-reduce-motion :is(.archive-detail-actions > button, .archive-detail-like):active { transform: none; }
 body.music-reduce-motion .archive-detail-like[aria-pressed="true"] > span { animation: none; }
+
+/* ───────── 歌单编辑弹窗里的歌曲列表 ─────────
+ * 列表区不再另铺一层底色，和弹窗是同一块玻璃；每一行是圆角的一汪，已在歌单里的那几行从左边透出强调色光，
+ * 勾选框是圆的，勾上时被强调色填满。 */
+.music-modal-overlay .music-modal-content { background: transparent; padding: 8px; }
+.music-modal-overlay .music-modal-search { border-color: var(--mf-rule); }
+.music-modal-overlay .music-modal-search input { border: 0; border-radius: 9999px; background: var(--mf-hover); color: var(--mf-ink); }
+.music-modal-overlay .music-modal-search input:focus { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent); }
+.music-modal-overlay .music-modal-song-item { border-radius: 14px; padding: 9px 14px; color: var(--mf-ink); }
+.music-modal-overlay .music-modal-song-item:hover { background: var(--mf-hover); }
+.music-modal-overlay .music-modal-song-item.in-playlist {
+  background:
+    radial-gradient(70% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 18%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.music-modal-overlay .music-modal-song-checkbox {
+  border-radius: 9999px;
+  border: 1.5px solid var(--mf-ink2);
+  transition: background-color .2s ease, border-color .2s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+.music-modal-overlay .music-modal-song-item.in-playlist .music-modal-song-checkbox { background: var(--mf-tint); border-color: var(--mf-tint); color: #fff; }
+.music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: scale(.84); transition-duration: .1s; }
+body.music-reduce-motion .music-modal-overlay .music-modal-song-item:active .music-modal-song-checkbox { transform: none; }
