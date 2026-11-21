@@ -173,7 +173,9 @@
             box.innerHTML = '<header><span>最近检索</span><button type="button" data-rq-clear>清除</button></header>'
                 + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条">✕</button></div>`).join('');
         };
-        const play = (...args) => { rememberQuery(); return opts.onPlay(...args); };
+        // 目录里「为你 · 每日推荐」那一节对应阵列的 daily 列，告诉阵列时换成列 id
+        const columnCtx = (ctx) => (ctx === 'recent:daily' ? 'daily' : ctx);
+        const play = (i, ctx, ...rest) => { rememberQuery(); return opts.onPlay(i, columnCtx(ctx), ...rest); };
 
         const state = {
             kind: 'all',
@@ -651,7 +653,25 @@
         };
 
         /* 阵列那边换了选中：列表跟着高亮并滚到那一行 */
+        // 阵列切到「每日推荐」「最近播放」这两列时，目录自动切到「为你」并停在对应那一节；
+        // 阵列离开这两列时，切回自动切换之前的分类（用户自己换过分类就不再自动切回）
+        const ARRAY_SECTIONS = { daily: 'recent:daily', recent: 'recent' };
+        let autoKind = null;
+        const followArray = (ctx) => {
+            if (state.query.trim()) return;
+            if (ARRAY_SECTIONS[ctx] && state.kind !== 'recent') {
+                const from = state.kind;
+                setKind('recent', { auto: true });
+                autoKind = from;
+            } else if (!ARRAY_SECTIONS[ctx] && ctx && autoKind && state.kind === 'recent') {
+                const back = autoKind;
+                autoKind = null;
+                setKind(back, { auto: true });
+            }
+        };
         const reveal = (i, ctx, { center = false, quiet = false } = {}) => {
+            followArray(ctx);
+            if (state.kind === 'recent' && ARRAY_SECTIONS[ctx]) ctx = ARRAY_SECTIONS[ctx];
             state.selected = i;
             state.preferCtx = ctx;
             const k = findRow(i, ctx);
@@ -674,7 +694,7 @@
             state.selected = row.i;
             state.preferCtx = row.ctx;
             scrollToRow(k);
-            opts.onPick(row.i, row.ctx);
+            opts.onPick(row.i, columnCtx(row.ctx));
             render();
         };
         const stepRow = (dir, n = 1) => {
@@ -1546,11 +1566,13 @@
          * 只有离开之后选中的歌变了（在阵列里换了卡、播了别的歌），才改为跟到选中那一行。
          */
         const kindScroll = new Map();
-        const setKind = (kind) => {
+        const setKind = (kind, { auto = false } = {}) => {
+            if (!auto) autoKind = null;
             if (kind === state.kind) return;
             kindScroll.set(state.kind, { top: r.viewport.scrollTop, selected: state.selected, query: state.query });
             state.kind = kind;
-            try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ }
+            // 跟着阵列自动切的不记住，下次打开还是用户自己选的分类
+            if (!auto) { try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ } }
             r.viewport.scrollTop = 0;
             rebuild();
             const k = findRow(state.selected, null);
