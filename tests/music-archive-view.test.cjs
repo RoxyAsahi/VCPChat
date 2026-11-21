@@ -834,8 +834,8 @@ test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时�
     assert.ok(root.classList.contains('is-scanning'));
     assert.equal(f.text('emptyTitle'), '正在扫描曲库');
     fns.progress({ current: 437, total: 1280 });
-    assert.match(f.text('emptyText'), /0437 \/ 1280/);
-    assert.equal(f.text('status'), '扫描中 0437 / 1280');
+    assert.match(f.text('emptyText'), / 437 \/ 1280/);
+    assert.equal(f.text('status'), '扫描中 437 / 1280');
     assert.match(root.querySelector('[data-ref="scanBar"]').style.transform, /scaleX\(0\.34/);
     fns.complete({ tracks: new Array(1280) });
     assert.equal(root.classList.contains('is-scanning'), false);
@@ -879,7 +879,7 @@ test('空的原因各有说法：检索没结果、空歌单、还没有播放�
     f.view.setListOpen(true);
     f.view.list.input.value = 'zzqx';
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    assert.match(empty().textContent, /没有找到「zzqx」.*ESC 清除检索/);
+    assert.match(empty().textContent, /没有找到「zzqx」.*Esc 清除检索/);
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal(empty().style.display, 'none');
     f.view.list.el.querySelector('[data-kind="playlist"]').click();
@@ -964,7 +964,7 @@ test('扫描途中一批批进来：阵列和目录跟着长，选中的还是�
     assert.ok(before);
     fns.start({ total: 200, folderPath: '/s' });
     fns.progress({ current: 100, total: 200 });
-    assert.equal(f.text('status'), '扫描中 0100 / 0200');
+    assert.equal(f.text('status'), '扫描中 100 / 200');
     // 新来的歌排在前面（标题 A 开头）
     f.app.playlist = f.app.playlist.concat(mk(40, 'A'));
     fns.batch({ tracks: [] });

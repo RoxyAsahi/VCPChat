@@ -60,6 +60,30 @@
             });
         };
 
+        const paintLike = (li, track) => {
+            const button = li.querySelector('.cl-like');
+            if (!button) return;
+            const on = typeof app.isLiked === 'function' && app.isLiked(track);
+            li.classList.toggle('is-liked', on);
+            button.setAttribute('aria-pressed', String(on));
+            button.setAttribute('aria-label', on ? '取消喜欢' : '喜欢');
+            button.title = on ? '取消喜欢' : '喜欢';
+        };
+        // 点心形只切换喜欢，不触发这一行的播放
+        list.addEventListener('click', (e) => {
+            const button = e.target.closest?.('.cl-like');
+            if (!button || typeof app.toggleLike !== 'function') return;
+            e.stopPropagation();
+            e.preventDefault();
+            const li = button.closest('li');
+            const track = li && app.playlist[Number(li.dataset.index)];
+            if (track) app.toggleLike(track);
+        }, true);
+        list.addEventListener('dblclick', (e) => { if (e.target.closest?.('.cl-like')) { e.stopPropagation(); e.preventDefault(); } }, true);
+        document.addEventListener('music-like-change', () => {
+            for (const li of list.children) if (li.dataset.cols === '1') paintLike(li, app.playlist[Number(li.dataset.index)]);
+        });
+
         // 每行拆成标题 / 歌手 / 时长三格。原渲染只在列表内容变化时重建 <li>，已拆过的行跳过。
         const decorateRow = (li) => {
             if (li.dataset.cols === '1') return;
@@ -73,7 +97,14 @@
             const duration = document.createElement('span');
             duration.className = 'cl-duration';
             duration.textContent = formatDuration(track?.duration);
-            li.replaceChildren(title, artist, duration);
+            // 喜欢：一格小心形（和主流播放器的列表一样，喜欢过的常亮，其他的悬停才出现）
+            const like = document.createElement('button');
+            like.type = 'button';
+            like.className = 'cl-like';
+            like.tabIndex = -1;
+            like.textContent = '♥';
+            li.replaceChildren(title, artist, like, duration);
+            paintLike(li, track);
             li.title = [titleOf(track), track?.artist].filter(Boolean).join(' — ');
             li.dataset.cols = '1';
         };

@@ -325,8 +325,8 @@
         const renderScan = () => {
             root.classList.toggle('is-scanning', scan.active);
             const total = scan.total;
-            const digits = Math.max(4, String(total).length);
-            const progress = total ? pad(scan.current, digits) + ' / ' + pad(total, digits) : '';
+            // 不补零（0437 这种是装饰写法）；数字等宽，跳动时宽度不变
+            const progress = total ? Math.max(0, Math.round(scan.current)) + ' / ' + total : '';
             refs.emptyTitle.textContent = scan.active ? '正在扫描曲库' : '曲库是空的';
             refs.emptyText.textContent = scan.active
                 ? (total ? '正在读取曲目信息 ' + progress + '，读完后这里会排成档案阵列。' : '正在查找音乐文件…')
