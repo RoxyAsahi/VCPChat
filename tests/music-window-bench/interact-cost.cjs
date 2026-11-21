@@ -3,7 +3,7 @@
  * next track, search typing, switching list kinds and sorts, queueing, removing a track,
  * rescanning. Reports wall time and the long tasks (> 50 ms) each action causes.
  *
- *   node tests/music-window-bench/interact-cost.cjs [--n=5000] [--cpu=4]
+ *   node tests/music-window-bench/interact-cost.cjs [--n=5000] [--cpu=4] [--settle=20000]
  *
  * Software rendering and CPU throttling: compare runs with each other, not with a real machine.
  */
@@ -54,7 +54,10 @@ const FAKE = ({ n }) => {
     await page.addInitScript(FAKE, { n: N });
     await page.goto(`http://127.0.0.1:${server.address().port}/Musicmodules/music.html`, { timeout: 180000, waitUntil: 'commit' });
     await page.waitForFunction((n) => window.app?.playlist?.length === n && window.app.archiveView, N, { timeout: 180000 });
-    await page.waitForTimeout(4000);
+    // 拼音表到了以后档案页要分片重算全部检索条目；软件渲染下要十几秒。没等完就量，
+    // 头几步（删歌、排序、选行）会把这次重算算进去，数字大好几倍。
+    await page.waitForFunction(() => window.pinyinPro, null, { timeout: 180000 }).catch(() => {});
+    await page.waitForTimeout(Number(args.settle) || 20000);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
 
