@@ -1234,15 +1234,38 @@ function setupPlayer(app) {
         if (app.statePollInFlight || app.isTrackLoading) return;
         app.statePollInFlight = true;
         const epoch = app.controlEpoch;
+        let failure = null;
         try {
             const result = await app.api.getMusicState();
             if (epoch !== app.controlEpoch || app.isTrackLoading) return;
-            if (result?.status === 'success') app.updateUIWithState(result.state);
+            if (result?.status === 'success') {
+                app.statePollFailures = 0;
+                app.updateUIWithState(result.state);
+            } else failure = result?.message || '';
         } catch (error) {
             console.warn('[Music.js] pollState failed:', error?.message || error);
+            failure = error?.message || '';
         } finally {
             app.statePollInFlight = false;
         }
+        if (failure !== null) noteEngineUnreachable(failure);
+    };
+
+    // 引擎进程退出（崩溃、被杀）后每次查询都失败：以前界面一直显示「在播」，进度条照本地时钟往前走，
+    // 其实早就没声音了。连续几次查不到（约 2 秒）就停下来说明；主进程会把引擎重新拉起来，
+    // 这首歌要重新加载，所以记成「引擎里没有歌」，再按播放就是重新加载。
+    const ENGINE_DOWN_AFTER = 4;
+    app.statePollFailures = 0;
+    const noteEngineUnreachable = (message) => {
+        app.statePollFailures += 1;
+        if (app.statePollFailures !== ENGINE_DOWN_AFTER) return;
+        app.engineTrackPath = null;
+        if (!app.isPlaying && !app.playIntent) return;
+        app.playIntent = false;
+        app.isChangingState = false;
+        app.applyPlayingUi(false);
+        app.stopStatePolling();
+        app.showPlaybackNotice(`播放中断：${message ? describeEngineError(message) : '音频引擎没有响应'}`);
     };
 
     // 引擎无缝切到了第 index 首：界面跟过去。和 loadTrack 一样把播放时钟归零、换上新时长，
