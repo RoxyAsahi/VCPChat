@@ -739,6 +739,8 @@
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
+                    // Ctrl+Enter：下一首播放；Ctrl+Shift+Enter：加入队列末尾（选中的或多选的几首）
+                    if ((e.ctrlKey || e.metaKey) && row && row.type === 'track') { queueBatch(pickedIndices(row), !e.shiftKey); break; }
                     if (row && row.type === 'track') play(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
                     break;
                 }
