@@ -44,10 +44,13 @@ function setupUtils(app) {
         return 'file://' + encodeURI(p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
     };
 
+    // 和列表、档案页一样：一小时以上写成 1:02:03（以前写 62:03）；引擎还没报时长（undefined）时写 0:00，不是 NaN:NaN
     app.formatTime = (seconds) => {
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+        const total = Math.max(0, Math.floor(Number(seconds) || 0));
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const secs = String(total % 60).padStart(2, '0');
+        return h ? `${h}:${String(m).padStart(2, '0')}:${secs}` : `${m}:${secs}`;
     };
 
     app.normalizePathForCompare = (inputPath) => {

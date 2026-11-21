@@ -484,12 +484,19 @@
                 // 空曲库：左上不写「全部曲目 · 0 首」，下面的空状态说明会告诉人怎么加歌
                 refs.ctxName.textContent = '曲库';
                 refs.ctxSub.textContent = '还没有歌曲';
+            } else if (groupCtx()) {
+                // 目录切到「歌手」或没有专辑列的「专辑」：阵列没有对应的列停在原处，左上至少跟着目录说分类，
+                // 不再写「全部曲目 · 首字母 H」，跟「为你」切过去时标题会变一样
+                const g = groupCtx();
+                refs.ctxName.textContent = g.name;
+                refs.ctxSub.textContent = g.n + ' ' + g.unit + ' · 曲库共 ' + tracks().length + ' 首';
             } else {
                 refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
                 refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
             }
             refs.playCol.disabled = !count;
-            refs.playCol.hidden = Boolean(searchCtx);
+            // 左上写的是目录分类（歌手/专辑）时，「播放这一组」放的却是阵列当前列，容易误会，先收起
+            refs.playCol.hidden = Boolean(searchCtx || groupCtx());
             renderResume();
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
@@ -1153,6 +1160,8 @@
             refs.listBtn?.setAttribute('aria-pressed', String(open));
             if (persist) { listPref = open ? '1' : '0'; try { localStorage.setItem(LIST_KEY, listPref); } catch (e) { /* 只是记住 */ } }
             if (open) { list.render(); syncList(); }
+            // 目录切在「歌手」「专辑」时左上写的是目录分类，开合要换回来
+            if (state.columns.length) renderHud();
             // 设置抽屉开着时目录开合会换档（见 resize 里的 midBeside）
             if (lastInset) resize();
         };
@@ -1886,11 +1895,22 @@
 
         /* 目录换了分类（歌单、专辑、为你、全部），阵列跳到对应那一类的列，左上标题和中间说明块说的就是同一件事。
            已经在那一类的列上就不动；歌手没有对应的列，阵列不动 */
+        const GROUP_KINDS = { artist: ['歌手', '位歌手', 'artist'], album: ['专辑', '张专辑', 'album'] };
+        const groupCtx = () => {
+            if (!list || !listOpen() || list.query) return null;
+            const g = GROUP_KINDS[list.kind];
+            const col = column();
+            if (!g || !col || col.kind === g[2]) return null;
+            const names = new Set();
+            tracks().forEach((t) => { const v = t && t[g[2]] ? String(t[g[2]]).trim() : ''; if (v) names.add(v); });
+            return names.size ? { name: g[0], unit: g[1], n: names.size } : null;
+        };
         const LIST_KIND_COLS = { playlist: ['playlist'], album: ['album'], recent: ['daily', 'recent'], all: ['letter', 'all'] };
         const followListKind = (kind) => {
             const want = LIST_KIND_COLS[kind];
             const n = state.columns.length;
-            if (!want || !n) return;
+            // 没有对应列的分类（歌手、没有专辑列时的专辑）只刷新左上标题
+            if (!want || !n || !state.columns.some((c) => want.includes(c.kind))) { renderHud(); return; }
             const cur = column();
             if (cur && want.includes(cur.kind)) return;
             let target = -1;

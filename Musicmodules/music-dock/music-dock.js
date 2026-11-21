@@ -37,11 +37,14 @@
         + ` stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`
     );
 
+    // 底栏用两位分钟（00:00）；一小时以上补上小时（1:02:03），和队列、列表里同一首的时长写法一致，不写成 62:03
     const formatClock = (seconds) => {
         const total = Math.max(0, Math.floor(Number(seconds) || 0));
-        const m = Math.floor(total / 60);
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
         const s = total % 60;
-        return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        const two = (n) => `${n < 10 ? '0' : ''}${n}`;
+        return h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
     };
 
     // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
