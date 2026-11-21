@@ -214,7 +214,7 @@
                 glow: { value: 1 }, vocal: { value: 0 },
                 constellation: { value: constellation ? 1 : 0 },
                 entrance: { value: 1 }, departure: { value: 0 },
-                motion: { value: 0 }, style: { value: style }, waterEcho: { value: 0 },
+                motion: { value: 0 }, style: { value: style }, waterEcho: { value: 0 }, ghost: { value: 0 },
                 hop: { value: 0 }, hopStart: { value: -1 },
                 // Dark strokes blended over a pale sky in linear light come out
                 // far paler than their opacity suggests, so by day the words
@@ -227,10 +227,12 @@
             },
             vertexShader: `
                 attribute vec3 glyphTiming;
-                uniform float time,motion,constellation,entrance,departure,style,waterEcho,hop,hopStart;
+                attribute float glyphCenter;
+                uniform float time,motion,constellation,entrance,departure,style,waterEcho,hop,hopStart,ghost;
                 varying vec2 vUv;
+                varying float vGhost;
                 void main(){
-                    vUv=uv;
+                    vUv=uv;vGhost=0.0;
                     float age=max(0.0,time-glyphTiming.x);
                     float duration=max(0.04,glyphTiming.y-glyphTiming.x);
                     float singing=step(glyphTiming.x,time)*(1.0-step(glyphTiming.y,time));
@@ -252,13 +254,33 @@
                     if(style>1.5 && style<2.5){
                         p.x+=motion*constellation*(incoming*0.2-departure*0.28);
                     }
+                    if(ghost>0.5){
+                        // A sung glyph lets go of a faint copy of itself that
+                        // rises, swells and fades; smaller on a board than on the sky.
+                        float after=time-glyphTiming.y;
+                        float k=clamp(after/0.6,0.0,1.0);
+                        float reach=motion*mix(0.3,1.0,constellation);
+                        float swell=1.0+0.3*k*reach;
+                        p.x=glyphCenter+(p.x-glyphCenter)*swell;
+                        p.y=p.y*swell+0.32*k*reach;
+                        vGhost=step(0.0,after)*(1.0-k)*(1.0-k)*smoothstep(0.0,0.06,after)*min(reach,1.0);
+                    }
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
                 }`,
             fragmentShader: `uniform sampler2D map;uniform float time,fade,glow,vocal;
                 uniform float constellation,entrance,departure,style,waterEcho,rest;
                 uniform vec3 accent,ink,cold;uniform float ranges[64],starts[64],ends[64];
+                uniform float ghost;
                 varying vec2 vUv;
-                void main(){float start=1e8,end=1e8;float selected=0.0;
+                varying float vGhost;
+                void main(){
+                    if(ghost>0.5){
+                        float a=texture2D(map,vUv).a*vGhost*fade*0.55*glow;
+                        if(a<0.004) discard;
+                        gl_FragColor=vec4(accent,a);
+                        #include <colorspace_fragment>
+                        return;
+                    }float start=1e8,end=1e8;float selected=0.0;
                     float left=0.0,right=1.0;
                     for(int i=0;i<64;i++){if(selected<0.5){if(vUv.x<=ranges[i]){
                         start=starts[i];end=ends[i];right=ranges[i];selected=1.0;}else left=ranges[i];}}
@@ -381,7 +403,7 @@
             width *= scale;
             // One atlas, one draw, independent glyph quads. Timing stays with
             // the actual glyph rather than a second detached effects emitter.
-            const vertices = [], uvs = [], timings = [], indices = [];
+            const vertices = [], uvs = [], timings = [], centers = [], indices = [];
             phrase.glyphs.forEach((glyph, index) => {
                 const left = index ? ranges[index - 1] : 0;
                 const right = index === phrase.glyphs.length - 1 ? 1 : ranges[index];
@@ -391,6 +413,7 @@
                     uvs.push(u, v);
                     timings.push(glyph.startTime, glyph.endTime,
                         index / Math.max(1, phrase.glyphs.length - 1));
+                    centers.push((left + ranges[index]) * 0.5 - 0.5);
                 }
                 indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
             });
@@ -398,12 +421,22 @@
             glyphGeometry.setAttribute('position', new T.Float32BufferAttribute(vertices, 3));
             glyphGeometry.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
             glyphGeometry.setAttribute('glyphTiming', new T.Float32BufferAttribute(timings, 3));
+            glyphGeometry.setAttribute('glyphCenter', new T.Float32BufferAttribute(centers, 1));
             glyphGeometry.setIndex(indices);
             const text = new T.Mesh(glyphGeometry, mat);
             text.frustumCulled = false;
             text.scale.set(width, height * scale, 1);
             text.position.z = 0.055;
             group.add(text);
+            const ghostMat = mat.clone();
+            ghostMat.uniforms.map.value = map;
+            ghostMat.uniforms.ghost.value = 1;
+            ghostMat.blending = T.AdditiveBlending;
+            materials.push(ghostMat);
+            const ghost = new T.Mesh(glyphGeometry, ghostMat);
+            ghost.frustumCulled = false;
+            ghost.renderOrder = 1;
+            text.add(ghost);
             const yaw = constellation ? reference.skyYaw ?? reference.yaw : reference.yaw;
             const right = new T.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
             const shift = constellation ? 0 : Math.min(2.5, halfHeight * aspect * 0.12);
@@ -512,7 +545,7 @@
                 sign.group.add(group);
             } else root.add(group);
             const subtitle = group.userData.subtitle;
-            return { group, materials, textures, mat, phrase, constellation, text, encounter, glyphGeometry,
+            return { group, materials, textures, mat, ghostMat, phrase, constellation, text, encounter, glyphGeometry,
                 echo, echoMat, style, home: group.position.clone(), homeYaw: group.rotation.y,
                 halfWidth: width / 2, halfHeight: height * scale / 2,
                 // Lower edge of the block once the translation rows are included.
@@ -757,6 +790,11 @@
                         node.echoMat.uniforms.fade.value = echoFade;
                         node.echo.visible = echoFade > 0;
                     }
+                    const ghost = node.ghostMat.uniforms;
+                    ghost.time.value = time;
+                    ghost.fade.value = node.mat.uniforms.fade.value;
+                    ghost.motion.value = node.mat.uniforms.motion.value;
+                    ghost.glow.value = node.mat.uniforms.glow.value;
                     if (node.encounter) {
                         const sign = signs.get(node.encounter.id);
                         const activation = node.phrase.glyphs.reduce((level, glyph) => {
