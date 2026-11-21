@@ -190,7 +190,7 @@ function setupEffects(app) {
         app.saveSettings();
     };
 
-    app.updateLoudnessLufsDisplay = () => { app.loudnessLufsValue.textContent = app.loudnessLufsSlider.value; };
+    app.updateLoudnessLufsDisplay = () => { app.loudnessLufsValue.textContent = `${app.loudnessLufsSlider.value} LUFS`; };
     app.updateLoudnessPreampDisplay = () => {
         const val = parseFloat(app.loudnessPreampSlider.value);
         app.loudnessPreampValue.textContent = (val >= 0 ? '+' : '') + val + ' dB';
@@ -243,6 +243,14 @@ function setupEffects(app) {
         await app.api.configureMusicOutputBits({ bits: app.outputBits });
         await app.api.setMusicNoiseShaperCurve({ curve: app.noiseShaperCurve });
         app.saveSettings();
+    };
+
+    // 「抖动处理」就是噪声整形的总开关：关掉时下面的位深和曲线不起作用，跟着变灰。
+    app.syncDitherSection = () => {
+        const on = !!app.ditherSwitch?.checked;
+        document.getElementById('noise-shaper-section')?.classList.toggle('is-inactive', !on);
+        if (app.outputBitsSelect) app.outputBitsSelect.disabled = !on;
+        if (app.noiseShaperCurveSelect) app.noiseShaperCurveSelect.disabled = !on;
     };
 
     app.updateOptimizations = async () => {

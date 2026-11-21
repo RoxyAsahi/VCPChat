@@ -268,7 +268,7 @@
 
                     <!-- ReplayGain -->
                     <div class="setting-item toggle-item">
-                        <label for="replaygain-switch">动态增益</label>
+                        <label for="replaygain-switch" title="有 ReplayGain 标签的歌按标签调到同样响，没有标签的按实测响度；打开时会一并打开下面的响度归一化">按 ReplayGain 标签</label>
                         <label class="switch compact">
                             <input type="checkbox" id="replaygain-switch" checked>
                             <span class="slider round"></span>
@@ -396,18 +396,16 @@
                                     <div class="setting-item">
                                         <label for="loudness-mode-select">模式</label>
                                         <select id="loudness-mode-select" class="compact-select">
-                                            <option value="track">单曲</option>
-                                            <option value="album">专辑</option>
-                                            <option value="streaming">流媒体</option>
-                                            <option value="replaygain_track">RG 单曲</option>
-                                            <option value="replaygain_album">RG 专辑</option>
+                                            <option value="track">单曲（实测）</option>
+                                            <option value="replaygain_track">单曲（按标签）</option>
+                                            <option value="replaygain_album">专辑（按标签）</option>
                                         </select>
                                     </div>
                                     <div class="setting-item">
                                         <label>目标</label>
                                         <div class="slider-with-value">
                                             <input type="range" id="loudness-lufs-slider" min="-23" max="-9" step="0.5" value="-12">
-                                            <span id="loudness-lufs-value">-12</span>
+                                            <span id="loudness-lufs-value">-12 LUFS</span>
                                         </div>
                                     </div>
                                     <div class="setting-item">
@@ -526,18 +524,18 @@
                                         <label>位深</label>
                                         <select id="output-bits-select" class="compact-select">
                                             <option value="32">32-bit</option>
-                                            <option value="24">24-bit</option>
+                                            <option value="24" selected>24-bit</option>
                                             <option value="16">16-bit</option>
                                         </select>
                                     </div>
                                     <div class="setting-item">
                                         <label>曲线</label>
                                         <select id="noise-shaper-curve-select" class="compact-select">
-                                            <option value="TpdfOnly">TPDF</option>
-                                            <option value="Lipshitz5">Lipshitz</option>
-                                            <option value="FWeighted9">F-W</option>
-                                            <option value="ModifiedE9">Mod E</option>
-                                            <option value="ImprovedE9">Imp E</option>
+                                            <option value="TpdfOnly">只抖动，不整形</option>
+                                            <option value="Lipshitz5">Lipshitz 5 阶</option>
+                                            <option value="FWeighted9">F 加权 9 阶</option>
+                                            <option value="ModifiedE9">E 加权 9 阶（修正）</option>
+                                            <option value="ImprovedE9">E 加权 9 阶（改进）</option>
                                         </select>
                                     </div>
                                 </div>
