@@ -743,6 +743,15 @@ function setupPlayer(app) {
         if (render) { try { app.renderPlaylist?.(app.currentFilteredTracks); } catch (error) { /* 旧列表只是同步显示 */ } }
         return app.loadTrack(index, play);
     };
+    // 正在放的列表叫什么：来自歌单时按 id 取歌单现在的名字（播放中改了名，队列标题跟着改）；歌单删了就还叫原来的名字。
+    app.playbackSourceName = (source = app.filteredPlaylistSource) => {
+        if (!source) return '';
+        if (source.type === 'playlist' && source.id != null && Array.isArray(app.customPlaylists)) {
+            const pl = app.customPlaylists.find((p) => p && String(p.id) === String(source.id));
+            if (pl && pl.name) return pl.name;
+        }
+        return source.name || '';
+    };
     // 上下文的顺序变了（比如经典列表换了排序），但还是同一组歌：换成新顺序，不打断播放。
     app.contextFrom = (origin) => {
         const ctx = app.playbackContext;

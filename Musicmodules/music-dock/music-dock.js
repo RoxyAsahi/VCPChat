@@ -1220,7 +1220,7 @@
             if (up.context.length) {
                 const mode = playMode();
                 const radio = app.radio && app.radio.list === app.currentFilteredTracks ? app.radio.label : '';
-                const name = radio || app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
+                const name = radio || (app.playbackSourceName ? app.playbackSourceName() : app.filteredPlaylistSource?.name) || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
                 const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
                 push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
                 up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
@@ -1300,7 +1300,7 @@
         let prebuilt = null;
         let prebuildTimer = 0;
         const queueSig = () => [currentTrack()?.path, app.currentFilteredTracks, app.currentFilteredTracks?.length,
-            app.filteredPlaylistSource, app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
+            app.filteredPlaylistSource, app.playbackSourceName?.(), app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
         const prebuiltFresh = () => Boolean(prebuilt) && performance.now() - prebuilt.at < 8000
             && queueSig().every((value, index) => value === prebuilt.sig[index]);
         const schedulePrebuild = () => {

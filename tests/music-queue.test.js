@@ -473,3 +473,16 @@ test('session restart: the context keeps the origin it was played from, so a lat
     assert.deepEqual(titles(next.app.currentFilteredTracks), ['t2', 't1', 't0']);
     assert.equal(next.app.reorderContext([a, b, c], 'archive'), false, 'another origin still does not own it');
 });
+
+test('the playing list is named after the playlist as it is now: renamed follows, deleted keeps the old name', () => {
+    const { app } = setup();
+    app.customPlaylists = [{ id: '7', name: '通勤', tracks: [] }];
+    app.filteredPlaylistSource = { type: 'playlist', id: '7', name: '通勤' };
+    app.customPlaylists[0].name = '早上通勤';
+    assert.equal(app.playbackSourceName(), '早上通勤');
+    app.customPlaylists = [];
+    assert.equal(app.playbackSourceName(), '通勤');
+    assert.equal(app.playbackSourceName({ type: 'album', name: 'Demo' }), 'Demo');
+    app.filteredPlaylistSource = null;
+    assert.equal(app.playbackSourceName(), '');
+});
