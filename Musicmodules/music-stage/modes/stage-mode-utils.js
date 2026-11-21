@@ -388,12 +388,20 @@
         veil.setAttribute('aria-hidden', 'true');
         veil.width = 1; veil.height = 1;
         root.appendChild(veil);
-        let context = null, captured = false, timer = 0;
-        const empty = () => { veil.width = 1; veil.height = 1; captured = false; };
+        let context = null, captured = false, timer = 0, takenAt = -Infinity;
+        const empty = () => { veil.width = 1; veil.height = 1; captured = false; takenAt = -Infinity; };
         return {
             get captured() { return captured; },
-            capture(source) {
+            // Reading the 3D picture back stalls until the GPU has drawn it, so
+            // while a mode is waiting on the next song it keeps one picture a
+            // quarter of a second rather than every frame: on the slow sky it
+            // looks at by then, nobody can tell the difference.
+            capture(source, { every = 250 } = {}) {
                 if (!source || !source.width) return;
+                const now = global.performance?.now?.() ?? Date.now();
+                if (captured && now - takenAt < every
+                    && veil.width === source.width && veil.height === source.height) return;
+                takenAt = now;
                 if (veil.width !== source.width || veil.height !== source.height) {
                     veil.width = source.width; veil.height = source.height;
                     context = null;
