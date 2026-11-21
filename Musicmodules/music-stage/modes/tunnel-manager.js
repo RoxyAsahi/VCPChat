@@ -4426,7 +4426,10 @@
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
             // The track length often arrives a moment after the track itself; the
             // journey has to be compiled for the whole song, not just its lyrics.
-            const nextDuration = Math.round(finiteNumber(frame.duration, 0));
+            // Nothing chosen yet: plan an ordinary journey, so the waiting
+            // picture is its opening rather than the end of a zero-length one.
+            const knownDuration = Math.round(finiteNumber(frame.duration, 0));
+            const nextDuration = knownDuration > 0 || frame.lines?.length ? knownDuration : 240;
             const songChanged = source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration;
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
