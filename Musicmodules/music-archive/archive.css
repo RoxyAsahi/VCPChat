@@ -774,3 +774,11 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-ico { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .archive-list-recentq .rq button .archive-ico { width: 12px; height: 12px; }
 .archive-list-group .acts button { display: inline-flex; align-items: center; padding: 2px; }
+/* 取出看详情时目录、歌词都让开了，顶栏的「目录」「歌词」不再亮着，免得以为它们开着 */
+#music-archive-view.is-detail .archive-nav > button[aria-pressed="true"] { color: inherit; }
+#music-archive-view.is-detail .archive-nav > button[aria-pressed="true"]:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+
+/* 窄窗口：封面放在说明块右上、底边停在分隔线上方，不再往上顶到导航（900×700 时盖住「设置」「正在播放」）；
+   长标题给封面让出位置 */
+.archive-hud.narrow .archive-cover { top: -91px; }
+.archive-hud.narrow .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(100% - 59px - 168px - 24px); }

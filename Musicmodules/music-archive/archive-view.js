@@ -1660,9 +1660,10 @@
                     case 'left': stepLane(-1); break;
                     case 'right': stepLane(1); break;
                     case 'search': openSearch(); break;
-                    case 'list': closeDetail(); setListOpen(!listOpen()); break;
+                    // 取出看详情时目录和歌词都藏着：这时按它们是想回去看，不是想关掉
+                    case 'list': if (detailOpen) { closeDetail(); setListOpen(true); } else setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
-                    case 'lyrics': wantLyrics(!state.lyricsOn); break;
+                    case 'lyrics': if (detailOpen) { closeDetail(); if (!state.lyricsOn) wantLyrics(true); } else wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
