@@ -804,3 +804,46 @@ test('when the engine dies in the middle of a load, the wait ends early with the
     assert.equal(app.failedTracks.has(app.playlist[1]), false);
     assert.match(notices[0] || '', /加载中断：连不上音频引擎/);
 });
+
+// 推送连接断开那几秒里正好放完：playback_ended 只发给当时连着的客户端，丢了就停在结尾不往下走。
+test('a song that ends while the push connection is down still moves on, and only once', async t => {
+    let ended = false;
+    const app = setup({
+        getMusicState: async () => readyState(app.lastLoadedPath === 'C:/music/b.flac'
+            ? { is_playing: true, current_time: 1, duration: 180, file_path: 'C:/music/b.flac' }
+            : ended ? { is_playing: false, current_time: 200, duration: 200 } : { is_playing: true, current_time: 199.4, duration: 200 })
+    });
+    app.playModes = app.playModes || ['repeat'];
+    app.currentPlayMode = app.currentPlayMode || 0;
+    t.after(async () => { await tick(300); app.stopStatePolling(); app.cancelFailureSkip?.(); });
+    await app.playTrack();
+    app.stopStatePolling(); // 下面手动一次次轮询
+    await tick(5);
+    await app.pollState();
+    assert.equal(app.isPlaying, true);
+    app.calls.length = 0;
+    ended = true;
+    await app.pollState();
+    // 同一次放完又从另一条路报上来（旧引擎没有推送、但连接上还会发 playback_ended）：不再切一次
+    assert.equal(app.handlePlaybackEnded('push'), false);
+    await tick(20);
+    assert.deepEqual(app.calls.filter(c => c.startsWith('load:')), ['load:b'], 'the next song is loaded');
+    app.stopStatePolling();
+    await app.pollState();
+    assert.deepEqual(app.calls.filter(c => c.startsWith('load:')), ['load:b'], 'and only once');
+});
+
+test('with the push connection up, a stopped engine at the end is left to the push event', async t => {
+    const app = setup({ getMusicState: async () => readyState({ is_playing: true, current_time: 100, duration: 200 }) });
+    app.playModes = ['repeat']; app.currentPlayMode = 0;
+    t.after(() => app.stopStatePolling());
+    await app.playTrack();
+    app.stopStatePolling();
+    await tick(5);
+    await app.pollState();
+    app.ws = { readyState: 1 };
+    app.api.getMusicState = async () => readyState({ is_playing: false, current_time: 200, duration: 200 });
+    app.calls.length = 0;
+    await app.pollState();
+    assert.deepEqual(app.calls.filter(c => c.startsWith('load:')), []);
+});

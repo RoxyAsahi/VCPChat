@@ -1261,7 +1261,9 @@ function setupPlayer(app) {
             if (epoch !== app.controlEpoch || app.isTrackLoading) return;
             if (result?.status === 'success') {
                 app.statePollFailures = 0;
+                const wasPlaying = app.isPlaying === true;
                 app.updateUIWithState(result.state);
+                if (wasPlaying && endedWhilePushDown(result.state)) app.handlePlaybackEnded('poll');
             } else failure = result?.message || '';
         } catch (error) {
             console.warn('[Music.js] pollState failed:', error?.message || error);
@@ -1270,6 +1272,31 @@ function setupPlayer(app) {
             app.statePollInFlight = false;
         }
         if (failure !== null) noteEngineUnreachable(failure);
+    };
+
+    // 一首歌放完：引擎发 playback_ended，但它只发给当时连着的客户端，不会攒着。推送连接断开重连的
+    // 那几秒里正好放完，这个事件就丢了，播放停在结尾不往下走。所以连接断开靠轮询时，查到「停了、
+    // 进度在结尾」也算放完。两条路都走这里，同一次加载只切一次。
+    const endedWhilePushDown = (state) => {
+        const socketUp = app.ws && app.ws.readyState === 1;
+        if (socketUp || !state || state.is_playing || state.is_loading) return false;
+        if (app.playIntent === false && app.isChangingState) return false; // 刚按了暂停
+        const duration = Number(state.duration) || 0;
+        return duration > 1 && (Number(state.current_time) || 0) >= duration - 0.75;
+    };
+    app.handlePlaybackEnded = (source = 'push') => {
+        if (app.isTrackLoading) return false;
+        // 同一次加载只算一次；刚切走的一两秒里（下一首还没开始加载）另一条路再报也不算。
+        if (app.endedHandledForLoad === app.pendingLoadRequestId) return false;
+        if (Date.now() - (app.endedHandledAt || 0) < 1500) return false;
+        app.endedHandledForLoad = app.pendingLoadRequestId;
+        app.endedHandledAt = Date.now();
+        console.log(`[Music.js] Playback ended (${source}), moving to next track`);
+        app.stopStatePolling();
+        app.isPlaying = false;
+        app.playPauseBtn?.classList.remove('is-playing');
+        app.nextTrack();
+        return true;
     };
 
     // 引擎进程退出（崩溃、被杀）后每次查询都失败：以前界面一直显示「在播」，进度条照本地时钟往前走，
