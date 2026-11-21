@@ -29,6 +29,7 @@
             <span class="archive-glyph-search" aria-hidden="true"></span>
             <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目">
             <span class="archive-key" aria-hidden="true">/</span>
+            <div class="archive-list-recentq mf-glass" data-l="recentQ" role="listbox" aria-label="最近检索" hidden></div>
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
             ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="按${zh === '全部' ? '曲名' : zh}浏览">${zh}</button>`).join('')}
@@ -147,6 +148,32 @@
         host.appendChild(el);
         const r = {};
         el.querySelectorAll('[data-l]').forEach((n) => { r[n.dataset.l] = n; });
+
+        /*
+         * 最近检索：检索后真的播了结果，才记下这个检索词（和 Spotify 一样，只是打字不算）。
+         * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，✕ 删一条，「清除」全删。
+         * 只是这台机器上的方便，存在 localStorage 里。
+         */
+        const RECENT_Q_KEY = 'musicArchiveRecentQueries';
+        const RECENT_Q_MAX = 8;
+        const readRecentQ = () => { try { const v = JSON.parse(localStorage.getItem(RECENT_Q_KEY) || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).slice(0, RECENT_Q_MAX) : []; } catch (e) { return []; } };
+        const writeRecentQ = (list) => { try { localStorage.setItem(RECENT_Q_KEY, JSON.stringify(list.slice(0, RECENT_Q_MAX))); } catch (e) { /* 存不了就算了 */ } };
+        const rememberQuery = () => {
+            const q = String(state?.query || '').trim();
+            if (!q) return;
+            writeRecentQ([q, ...readRecentQ().filter((x) => x.toLowerCase() !== q.toLowerCase())]);
+        };
+        const paintRecentQ = () => {
+            const box = r.recentQ;
+            if (!box) return;
+            const list = readRecentQ();
+            const show = document.activeElement === r.input && !r.input.value.trim() && list.length > 0;
+            box.hidden = !show;
+            if (!show) return;
+            box.innerHTML = '<header><span>最近检索</span><button type="button" data-rq-clear>清除</button></header>'
+                + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条">✕</button></div>`).join('');
+        };
+        const play = (...args) => { rememberQuery(); return opts.onPlay(...args); };
 
         const state = {
             kind: 'all',
@@ -634,6 +661,23 @@
                 if (state.query.trim()) edgeRow(false);
             }, 30); // 570 首时一次检索约 5–15ms，去抖只为合并连续按键，不再让人等
         });
+        r.input.addEventListener('focus', paintRecentQ);
+        r.input.addEventListener('input', paintRecentQ);
+        r.input.addEventListener('blur', () => { if (r.recentQ) r.recentQ.hidden = true; });
+        // 在列表里按下不让检索框失焦（否则点不到）
+        r.recentQ?.addEventListener('pointerdown', (e) => e.preventDefault());
+        r.recentQ?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const del = e.target.closest('[data-rq-del]');
+            if (e.target.closest('[data-rq-clear]')) { writeRecentQ([]); paintRecentQ(); return; }
+            if (del) { const list = readRecentQ(); list.splice(Number(del.dataset.rqDel), 1); writeRecentQ(list); paintRecentQ(); return; }
+            const item = e.target.closest('[data-rq]');
+            const q = item && readRecentQ()[Number(item.dataset.rq)];
+            if (!q) return;
+            r.input.value = q;
+            r.input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
         const flushQuery = () => {
             if (r.input.value === state.query) return;
             clearTimeout(typeTimer);
@@ -663,13 +707,13 @@
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
-                    if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
+                    if (row && row.type === 'track') play(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
                     break;
                 }
                 case 'ArrowRight': {
                     if (inInput && r.input.selectionStart < r.input.value.length) return;
                     const row = selectedRowData();
-                    if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
+                    if (row && row.type === 'track') { e.preventDefault(); play(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
                 case 'a': case 'A':
@@ -718,7 +762,7 @@
                 e.stopPropagation();
                 clearMulti();
                 pickRow(h + 1);
-                opts.onPlay(first.i, first.ctx, { stage: false, group: groupOf(h + 1) });
+                play(first.i, first.ctx, { stage: false, group: groupOf(h + 1) });
                 return;
             }
             const node = e.target.closest('.archive-list-row');
@@ -732,7 +776,7 @@
                 clearMulti();
                 pickRow(k);
                 if (row.i === state.playing) { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
-                else opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(k) });
+                else play(row.i, row.ctx, { stage: false, group: groupOf(k) });
                 return;
             }
             clickRow(Number(node.dataset.k), e);
@@ -741,7 +785,7 @@
             if (e.target.closest('[data-go]')) return; // 播放键连点两下不算双击（不然会重播）
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
-            if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
+            if (row && row.type === 'track') play(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
         });
         /* 歌单分类里的行：右键菜单的「移除」只从这个歌单里移除；其他行按曲库处理 */
         const scopeOf = (row) => {
@@ -1096,7 +1140,7 @@
                     const row = state.rows[k];
                     clearMulti();
                     if (row) pickRow(k);
-                    opts.onPlay(indices[0], row ? row.ctx : null, { stage: false, group: { name: `所选 ${indices.length} 首`, items: indices.slice() } });
+                    play(indices[0], row ? row.ctx : null, { stage: false, group: { name: `所选 ${indices.length} 首`, items: indices.slice() } });
                 } else if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
                 else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);

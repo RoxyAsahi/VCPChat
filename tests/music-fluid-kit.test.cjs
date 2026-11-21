@@ -105,3 +105,21 @@ test('a dialog opened anywhere grows out of the last press, without the opening 
     frames.splice(0).forEach((fn) => fn());
     assert.equal(doc.querySelector('svg.mf-goo'), null, 'no regrowth while it stays open');
 });
+
+test('slide also runs vertically (top/height), leading edge first, and lands exactly', () => {
+    const { window, doc, run } = setup();
+    const drop = doc.createElement('i');
+    doc.body.appendChild(drop);
+    window.MusicFluid.slide(drop, { top: 0, height: 30 }, { key: 'lyr', axis: 'y' });
+    assert.equal(parseFloat(drop.style.top), 0);
+    assert.equal(parseFloat(drop.style.height), 30);
+    assert.equal(drop.style.left, '', 'vertical slide leaves left alone');
+    window.MusicFluid.slide(drop, { top: 60, height: 30 }, { key: 'lyr', axis: 'y', lead: 200, trail: 400 });
+    run(100);
+    const top = parseFloat(drop.style.top), h = parseFloat(drop.style.height);
+    assert.ok(top + h > 60, 'the lower edge has already reached past the target top');
+    assert.ok(h > 30, 'stretched while flowing');
+    run(400);
+    assert.equal(parseFloat(drop.style.top), 60);
+    assert.equal(parseFloat(drop.style.height), 30);
+});

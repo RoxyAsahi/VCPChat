@@ -38,7 +38,7 @@
         const Optics = () => global.MusicStageDioramaOptics;
         const wantsCanvasSmoothing = () => !(Optics()?.active(mode.config) ?? false);
         const onset = R.createAudioOnset();
-        const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
+        const audio = { energy: 0, impact: 0, onsets: 0, vocal: 0, spectrum: new Float32Array(24) };
         let appliedPalette = null;
         const palette = () => (themeHold && appliedPalette) || services?.app?.stagePalette || {};
         const dayLens = {};
@@ -197,6 +197,7 @@
                 const gain = R.clamp(settings.audioReactivity ?? 1, 0, 2);
                 audio.energy = live.energy * gain;
                 audio.impact = live.impact * gain;
+                audio.onsets = live.onsets;
                 const target = R.clamp(frame.audio?.vocal) * gain;
                 audio.vocal = seek ? target : audio.vocal
                     + (target - audio.vocal) * (1 - Math.exp(-dt * (target > audio.vocal ? 16 : 5)));
