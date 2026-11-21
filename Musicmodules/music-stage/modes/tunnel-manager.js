@@ -4424,7 +4424,7 @@
                     { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
             } else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving || themeHold) veil.capture(renderer.domElement);
+            if (leaving || themeHold) veil.capture(renderer.domElement, { every: themeHold ? 0 : 100 });
             else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
         };

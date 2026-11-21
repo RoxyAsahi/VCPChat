@@ -276,7 +276,7 @@
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(), lens);
             else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving || themeHold) veil.capture(renderer.domElement);
+            if (leaving || themeHold) veil.capture(renderer.domElement, { every: themeHold ? 0 : 250 });
             // Dissolve once the new song's first picture is really there.
             else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
