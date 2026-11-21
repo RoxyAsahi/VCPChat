@@ -18,7 +18,8 @@
     const FOCUSABLE = 'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
     const openers = new WeakMap();
 
-    const isOpen = (o) => o.classList.contains('visible');
+    // 多数弹窗用 visible 开关，WebDAV 两个弹窗用的是 active：两种都算开着，不然开着的弹窗会被设成 inert，点什么都没反应
+    const isOpen = (o) => o.classList.contains('visible') || o.classList.contains('active');
     const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
     const focusables = (o) => [...o.querySelectorAll(FOCUSABLE)].filter((el) => !el.closest('[inert]') && shown(el));
     const topOverlay = () => {
@@ -33,17 +34,32 @@
         target?.focus({ preventScroll: true });
     };
 
+    // 关弹窗时列表常会整块重画（编辑歌单关掉后侧栏歌单列表重建），原来那个按钮已经不在页面上。
+    // 记下它在最近一个带 id 的容器里、同类按钮中的第几个，重画后按位置找回新的那个。
+    const remember = (el) => {
+        const root = el.parentElement?.closest('[id]');
+        const cls = [...el.classList].filter((c) => /^[\w-]+$/.test(c)).map((c) => '.' + c).join('');
+        const sel = el.tagName.toLowerCase() + cls;
+        return { el, root, sel, index: root ? [...root.querySelectorAll(sel)].indexOf(el) : -1 };
+    };
+    const recall = (mark) => {
+        if (!mark) return null;
+        if (mark.el.isConnected) return mark.el;
+        if (!mark.root?.isConnected || mark.index < 0) return null;
+        return mark.root.querySelectorAll(mark.sel)[mark.index] || null;
+    };
+
     const sync = (o) => {
         const open = isOpen(o);
         o.inert = !open;
         if (open && !openers.has(o)) {
             const from = document.activeElement;
-            openers.set(o, from && from !== document.body && !o.contains(from) ? from : null);
+            openers.set(o, from && from !== document.body && !o.contains(from) ? remember(from) : null);
             // 打开的代码可能在去掉 inert 之前就 focus 过（那次会落空），这里补上
             focusInside(o);
             global.requestAnimationFrame?.(() => { if (isOpen(o)) focusInside(o); });
         } else if (!open && openers.has(o)) {
-            const back = openers.get(o);
+            const back = recall(openers.get(o));
             openers.delete(o);
             const lost = document.activeElement === document.body || o.contains(document.activeElement);
             if (lost && back && back.isConnected && !back.closest('[inert], [hidden]')) back.focus({ preventScroll: true });
@@ -71,6 +87,17 @@
                 : (at < 0 || at === list.length - 1 ? list[0] : null);
             if (next) { e.preventDefault(); next.focus({ preventScroll: true }); }
         }, true);
+        // Esc 关最上面那个弹窗（按它自己的关闭／取消钮，走原来的关闭逻辑）。
+        // WebDAV 两个弹窗和编辑歌单以前按 Esc 没反应；已经自己处理过 Esc 的弹窗，到这里时已经关了。
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+            const o = topOverlay();
+            if (!o) return;
+            const close = o.querySelector('.music-modal-close-btn, [id$="-cancel"]');
+            if (!close || close.disabled) return;
+            e.preventDefault();
+            close.click();
+        });
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch, { once: true });
