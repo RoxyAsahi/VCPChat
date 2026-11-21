@@ -209,6 +209,9 @@
                         renderer.setRenderTarget(destination);
                         await global.MusicStageModeUtils.compileReady(renderer, scene, camera);
                         if (dead) return;
+                        // One pass a frame: without background compiling each link blocks.
+                        await global.MusicStageModeUtils.breathe();
+                        if (dead) return;
                     }
                 } catch (error) {
                     console.warn('[MusicStage] lens warm-up skipped:', error);

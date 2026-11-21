@@ -336,27 +336,50 @@
             renderer.setRenderTarget(previous);
             probe?.dispose();
         }
-        if (report) reportPrograms(renderer);
+        if (report) await settlePrograms(renderer);
     };
 
-    // Shader errors are not checked per program (that waits on the GPU
-    // process every time), so look once, after the warm-up, and say which
-    // program the driver refused and why.
-    const reportPrograms = (renderer) => {
+    /*
+     * Shader errors are not checked per program (that waits on the GPU
+     * process every time), so look once, after the warm-up, and say which
+     * program the driver refused and why.
+     *
+     * A driver without background compiling links a program the first time
+     * anything asks about it: here, or else in the first frame, which then
+     * asks about every program at once and stalls for the whole lot. So each
+     * program is asked here, and its uniform table read the way the first
+     * draw would, a slice at a time with a frame in between. With background
+     * compiling every program is ready by now and this costs nothing.
+     */
+    const settlePrograms = async (renderer, alive = () => true, budget = 24) => {
+        let started = global.performance?.now?.() ?? Date.now();
+        const seen = new Set();
         try {
-            const gl = renderer.getContext();
-            if (!gl || gl.isContextLost()) {
-                console.warn('[MusicStage] WebGL context lost during shader warm-up');
-                return;
-            }
-            for (const entry of renderer.info.programs || []) {
+            for (const entry of [...(renderer.info?.programs || [])]) {
+                if (!alive()) return;
+                const gl = renderer.getContext?.();
+                if (!gl || gl.isContextLost()) {
+                    console.warn('[MusicStage] WebGL context lost during shader warm-up');
+                    return;
+                }
                 const program = entry.program;
-                if (!program || gl.getProgramParameter(program, gl.LINK_STATUS)) continue;
-                const shaderLog = (shader) => (shader && gl.getShaderInfoLog(shader)) || '';
-                console.error('[MusicStage] shader program failed:', entry.name || entry.type || '',
-                    '\nprogram:', gl.getProgramInfoLog(program) || '',
-                    '\nvertex:', shaderLog(entry.vertexShader),
-                    '\nfragment:', shaderLog(entry.fragmentShader));
+                if (!program || seen.has(program)) continue;
+                seen.add(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    const shaderLog = (shader) => (shader && gl.getShaderInfoLog(shader)) || '';
+                    console.error('[MusicStage] shader program failed:', entry.name || entry.type || '',
+                        '\nprogram:', gl.getProgramInfoLog(program) || '',
+                        '\nvertex:', shaderLog(entry.vertexShader),
+                        '\nfragment:', shaderLog(entry.fragmentShader));
+                    continue;
+                }
+                entry.getUniforms?.();
+                entry.getAttributes?.();
+                const now = global.performance?.now?.() ?? Date.now();
+                if (now - started > budget) {
+                    await breathe();
+                    started = global.performance?.now?.() ?? Date.now();
+                }
             }
         } catch (error) {
             console.warn('[MusicStage] shader check skipped:', error);
@@ -581,7 +604,7 @@
     });
 
     global.MusicStageModeUtils = Object.freeze({
-        watchOverlay, breathe,
+        watchOverlay, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,
         lyricFont,
         createRenderScale,
