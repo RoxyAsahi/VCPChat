@@ -1236,7 +1236,9 @@
                 return `<div class="md-qhd" role="presentation" style="${style}"><span>${escapeHtml(row.label)}</span><em>${row.count}</em>`
                     + (row.clear ? '<span class="md-g"></span><button class="md-qclr" type="button" data-qact="clear">清空</button>' : '') + '</div>';
             }
-            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`;
+            const dur = queueDuration(row.track);
+            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`
+                + (dur && row.type !== 'now' ? `<span class="md-qdur">${dur}</span>` : '');
             if (row.type === 'now') {
                 return `<div class="md-qi md-cur md-now" role="listitem" style="${style}">${text}<span class="md-g"></span><span class="md-qtag">正在播放</span></div>`;
             }
@@ -1256,6 +1258,23 @@
                 + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
         };
 
+        // 队列每行右边的时长：曲目自带的优先；没带的用档案页记下的（播放过一次就有，存在本机同一个键里）
+        let qDurs = null, qDursAt = 0;
+        const queueDuration = (t) => {
+            let sec = Number(t?.duration) > 0 ? Number(t.duration) : 0;
+            if (!sec && t?.path) {
+                const now = performance.now();
+                if (!qDurs || now - qDursAt > 5000) {
+                    try { qDurs = JSON.parse(localStorage.getItem('musicArchiveDurations') || '{}') || {}; } catch (e) { qDurs = {}; }
+                    qDursAt = now;
+                }
+                sec = Number(qDurs[t.path]) || 0;
+            }
+            sec = Math.round(sec);
+            if (!(sec > 0)) return '';
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = String(sec % 60).padStart(2, '0');
+            return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
+        };
         function renderQueueWindow(scroller, force = false) {
             if (state.queueDrag?.active) return; // 拖动时别重建行
             const rows = state.queueRows || [];

@@ -1116,3 +1116,11 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
 #music-dock-root :is(.md-fx-sc, .md-stage-in) input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.15); }
 #music-dock-root :is(.md-fx-sc, .md-stage-in) input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.25); }
 #music-dock-root :is(.md-fx-sc, .md-stage-in) input[type="range"]:focus-visible { outline: 2px solid var(--mf-tint); outline-offset: 4px; }
+
+/* 播放队列每行右边的时长（music-dock.js queueDuration） */
+#music-dock-root .md-qplay .md-qi-tx { flex: 1 1 auto; }
+#music-dock-root .md-qdur { flex: none; margin-left: 8px; font-size: 12px; line-height: 16px; color: var(--md-t3); font-variant-numeric: tabular-nums; }
+
+/* 播放队列在抽屉里铺满到底部页签上沿：原来固定 300px 高，下面空出一大截 */
+#music-dock-root .md-pnl .md-body > .md-tab:has(> .md-ql) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+#music-dock-root .md-pnl .md-body > .md-tab:has(> .md-ql) > .md-ql { flex: 1 1 0; height: auto; min-height: 240px; }
