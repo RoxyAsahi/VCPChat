@@ -1604,8 +1604,18 @@ test('目录换分类：阵列和左上标题跟过去；检索第一条结果�
     f.view.list.el.querySelector('[data-kind="playlist"]').click();
     assert.equal(colKind(), 'playlist:p');
     assert.equal(f.text('ctxName'), '夜间散步');
+    // 歌手没有对应的列：阵列不动，左上跟着目录写「歌手」，不再停在「全部曲目 · 首字母」
+    f.view.list.el.querySelector('[data-kind="artist"]').click();
+    assert.equal(f.text('ctxName'), '歌手');
+    assert.equal(f.text('ctxSub'), '2 位歌手 · 曲库共 60 首');
+    assert.ok(f.w.document.querySelector('[data-act="play-col"]').hidden);
+    // 专辑有列时阵列跳到专辑列，标题就是那张专辑
+    f.view.list.el.querySelector('[data-kind="album"]').click();
+    assert.ok(/^album:/.test(colKind()), colKind());
+    assert.equal(f.text('ctxName'), colKind().slice(6));
     f.view.list.el.querySelector('[data-kind="all"]').click();
     assert.ok(/^letter:|^all$/.test(colKind()), colKind());
+    assert.notEqual(f.text('ctxName'), '歌手');
     // 检索：第一条结果带着阵列走
     f.view.list.input.value = 'Song 42';
     f.view.list.input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
@@ -1620,6 +1630,18 @@ test('目录换分类：阵列和左上标题跟过去；检索第一条结果�
     assert.ok(hud.classList.contains('no-match'));
     assert.equal(f.text('ctxSub'), '没有结果');
     assert.ok(f.view.list.el.querySelector('.archive-list-foot').classList.contains('zero'));
+    f.close();
+});
+
+test('目录切到专辑但没有专辑列（每张都只有一首）：左上写「专辑」，关掉目录回到原来的列名', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    f.view.setListOpen(true);
+    const before = f.text('ctxName');
+    f.view.list.el.querySelector('[data-kind="album"]').click();
+    assert.equal(f.text('ctxName'), '专辑');
+    assert.equal(f.text('ctxSub'), '46 张专辑 · 曲库共 46 首');
+    f.view.setListOpen(false);
+    assert.equal(f.text('ctxName'), before);
     f.close();
 });
 
