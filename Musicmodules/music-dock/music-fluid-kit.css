@@ -308,3 +308,38 @@ body.music-reduce-motion #music-dock-root :is(.md-sld-tr, .md-sld-kn) { transiti
 }
 body.music-reduce-motion #music-dock-root .md-like.md-like-pop svg,
 body.music-reduce-motion #music-dock-root .md-like.md-like-pop::after { animation: none; }
+
+/* ───────── 抽屉里的开关块和小开关：按下去像按进一汪液体 ─────────
+ * 开关块（播放模式、歌词舞台……）和歌词页的小开关（翻译）换成同一套玻璃：圆角更大，
+ * 打开时不是换一块更亮的灰底，而是从下面透出一团强调色的光、四周柔光；
+ * 按下时压扁一点，松手时鼓过头再回来。 */
+#music-dock-root .md-tile {
+  border-radius: 18px;
+  transition: background .18s ease, color .18s ease, box-shadow .22s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+#music-dock-root .md-tile:hover { background: var(--mf-hover), var(--md-fill); }
+#music-dock-root .md-tile:active { transform: scale(.95, .92); transition-duration: .1s; }
+#music-dock-root .md-tile.md-lit,
+#music-dock-root .md-chip.md-lit {
+  background:
+    radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 26%, transparent), transparent 66%),
+    var(--mf-fill);
+  color: var(--mf-ink);
+  box-shadow: var(--mf-glow);
+}
+/* 深色下抽屉底比玻璃本色还亮，打开的那块要更亮一层才像浮起来，不然看着像按下去了 */
+body:not(.light-theme) #music-dock-root :is(.md-tile, .md-chip).md-lit {
+  background:
+    radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 30%, transparent), transparent 66%),
+    rgba(255, 255, 255, .14);
+}
+#music-dock-root .md-tile.md-lit .md-ti,
+#music-dock-root .md-chip.md-lit svg { color: var(--mf-tint); }
+#music-dock-root .md-chip {
+  border-radius: 9999px;
+  padding: 0 12px;
+  transition: background .18s ease, color .18s ease, box-shadow .22s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+#music-dock-root .md-chip:active:not(:disabled) { transform: scale(.94, .9); transition-duration: .1s; }
+body.music-reduce-motion #music-dock-root :is(.md-tile, .md-chip) { transition: background .12s, color .12s; }
+body.music-reduce-motion #music-dock-root :is(.md-tile, .md-chip):active { transform: none; }
