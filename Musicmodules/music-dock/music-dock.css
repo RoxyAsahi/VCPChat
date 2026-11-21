@@ -1695,3 +1695,7 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
 #music-dock-root .md-quick-g .md-slot.md-on,
 #music-dock-root .md-quick-g .md-slot:focus-visible { opacity: 1; }
 #music-dock-root .md-more.md-on { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }
+
+/* 队列页顶上「播放过的」：比接下来要放的淡一些，悬停时恢复 */
+.md-qi.md-hist { opacity: .55; transition: opacity .2s; }
+.md-qi.md-hist:hover, .md-qi.md-hist:focus-within { opacity: 1; }

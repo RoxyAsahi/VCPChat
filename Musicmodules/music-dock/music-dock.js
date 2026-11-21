@@ -1156,7 +1156,7 @@
                 const scroller = el.body.querySelector('.md-ql');
                 if (scroller) {
                     // 重画时保住滚动位置；第一次打开时从正在放的那首开始。
-                    scroller.scrollTop = keepScroll != null ? keepScroll : 0;
+                    scroller.scrollTop = keepScroll != null ? keepScroll : Math.max(0, (state.queueRows?.nowTop || 0) - QUEUE_HEAD_H);
                     renderQueueWindow(scroller);
                     scroller.addEventListener('scroll', () => renderQueueWindow(scroller), { passive: true });
                     scroller.addEventListener('pointerdown', onQueuePointerDown);
@@ -1202,7 +1202,14 @@
             const rows = [];
             let y = 0;
             const push = (row, h) => { row.top = y; row.h = h; y += h; rows.push(row); };
+            // 播放过的（Apple Music 的「历史」、Spotify 的「最近播放」）：在正在放的上面，打开时先看到正在放的，往上翻才看到
+            const history = typeof app.getHistory === 'function' ? app.getHistory(30) : [];
+            if (history.length && current) {
+                push({ type: 'head', label: '播放过的', count: history.length }, QUEUE_HEAD_H);
+                history.forEach((track) => push({ type: 'hist', track }, QUEUE_ROW_H));
+            }
             if (current) push({ type: 'now', track: current }, QUEUE_ROW_H);
+            rows.nowTop = current ? y - QUEUE_ROW_H : 0;
             if (up.manual.length) {
                 push({ type: 'head', label: '接下来播放', count: up.manual.length, clear: true }, QUEUE_HEAD_H);
                 up.manual.forEach((track, i) => push({ type: 'manual', i, track }, QUEUE_ROW_H));
@@ -1235,6 +1242,11 @@
                     + `<span class="md-qgrip" title="拖动排序" aria-hidden="true">${icon('grip-vertical', 14)}</span>`
                     + `<button class="md-qplay" type="button" data-qact="play" aria-label="现在播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
                     + `<button class="md-qx" type="button" data-qact="remove" aria-label="从队列移除" title="从队列移除">${icon('x', 14)}</button></div>`;
+            }
+            if (row.type === 'hist') {
+                return `<div class="md-qi md-hist" role="listitem" data-k="${k}" style="${style}">`
+                    + `<button class="md-qplay" type="button" data-qact="play" aria-label="再放一次 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
+                    + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
             }
             return `<div class="md-qi${row.track === current ? ' md-cur' : ''}" role="listitem" data-k="${k}" style="${style}">`
                 + `<button class="md-qplay" type="button" data-qact="play" aria-label="播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
