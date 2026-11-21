@@ -800,3 +800,26 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
   --scrollbar-thumb: color-mix(in srgb, var(--mf-ink) 18%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--mf-ink) 34%, transparent);
 }
+
+/* ───────── 目录里就地起名（新建歌单、重命名） ─────────
+ * 输入框出现时先是档案那条细线，随即凝成一汪浅玻璃：底线淡掉，四周起一圈强调色细光（和弹窗输入框一样）。
+ * 分组标题上的「播放这一组」小胶囊：按下压扁、松手回弹。 */
+.archive-list-name {
+  border-radius: 10px;
+  padding: 0 8px 2px;
+  margin-left: -8px;
+  width: calc(100% + 8px);
+  background: var(--mf-hover);
+  border-bottom-color: transparent;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 55%, transparent);
+  animation: mf-name-condense .42s cubic-bezier(.34, 1.3, .5, 1) both;
+}
+@keyframes mf-name-condense {
+  from { border-radius: 0; background-color: transparent; border-bottom-color: var(--ar-ink, currentColor); box-shadow: 0 0 0 0 transparent; }
+  45% { border-bottom-color: transparent; }
+}
+.archive-list-group .gplay { transition: opacity .15s, color .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.archive-list-group .gplay:active { transform: scale(.9, .84); transition-duration: .1s; }
+body.music-reduce-motion .archive-list-name { animation: none; }
+body.music-reduce-motion .archive-list-group .gplay:active { transform: none; }
+#music-archive-view .archive-list-name:is(:focus, :focus-visible):not(#messageInput) { outline: none; }
