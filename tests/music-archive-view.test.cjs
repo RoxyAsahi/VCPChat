@@ -845,6 +845,24 @@ test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时�
     assert.equal(fns.start, null, '关掉时取消订阅');
 });
 
+test('目录检索时左上标题写检索词和结果数，清掉检索恢复分组名', () => {
+    const f = fixture();
+    f.view.setListOpen(true);
+    const input = f.view.list.input;
+    input.value = 'Song 1';
+    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.equal(f.text('ctxName'), '检索「Song 1」');
+    assert.match(f.text('ctxSub'), /^\d+ 首结果/);
+    assert.ok(f.w.document.querySelector('[data-ref="playCol"]').hidden, '检索时不显示「播放这一组」');
+    input.value = 'zzqx';
+    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.match(f.text('ctxSub'), /没有结果/);
+    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(f.text('ctxName'), '全部曲目');
+    assert.equal(f.w.document.querySelector('[data-ref="playCol"]').hidden, false);
+    f.close();
+});
+
 test('空的原因各有说法：检索没结果、空歌单、还没有播放记录', () => {
     const f = fixture({ playlists: [{ id: 'e', name: '空歌单', tracks: [] }] });
     const empty = () => f.view.list.el.querySelector('[data-l="empty"]');
