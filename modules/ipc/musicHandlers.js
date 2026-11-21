@@ -370,6 +370,12 @@ async function handleMusicControl(args) {
 
     console.log(`[MusicControl] Received command: ${command}, Target: ${target}, Stage mode: ${normalizedStageMode || 'regular'}`);
 
+    // 窗口正在创建时，暂停/切歌/读歌词等消息发过去会落空：先等它就绪（失败也照常往下走）。
+    const isPlayWithTarget = String(command || '').toLowerCase() === 'play' && target;
+    if (musicWindowPromise && !isPlayWithTarget) {
+        try { await musicWindowPromise; } catch (_) { /* 按窗口不在处理 */ }
+    }
+
     switch (command.toLowerCase()) {
         case 'getcurrentlyrics':
             return getCurrentLyrics();
@@ -382,16 +388,14 @@ async function handleMusicControl(args) {
                     return { status: 'error', message: `Track '${target}' not found.` };
                 }
 
-                // 判断窗口是否已经存在且 ready
-                const windowAlreadyExists = musicWindow && !musicWindow.isDestroyed();
-
                 const playbackRequest = {
                     track,
                     stageMode: normalizedStageMode
                 };
 
-                if (windowAlreadyExists) {
-                    // 窗口已存在，直接发送完整播放请求让前端处理
+                // 窗口开着且已就绪：直接交给它。窗口还在创建（页面脚本可能还没跑，消息会丢）
+                // 或者没开：放进 pending，等窗口就绪；它若在这之前已经取过 pending，就绪后再直接发。
+                if (!musicWindowPromise && musicWindow && !musicWindow.isDestroyed()) {
                     console.log('[MusicControl] Window exists, sending music-set-track to renderer.');
                     musicWindow.webContents.send('music-set-track', playbackRequest);
                     if (!musicWindow.isVisible()) {
@@ -399,19 +403,20 @@ async function handleMusicControl(args) {
                     }
                     musicWindow.focus();
                     return { status: 'success', message: `Playing: ${track.title}` };
-                } else {
-                    // 窗口不存在，需要创建。将完整播放请求存入 pending，
-                    // 窗口初始化时由前端主动拉取，避免 ready 信号时序竞争。
-                    console.log('[MusicControl] Window does not exist, storing pending playback request and creating window.');
-                    pendingPlaybackForNewWindow = playbackRequest;
-                    try {
-                        await createOrFocusMusicWindow();
-                        return { status: 'success', message: `Playing: ${track.title}` };
-                    } catch (createErr) {
-                        console.error('[MusicControl] Failed to create music window for playback:', createErr);
+                }
+                console.log('[MusicControl] Window not ready, storing pending playback request.');
+                pendingPlaybackForNewWindow = playbackRequest;
+                try {
+                    await createOrFocusMusicWindow();
+                    if (pendingPlaybackForNewWindow === playbackRequest && musicWindow && !musicWindow.isDestroyed()) {
                         pendingPlaybackForNewWindow = null;
-                        return { status: 'error', message: `Music window creation aborted or failed: ${createErr.message}` };
+                        musicWindow.webContents.send('music-set-track', playbackRequest);
                     }
+                    return { status: 'success', message: `Playing: ${track.title}` };
+                } catch (createErr) {
+                    console.error('[MusicControl] Failed to create music window for playback:', createErr);
+                    if (pendingPlaybackForNewWindow === playbackRequest) pendingPlaybackForNewWindow = null;
+                    return { status: 'error', message: `Music window creation aborted or failed: ${createErr.message}` };
                 }
             } else {
                 // 无目标，简单恢复播放
