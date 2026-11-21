@@ -455,7 +455,7 @@
             const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
             refs.fmeta.textContent = t ? (meta || '未知歌手') : idle;
             refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
-            // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
+            // 按首字母拆开的列，大标题还是「全部曲目」，下面一行写明「首字母 H」，免得把「H · 23 首」读成全部只有 23 首
             const letterCol = col.kind === 'letter';
             if (searchCtx) {
                 // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
@@ -463,7 +463,7 @@
                 refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
             } else {
                 refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-                refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+                refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
             }
             refs.playCol.disabled = !count;
             refs.playCol.hidden = Boolean(searchCtx);

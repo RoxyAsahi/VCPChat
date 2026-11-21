@@ -662,3 +662,32 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.short .archive-detail-card h2 { font-size: 34px; margin-top: 6px; }
 .archive-hud.short .archive-detail-actions { margin-top: 20px; padding-bottom: 18px; }
 .archive-hud.short .archive-detail-actions > button { height: 42px; }
+/* 首页排版复查（11-21）：
+   1. 说明块底下垫一层淡纸色，字不再直接压在卡片上；分隔线只画到摘要的右端，不再一路拉到窗口边。
+   2. 底部控件对齐到说明块那一栏：↑↓ 位置条左边和说明块标题对齐，换组箭头靠右边距，两组不会挤在一起。
+   3. 键盘提示只在宽窗口显示，并且和页脚放在同一行；页脚不再重复「曲库 N 首」（左上标题下面已经有）。
+   4. 目录开着时搜索框就在眼前，顶部导航的「检索」收起来。 */
+.archive-hud { --ar-col: 970px; }
+.archive-hud.mid { --ar-col: 520px; }
+.archive-callout { isolation: isolate; }
+.archive-callout::before { content: ""; position: absolute; z-index: -1; pointer-events: none; left: -70px; top: -56px; bottom: -48px; width: min(860px, calc(100% + 70px)); background: radial-gradient(closest-side, rgba(var(--ar-paper-rgb), .78) 0, rgba(var(--ar-paper-rgb), .6) 58%, rgba(var(--ar-paper-rgb), 0) 100%); }
+.archive-hud.has-lyrics .archive-callout::before { width: 560px; }
+.archive-rule { width: 653px; }
+.archive-hud.mid .archive-rule { width: min(653px, calc(100% - 116px)); }
+.archive-hud.has-lyrics .archive-rule { width: 413px; }
+.archive-hud.mid.has-lyrics .archive-rule { width: calc(100% - 57px); }
+.archive-hud.narrow .archive-rule { width: calc(100% - 117px); }
+.archive-bottom { container-type: inline-size; }
+.archive-rows { left: calc(var(--ar-col) - 15px); }
+.archive-ticks { width: clamp(150px, calc(100cqw - var(--ar-col) - 59px - 340px - 158px - 48px), 300px); }
+.archive-lanes { left: auto; right: 59px; }
+.archive-lanes > div { min-width: 120px; max-width: 200px; }
+.archive-hud.narrow .archive-lanes { left: 59px; right: auto; }
+.archive-hud.narrow.short .archive-lanes { left: auto; right: 59px; }
+.archive-hint { left: var(--ar-col); bottom: 35px; }
+.archive-hint > span { margin: 0 9px; }
+.archive-hud.mid .archive-hint, .archive-hud.short .archive-hint { display: none; }
+.archive-footer { left: auto; }
+.archive-footer > span:nth-child(3) { display: none; }
+.archive-queue[hidden] + span { margin-left: 0; }
+.archive-hud.list-open .archive-nav > [data-act="search"] { display: none; }
