@@ -650,6 +650,10 @@ impl AudioPlayer {
     }
 
     pub fn seek(&mut self, time_secs: f64) -> Result<(), String> {
+        // `(NaN * rate) as u64` is 0: a bad position used to restart the song.
+        if !time_secs.is_finite() || time_secs < 0.0 {
+            return Err(format!("Invalid seek position: {time_secs}"));
+        }
         self.cmd_tx.send(AudioCommand::Seek(time_secs))
             .map_err(|e| format!("Failed to send seek command: {}", e))
     }
@@ -1320,5 +1324,14 @@ mod loudness_cache_tests {
         let cached = std::fs::read_dir(&cache_dir).map(|d| d.count()).unwrap_or(0);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(cached, 0, "the cut-short decode was saved to the resample cache");
+    }
+
+    #[test]
+    fn a_seek_to_nan_or_a_negative_time_is_refused() {
+        let mut player = AudioPlayer::new(AppConfig::default());
+        assert!(player.seek(f64::NAN).is_err());
+        assert!(player.seek(-1.0).is_err());
+        assert!(player.seek(f64::INFINITY).is_err());
+        assert!(player.seek(12.5).is_ok());
     }
 }
