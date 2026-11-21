@@ -3327,14 +3327,15 @@
                 colors.accentHex,
                 colors.secondaryHex,
                 scale.toFixed(2),
-                res
+                res,
+                settings?.lyricFont
             ]);
 
             if (cacheKey === glyphCacheKey) return;
             clearGlyphStage();
             glyphCacheKey = cacheKey;
 
-            const fontFamily = '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const fontFamily = U.lyricFont(settings?.lyricFont);
             const mainFont = `600 80px ${fontFamily}`;
             const subFont = `500 35px ${fontFamily}`;
             measureCtx.font = mainFont;

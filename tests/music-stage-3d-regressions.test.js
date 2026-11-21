@@ -120,7 +120,7 @@ test('mode settings keep their own ranges', () => {
     dom.window.close();
 });
 
-test('the sung-word hop has its own strength on the two 3D stages only', () => {
+test('the sung-word hop and the lyric face are settings of the two 3D stages only', () => {
     const dom = createDom();
     const { MusicStageConfig: Config } = loadStage(dom);
     assert.equal(Config.get().modes.diorama.lyricHop, 1);
@@ -130,6 +130,12 @@ test('the sung-word hop has its own strength on the two 3D stages only', () => {
     Config.setModePatch('tunnel', { lyricHop: 0 });
     assert.equal(Config.get().modes.tunnel.lyricHop, 0);
     assert.equal(Config.get().modes.luminous.lyricHop, undefined);
+    assert.equal(Config.get().modes.diorama.lyricFont, 'sans');
+    Config.setModePatch('diorama', { lyricFont: 'serif' });
+    assert.equal(Config.get().modes.diorama.lyricFont, 'serif');
+    Config.setModePatch('tunnel', { lyricFont: 'comic' });
+    assert.equal(Config.get().modes.tunnel.lyricFont, 'sans');
+    assert.equal(Config.get().modes.luminous.lyricFont, undefined);
     dom.window.close();
 });
 

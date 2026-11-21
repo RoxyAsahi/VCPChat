@@ -114,7 +114,7 @@
         // Settings that force the journey, lyric layout and events to be rebuilt.
         const REBUILD_KEYS = ['cameraSpeed', 'motionAmount', 'animationIntensity', 'reducedMotion',
             'cameraCuts', 'aspect', 'lyricCarrier', 'showTranslation', 'fireworks',
-            'narrativeStations', 'stationIntensity'];
+            'narrativeStations', 'stationIntensity', 'lyricFont'];
         const update = (frame, force = false) => {
             if (mode.destroyed || mode.suspended) return;
             latest = frame;

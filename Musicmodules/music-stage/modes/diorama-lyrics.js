@@ -338,7 +338,7 @@
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             // Microsoft YaHei has only regular and bold: anything under 600 is the
             // thin regular face, which loses its strokes against the sky.
-            const font = `700 144px "Microsoft YaHei","PingFang SC",sans-serif`;
+            const font = `700 144px ${global.MusicStageModeUtils.lyricFont(options.lyricFont)}`;
             ctx.font = font;
             const advances = phrase.glyphs.map(g => Math.max(1, ctx.measureText(g.text).width));
             const total = advances.reduce((a, b) => a + b, 0);
@@ -434,7 +434,7 @@
                 // Size the translation against the lyric it accompanies, then
                 // shrink or wrap only as far as the text needs.
                 const wanted = encounter ? 0.74 : height * scale * 0.27;
-                const subFont = px => `500 ${Math.round(px)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+                const subFont = px => `500 ${Math.round(px)}px ${global.MusicStageModeUtils.lyricFont(options.lyricFont)}`;
                 let rows = supplemental.split('\n').map(row => row.trim()).filter(Boolean).slice(0, 2);
                 let px = R.clamp(wanted / subWidth * 2048, 44, 116);
                 const widest = () => { sc.font = subFont(px); return Math.max(1, ...rows.map(row => sc.measureText(row).width)); };

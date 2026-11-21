@@ -462,8 +462,18 @@
         };
     };
 
+    // The faces a 3D stage can write its lyrics in. Each list starts with the
+    // face Windows ships, then the usual macOS and open-source equivalents.
+    const LYRIC_FONTS = Object.freeze({
+        sans: '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Segoe UI",sans-serif',
+        serif: '"SimSun","Songti SC","Noto Serif CJK SC","Source Han Serif SC",serif',
+        kai: '"KaiTi","STKaiti","Kaiti SC","AR PL UKai CN",serif'
+    });
+    const lyricFont = key => LYRIC_FONTS[key] || LYRIC_FONTS.sans;
+
     global.MusicStageModeUtils = Object.freeze({
         watchOverlay,
+        lyricFont,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, durationChanged,
