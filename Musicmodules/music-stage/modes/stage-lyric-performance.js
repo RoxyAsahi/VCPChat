@@ -101,6 +101,41 @@
         }
     };
 
+    // Where the words can reach inside the field, allowing for the swell of the
+    // word being sung, so a scene can be kept clear of the track card.
+    const contentBox = (layout) => {
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        const add = (p, ox, oy) => {
+            const scale = number(p.scale, 1) * 1.2;
+            const w = number(p.width, 0) * scale, h = number(p.height, number(layout.fontSize, 32) * 1.22) * scale;
+            const cx = ox + number(p.x, 0) + number(p.width, 0) / 2, cy = oy + number(p.y, 0) + h / scale / 2;
+            left = Math.min(left, cx - w / 2); right = Math.max(right, cx + w / 2);
+            top = Math.min(top, cy - h / 2); bottom = Math.max(bottom, cy + h / 2);
+        };
+        if (layout.groups) layout.groups.forEach(g => g.placements.forEach(p => add(p, number(g.x, 0), number(g.y, 0))));
+        else (layout.placements || []).forEach(p => add(p, 0, 0));
+        return Number.isFinite(left) ? { left, top, right, bottom } : null;
+    };
+    // The shift that takes a scene off the track card in the top left corner:
+    // whichever of right or down is shorter and still fits the stage.
+    const dodgeCard = (scene, card, width, height) => {
+        const box = scene.content;
+        if (!card || !box) return { x: 0, y: 0 };
+        const fit = number(scene.fitScale, 1);
+        const toX = fx => width / 2 + (fx - scene.width / 2) * fit;
+        const toY = fy => height / 2 + (fy - scene.height / 2) * fit;
+        const left = toX(box.left), right = toX(box.right), top = toY(box.top), bottom = toY(box.bottom);
+        const cardRight = (card.right + 1) / 2 * width, cardBottom = (1 - card.bottom) / 2 * height;
+        const cardLeft = (card.left + 1) / 2 * width, cardTop = (1 - card.top) / 2 * height;
+        if (left >= cardRight || right <= cardLeft || top >= cardBottom || bottom <= cardTop) return { x: 0, y: 0 };
+        const gap = 28;
+        const dx = cardRight + gap - left, dy = cardBottom + gap - top;
+        const roomX = right + dx <= width * 1.04, roomY = bottom + dy <= height * 1.12;
+        if (roomX && (!roomY || dx <= dy)) return { x: dx, y: 0 };
+        if (roomY) return { x: 0, y: dy };
+        return dx <= dy ? { x: Math.max(0, width * 1.04 - right), y: 0 } : { x: 0, y: Math.max(0, height * 1.12 - bottom) };
+    };
+
     const mountScene = (layout, line, kind) => {
         const root = el('div', 'lyric-performance-scene');
         root.setAttribute('aria-label', line.fullText);
@@ -111,7 +146,7 @@
         root.append(field);
         const scene = {
             ...layout, line, kind, root, field, profile: L.profile(line),
-            nodes: [], groups: [], retireAt: null
+            nodes: [], groups: [], retireAt: null, content: contentBox(layout)
         };
         if (layout.groups) {
             layout.groups.forEach(group => {
@@ -142,7 +177,7 @@
         return scene;
     };
 
-    const renderScene = (scene, frame, tuning, intensity) => {
+    const renderScene = (scene, frame, tuning, intensity, shift = { x: 0, y: 0 }) => {
         const time = frame.playbackTime;
         const profile = scene.profile;
         const enter = profile.enter ? ease((time - scene.line.startTime) / profile.enter) : 1;
@@ -156,7 +191,7 @@
         const breath = number(tuning.breathing, 1) * intensity * number(tuning.motion, 1);
         const phase = (time % 7) / 7 * Math.PI * 2;
         const floatY = (-Math.sin(phase) * 14 + Math.sin(phase * 2) * 2) * breath;
-        scene.field.style.transform = `translate(-50%,-50%) translateY(${floatY.toFixed(2)}px) scale(${number(scene.fitScale, 1) * (1 + Math.sin(phase) * 0.01 * breath)})`;
+        scene.field.style.transform = `translate(-50%,-50%) translate(${shift.x.toFixed(1)}px,${(shift.y + floatY).toFixed(2)}px) scale(${number(scene.fitScale, 1) * (1 + Math.sin(phase) * 0.01 * breath)})`;
         scene.groups.forEach(group => {
             const entry = spring(time - group.startTime + profile.lookahead);
             const waiting = time < group.startTime - profile.lookahead;
@@ -198,6 +233,8 @@
         const decor = ['luminous', 'partita', 'cadenza'].includes(id)
             ? global.MusicStageLyricDecor?.create(mode.root, id) : null;
         if (decor) mode.scope.add(() => decor.destroy());
+        const card = U.watchOverlay(viewport);
+        mode.scope.add(() => card.destroy());
         const reduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -325,7 +362,12 @@
                     scene.root.remove();
                     return false;
                 }
-                renderScene(scene, frame, tuning, motion);
+                if (!scene.shift || scene.shiftFor !== card.box || scene.shiftSize !== width * 1e5 + height) {
+                    scene.shift = dodgeCard(scene, card.box, width, height);
+                    scene.shiftFor = card.box;
+                    scene.shiftSize = width * 1e5 + height;
+                }
+                renderScene(scene, frame, tuning, motion, scene.shift);
                 return true;
             });
             const alive = line && scenes.some(scene => scene.line === line && frame.playbackTime <= scene.profile.end);
