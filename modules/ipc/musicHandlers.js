@@ -315,11 +315,14 @@ async function runLibraryScan(event, { folderPath = null, filePaths } = {}) {
         });
         console.log(`[Music] Scan of ${folderPath || `${filePaths?.length || 0} files`}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
         if (!scanned.stats.aborted) {
-            sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
+            sendToRequester('music-scan-complete', {
+                tracks: scanned.tracks, folderPath,
+                stats: { total: scanned.stats.total, failed: scanned.stats.failed }
+            });
         }
     } catch (err) {
         console.error("Error during music scan:", err);
-        sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
+        sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true, error: err?.message || String(err) });
     } finally {
         if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
     }

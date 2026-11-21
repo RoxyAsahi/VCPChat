@@ -38,8 +38,41 @@ function setupOutput(app) {
                     });
                     app.deviceSelect.appendChild(group);
                 }
+                // 重建选项会把选中项清回第一个：放回引擎正在用的那个，不然打开窗口总显示「默认设备」。
+                const current = app.currentDeviceId === null || app.currentDeviceId === undefined ? 'default' : String(app.currentDeviceId);
+                const known = [...app.deviceSelect.querySelectorAll('option')].some((o) => String(o.value) === current);
+                app.deviceSelect.value = known ? current : 'default';
             }
         } catch (e) { console.error("Error populating device list:", e); }
+    };
+
+    // 引擎打开输出时退回了什么（新引擎在 /state 的 output_fallback 里报；旧引擎没有这个字段，什么都不显示）。
+    const FALLBACK_TEXT = {
+        exclusive: '独占模式没能打开（声卡被别的程序占着，或不支持这首歌的格式），现在用共享模式播放。',
+        device: '选的音频设备不在了（拔掉了或编号变了），现在用默认设备播放。'
+    };
+    app.syncOutputFallback = (state) => {
+        const note = document.getElementById('output-fallback-note');
+        if (!note || !state || !Array.isArray(state.output_fallback)) return;
+        // 独占这句只在开关还开着时说；用户已经关掉独占就不用提了。
+        const lines = state.output_fallback
+            .filter((k) => k !== 'exclusive' || app.wasapiSwitch?.checked)
+            .map((k) => FALLBACK_TEXT[k])
+            .filter(Boolean);
+        note.textContent = lines.join(' ');
+        note.hidden = lines.length === 0;
+    };
+    // 输出是在开始播放时才真正打开的，所以开播后和改设置后过一会儿再问一次。
+    let fallbackCheckTimer = null;
+    app.checkOutputFallbackSoon = (delay = 900) => {
+        if (!app.api?.getMusicState) return;
+        clearTimeout(fallbackCheckTimer);
+        fallbackCheckTimer = setTimeout(async () => {
+            try {
+                const result = await app.api.getMusicState();
+                if (result?.status === 'success') app.syncOutputFallback(result.state);
+            } catch (e) { /* 只是提示 */ }
+        }, delay);
     };
 
     app.configureOutput = async () => {
@@ -55,10 +88,12 @@ function setupOutput(app) {
         try {
             app.currentDeviceId = selectedId;
             app.useWasapiExclusive = useExc;
-            await app.api.configureMusicOutput({
+            const result = await app.api.configureMusicOutput({
                 device_id: app.currentDeviceId,
                 exclusive: app.useWasapiExclusive
             });
+            if (result?.status === 'success') app.syncOutputFallback(result.state);
+            app.checkOutputFallbackSoon();
             await app.populateDeviceList(false);
             app.deviceSelect.value = app.currentDeviceId === null ? 'default' : app.currentDeviceId;
         } catch (e) { console.error("Error configuring output:", e); }

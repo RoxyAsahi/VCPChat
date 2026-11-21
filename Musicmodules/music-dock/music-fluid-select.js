@@ -159,8 +159,10 @@
                 choose(index);
             });
             item.addEventListener('pointermove', () => { if (doc.activeElement !== item) item.focus({ preventScroll: true }); });
-            menu.append(item);
             items.push(item);
+            // 只用来显示当前状态的项（隐藏且不能选，比如 EQ 的「自定义」）：不是当前值时不进菜单
+            if (option.hidden && option.disabled && !option.selected) return;
+            menu.append(item);
         });
         doc.body.append(menu);
         trigger.setAttribute('aria-expanded', 'true');

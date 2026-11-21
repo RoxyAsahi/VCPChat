@@ -317,6 +317,33 @@ function setupPlayer(app) {
         if (wakeLoadWait) wakeLoadWait();
     };
 
+    // 把一首歌摆上界面：标题、封面、列表位置、歌词、系统媒体信息。点播和无缝切歌共用。
+    const showTrack = (track) => {
+        app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
+        app.trackArtist.textContent = track.artist || '未知艺术家';
+        app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
+
+        const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
+        if (track.albumArt) {
+            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
+            app.albumArt.style.backgroundImage = albumArtUrl;
+            app.updateBlurredBackground(albumArtUrl);
+        } else {
+            app.albumArt.style.backgroundImage = defaultArtUrl;
+            app.updateBlurredBackground('none');
+        }
+
+        app.renderPlaylist(app.currentFilteredTracks);
+        app.scrollCurrentTrackToSidebarTop?.();
+        app.fetchAndDisplayLyrics(track.artist, track.title, {
+            path: track.path,
+            duration: track.duration || 0,
+            album: track.album || ''
+        });
+        app.updateMediaSessionMetadata();
+        app.syncMediaPosition?.(true);
+    };
+
     app.loadTrack = async (trackIndex, andPlay = true) => {
         const requestId = ++app.pendingLoadRequestId;
         const skipHistory = app.skipHistoryOnce === true;
@@ -364,29 +391,7 @@ function setupPlayer(app) {
         // 加载期间按钮显示用户想要的状态：此时点它就是“加载好也别播”。
         if (app.playIntent) app.applyPlayingUi(true);
 
-        app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
-        app.trackArtist.textContent = track.artist || '未知艺术家';
-        app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
-
-        const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
-        if (track.albumArt) {
-            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
-            app.albumArt.style.backgroundImage = albumArtUrl;
-            app.updateBlurredBackground(albumArtUrl);
-        } else {
-            app.albumArt.style.backgroundImage = defaultArtUrl;
-            app.updateBlurredBackground('none');
-        }
-
-        app.renderPlaylist(app.currentFilteredTracks);
-        app.scrollCurrentTrackToSidebarTop?.();
-        app.fetchAndDisplayLyrics(track.artist, track.title, {
-            path: track.path,
-            duration: track.duration || 0,
-            album: track.album || ''
-        });
-        app.updateMediaSessionMetadata();
-        app.syncMediaPosition?.(true);
+        showTrack(track);
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
 
         // 旧歌的轮询到此为止；加载期间由下面的等待循环负责读状态。
@@ -503,6 +508,7 @@ function setupPlayer(app) {
         if (result?.status === 'success') {
             app.lastCommandTime = Date.now();
             app.startStatePolling();
+            app.checkOutputFallbackSoon?.();
         } else {
             app.playIntent = false;
             app.isChangingState = false;
@@ -736,6 +742,15 @@ function setupPlayer(app) {
         app.playbackContext = { origin: origin || null, list: app.currentFilteredTracks, source: app.filteredPlaylistSource };
         if (render) { try { app.renderPlaylist?.(app.currentFilteredTracks); } catch (error) { /* 旧列表只是同步显示 */ } }
         return app.loadTrack(index, play);
+    };
+    // 正在放的列表叫什么：来自歌单时按 id 取歌单现在的名字（播放中改了名，队列标题跟着改）；歌单删了就还叫原来的名字。
+    app.playbackSourceName = (source = app.filteredPlaylistSource) => {
+        if (!source) return '';
+        if (source.type === 'playlist' && source.id != null && Array.isArray(app.customPlaylists)) {
+            const pl = app.customPlaylists.find((p) => p && String(p.id) === String(source.id));
+            if (pl && pl.name) return pl.name;
+        }
+        return source.name || '';
     };
     // 上下文的顺序变了（比如经典列表换了排序），但还是同一组歌：换成新顺序，不打断播放。
     app.contextFrom = (origin) => {
@@ -1245,29 +1260,7 @@ function setupPlayer(app) {
         // 之前加载失败标灰过的歌，这次无缝放起来了，就不再是坏的。
         if (app.failedTracks.has(track)) markFailed(track, '');
         app.rememberPlayed(track);
-        app.trackTitle.textContent = app.stripAudioExtension(track.title) || '未知标题';
-        app.trackArtist.textContent = track.artist || '未知艺术家';
-        app.trackBitrate.textContent = track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : '';
-
-        const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
-        if (track.albumArt) {
-            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
-            app.albumArt.style.backgroundImage = albumArtUrl;
-            app.updateBlurredBackground(albumArtUrl);
-        } else {
-            app.albumArt.style.backgroundImage = defaultArtUrl;
-            app.updateBlurredBackground('none');
-        }
-
-        app.renderPlaylist(app.currentFilteredTracks);
-        app.scrollCurrentTrackToSidebarTop?.();
-        app.fetchAndDisplayLyrics(track.artist, track.title, {
-            path: track.path,
-            duration: track.duration || 0,
-            album: track.album || ''
-        });
-        app.updateMediaSessionMetadata();
-        app.syncMediaPosition?.(true);
+        showTrack(track);
 
         // 如果是随机播放，从队列中移除当前已开始播放的这首歌，防止之后再次随机到它
         if (app.playModes[app.currentPlayMode] === 'shuffle') {

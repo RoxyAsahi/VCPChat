@@ -15,7 +15,8 @@ mod track_buffer;
 pub use state::{AudioCommand, PlayerState, SharedState, AudioDeviceInfo,
     EVENT_LOAD_COMPLETE, EVENT_LOAD_ERROR, EVENT_TRACK_CHANGED,
     EVENT_PLAYBACK_ENDED, EVENT_NEEDS_PRELOAD_RESET, EVENT_COMMAND_APPLIED,
-    EVENT_DECODE_COMPLETE};
+    EVENT_DECODE_COMPLETE, output_fallback_names, OUTPUT_FELL_BACK_FROM_EXCLUSIVE,
+    OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE, resolve_output_device};
 pub use track_buffer::{TrackBuffer, CHUNK_FRAMES};
 pub use gapless::GaplessManager;
 
@@ -266,6 +267,38 @@ impl AudioPlayer {
         self.shared_state.device_id.store(id_value, Ordering::Relaxed);
         log::info!("Device selected: {:?}", device_id);
         Ok(())
+    }
+
+    /// Choose the output device by id (its position in `list_devices`) and
+    /// remember its name, so the same device is found again after the list
+    /// shifts. Returns the name that was recorded.
+    pub fn select_device_by_list(&mut self, device_id: Option<usize>, names: &[String]) -> Option<String> {
+        let name = device_id.and_then(|id| names.get(id).cloned());
+        *self.shared_state.device_name.write() = name.clone();
+        let _ = self.select_device(device_id);
+        name
+    }
+
+    /// Put back a saved output choice: find the saved device by name in the
+    /// current list (falls back to the saved position for settings written
+    /// before names were kept).
+    pub fn restore_device(&mut self, saved_name: Option<&str>, saved_id: Option<usize>, names: &[String]) {
+        let (index, missing) = resolve_output_device(names, saved_name, saved_id);
+        if missing {
+            log::warn!("Saved output device {:?} / {:?} not present, using the default", saved_name, saved_id);
+        }
+        // Keep the name even when the device is away, so it is picked again once plugged back in.
+        *self.shared_state.device_name.write() = saved_name.map(str::to_string)
+            .or_else(|| index.and_then(|i| names.get(i).cloned()));
+        let _ = self.select_device(index);
+    }
+
+    /// Names of the output devices, in list order (what `list_devices` ids index).
+    pub fn output_device_names() -> Vec<String> {
+        let host = cpal::default_host();
+        host.output_devices()
+            .map(|devices| devices.map(|d| d.name().unwrap_or_default()).collect())
+            .unwrap_or_default()
     }
 
     /// Remember EBU R128 measurements across plays (and restarts).
@@ -1280,6 +1313,36 @@ mod loudness_cache_tests {
         // The file changes: the old value is not trusted any more.
         write_wav(&wav, 1.5);
         assert_eq!(cached_loudness(Some(&db), &path), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stream_that_had_to_fall_back_says_so() {
+        // 独占打不开（这台机器根本没有独占）、选的设备不在了：都要能从 /state 看出来，
+        // 不然界面一直显示「独占」「某某声卡」，实际在用共享模式、默认设备。
+        let dir = std::env::temp_dir().join(format!("vcp-fallback-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("a.wav");
+        write_wav(&wav, 1.0);
+        let mut player = AudioPlayer::new(AppConfig::default());
+        let shared = player.shared_state();
+        player.exclusive_mode = true;
+        shared.exclusive_mode.store(true, Ordering::Relaxed);
+        player.select_device(Some(4096)).unwrap();
+        player.load(&wav.to_string_lossy()).unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while player.is_loading() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        player.play().unwrap();
+        while shared.output_fallback.load(Ordering::Relaxed) == 0 && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let bits = shared.output_fallback.load(Ordering::Relaxed);
+        let names = output_fallback_names(bits);
+        assert!(names.contains(&"device"), "{names:?}");
+        // 没有独占的平台上一定是退回了共享模式（Windows 上取决于声卡，这里不判）
+        if !cfg!(windows) { assert!(names.contains(&"exclusive"), "{names:?}"); }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

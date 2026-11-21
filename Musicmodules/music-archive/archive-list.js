@@ -1230,7 +1230,7 @@
             for (const t of victims) { const at = (app.manualQueue || []).indexOf(t); if (at !== -1) app.queueRemove?.(at); }
             const after = () => {
                 if (app.playlistViewSource && Array.isArray(app.currentFilteredTracks)) app.renderPlaylist?.(app.currentFilteredTracks); else app.renderPlaylist?.();
-                app.api?.saveMusicPlaylist?.(app.playlist);
+                (app.saveLibrary ? app.saveLibrary() : app.api?.saveMusicPlaylist?.(app.playlist));
                 app.refreshPreload?.();
                 if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
             };

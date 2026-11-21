@@ -35,6 +35,7 @@ function setup({ confirmAnswer = true } = {}) {
         renderPlaylist(filtered) { calls.push(['render', filtered ? filtered.map((t) => t.path) : null]); },
         showContextMenu() { calls.push('menu'); },
         saveCustomPlaylists() { calls.push('savePl'); },
+        saveLibrary() { return app.api.saveMusicPlaylist(app.playlist); },
         loadTrack(i, play) { calls.push(['load', i, play]); app.currentTrackIndex = i; },
         pauseTrack() { calls.push('pause'); },
         nextTrack() { calls.push('next'); },

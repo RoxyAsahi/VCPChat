@@ -111,7 +111,12 @@
         <div class="md-stage-in md-tune" data-md="tune-slot"></div>
         <button class="md-fold" type="button" data-md="tune-more" aria-expanded="false" hidden></button>
       </section>
+      <section class="md-grp md-play-grp" data-md="play-sec" aria-label="播放" hidden>
+        <div class="md-grp-h"><b>播放</b></div>
+        <div class="md-fx-sc md-moved" data-md="play-slot"></div>
+      </section>
       <div class="md-tab md-tab2" data-md="body2"></div>
+      <div class="md-fx-sc md-moved" data-md="disp-slot"></div>
       <div class="md-stage-in" data-md="common-slot"></div>
       <section class="md-grp md-adv">
         <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
@@ -170,6 +175,9 @@
             tabs: $('[data-md="tabs"]'),
             ext: $('[data-md="ext"]'),
             body2: $('[data-md="body2"]'),
+            playSec: $('[data-md="play-sec"]'),
+            playSlot: $('[data-md="play-slot"]'),
+            dispSlot: $('[data-md="disp-slot"]'),
             tuneSec: $('[data-md="tune-sec"]'),
             tuneTitle: $('[data-md="tune-title"]'),
             tuneHint: $('[data-md="tune-hint"]'),
@@ -1150,6 +1158,7 @@
             }
             el.body.innerHTML = html;
             renderExt(tab === '控制');
+            syncMoved(tab === '控制');
             syncFx(tab === '声音');
             placeMarks(el.body);
             placeMarks(el.body2);
@@ -1220,7 +1229,7 @@
             if (up.context.length) {
                 const mode = playMode();
                 const radio = app.radio && app.radio.list === app.currentFilteredTracks ? app.radio.label : '';
-                const name = radio || app.filteredPlaylistSource?.name || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
+                const name = radio || (app.playbackSourceName ? app.playbackSourceName() : app.filteredPlaylistSource?.name) || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
                 const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
                 push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
                 up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
@@ -1300,7 +1309,7 @@
         let prebuilt = null;
         let prebuildTimer = 0;
         const queueSig = () => [currentTrack()?.path, app.currentFilteredTracks, app.currentFilteredTracks?.length,
-            app.filteredPlaylistSource, app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
+            app.filteredPlaylistSource, app.playbackSourceName?.(), app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
         const prebuiltFresh = () => Boolean(prebuilt) && performance.now() - prebuilt.at < 8000
             && queueSig().every((value, index) => value === prebuilt.sig[index]);
         const schedulePrebuild = () => {
@@ -1664,6 +1673,7 @@
             state.panelOpen = false;
             closePop();
             syncFx(false);
+            syncMoved(false);
             el.pnl.classList.remove('md-open');
             el.pnl.setAttribute('aria-hidden', 'true');
             el.hdl.classList.remove('md-open');
@@ -1890,6 +1900,28 @@
             if (inDrawer) el.fxScroll.appendChild(dspCard);
             else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
+        // 音效卡里有三个开关和声音无关：「放完接着放相似的歌」归到控制页新开的「播放」组，「桌面歌词」「旧版界面（原版）」
+        // 归到「显示」组。控制页开着时把这三行原样搬进来（appendChild，id、事件、设置键都不变），离开控制页或关面板就放回原处，
+        // 所以经典视图里的音效卡照旧完整；抽屉声音页里由 CSS 不再显示这三行。
+        // var：renderBody 可能在这里之前就被调用（预画），那时还没收集到这三行，直接跳过即可。
+        var movedRows = [['autoplay-switch', 'play'], ['desktop-lyrics-switch', 'disp'], ['legacy-ui-switch', 'disp']]
+            .map(([id, where]) => {
+                const item = document.getElementById(id)?.closest('.setting-item');
+                return item ? { item, where, parent: item.parentNode, next: item.nextSibling } : null;
+            }).filter(Boolean);
+        var movedIn = false;
+        function syncMoved(show) {
+            if (!movedRows) return;
+            show = Boolean(show && state.panelOpen);
+            if (show === movedIn) return;
+            movedIn = show;
+            for (const row of movedRows) {
+                if (show) (row.where === 'play' ? el.playSlot : el.dispSlot).appendChild(row.item);
+                else if (row.parent) row.parent.insertBefore(row.item, row.next && row.next.parentNode === row.parent ? row.next : null);
+            }
+            el.playSec.hidden = !(show && movedRows.some((row) => row.where === 'play'));
+        }
+        cleanups.push(() => syncMoved(false));
         // 「音效设置」原来是抽屉里的子页，现在就是声音页；这两个名字留给命令面板和外面的调用。
         function openSheet() { openPanel('声音'); }
         function closeSheet() { syncFx(false); }
@@ -1907,6 +1939,25 @@
             else if (state.scenesOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
+        // 抽屉开着时 Tab 在抽屉里转一圈（内容 → 页签 → 关闭钮 → 回到内容）。
+        // 页签排在抽屉最后，以前从页签再按 Tab 就跑到抽屉后面的档案页去了，抽屉还开着，焦点却看不见。
+        const panelStops = () => {
+            const inPanel = [...el.pnl.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')]
+                .filter((n) => n.tabIndex >= 0 && !n.disabled && !n.closest('[hidden], [inert], [aria-hidden="true"]')
+                    && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden');
+            return el.handle && el.handle.getClientRects().length ? inPanel.concat(el.handle) : inPanel;
+        };
+        listen(document, 'keydown', (event) => {
+            if (event.key !== 'Tab' || event.defaultPrevented || !state.panelOpen || event.altKey || event.ctrlKey || event.metaKey) return;
+            const active = document.activeElement;
+            if (!active || !(el.pnl.contains(active) || el.hdl.contains(active))) return;
+            const stops = panelStops();
+            if (!stops.length) return;
+            const at = stops.indexOf(active);
+            const next = at === -1 ? stops[0] : stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length];
+            event.preventDefault();
+            next.focus({ preventScroll: false });
+        });
 
         // ───────── 状态订阅 ─────────
         const observers = [];
@@ -2162,6 +2213,20 @@
                 cleanups.push(() => { if (app.showPlaybackNotice !== baseNotice) app.showPlaybackNotice = baseNotice; });
             }
             const bridge = app.api;
+            // 扫描结束的那句话。扫描本身失败时以前也说「扫描完成，没有找到音乐文件」，
+            // 像是文件夹空了；读不出来的文件也一声不吭地少了。
+            const scanOutcomeToast = (data) => {
+                if (data && data.failed) {
+                    const reason = (global.MusicErrorText || ((m, f) => f))(data.error, '').replace(/^：/, '');
+                    return { kind: 'error', message: `扫描没有完成${reason ? `（${reason}）` : ''}，曲库保持原样` };
+                }
+                const count = Array.isArray(data) ? data.length : (Array.isArray(data?.tracks) ? data.tracks.length : 0);
+                const unread = Number(data?.stats?.failed) || 0;
+                const skipped = unread ? `，另有 ${unread} 个文件读不出来（可能损坏或格式不支持），已跳过` : '';
+                if (!count) return { kind: unread ? 'error' : 'success', message: unread ? `扫描完成，没有读出音乐文件${skipped}` : '扫描完成，没有找到音乐文件' };
+                return { kind: 'success', message: `扫描完成，这个文件夹里有 ${count} 首${skipped}` };
+            };
+            app.scanOutcomeToast = scanOutcomeToast;
             if (bridge?.onMusicScanProgress) {
                 bridge.onMusicScanStart?.(() => {
                     if (!state.destroyed) toast.show({ id: 'scan', kind: 'progress', message: '正在扫描音乐文件夹…', delay: 300 });
@@ -2174,9 +2239,8 @@
                 });
                 bridge.onMusicScanComplete?.((data) => {
                     if (state.destroyed) return;
-                    const count = Array.isArray(data) ? data.length : (Array.isArray(data?.tracks) ? data.tracks.length : 0);
                     toast.dismiss('scan');
-                    toast.show({ kind: 'success', message: count ? `扫描完成，这个文件夹里有 ${count} 首` : '扫描完成，没有找到音乐文件' });
+                    toast.show(scanOutcomeToast(data));
                 });
             }
         }

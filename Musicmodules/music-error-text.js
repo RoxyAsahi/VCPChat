@@ -14,6 +14,8 @@
         [/fetch failed|network|ERR_INTERNET_DISCONNECTED|ECONNRESET/i, '网络连接出错'],
         [/ENOENT|no such file/i, '找不到这个文件'],
         [/EACCES|EPERM|permission denied/i, '没有权限读写这个文件'],
+        [/ENOSPC|no space left/i, '磁盘空间不够'],
+        [/EBUSY|resource busy|locked/i, '文件被别的程序占用'],
     ];
 
     function errorText(err, fallback = '出错了') {

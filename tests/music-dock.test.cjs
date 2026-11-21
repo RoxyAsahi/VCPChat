@@ -190,6 +190,46 @@ test('command palette parses --filters and ranks title hits above artist hits', 
     dom.window.close();
 });
 
+test('Tab stays inside the open panel: from the tabs it wraps to the close button and back into the panel', async () => {
+    const { window, doc, dock } = setup((app, win) => { win.Element.prototype.getClientRects = function () { return [{}]; }; });
+    try {
+        dock.openPanel('控制');
+        const tab = doc.querySelector('[data-md="tabs"] [aria-selected="true"]');
+        assert.equal(doc.activeElement, tab, 'opening focuses the current tab');
+        const press = (shiftKey = false) => {
+            const event = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+            doc.activeElement.dispatchEvent(event);
+            return event.defaultPrevented;
+        };
+        assert.equal(press(), true);
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '关闭面板', 'after the tabs comes the close button, not the page behind');
+        press();
+        const pnl = doc.getElementById('music-dock-panel');
+        assert.ok(pnl.contains(doc.activeElement), 'then back to the top of the panel');
+        press(true);
+        assert.equal(doc.activeElement.getAttribute('aria-label'), '关闭面板');
+        dock.closePanel?.();
+    } finally {
+        dock.destroy?.();
+    }
+});
+
+test('queue heading uses the playing playlist\'s current name after it is renamed', async () => {
+    const { doc, app, dock } = setup();
+    try {
+        const [, b] = app.playlist;
+        app.getUpNext = () => ({ manual: [], context: [b] });
+        app.currentFilteredTracks = [b];
+        app.filteredPlaylistSource = { type: 'playlist', id: '7', name: '通勤' };
+        app.customPlaylists = [{ id: '7', name: '早上通勤', tracks: [b.path] }];
+        app.playbackSourceName = () => app.customPlaylists.find((p) => p.id === app.filteredPlaylistSource.id)?.name || app.filteredPlaylistSource.name;
+        dock.openPanel('播放列表');
+        assert.equal(doc.querySelector('.md-qhd span:first-child').textContent, '接着播放 · 早上通勤');
+    } finally {
+        dock.destroy?.();
+    }
+});
+
 test('queue page shows now playing, the manual layer and the real upcoming order, and edits the manual layer', async () => {
     const { window, doc, app, dock, calls } = setup();
     try {
@@ -930,4 +970,36 @@ test('without a sleep timer the control page keeps two tiles and the bar has no 
         dock?.destroy?.();
         window.close();
     }
+});
+
+test('non-sound switches live on the control page: autoplay in 播放, desktop lyrics and the old-UI switch in 显示; they go back to the sound card when the page closes', () => {
+    const rows = ['autoplay-switch', 'desktop-lyrics-switch', 'legacy-ui-switch'];
+    const { window, doc, dock } = setup((app, win) => {
+        const dsp = win.document.getElementById('dsp');
+        dsp.innerHTML = '<div class="settings-block"><div class="setting-item"><label for="exclusive-switch">独占模式</label><input type="checkbox" id="exclusive-switch"></div>'
+            + rows.map((id) => `<div class="setting-item toggle-item"><label for="${id}">${id}</label><label class="switch compact"><input type="checkbox" id="${id}"><span class="slider round"></span></label></div>`).join('')
+            + '</div>';
+    });
+    try {
+        const legacy = doc.getElementById('legacy-ui-switch');
+        let toggled = 0;
+        legacy.addEventListener('change', () => { toggled++; });
+        dock.openPanel('控制');
+        const ext = doc.querySelector('#music-dock-root [data-md="ext"]');
+        assert.ok(ext.contains(legacy), 'the old-UI switch is on the control page');
+        assert.ok(doc.querySelector('#music-dock-root [data-md="disp-slot"]').contains(legacy));
+        assert.ok(doc.querySelector('#music-dock-root [data-md="play-slot"]').contains(doc.getElementById('autoplay-switch')));
+        assert.equal(doc.querySelector('#music-dock-root [data-md="play-sec"]').hidden, false);
+        legacy.click();
+        assert.equal(legacy.checked, true);
+        assert.equal(toggled, 1, 'same node, same listeners');
+        dock.openPanel('声音');
+        const dsp = doc.getElementById('dsp');
+        for (const id of rows) assert.ok(dsp.contains(doc.getElementById(id)), `${id} back in the sound card`);
+        assert.ok(dsp.contains(doc.getElementById('exclusive-switch')));
+        dock.openPanel('控制');
+        dock.closePanel();
+        for (const id of rows) assert.ok(dsp.contains(doc.getElementById(id)), `${id} back after closing`);
+        assert.equal(legacy.checked, true, 'state survives the moves');
+    } finally { dock.destroy(); }
 });

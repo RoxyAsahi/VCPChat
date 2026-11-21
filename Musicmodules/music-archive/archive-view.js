@@ -1873,7 +1873,12 @@
                 getRecent: recentIndices, durationOf,
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
-                onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
+                onPlaylistsChanged: () => {
+                    warming = null; rebuild({ steady: true });
+                    // 正在放的歌单改了名：底栏「正在播放」后面的名字跟着改
+                    const playing = app.filteredPlaylistSource;
+                    if (playing && playing.type === 'playlist' && app.playbackSourceName) setQueueName(app.playbackSourceName(playing));
+                },
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
                 onResults: (q, n, first) => {
                     searchCtx = q ? { q, n } : null;

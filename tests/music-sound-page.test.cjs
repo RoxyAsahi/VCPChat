@@ -64,3 +64,29 @@ test('noise shaper curves and bit depth read in words; 24-bit is the default lik
     for (const cryptic of ['>F-W<', '>Mod E<', '>Imp E<']) assert.ok(!curve.includes(cryptic), cryptic);
     assert.match(html, /<option value="24" selected>24-bit<\/option>/);
 });
+
+test('cancelling the IR file picker leaves the switch off when nothing is loaded', async () => {
+    const { app } = effects({
+        irSwitch: { checked: true }, irPresetSelect: { value: 'custom' }, irLoadBtn: { style: { display: 'block' } },
+        api: { selectMusicIrFile: async () => null }
+    });
+    await app.pickIrFile();
+    assert.equal(app.irSwitch.checked, false, 'switch shows off: no IR is running');
+    assert.equal(app.irPresetSelect.value, '', 'the list does not stay on 自定义 with nothing chosen');
+    assert.equal(app.irLoadBtn.style.display, 'none');
+});
+
+test('cancelling the IR file picker keeps an IR that is already loaded', async () => {
+    const { app } = effects({
+        irSwitch: { checked: true }, irPresetSelect: { value: 'hall' }, irLoadBtn: { style: {} },
+        api: { selectMusicIrFile: async () => null }
+    });
+    app.irLoadedPath = 'C:/ir/hall.wav';
+    await app.pickIrFile();
+    assert.equal(app.irSwitch.checked, true);
+    assert.equal(app.irPresetSelect.value, 'hall');
+});
+
+test('the IR button goes through pickIrFile', () => {
+    assert.match(musicJs, /app\.irLoadBtn\.onclick = \(\) => app\.pickIrFile\(\);/);
+});

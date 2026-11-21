@@ -1178,3 +1178,11 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
 :is(.music-modal-overlay, .dialog-overlay) :is(input, button, textarea, select) { font-family: inherit; }
 /* 添加服务器：字段名写在框上面，输进内容后也看得到这一格是什么 */
 #webdav-server-dialog .music-field-label { display: block; margin: 0 0 4px 2px; color: var(--mf-ink2); font-size: 12px; text-align: left; }
+
+/* 声音页里不再显示和声音无关的三行（它们在控制页「播放」「显示」组里；离开控制页时放回音效卡，只为经典视图） */
+#music-dock-root [data-md="fx-scroll"] .setting-item:has(#autoplay-switch, #desktop-lyrics-switch, #legacy-ui-switch) { display: none !important; }
+/* 搬到控制页的开关行：和控制页别的行同样的左右内边距；功能不可用时（hidden）照旧藏起来 */
+#music-dock-root .md-moved { padding: 0; }
+#music-dock-root .md-moved .setting-item[hidden] { display: none !important; }
+#music-dock-root .md-moved .setting-item { min-height: 44px; padding: 6px 4px !important; }
+#music-dock-root .md-play-grp { margin-bottom: 4px; }
