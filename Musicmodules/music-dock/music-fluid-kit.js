@@ -535,12 +535,17 @@
         { s: '.archive-brand > div', in: '.archive-brand', font: true },
         { s: '.archive-brand-play', in: '.archive-brand' },
         { s: '.archive-brand-resume', in: '.archive-brand' },
-        { s: '.archive-counter' },
+        { s: '.archive-counter', in: '.archive-bottom' },
         { s: '.archive-callout' },
         { s: '.archive-nav' },
         { s: '.archive-bottom' },
         { s: '.archive-list' },
-        { s: '.archive-list-foot', in: '.archive-list' }
+        { s: '.archive-list-foot', in: '.archive-list' },
+        { s: '.archive-cover', in: '.archive-callout' },
+        { s: '.archive-detail' },
+        { s: '.archive-rows', in: '.archive-bottom' },
+        { s: '.archive-lanes', in: '.archive-bottom' },
+        { s: '.archive-footer', in: '.archive-bottom' }
     ];
     const watchHud = () => {
         const doc = global.document;
@@ -549,7 +554,11 @@
         const attach = () => {
             const hud = doc.querySelector('#music-archive-view .archive-hud');
             if (!hud) { if (++tries < 60) global.setTimeout(attach, 500); return; }
-            let open = hud.classList.contains('list-open');
+            // 目录开合、设置抽屉让位（首页整层变窄、可能换档）都会让这些块跳到新位置：
+            // 记一个「排版档位」的指纹，变了才补过渡；窗口拖边改大小没有按键，不会触发。
+            const layoutKey = () => ['list-open', 'narrow', 'mid', 'squeeze', 'tiny', 'beside-drawer']
+                .map((c) => (hud.classList.contains(c) ? c : '')).join('|') + '|' + hud.style.width;
+            let open = layoutKey();
             let before = null;
             const measure = () => {
                 const out = new Map();
@@ -565,10 +574,11 @@
             };
             // 开合都是由一次按键或点击触发的：在它的处理函数之前（捕获阶段）先记下旧位置
             const remember = () => { if (enabled()) before = { at: Date.now(), map: measure() }; };
-            doc.addEventListener('pointerdown', remember, true);
-            doc.addEventListener('keydown', remember, true);
+            // 挂在 window 的捕获阶段：底栏在 document 上处理 Esc 时会同步收抽屉，首页随即重排，挂 document 上就晚了一步
+            global.addEventListener('pointerdown', remember, true);
+            global.addEventListener('keydown', remember, true);
             new global.MutationObserver(() => {
-                const now = hud.classList.contains('list-open');
+                const now = layoutKey();
                 if (now === open) return;
                 open = now;
                 const first = before && Date.now() - before.at < 1500 ? before.map : null;
@@ -588,7 +598,7 @@
                     if (!from) {
                         // 新出现的：从左边一点点淡入（嵌在别的块里的不单独动，跟着外层）
                         if (!t.in || !last.get(t.in) || first.get(t.in)) {
-                            to.el.animate([{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: ease });
+                            to.el.animate([{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: ease, composite: 'add' });
                         }
                         continue;
                     }
@@ -599,9 +609,9 @@
                     to.el.animate([
                         { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${k})` },
                         { transformOrigin: '0 0', transform: 'none' }
-                    ], { duration: 520, easing: ease });
+                    ], { duration: 520, easing: ease, composite: 'add' }); // 叠在块自己的 transform 上（底部一排有让底栏的上移），结束时不跳
                 }
-            }).observe(hud, { attributes: true, attributeFilter: ['class'] });
+            }).observe(hud, { attributes: true, attributeFilter: ['class', 'style'] });
         };
         attach();
     };
