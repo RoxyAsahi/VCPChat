@@ -823,3 +823,17 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 body.music-reduce-motion .archive-list-name { animation: none; }
 body.music-reduce-motion .archive-list-group .gplay:active { transform: none; }
 #music-archive-view .archive-list-name:is(:focus, :focus-visible):not(#messageInput) { outline: none; }
+
+/* ───────── 底栏和队列里还没回弹的小按钮 ─────────
+ * 上一首/下一首小箭头、「接下来」两首的歌名、队列行尾的 ×、「清空」：都换成同一条按下压扁、松手回弹的曲线。
+ * × 和「清空」改成圆的，和别处的玻璃按钮一致。 */
+#music-dock-root .md-arw { transition: opacity .2s, background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-arw:active { transform: scale(.8); transition-duration: .1s; }
+#music-dock-root .md-nxb { transition: opacity .3s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-nxb:active { transform: scale(.95, .9); transition-duration: .1s; }
+#music-dock-root .md-qx { border-radius: 9999px; transition: opacity .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-qx:hover { background: var(--mf-hover); }
+#music-dock-root .md-qx:active { transform: scale(.8); transition-duration: .1s; }
+#music-dock-root .md-qclr { border-radius: 9999px; padding: 0 9px; transition: color .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-qclr:active { transform: scale(.9, .84); transition-duration: .1s; }
+body.music-reduce-motion #music-dock-root :is(.md-arw, .md-nxb, .md-qx, .md-qclr):active { transform: none; }
