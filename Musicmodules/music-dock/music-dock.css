@@ -1714,3 +1714,5 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
   visibility: hidden;
   pointer-events: none;
 }
+/* 空闲预热那一下（music-dock.js warmFx）：照常算样式和排版，但仍不占地方、看不见 */
+#music-dock-root .md-fx-sc.md-fx-park.md-fx-warm { content-visibility: visible; }
