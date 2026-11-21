@@ -70,7 +70,7 @@
             const columns = width < 600 ? 2 : width < 1100 ? 3 : 4;
             // Columns about a dozen glyphs wide, so the page reads as a dense
             // article with the neighbouring lines in view, not one line adrift.
-            const columnWidth = clamp(width * 0.24, 240, 320);
+            const columnWidth = clamp(width * 0.24, 260, 320);
             const gap = 18 * spacing;
             paperWidth = columns * columnWidth + (columns - 1) * gap;
             const skyline = Array(columns).fill(0);
