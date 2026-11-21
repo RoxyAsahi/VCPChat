@@ -278,7 +278,7 @@ function setupPlayer(app) {
 
         const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
         if (track.albumArt) {
-            const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+            const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
             app.albumArt.style.backgroundImage = albumArtUrl;
             app.updateBlurredBackground(albumArtUrl);
         } else {
@@ -1142,7 +1142,7 @@ function setupPlayer(app) {
             
             const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
             if (track.albumArt) {
-                const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+                const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
                 app.albumArt.style.backgroundImage = albumArtUrl;
                 app.updateBlurredBackground(albumArtUrl);
             } else {
@@ -1197,7 +1197,7 @@ function setupPlayer(app) {
                     
                     const defaultArtUrl = `url('../assets/${app.currentTheme === 'light' ? 'musiclight.jpeg' : 'musicdark.jpeg'}')`;
                     if (track.albumArt) {
-                        const albumArtUrl = `url('file://${track.albumArt.replace(/\\/g, '/')}')`;
+                        const albumArtUrl = `url("${app.fileUrl(track.albumArt)}")`;
                         app.albumArt.style.backgroundImage = albumArtUrl;
                         app.updateBlurredBackground(albumArtUrl);
                     } else {

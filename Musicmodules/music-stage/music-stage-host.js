@@ -8,7 +8,12 @@
 
     const { clamp, DisposableScope } = Runtime;
 
-    const fileUrl = (path) => path ? `file://${String(path).replace(/\\/g, '/')}` : '';
+    // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
+    const fileUrl = (path) => {
+        if (!path) return '';
+        const p = String(path).replace(/\\/g, '/');
+        return 'file://' + encodeURI(p.startsWith('/') ? p : '/' + p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    };
 
     const resolveThemeAssetValue = (value) => {
         if (typeof value !== 'string' || !value.includes('url(')) return value;
