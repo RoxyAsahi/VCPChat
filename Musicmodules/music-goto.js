@@ -2,6 +2,7 @@
 // 右键「转到歌手 / 转到专辑」：主流播放器的右键菜单都有，从一首歌直接跳到它所在的那一组。
 // 落点是档案页目录：换到「歌手」或「专辑」分类，把这一组顶到最上面并选中这首。
 // 只在档案页（不在舞台、不在经典视图）显示；曲目没有歌手或专辑信息时对应那一项隐藏。
+// 另有「复制歌名」（歌名 - 歌手），任何视图都显示。
 
 (function (global) {
     'use strict';
@@ -12,6 +13,15 @@
     ];
 
     const fieldOf = (track, kind) => String((track && track[kind]) || '').trim();
+
+    /* 复制出去的文字：「歌名 - 歌手」，没有歌手就只有歌名；去掉文件扩展名 */
+    function copyText(app, track) {
+        if (!track) return '';
+        const raw = String(track.title || '').trim();
+        const title = app.stripAudioExtension ? app.stripAudioExtension(raw) : raw.replace(/\.[a-z0-9]{2,4}$/i, '');
+        const artist = fieldOf(track, 'artist');
+        return title ? (artist ? `${title} - ${artist}` : title) : '';
+    }
 
     function archiveReady(app) {
         const view = app.archiveView;
@@ -54,6 +64,25 @@
             return { kind, label, item };
         });
 
+        // 「复制歌名」：歌名 - 歌手，分享给别人或贴进搜索框用；任何视图都有
+        const copy = doc.createElement('div');
+        copy.className = 'context-menu-item';
+        copy.dataset.action = 'copy-title';
+        copy.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" fill="currentColor"/></svg><span>复制歌名</span>';
+        if (after && after.parentNode === menu) menu.insertBefore(copy, after.nextSibling); else menu.appendChild(copy);
+        copy.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const track = app.playlist?.[app.contextMenuTrackIndex];
+            menu.classList.remove('visible');
+            const text = copyText(app, track);
+            if (!text) return;
+            const done = () => { try { global.MusicToast?.show?.({ message: `已复制「${text}」` }); } catch (err) { /* 没有提示层 */ } };
+            try {
+                const p = global.navigator?.clipboard?.writeText?.(text);
+                if (p && typeof p.then === 'function') p.then(done, () => {}); else done();
+            } catch (err) { /* 剪贴板不可用 */ }
+        });
+
         const paint = () => {
             const track = app.playlist?.[app.contextMenuTrackIndex];
             const ready = Boolean(archiveReady(app));
@@ -69,5 +98,5 @@
     }
 
     global.setupMusicGoto = setupMusicGoto;
-    if (typeof module !== 'undefined' && module.exports) module.exports = { setupMusicGoto };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { setupMusicGoto, copyText };
 })(typeof window !== 'undefined' ? window : globalThis);
