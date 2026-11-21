@@ -25,6 +25,8 @@ module.exports = {
         getCustomPlaylists: invoke('get-custom-playlists'),
         saveCustomPlaylists: invoke('save-custom-playlists', 'playlists'),
         addMusicFolder: invoke('music-add-folder'),
+        // 拖进音乐窗口的本地文件/文件夹路径；结果照常经 music-scan-* 送回
+        addMusicPaths: invoke('music-add-paths', 'paths'),
         shareMusicTrack: invoke('music-share-track', 'trackPath'),
         onMusicFiles: on('music-files'),
         onMusicScanStart: on('music-scan-start'),

@@ -3,7 +3,7 @@
 const { ipcMain, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
-const { scanFolder } = require('../musicLibraryScanner');
+const { scanFolder, SUPPORTED_FORMATS } = require('../musicLibraryScanner');
 const lyricFetcher = require('../lyricFetcher'); // Import the new lyric fetcher
 const webdavManager = require('../webdavManager'); // WebDAV support
 const windowService = require('../services/windowService');
@@ -224,6 +224,45 @@ async function followTrackChange(state) {
         album: String(info.album || '').slice(0, 512) || '未知专辑',
         path: trackPath
     };
+}
+
+// 扫一个文件夹（或几首单曲），把进度和结果发回发起的窗口。只给 filePaths 时 folderPath 为空：
+// 窗口收到后只加不删（不会把「没扫到」的歌当成被删了）。
+async function runLibraryScan(event, { folderPath = null, filePaths } = {}) {
+    const sendToRequester = (channel, payload) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+            event.sender.send(channel, payload);
+        }
+    };
+
+    // 窗口在扫描中途关掉就停下，不替一个已经不在的窗口把整个文件夹读完。
+    const abort = new AbortController();
+    const onGone = () => abort.abort();
+    event.sender.once('destroyed', onGone);
+
+    try {
+        // 上次保存的歌单里带着文件大小和修改时间；没动过的文件不用再读一遍。
+        const knownTracks = await readPlaylistFile();
+        const scanned = await scanFolder({
+            folderPath,
+            filePaths,
+            coverCachePath: MUSIC_COVER_CACHE_DIR,
+            knownTracks,
+            signal: abort.signal,
+            onStart: (info) => sendToRequester('music-scan-start', info),
+            onProgress: (info) => sendToRequester('music-scan-progress', info),
+            onBatch: (tracks) => sendToRequester('music-scan-batch', { tracks, folderPath })
+        });
+        console.log(`[Music] Scan of ${folderPath || `${filePaths?.length || 0} files`}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
+        if (!scanned.stats.aborted) {
+            sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
+        }
+    } catch (err) {
+        console.error("Error during music scan:", err);
+        sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
+    } finally {
+        if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
+    }
 }
 
 // --- Playlist file helpers ---
@@ -824,40 +863,23 @@ function initialize(options) {
                 return;
             }
 
-            const folderPath = result.filePaths[0];
-            const sendToRequester = (channel, payload) => {
-                if (event.sender && !event.sender.isDestroyed()) {
-                    event.sender.send(channel, payload);
-                }
-            };
+            await runLibraryScan(event, { folderPath: result.filePaths[0] });
+        });
 
-            // 窗口在扫描中途关掉就停下，不替一个已经不在的窗口把整个文件夹读完。
-            const abort = new AbortController();
-            const onGone = () => abort.abort();
-            event.sender.once('destroyed', onGone);
-
-            try {
-                // 上次保存的歌单里带着文件大小和修改时间；没动过的文件不用再读一遍。
-                const knownTracks = await readPlaylistFile();
-                const scanned = await scanFolder({
-                    folderPath,
-                    coverCachePath: MUSIC_COVER_CACHE_DIR,
-                    knownTracks,
-                    signal: abort.signal,
-                    onStart: (info) => sendToRequester('music-scan-start', info),
-                    onProgress: (info) => sendToRequester('music-scan-progress', info),
-                    onBatch: (tracks) => sendToRequester('music-scan-batch', { tracks, folderPath })
-                });
-                console.log(`[Music] Scan of ${folderPath}: ${scanned.stats.total} files, ${scanned.stats.parsed} read, ${scanned.stats.reused} unchanged, ${scanned.stats.failed} failed, ${scanned.stats.elapsedMs} ms`);
-                if (!scanned.stats.aborted) {
-                    sendToRequester('music-scan-complete', { tracks: scanned.tracks, folderPath });
-                }
-            } catch (err) {
-                console.error("Error during music scan:", err);
-                sendToRequester('music-scan-complete', { tracks: [], folderPath, failed: true });
-            } finally {
-                if (!event.sender.isDestroyed()) event.sender.removeListener('destroyed', onGone);
+        // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
+        ipcMain.handle('music-add-paths', async (event, paths) => {
+            if (!Array.isArray(paths)) return { added: 0 };
+            const folders = [];
+            const files = [];
+            for (const raw of paths.slice(0, 2000)) {
+                if (typeof raw !== 'string' || !path.isAbsolute(raw)) continue;
+                const stat = await fs.stat(raw).catch(() => null);
+                if (stat?.isDirectory()) folders.push(raw);
+                else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
+            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
+            if (files.length) await runLibraryScan(event, { filePaths: files });
+            return { folders: folders.length, files: files.length };
         });
 
         ipcMain.handle('get-music-playlist', () => readPlaylistFile());

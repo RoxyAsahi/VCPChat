@@ -1,6 +1,7 @@
 /*
  * Files dragged in from the file manager must not make the music window navigate
- * away to that file: dragover and drop of Files are cancelled, internal drags are not.
+ * away to that file: dragover and drop of Files are cancelled, internal drags are not,
+ * and the dropped files are handed to the library by path.
  *
  *   node tests/music-window-bench/file-drop.cjs
  */
@@ -23,6 +24,8 @@ const FAKE = () => {
         musicLoad: async (t) => { state.file_path = t.path; return { status: 'success', state: { ...state } }; },
         saveMusicPlaylist: async (p) => { w.__saved = p.map((t) => t.path); return { success: true }; },
         getMusicLyrics: async () => null,
+        getPathForFile: (file) => 'C:\\Drop\\' + file.name,
+        addMusicPaths: async (paths) => { w.__added = paths; return { files: paths.length }; },
         onMusicScanBatch: (fn) => { (w.__batches ||= []).push(fn); w.__batch = (d) => w.__batches.forEach((f) => f(d)); return () => {}; },
         onMusicScanComplete: (fn) => { (w.__completes ||= []).push(fn); w.__complete = (d) => w.__completes.forEach((f) => f(d)); return () => {}; }
     };
@@ -50,12 +53,13 @@ const FAKE = () => {
             document.body.dispatchEvent(ev);
             return ev.defaultPrevented;
         };
-        return { fileOver: fire('dragover', true), fileDrop: fire('drop', true), rowOver: fire('dragover', false) };
+        return { fileOver: fire('dragover', true), fileDrop: fire('drop', true), rowOver: fire('dragover', false), added: window.__added || null };
     });
     const checks = [
         ['file dragover is cancelled', r.fileOver],
         ['file drop is cancelled (no navigation)', r.fileDrop],
         ['internal drags are left to their own handlers', !r.rowOver],
+        ['dropped files are added to the library by path', JSON.stringify(r.added) === JSON.stringify(['C:\\Drop\\song.mp3'])],
         ['no page errors', errors.length === 0]
     ];
     for (const [name, ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);
