@@ -4311,6 +4311,7 @@
             reset,
             setPalette,
             setCoverColour: hex => cover.set(hex),
+            redrawLyric: () => { glyphCacheKey = ''; },
             coverSettling: () => cover.settling(),
             prepare,
             update,
@@ -4655,6 +4656,11 @@
         mode.updateConfig = (config) => {
             // A tier picked by hand starts the automatic stepping down afresh.
             if (config?.quality !== mode.config.quality) renderScale.reset();
+            // The sung line is only rebuilt when the line changes; a new size,
+            // face or translation choice must redraw the one on screen now.
+            const before = mode.config.modes?.tunnel || {};
+            const after = config?.modes?.tunnel || {};
+            if (['fontScale', 'lyricFont', 'showTranslation'].some(key => before[key] !== after[key])) world?.redrawLyric?.();
             baseConfig(config);
             // The canvas is antialiased only when the lens is off; that is fixed
             // when the context is made, so a change of tier rebuilds it.

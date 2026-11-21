@@ -2382,6 +2382,11 @@ body.light-theme .music-stage-settings-card {
     margin-top: 15px;
 }
 
+/* A setting that only acts under another setting's current choice. */
+.music-stage-tuning-row[hidden] {
+    display: none !important;
+}
+
 .music-stage-tuning-row {
     display: grid;
     grid-template-columns: minmax(90px, 1fr) auto;
@@ -3167,7 +3172,9 @@ body.light-theme .music-stage-settings-card option {
 .fume-article-heading {
     position: absolute;
     top: 12%;
-    left: 8%;
+    right: 8%;
+    /* Right side: the track card owns the top-left corner. */
+    text-align: right;
     color: color-mix(in srgb, var(--stage-ink) 40%, transparent);
     font: 600 9px/1.4 Consolas, monospace;
     letter-spacing: .22em;

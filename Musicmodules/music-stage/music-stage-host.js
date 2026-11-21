@@ -141,10 +141,10 @@
             { key: 'cameraSoftness', label: '镜头平缓度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'cameraRoll', label: '镜头侧倾', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'lyricLayout', label: '歌词构图', type: 'select', options: [['lines', '整句分行'], ['phrases', '短语分组'], ['staircase', '阶梯短语'], ['editorial-track', '纵横连续版轨'], ['starbloom', '繁星如盛']] },
-            { key: 'trackVerticalChance', label: '版轨纵排概率', type: 'range', min: 0.1, max: 0.9, step: 0.05, unit: '%' },
-            { key: 'trackJunction', label: '版轨交错幅度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'trackLookAhead', label: '镜头提前看下一段', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'trackMinSegment', label: '换栏最短字数', type: 'range', min: 2, max: 8, step: 1, unit: '字' },
+            { key: 'trackVerticalChance', label: '版轨纵排概率', type: 'range', min: 0.1, max: 0.9, step: 0.05, unit: '%', onlyWhen: ['lyricLayout', ['editorial-track']] },
+            { key: 'trackJunction', label: '版轨交错幅度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%', onlyWhen: ['lyricLayout', ['editorial-track']] },
+            { key: 'trackLookAhead', label: '镜头提前看下一段', type: 'range', min: 0, max: 1, step: 0.05, unit: '%', onlyWhen: ['lyricLayout', ['editorial-track']] },
+            { key: 'trackMinSegment', label: '换栏最短字数', type: 'range', min: 2, max: 8, step: 1, unit: '字', onlyWhen: ['lyricLayout', ['editorial-track']] },
             { key: 'phraseLength', label: '短语目标字数', type: 'range', min: 6, max: 24, step: 1, unit: '字' },
             { key: 'phraseEmphasis', label: '短语聚光', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'cameraTracking', label: '逐词追焦', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -542,6 +542,16 @@
             const modeMeta = Config.modes.find((entry) => entry.id === state.modeId);
             if (elements.settingsHint) elements.settingsHint.textContent = modeMeta?.description || '';
             const tuningFragment = document.createDocumentFragment();
+            // Settings that only act under one choice of another setting (the
+            // editorial-track knobs, say) are hidden while that choice is off,
+            // so no slider in the list moves without changing anything.
+            const tuningDependents = [];
+            const syncTuningDependents = () => {
+                const current = state.config.modes?.[state.modeId] || {};
+                tuningDependents.forEach(({ row, when: [key, values] }) => {
+                    row.hidden = !values.includes(current[key]);
+                });
+            };
             (tuningDefinitions[state.modeId] || []).forEach((definition) => {
                 const value = config.modes[state.modeId]?.[definition.key];
                 const row = createElement('label', 'music-stage-tuning-row');
@@ -576,6 +586,7 @@
                 }
                 control.dataset.stageConfigKey = definition.key;
                 control.dataset.stageConfigType = definition.type;
+                if (definition.onlyWhen) tuningDependents.push({ row, when: definition.onlyWhen });
                 const handleControlChange = () => {
                     const next = definition.type === 'toggle'
                         ? control.checked
@@ -586,6 +597,7 @@
                     editingSettings = true;
                     try { Config.setModePatch(state.modeId, { [definition.key]: next }); }
                     finally { editingSettings = false; }
+                    syncTuningDependents();
                 };
                 control.addEventListener('input', handleControlChange);
                 control.addEventListener('change', handleControlChange);
@@ -593,6 +605,7 @@
                 tuningFragment.appendChild(row);
             });
             elements.tuningControls.replaceChildren(tuningFragment);
+            syncTuningDependents();
 
             const commonFragment = document.createDocumentFragment();
             const edgeRow = createElement('label', 'music-stage-tuning-row');
