@@ -2799,7 +2799,7 @@
         }));
         const saloonMaterial = material(new T.ShaderMaterial({
             uniforms: { warm: glassMaterial.uniforms.warm, seat: glassMaterial.uniforms.seat,
-                sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway,
+                sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway, rain: cabinMood.rain,
                 detail: { value: detailAtlas },
                 sky: carHorizon, shadowInk: glassMaterial.uniforms.shadowInk, day: cabinDaylight, power: glassMaterial.uniforms.power,
                 boards: planks.map, boardsReady: planks.ready, cabReal, tailCab: { value: 0 } },
@@ -2821,7 +2821,7 @@
                     vNormal=nn;vPos=p;
                     vView=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz-p;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
-            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty,cabReal,tailCab;
+            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty,cabReal,tailCab,rain;
                 uniform sampler2D boards,detail;
                 varying float vPaint;varying vec3 vNormal,vPos,vView;
                 ${cabinLightFunctions}
@@ -3167,7 +3167,8 @@
                     vec3 lamp=light*(0.15*(1.0-0.6*sunset)+direct);
                     vec3 colour=c*lit*(fill+lamp)+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12)*(1.0-0.5*sunset);
                     colour=mix(colour,env+shine*light*0.5,chrome);
-                    float sun=sunPatch(vPos,n)*sunset;
+                    // Under rain cloud the low sun only just gets through.
+                    float sun=sunPatch(vPos,n)*sunset*(1.0-0.8*rain);
                     vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
                     colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
                     if(vPaint>4.5&&vPaint<6.5)colour=c*(1.0-0.6*sunset);
@@ -3345,7 +3346,7 @@
                 moonGlow: { value: 1 },
                 // The ride starts at dusk, the last of the sun going down behind
                 // the far peak, and drifts into a dream later on.
-                dusk: { value: 0 }, dream: { value: 0 },
+                dusk: { value: 0 }, dream: { value: 0 }, overcast: { value: 0 },
                 duskHigh: { value: new T.Color('#4a5878') }, sunset: { value: new T.Color('#c97a52') },
                 dreamTint: { value: new T.Color('#2a2350') },
                 sunDir: { value: new T.Vector3(Math.cos(PEAK.bearing + 0.03), 0, Math.sin(PEAK.bearing + 0.03)) },
@@ -3361,7 +3362,7 @@
             vertexShader: `varying vec3 ray;
                 void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
             fragmentShader: `varying vec3 ray;uniform vec3 night,horizon,cold,duskHigh,sunset,dreamTint,sunDir;
-                uniform float open,dusk,dream;
+                uniform float open,dusk,dream,overcast;
                 uniform vec3 moonDir,moonTint,glowTint;uniform float moonGlow,horizonGlow,accent;
                 uniform float auroraActive, auroraTime, auroraRhythm, auroraHeading;
                 uniform vec3 auroraGreen, auroraViolet;
@@ -3393,6 +3394,8 @@
                         float rose=(d.y-0.13)*8.0;
                         c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-rose*rose)*pow(toward,1.5)*dusk*0.3);
                     }
+                    // Rain cloud: the colour drains out of the sky and it closes in, darker overhead.
+                    c=mix(c,vec3(dot(c,vec3(0.3,0.55,0.15)))*mix(1.0,0.72,clamp(h*1.4,0.0,1.0)),overcast*0.7);
                     float across=dot(d,normalize(vec3(0.35,0.8,0.48)))-0.18;
                     float band=exp(-across*across*90.0);
                     float cloud=noise(d*12.0)*0.6+noise(d*33.0)*0.3+noise(d*91.0)*0.1;
@@ -4628,6 +4631,7 @@
             starGeo.setDrawRange(0, townLights + (saving ? 1500 : quality === 'ultimate' ? 8000 : 4000));
             skyMat.uniforms.open.value = pose.state.openness;
             const auroraEnabled = tuning.aurora !== false;
+            skyMat.uniforms.overcast.value = rainLevel;
             // The aurora only shows once the afterglow has nearly gone.
             skyMat.uniforms.auroraActive.value = auroraEnabled ? (1.0 - rainLevel * 0.95) * (1 - liveDusk) ** 3 * (1 + liveDream * 0.4) : 0.0;
             if (auroraTrack !== track) {
