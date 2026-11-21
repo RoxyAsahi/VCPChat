@@ -10,6 +10,20 @@ function setupUtils(app) {
         return title.replace(/\.(mp3|flac|wav|m4a|ogg|aac|wma|ape|dsf|dff|alac|aiff|opus|wv)$/i, '');
     };
 
+    // 列表搜索框和歌单编辑框共用的匹配：全角半角、大小写、合字统一（NFKC），标题去掉扩展名，
+    // 歌手和专辑也算；空格分开的几个词都要命中（顺序不限）。
+    const searchKey = (text) => String(text || '').normalize('NFKC').toLowerCase();
+    app.searchTracks = (tracks, query) => {
+        const words = searchKey(query).split(/\s+/).filter(Boolean);
+        const list = Array.isArray(tracks) ? tracks : [];
+        if (!words.length) return list;
+        return list.filter((t) => {
+            if (!t) return false;
+            const hay = searchKey(`${app.stripAudioExtension(t.title || '')}\n${t.artist || ''}\n${t.album || ''}`);
+            return words.every((w) => hay.includes(w));
+        });
+    };
+
     app.formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);

@@ -12,6 +12,7 @@ const path = require('path');
 const fsp = require('fs/promises');
 const os = require('os');
 const { Worker } = require('worker_threads');
+const { repairTrackTags } = require('./musicTagText');
 
 const SUPPORTED_FORMATS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a']);
 const WORKER_FILE = path.join(__dirname, 'musicScannerWorker.js');
@@ -161,7 +162,8 @@ async function scanFolder(options) {
         try { stat = await fsp.stat(filePath); } catch (_) { /* 遍历之后被删掉的文件交给解析去报错 */ }
         const prior = known.get(filePath);
         if (stat && await reusable(prior, stat, coverSeen)) {
-            slots[index] = prior;
+            // 没变的文件不重读，但旧版留下的 GBK 乱码标签顺手修好
+            slots[index] = repairTrackTags(prior);
             stats.reused++;
             done++;
             reportProgress(false);

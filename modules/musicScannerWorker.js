@@ -4,6 +4,7 @@ const musicMetadata = require('music-metadata');
 const path = require('path');
 const fs = require('fs/promises');
 const crypto = require('crypto');
+const { repairTrackTags } = require('./musicTagText');
 
 if (!parentPort) {
     throw new Error('This script must be run as a worker thread.');
@@ -55,7 +56,7 @@ async function parseTrack(filePath) {
         coverPath = fullCoverPath;
     }
 
-    return {
+    return repairTrackTags({
         path: filePath,
         title: metadata.common.title || path.basename(filePath),
         artist: metadata.common.artist,
@@ -69,7 +70,7 @@ async function parseTrack(filePath) {
         lossless: metadata.format.lossless,
         numberOfChannels: metadata.format.numberOfChannels,
         duration: metadata.format.duration
-    };
+    });
 }
 
 // 消息是 { id, filePath }；也接受旧的纯路径字符串。
