@@ -1634,7 +1634,8 @@
             hudObserver = new MutationObserver(queueShift);
             hudObserver.observe(hud, { attributes: true, attributeFilter: ['class'] });
         }
-        cleanups.push(() => { cancelAnimationFrame(shiftFrame); hudObserver?.disconnect(); hudObserver = null; document.body.classList.remove('music-dock-beside-list'); });
+        cleanups.push(() => { cancelAnimationFrame(shiftFrame); hudObserver?.disconnect(); hudObserver = null; document.body.classList.remove('music-dock-beside-list', 'music-drawer-open'); });
+        let roomRight = 0;
         let widthTimer = 0;
         const followWidth = () => {
             // 宽度有 CSS 过渡；流体层每帧跟着量一次，过渡结束再落一次
@@ -1678,6 +1679,9 @@
                 followWidth();
             }
             document.body.classList.toggle('music-dock-beside-list', Boolean(edge));
+            // 首页按抽屉占掉的宽度重排（archive-view 的 resize 读 roomRight），区块让开，不被抽屉盖住
+            roomRight = open ? DRAWER_W : 0;
+            document.body.classList.toggle('music-drawer-open', open);
             const shift = vw > 0 && barW ? left - (vw / 2 - barW / 2) : 0;
             host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
             host.classList.toggle('md-shifted', shift < 0);
@@ -2357,6 +2361,8 @@
             get stageSettingsOpen() { return state.panelOpen && state.tab === '控制'; },
             get soundSettingsOpen() { return state.panelOpen && state.tab === '声音'; },
             get tab() { return state.tab; },
+            /** 右边抽屉占掉的窗口宽度（px），关着是 0；首页据此重排 */
+            get roomRight() { return roomRight; },
             get glowColors() { return currentGlow(); },
             get ringMode() { return ringMode; },
             setRingMode(mode) {
