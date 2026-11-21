@@ -87,6 +87,11 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
+    if (name.includes('resume')) {
+      // 假的听歌记录：上次第 8 首听到 2:13
+      await page.evaluate(() => { const t = window.app.playlist[8]; window.app.musicStats = { resume: () => ({ track: t, position: 133, at: Date.now() }) }; document.dispatchEvent(new CustomEvent('music-stats-change')); });
+      await page.waitForTimeout(300);
+    }
     if (name.includes('detail')) {
       if (name.includes('like')) await page.evaluate(() => { window.app.isLiked = () => true; window.app.toggleLike = () => {}; });
       await page.evaluate(() => window.app.archiveView.openDetail());
