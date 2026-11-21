@@ -583,8 +583,32 @@
                     const shared = (Math.min(maxX, boardRight) - Math.max(minX, boardLeft)) / Math.max(1e-6, maxX - minX);
                     lift = Math.max(lift, Math.max(0, boardTop + 0.05 - minY) * D.smooth(shared / 0.15));
                 });
-                const dx = behind ? 0 : correction(minX, maxX, limitX);
-                const dy = behind ? 0 : lift + correction(minY + lift, maxY + lift, limitY);
+                let dx = behind ? 0 : correction(minX, maxX, limitX);
+                let dy = behind ? 0 : lift + correction(minY + lift, maxY + lift, limitY);
+                // The track card covers a corner of the picture. A line that
+                // would run under it steps right or down, whichever is the
+                // shorter way out and still inside the frame; a line keeps
+                // the way it took until the card no longer touches it, so it
+                // does not flick between the two as the camera moves.
+                const card = !behind && frame?.avoid;
+                const margin = 0.03;
+                if (card && minX + dx < card.right + margin && maxX + dx > card.left - margin
+                    && minY + dy < card.top + margin && maxY + dy > card.bottom - margin) {
+                    const right = card.right + margin - (minX + dx);
+                    const down = card.bottom - margin - (maxY + dy);
+                    const rightFits = maxX + dx + right <= limitX;
+                    const downFits = minY + dy + down >= -limitY;
+                    let way = node.dodge;
+                    if (way === 'right' && !rightFits) way = null;
+                    if (way === 'down' && !downFits) way = null;
+                    if (!way) way = rightFits && (!downFits || right <= -down * 1.2) ? 'right'
+                        : downFits ? 'down' : 'right';
+                    node.dodge = way;
+                    if (way === 'right') dx += Math.min(right, Math.max(0, limitX - (maxX + dx)));
+                    else dy += down;
+                } else if (node.dodge) {
+                    node.dodge = null;
+                }
                 if (dx || dy) {
                     slide.set(0, 0, 0);
                     slide.addScaledVector(axis.setFromMatrixColumn(camera.matrixWorld, 0), dx * depth * tanH);

@@ -263,6 +263,32 @@ test('the canvas shaders for a lens-less tier are compiled in the background bef
 });
 
 
+test('the track card box is handed to 3D modes in picture units, and only when it is shown', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const doc = dom.window.document;
+    const stage = doc.createElement('div'); stage.className = 'music-stage';
+    const root = doc.createElement('section');
+    const card = doc.createElement('aside'); card.className = 'music-stage-id3';
+    stage.append(root, card); doc.body.append(stage);
+    root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 500 });
+    card.getBoundingClientRect = () => ({ left: 16, right: 216, top: 50, bottom: 175, width: 200, height: 125 });
+    let observed = 0;
+    dom.window.ResizeObserver = class { constructor(fn) { this.fn = fn; } observe() { observed += 1; } disconnect() {} };
+    const overlay = U.watchOverlay(root);
+    assert.equal(observed, 2, 'card and stage are watched, nothing is read per frame');
+    assert.equal(overlay.box, null);
+    overlay.measure();
+    const box = overlay.box;
+    assert.ok(Math.abs(box.left - -0.96) < 1e-9 && Math.abs(box.right - -0.46) < 1e-9);
+    assert.ok(Math.abs(box.top - 0.8) < 1e-9 && Math.abs(box.bottom - 0.3) < 1e-9);
+    card.style.display = 'none';
+    overlay.measure();
+    assert.equal(overlay.box, null, 'a hidden card is not avoided');
+    overlay.destroy();
+    assert.equal(U.watchOverlay(doc.createElement('div')).box, null, 'a mode outside the stage has no card');
+});
+
 test('the handover veil reads the 3D picture back at most four times a second while waiting', () => {
     const dom = createDom();
     const { MusicStageModeUtils: U } = loadStage(dom);
