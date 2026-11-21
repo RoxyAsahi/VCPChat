@@ -2080,6 +2080,13 @@ body.sidebar-is-scrolling .sidebar-playlist li {
     transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+/* 窗口太窄、子菜单被收窄时，长歌单名用省略号（完整名字在 title 里） */
+.context-submenu .submenu-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* 菜单靠近窗口右边时，子菜单往左边展开 */
 .context-menu.sub-left .context-submenu {
     left: auto;
