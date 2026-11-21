@@ -434,6 +434,7 @@
             const edge = a + fraction * (b - a);
             for (const trk of el.tracks) {
                 trk.firstElementChild.style.transform = `scaleX(${edge.toFixed(5)})`;
+                trk.style.setProperty('--md-edge', edge.toFixed(5));
                 trk.querySelector('.md-kn-rail').style.transform = `translateX(${(edge * 100).toFixed(3)}%)`;
                 trk.setAttribute('aria-valuenow', String(Math.round(t)));
             }
@@ -545,6 +546,7 @@
             el.more.classList.toggle('md-on', show);
             if (!show && state.volOpen) setVolumeOpen(false);
             fluid?.setQuick(show, show ? el.quickGroup.getBoundingClientRect() : null);
+            if (show && !state.panelOpen) schedulePrebuild();
         };
         // ───────── 定时关闭 ─────────
         // 逻辑在 music-sleep.js（app.sleepTimer）；这里只画入口：控制页第三块开关、展开的时长选项、底栏上的剩余时间。
@@ -1087,6 +1089,7 @@
         }
 
         function renderBody() {
+            prebuilt = null;
             const oldScroller = state.tab === '播放列表' ? el.body.querySelector('.md-ql') : null;
             const keepScroll = oldScroller ? oldScroller.scrollTop : null;
             const tab = state.tab;
@@ -1261,6 +1264,33 @@
             scroller.firstElementChild.innerHTML = [...keep].sort((a, b) => a - b).map((k) => queueRowHtml(rows[k], k, current)).join('');
         }
 
+        // 预先画好播放列表页：点开「更多」以后，在空闲时把队列页先画进（还藏着的）抽屉里，
+        // 真点「播放列表」时抽屉只需要滑出来。画好以后歌、列表或队列变了就作废，照常重画。
+        let prebuilt = null;
+        let prebuildTimer = 0;
+        const queueSig = () => [currentTrack()?.path, app.currentFilteredTracks, app.currentFilteredTracks?.length,
+            app.filteredPlaylistSource, app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
+        const prebuiltFresh = () => Boolean(prebuilt) && performance.now() - prebuilt.at < 8000
+            && queueSig().every((value, index) => value === prebuilt.sig[index]);
+        const schedulePrebuild = () => {
+            clearTimeout(prebuildTimer);
+            // 等「更多」那组按钮展开的动画走完再画，别把卡顿挪到展开动画里。
+            prebuildTimer = setTimeout(() => {
+                const run = () => {
+                    if (state.panelOpen || state.destroyed || !el.quick.classList.contains('md-show') || prebuiltFresh()) return;
+                    const was = state.tab;
+                    state.tab = '播放列表';
+                    renderBody();
+                    state.tab = was;
+                    prebuilt = { sig: queueSig(), at: performance.now() };
+                };
+                if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 200 });
+                else run();
+            }, 320);
+        };
+        cleanups.push(() => clearTimeout(prebuildTimer));
+        listen(document, 'music-queue-change', () => { prebuilt = null; });
+
         function rerenderQueue() {
             if (!state.panelOpen || state.tab !== '播放列表' || state.queueDrag?.active) return;
             renderBody();
@@ -1380,11 +1410,11 @@
             } else scroller.scrollTop = Math.max(0, target);
         }
 
-        const renderTabs = () => {
+        const renderTabs = (marks = true) => {
             el.tabs.innerHTML = '<i class="md-mk"></i>' + TABS.map((tab, index) => (
                 `<button type="button" role="tab" aria-selected="${tab === state.tab}" aria-controls="music-dock-panel-body" tabindex="${tab === state.tab ? 0 : -1}" class="${tab === state.tab ? 'md-on' : ''}" data-i="${index}"><span>${tab}</span></button>`
             )).join('');
-            placeMarks(el.pnl);
+            if (marks) placeMarks(el.pnl);
         };
         listen(el.tabs, 'click', (event) => {
             const button = event.target.closest('button[data-i]');
@@ -1547,11 +1577,24 @@
             const cx = vw / 2 + shift;
             const rightLimit = (open ? vw - DRAWER_W : vw) - 8;
             const maxW = Math.max(200, 2 * Math.min(cx - 8, rightLimit - cx));
-            if (vw > 0) {
-                document.body.style.setProperty('--md-toast-x', `${Math.round(cx)}px`);
-                document.body.style.setProperty('--md-toast-max', `${Math.round(maxW)}px`);
-            }
+            if (vw > 0) placeToasts(Math.round(cx), Math.round(maxW));
         };
+        // 提示层的位置写在一条只匹配 .mtst-layer 的样式规则里，不写在 body 上：
+        // body 上的自定义属性会让整页（曲库一万行）重算样式，开抽屉那一下要多花几十毫秒。
+        let toastPos = null;
+        let toastSheet = '';
+        const placeToasts = (x, w) => {
+            const text = `.mtst-layer{--md-toast-x:${x}px;--md-toast-max:${w}px}`;
+            if (text === toastSheet) return;
+            toastSheet = text;
+            if (!toastPos || !toastPos.isConnected) {
+                toastPos = document.createElement('style');
+                toastPos.dataset.md = 'toast-pos';
+                document.head.appendChild(toastPos);
+            }
+            toastPos.textContent = text;
+        };
+        cleanups.push(() => { toastPos?.remove(); toastPos = null; toastSheet = ''; });
         let panelReturn = null;
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
@@ -1567,10 +1610,14 @@
                 // 焦点进抽屉（落在当前页签上）；记住是从哪里打开的，关的时候还回去。
                 const from = document.activeElement;
                 panelReturn = from && from !== document.body && !el.pnl.contains(from) ? from : el.handle;
-                renderTabs();
-                renderBody();
+                // 页签下划线要读排版，挪到下一帧和抽屉滑入的第一帧一起算：
+                // 同一下点击里和下面的焦点各读一次，会把刚插进来的行算两遍样式和排版。
+                renderTabs(false);
+                if (!(state.tab === '播放列表' && prebuiltFresh())) renderBody();
+                prebuilt = null;
                 el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
                 syncSolid();
+                requestAnimationFrame(() => { if (state.panelOpen && !state.destroyed) placeMarks(el.pnl); });
                 return;
             }
             renderTabs();
