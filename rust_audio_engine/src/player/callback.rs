@@ -102,15 +102,130 @@ pub struct VchatDspPipeline {
     source_post: DspChain,
     /// Device/output domain after Rubato: final True-Peak Limiter → Noise Shaper.
     output: DspChain,
+    /// What the stages are set to, read once per block to decide on direct mode.
+    probe: TransparencyProbe,
+    /// Direct ("bit-perfect") mode: nothing would change the samples, so every
+    /// stage is skipped, including the limiter's ~10 ms look-ahead.
+    direct: DirectMode,
+}
+
+/// Parameter handles needed to tell whether the chain would be a no-op.
+struct TransparencyProbe {
+    eq: Arc<AtomicEqParams>,
+    saturation: Arc<AtomicSaturationParams>,
+    crossfeed: Arc<AtomicCrossfeedParams>,
+    volume: Arc<AtomicVolumeParams>,
+    noise_shaper: Arc<AtomicNoiseShaperParams>,
+    dynamic_loudness: Arc<AtomicDynamicLoudnessParams>,
+}
+
+impl TransparencyProbe {
+    fn chain_is_identity(&self) -> bool {
+        let eq = self.eq.read();
+        self.volume.effective_volume() == 1.0
+            && (!eq.enabled || eq.gains.iter().all(|g| *g == 0.0))
+            && !self.saturation.is_enabled()
+            && !self.crossfeed.is_enabled()
+            && !self.dynamic_loudness.is_enabled()
+            && !self.noise_shaper.is_enabled()
+    }
+}
+
+/// Switching between the full chain and direct mode moves the output by the
+/// limiter's look-ahead, so the switch dips to silence and back (~8 ms each way)
+/// instead of jumping.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum DirectPhase {
+    /// No decision yet: the first block picks a mode without a fade.
+    Unset,
+    Steady,
+    FadingOut,
+    FadingIn,
+}
+
+struct DirectMode {
+    active: bool,
+    phase: DirectPhase,
+    gain: f64,
+    /// Frames to stay silent after switching into the chain: its look-ahead
+    /// starts out empty, so the fade-in waits for real audio to come through.
+    hold: usize,
+}
+
+impl DirectMode {
+    fn new() -> Self {
+        Self { active: false, phase: DirectPhase::Unset, gain: 1.0, hold: 0 }
+    }
 }
 
 impl VchatDspPipeline {
     fn process_source_pre(&mut self, buffer: &mut [f64], channels: usize) -> Result<(), crate::processor::ProcessError> {
+        if self.direct.active { return Ok(()); }
         self.source_pre.process(buffer, channels).map(|_| ())
     }
 
     fn process_source_post(&mut self, buffer: &mut [f64], channels: usize) -> Result<(), crate::processor::ProcessError> {
+        if self.direct.active { return Ok(()); }
         self.source_post.process(buffer, channels).map(|_| ())
+    }
+
+    /// Decide once per block whether the chain can be skipped. `others_idle` covers
+    /// what the pipeline cannot see: loudness normalization, resampling, convolver.
+    fn plan_direct(&mut self, others_idle: bool) {
+        let want = others_idle && self.probe.chain_is_identity();
+        match self.direct.phase {
+            DirectPhase::Unset => {
+                self.direct.active = want;
+                self.direct.phase = DirectPhase::Steady;
+            }
+            DirectPhase::Steady if want != self.direct.active => {
+                self.direct.phase = DirectPhase::FadingOut;
+            }
+            // Changed back while fading in: fade out again from where we are.
+            DirectPhase::FadingIn if want != self.direct.active => {
+                self.direct.phase = DirectPhase::FadingOut;
+            }
+            _ => {}
+        }
+    }
+
+    /// Ramp the switch fade over the finished block; flip modes at silence.
+    fn apply_direct_fade(&mut self, data: &mut [f64], channels: usize) {
+        if !matches!(self.direct.phase, DirectPhase::FadingOut | DirectPhase::FadingIn) {
+            return;
+        }
+        let step = 1.0 / FADE_FRAMES as f64;
+        for frame in data.chunks_mut(channels.max(1)) {
+            match self.direct.phase {
+                DirectPhase::FadingOut => self.direct.gain = (self.direct.gain - step).max(0.0),
+                DirectPhase::FadingIn if self.direct.hold > 0 => self.direct.hold -= 1,
+                DirectPhase::FadingIn => self.direct.gain = (self.direct.gain + step).min(1.0),
+                _ => {}
+            }
+            for sample in frame.iter_mut() {
+                *sample *= self.direct.gain;
+            }
+        }
+        if self.direct.phase == DirectPhase::FadingOut && self.direct.gain <= 0.0 {
+            // Silent now: switch, and start the chain from clean state so the
+            // limiter's look-ahead holds silence rather than the old audio.
+            self.direct.active = !self.direct.active;
+            self.reset_stages();
+            self.direct.hold = if self.direct.active {
+                0
+            } else {
+                self.source_pre.latency().frames() + self.source_post.latency().frames() + self.output.latency().frames()
+            };
+            self.direct.phase = DirectPhase::FadingIn;
+        } else if self.direct.phase == DirectPhase::FadingIn && self.direct.gain >= 1.0 {
+            self.direct.phase = DirectPhase::Steady;
+        }
+    }
+
+    fn reset_stages(&mut self) {
+        let _ = self.source_pre.reset();
+        let _ = self.source_post.reset();
+        let _ = self.output.reset();
     }
 
     /// Process the final device-domain stages after the rate boundary.
@@ -119,6 +234,14 @@ impl VchatDspPipeline {
         buffer: &mut [f64],
         channels: usize,
     ) -> Result<(), crate::processor::ProcessError> {
+        if self.direct.active {
+            // Nothing scales the signal in direct mode; only keep it inside full scale
+            // (a no-op for integer sources, a guard for hot float files).
+            for sample in buffer.iter_mut() {
+                *sample = sample.clamp(-1.0, 1.0);
+            }
+            return Ok(());
+        }
         self.output.process(buffer, channels).map(|_| ())
     }
 
@@ -132,9 +255,11 @@ impl VchatDspPipeline {
     }
 
     fn reset(&mut self) {
-        let _ = self.source_pre.reset();
-        let _ = self.source_post.reset();
-        let _ = self.output.reset();
+        self.reset_stages();
+        // A new stream: pick the mode again without a fade.
+        if !matches!(self.direct.phase, DirectPhase::FadingOut | DirectPhase::FadingIn) {
+            self.direct.phase = DirectPhase::Unset;
+        }
     }
 }
 
@@ -224,12 +349,22 @@ impl LockfreeDspContext {
             fir_ir_kernel: parking_lot::Mutex::new(None),
         };
 
+        let probe = TransparencyProbe {
+            eq: Arc::clone(&ctx.eq_params),
+            saturation: Arc::clone(&ctx.saturation_params),
+            crossfeed: Arc::clone(&ctx.crossfeed_params),
+            volume: Arc::clone(&ctx.volume_params),
+            noise_shaper: Arc::clone(&ctx.noise_shaper_params),
+            dynamic_loudness: Arc::clone(&ctx.dynamic_loudness_params),
+        };
         (
             ctx,
             VchatDspPipeline {
                 source_pre,
                 source_post,
                 output,
+                probe,
+                direct: DirectMode::new(),
             },
         )
     }
@@ -501,6 +636,8 @@ pub fn audio_callback_lockfree(
         resample_leftover.clear();
         *resample_leftover_pos = 0;
     }
+
+    dsp_pipeline.plan_direct(!loudness_state.enabled() && resampler.is_none() && convolver.is_idle());
 
     let has_leftover = *resample_leftover_pos < resample_leftover.len();
 
@@ -812,6 +949,7 @@ pub fn audio_callback_lockfree(
         }
     }
 
+    dsp_pipeline.apply_direct_fade(data, channels);
     apply_fade(data, shared, channels);
 
     // Spectrum output: mono-downmix the first 512 frames and push them to
@@ -1147,6 +1285,96 @@ mod tests {
         // What is left is the loudness stage re-applying the (equal) target gain: < -70 dB.
         let e = max_join_error();
         assert!(e < 2e-4, "join error {e}");
+    }
+
+    /// Harness whose parameters we keep, with every stage switched off.
+    fn transparent_harness() -> (StreamingHarness, Arc<AtomicEqParams>, Arc<AtomicVolumeParams>) {
+        let eq = Arc::new(AtomicEqParams::new());
+        let vol = Arc::new(AtomicVolumeParams::new());
+        let sat = Arc::new(AtomicSaturationParams::new());
+        let cf = Arc::new(AtomicCrossfeedParams::new());
+        let ns = Arc::new(AtomicNoiseShaperParams::new());
+        let dl = Arc::new(AtomicDynamicLoudnessParams::new());
+        let (context, pipeline) = LockfreeDspContext::new(
+            2, 44_100.0, 44_100.0,
+            Arc::clone(&eq), Arc::clone(&sat), Arc::clone(&cf),
+            Arc::new(AtomicPeakLimiterParams::new()), Arc::clone(&vol), Arc::clone(&ns), Arc::clone(&dl),
+            Arc::new(AtomicDynamicLoudnessTelemetry::new()),
+        );
+        vol.set_volume(1.0);
+        eq.set_enabled(false);
+        sat.set_enabled(false);
+        cf.set_enabled(false);
+        ns.set_enabled(false);
+        dl.set_enabled(false);
+        let mut h = StreamingHarness::new();
+        let mut convolver = ConvolverProcessor::new(context.convolver_control.clone()).unwrap();
+        convolver.set_sample_rate(44_100).unwrap();
+        h.pipeline = pipeline;
+        h.convolver = convolver;
+        h.loudness_state.set_enabled(false);
+        (h, eq, vol)
+    }
+
+    fn pcm16_noise(frames: usize) -> Vec<f64> {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        (0..frames * 2)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                ((seed >> 48) as i16) as f64 / 32768.0 * 0.5
+            })
+            .collect()
+    }
+
+    #[test]
+    fn direct_mode_outputs_the_source_bit_for_bit() {
+        // Before: with every effect off the limiter still delayed the output by
+        // ~10 ms and its smoothing touched the samples, so nothing was bit-exact.
+        let (mut h, _, _) = transparent_harness();
+        let src = pcm16_noise(20_000);
+        h.shared.audio_buffer.store(TrackBuffer::from_samples(src.clone(), 2));
+        let mut out = Vec::new();
+        let mut block = vec![0.0; 1000 * 2];
+        for _ in 0..12 { h.render(&mut block); out.extend_from_slice(&block); }
+        assert_eq!(&out[..], &src[..out.len()], "direct mode must be a straight copy");
+    }
+
+    #[test]
+    fn leaving_direct_mode_dips_instead_of_clicking() {
+        let (mut h, eq, _) = transparent_harness();
+        let tone: Vec<f64> = (0..40_000).flat_map(|i| { let v = (i as f64 * 0.05).sin() * 0.3; [v, v] }).collect();
+        h.shared.audio_buffer.store(TrackBuffer::from_samples(tone, 2));
+        let mut out = Vec::new();
+        let mut block = vec![0.0; 512 * 2];
+        for _ in 0..4 { h.render(&mut block); out.extend_from_slice(&block); }
+        let mut gains = [0.0; crate::processor::EQ_BANDS];
+        gains[5] = 3.0;
+        eq.write(&gains, true); // EQ on: the chain is needed again
+        for _ in 0..30 { h.render(&mut block); out.extend_from_slice(&block); }
+        let left: Vec<f64> = out.chunks(2).map(|f| f[0]).collect();
+        let worst = left.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f64::max);
+        // A 0.05 rad/sample tone moves at most ~0.015 per sample at 0.3 amplitude.
+        assert!(worst < 0.03, "step at the switch {worst}");
+        assert!(left[left.len() - 200..].iter().any(|s| s.abs() > 0.15), "audio is back after the switch");
+    }
+
+    #[test]
+    fn entering_direct_mode_dips_instead_of_clicking() {
+        let (mut h, eq, _) = transparent_harness();
+        let mut gains = [0.0; crate::processor::EQ_BANDS];
+        gains[5] = 3.0;
+        eq.write(&gains, true);
+        let tone: Vec<f64> = (0..40_000).flat_map(|i| { let v = (i as f64 * 0.05).sin() * 0.3; [v, v] }).collect();
+        h.shared.audio_buffer.store(TrackBuffer::from_samples(tone, 2));
+        let mut out = Vec::new();
+        let mut block = vec![0.0; 512 * 2];
+        for _ in 0..6 { h.render(&mut block); out.extend_from_slice(&block); }
+        eq.set_enabled(false); // back to nothing-to-do: the limiter look-ahead is dropped
+        for _ in 0..30 { h.render(&mut block); out.extend_from_slice(&block); }
+        let left: Vec<f64> = out.chunks(2).map(|f| f[0]).collect();
+        let worst = left[1500..].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f64::max);
+        assert!(worst < 0.03, "step at the switch {worst}");
+        assert!(left[left.len() - 200..].iter().any(|s| s.abs() > 0.15), "audio is back after the switch");
     }
 
     #[test]
