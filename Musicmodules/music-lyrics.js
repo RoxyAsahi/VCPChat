@@ -464,8 +464,11 @@ function setupLyrics(app) {
                     // 用户点击后暂时锁定手动滚动，强制恢复自动跟踪
                     app.lyricUserScrolling = false;
                     if (app.lyricUserScrollTimer) clearTimeout(app.lyricUserScrollTimer);
+                    // 暂停时点一句：跳过去并接着播（和主流播放器的歌词页一样，点了就从这句唱起）
+                    if (!app.isPlaying && !app.isTrackLoading && typeof app.playTrack === 'function') app.playTrack();
                 }
             };
+            if (typeof line.time === 'number' && app.formatTime) li.title = `从 ${app.formatTime(line.time)} 这句开始播放`;
 
             fragment.appendChild(li);
         });
