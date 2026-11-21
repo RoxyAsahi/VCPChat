@@ -1591,6 +1591,7 @@ test('目录换分类：阵列和左上标题跟过去；检索第一条结果�
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
     assert.ok(hud.classList.contains('no-match'));
     assert.equal(f.text('ctxSub'), '没有结果');
+    assert.ok(f.view.list.el.querySelector('.archive-list-foot').classList.contains('zero'));
     f.close();
 });
 
