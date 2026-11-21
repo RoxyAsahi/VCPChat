@@ -647,6 +647,12 @@
             if (inInput) flushQuery();
             const before = state.selectedRow;
             const range = e.shiftKey && !inInput;
+            // Alt+↑ / Alt+↓：在歌单里把选中的歌（或多选的几首）上移、下移一位，和拖动排序是同一件事
+            if (e.altKey && !inInput && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && moveInPlaylist(e.key === 'ArrowUp' ? -1 : 1)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             switch (e.key) {
                 case 'ArrowDown': e.preventDefault(); stepRow(1); afterMove(range, before); break;
                 case 'ArrowUp': e.preventDefault(); stepRow(-1); afterMove(range, before); break;
@@ -941,7 +947,7 @@
          * 歌单里存的是路径；比较时和建目录时一样，统一斜杠、不分大小写。
          */
         const normPath = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
-        const reorderPlaylist = (pl, indices, targetI, after) => {
+        const reorderPlaylist = (pl, indices, targetI, after, { quiet = false } = {}) => {
             if (!pl || !Array.isArray(pl.tracks)) return false;
             const moving = new Set(indices.map((i) => normPath((tracks()[i] || {}).path)));
             const target = normPath((tracks()[targetI] || {}).path);
@@ -956,8 +962,35 @@
             if (rest.every((p, n) => p === before[n])) return false;
             pl.tracks = rest;
             commitPlaylists();
-            toast(`已调整「${pl.name}」的顺序`, { label: '撤销', run: () => { pl.tracks = before; commitPlaylists(); } });
+            if (!quiet) toast(`已调整「${pl.name}」的顺序`, { label: '撤销', run: () => { pl.tracks = before; commitPlaylists(); } });
             return true;
+        };
+        const moveInPlaylist = (dir) => {
+            const row = selectedRowData();
+            const pl = row && row.type === 'track' ? reorderScope(row) : null;
+            if (!pl) return false;
+            const indices = pickedIndices(row);
+            const plPaths = new Set((pl.tracks || []).map(normPath));
+            if (!indices.every((i) => plPaths.has(normPath((tracks()[i] || {}).path)))) return false;
+            // 目标：这一组里，选中那几首最上面一首的上一首（或最下面一首的下一首）
+            const h = headOf(state.selectedRow);
+            const ks = [];
+            for (let j = h + 1; j < state.rows.length && state.rows[j].type === 'track'; j++) ks.push(j);
+            const picked = new Set(indices);
+            const inside = ks.filter((j) => picked.has(state.rows[j].i));
+            if (!inside.length) return false;
+            const edge = dir < 0 ? inside[0] - 1 : inside[inside.length - 1] + 1;
+            const target = state.rows[edge];
+            if (!target || target.type !== 'track') return false;
+            const ctx = row.ctx;
+            const moved = reorderPlaylist(pl, indices, target.i, dir > 0, { quiet: true });
+            if (moved) {
+                // 重建之后把选中跟到挪过去的那首上
+                const follow = () => { const k = findRow(row.i, ctx); if (k >= 0) { state.selectedRow = k; state.selected = row.i; scrollToRow(k); render(); } };
+                follow();
+                Promise.resolve().then(follow);
+            }
+            return moved;
         };
         const headOf = (k) => { let h = -1; for (const hk of state.heads) { if (hk <= k) h = hk; else break; } return h; };
         /* 正在拖的歌都来自同一个歌单、而且没在检索时，才能在这个歌单里排序 */
