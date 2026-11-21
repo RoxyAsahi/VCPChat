@@ -49,7 +49,7 @@
         <div class="archive-list-thumb" data-l="thumb" aria-hidden="true" hidden></div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
-            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em>
+            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
         </div>`;
 
     /*
@@ -275,6 +275,8 @@
             if (!out.count) { r.pos.textContent = '---'; r.tot.textContent = pad(0, 3); }   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();
+            // 有检索词、有结果时给「存为智能歌单」（多选时让给多选说明）
+            r.saveSmart.hidden = !(q0 && out.count && app.createSmartPlaylist) || multi.size > 1;
             if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count); }
             if (!out.count) {
                 // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
@@ -737,6 +739,10 @@
         r.input.addEventListener('input', paintRecentQ);
         r.input.addEventListener('blur', () => { if (r.recentQ) r.recentQ.hidden = true; });
         // 在列表里按下不让检索框失焦（否则点不到）
+        r.saveSmart.addEventListener('click', () => {
+            const q = state.query.trim();
+            if (q && app.createSmartPlaylist) app.createSmartPlaylist(q);
+        });
         r.recentQ?.addEventListener('pointerdown', (e) => e.preventDefault());
         r.recentQ?.addEventListener('click', (e) => {
             e.preventDefault();
