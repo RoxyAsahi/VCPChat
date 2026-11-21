@@ -772,9 +772,13 @@
             syncDetailCover();
             syncDetailEnd();
         };
+        let openedFrom = null;
         const openDetail = () => {
             if (selectedIndex() < 0) return;
             if (!detailOpen) {
+                // 记下是从哪里打开的，关掉时把焦点还回去（键盘用户不会掉到页面开头）
+                const from = document.activeElement;
+                openedFrom = from && from !== document.body && root.contains(from) && !refs.detail.contains(from) ? from : null;
                 detailOpen = true;
                 root.classList.add('is-detail');
                 refs.detail.removeAttribute('inert');
@@ -796,7 +800,11 @@
             refs.detail.setAttribute('inert', '');
             refs.detail.setAttribute('aria-hidden', 'true');
             state.scene?.setDetail(false);
-            if (refs.detail.contains(document.activeElement)) document.activeElement.blur();
+            if (refs.detail.contains(document.activeElement)) {
+                const back = openedFrom && openedFrom.isConnected && !openedFrom.closest('[hidden],[inert]') ? openedFrom : null;
+                if (back) back.focus({ preventScroll: true }); else document.activeElement.blur();
+            }
+            openedFrom = null;
             kick();
         };
         const expandSelected = openDetail;

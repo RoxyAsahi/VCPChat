@@ -686,6 +686,10 @@ body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before 
 .mf-trail.mf-on { opacity: 1; transform: none; }
 .archive-nav { isolation: isolate; }
 .archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
+/* 曲库空着时的「添加音乐文件夹 / 从云端导入」：和提示卡的按钮一样，手底下一汪浅玻璃。
+ * 整块里还有标题和说明，所以竖直位置也按按钮量（axis: 'xy'），不用整块的中线。 */
+.archive-empty { isolation: isolate; }
+.archive-empty > .mf-trail { top: 0; margin-top: 0; height: 0; }
 body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }
 /* 左侧目录的曲目行：竖着流，横向和行对齐（行从 --gutter 开始） */
 .archive-list-spacer { isolation: isolate; }
@@ -787,7 +791,91 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 .webdav-file-list:has(> .mf-trail.mf-on) > .webdav-file-item:hover,
 .webdav-server-list:has(> .mf-trail.mf-on) > .webdav-server-item:not(.active):hover { background: none; }
 /* 键盘焦点：那一汪跟着焦点走时，焦点提示画在它身上（一圈强调色细光），不再在按钮外面另套一个方框 */
-:is(.archive-nav, .archive-callout-acts):has(> button:focus-visible) > .mf-trail.mf-on {
+:is(.archive-nav, .archive-callout-acts, .archive-empty):has(> button:focus-visible) > .mf-trail.mf-on {
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
 }
-#music-archive-view :is(.archive-nav, .archive-callout-acts):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
+#music-archive-view :is(.archive-nav, .archive-callout-acts, .archive-empty):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
+
+/* ───────── 弹窗里的滚动条 ─────────
+ * 全局滚动条是 6px、强调色的滑块（themes.css，带 !important），在玻璃弹窗里太跳。
+ * 这里只换它读的颜色变量：轨道透明，滑块是一根淡淡的墨色胶囊，指针移上去才深一点。 */
+:is(.music-modal-overlay, .dialog-overlay) {
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: color-mix(in srgb, var(--mf-ink) 18%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--mf-ink) 34%, transparent);
+}
+
+/* ───────── 目录里就地起名（新建歌单、重命名） ─────────
+ * 输入框出现时先是档案那条细线，随即凝成一汪浅玻璃：底线淡掉，四周起一圈强调色细光（和弹窗输入框一样）。
+ * 分组标题上的「播放这一组」小胶囊：按下压扁、松手回弹。 */
+.archive-list-name {
+  border-radius: 10px;
+  padding: 0 8px 2px;
+  margin-left: -8px;
+  width: calc(100% + 8px);
+  background: var(--mf-hover);
+  border-bottom-color: transparent;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 55%, transparent);
+  animation: mf-name-condense .42s cubic-bezier(.34, 1.3, .5, 1) both;
+}
+@keyframes mf-name-condense {
+  from { border-radius: 0; background-color: transparent; border-bottom-color: var(--ar-ink, currentColor); box-shadow: 0 0 0 0 transparent; }
+  45% { border-bottom-color: transparent; }
+}
+.archive-list-group .gplay { transition: opacity .15s, color .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.archive-list-group .gplay:active { transform: scale(.9, .84); transition-duration: .1s; }
+body.music-reduce-motion .archive-list-name { animation: none; }
+body.music-reduce-motion .archive-list-group .gplay:active { transform: none; }
+#music-archive-view .archive-list-name:is(:focus, :focus-visible):not(#messageInput) { outline: none; }
+
+/* ───────── 底栏和队列里还没回弹的小按钮 ─────────
+ * 上一首/下一首小箭头、「接下来」两首的歌名、队列行尾的 ×、「清空」：都换成同一条按下压扁、松手回弹的曲线。
+ * × 和「清空」改成圆的，和别处的玻璃按钮一致。 */
+#music-dock-root .md-arw { transition: opacity .2s, background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-arw:active { transform: scale(.8); transition-duration: .1s; }
+#music-dock-root .md-nxb { transition: opacity .3s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-nxb:active { transform: scale(.95, .9); transition-duration: .1s; }
+#music-dock-root .md-qx { border-radius: 9999px; transition: opacity .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-qx:hover { background: var(--mf-hover); }
+#music-dock-root .md-qx:active { transform: scale(.8); transition-duration: .1s; }
+#music-dock-root .md-qclr { border-radius: 9999px; padding: 0 9px; transition: color .12s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-dock-root .md-qclr:active { transform: scale(.9, .84); transition-duration: .1s; }
+body.music-reduce-motion #music-dock-root :is(.md-arw, .md-nxb, .md-qx, .md-qclr):active { transform: none; }
+
+/* ───────── 歌词：点一行跳过去 ─────────
+ * 首页右侧滚动歌词：手底下那一行背后一汪浅玻璃，在行之间流动（行会跟着歌往上走，那一汪也在同一层里一起走）。
+ * 首页和底栏抽屉的歌词行，按下时往左边轻轻压一下再弹回，表示「跳到这里」。 */
+.archive-lyrics-track { position: relative; isolation: isolate; }
+.archive-lyrics-track > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  height: 0;
+  border-radius: 16px;
+  transform: scale(.96, .7);
+}
+.archive-lyrics-track > .mf-trail.mf-on { transform: none; }
+:is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p) {
+  transform-origin: 0 50%;
+  transition: color .2s, background-color .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+:is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: scale(.97); transition-duration: .1s; }
+body.music-reduce-motion :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: none; }
+
+/* ───────── 档案页底部的 ↑ ↓ ← → ─────────
+ * 按下时朝箭头的方向轻推一下再弹回；用方向键选歌、换组时，对应的按钮也被推一下（mf-nudge，JS 加），
+ * 键盘操作在屏幕上有个落点。按钮的方块样子不变。 */
+#music-archive-view :is(.archive-rows, .archive-lanes) button { --mf-nx: 0px; --mf-ny: 0px; transition: background .3s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-archive-view .archive-bottom button[data-act="up"] { --mf-ny: -5px; }
+#music-archive-view .archive-bottom button[data-act="down"] { --mf-ny: 5px; }
+#music-archive-view .archive-bottom button[data-act="left"] { --mf-nx: -5px; }
+#music-archive-view .archive-bottom button[data-act="right"] { --mf-nx: 5px; }
+#music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); transition-duration: .1s; }
+#music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: mf-nudge .42s cubic-bezier(.3, .7, .4, 1); }
+@keyframes mf-nudge {
+  0% { transform: none; background-color: transparent; }
+  22% { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); background-color: var(--mf-hover); }
+  60% { transform: translate(calc(var(--mf-nx) * -.25), calc(var(--mf-ny) * -.25)); }
+  100% { transform: none; background-color: transparent; }
+}
+body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: none; }
+body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: none; }

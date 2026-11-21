@@ -1466,6 +1466,19 @@ test('取出详情里的「喜欢」：有喜欢功能才显示，点了切换�
     f.close();
 });
 
+test('取出详情：从曲名打开、Esc 关掉后焦点回到曲名', () => {
+    const f = fixture();
+    const title = f.w.document.querySelector('.archive-file-title');
+    title.focus();
+    title.click();
+    assert.ok(f.view.detailOpen);
+    assert.equal(f.w.document.activeElement.dataset.act, 'd-play', '打开后焦点在「播放」');
+    f.key('Escape');
+    assert.equal(f.view.detailOpen, false);
+    assert.equal(f.w.document.activeElement, title, '关掉后焦点回到打开它的曲名');
+    f.close();
+});
+
 test('首页文字：没有装饰用的英文，左上是当前分组名和首数', () => {
     const f = fixture();
     const hud = f.w.document.querySelector('.archive-hud').textContent;
