@@ -1642,6 +1642,8 @@
                         const r = btn.getBoundingClientRect();
                         app.contextMenuTrackIndex = index;
                         app.showContextMenu?.(r.left, r.bottom + 8);
+                        // 菜单接上键盘（Esc 能关），并直接展开歌单列表
+                        ListLib?.menuKeyboard?.(app, { restore: btn, playlist: true });
                         break;
                     }
                     case 'd-artist': {
@@ -1671,6 +1673,7 @@
                         const r = btn.getBoundingClientRect();
                         app.contextMenuTrackIndex = index;
                         app.showContextMenu?.(r.left, r.bottom + 8);
+                        ListLib?.menuKeyboard?.(app, { restore: btn, playlist: true });
                         break;
                     }
                     default: break;
