@@ -436,7 +436,37 @@
         }, true);
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); };
+    // ───────── 提示条叠在一起时：来一条、走一条，其余的像液体一样被推开、再落回去 ─────────
+    // 提示条一层一层叠在底栏上方（music-toast.js）；新的一条加进来或旧的一条散掉时，其余几条原本会一下跳到新位置。
+    // 这里记下每条的位置，变动后用独立的 translate 从旧位置弹回新位置，不碰提示条自己的 transform 动画。
+    const watchToasts = () => {
+        const doc = global.document;
+        if (typeof global.MutationObserver !== 'function') return;
+        const tops = new WeakMap();
+        // 量屏幕上的位置：提示层是贴着底边往上长的，条在层里的 offsetTop 不变，层自己在动
+        const record = (layer) => { for (const el of layer.children) tops.set(el, el.getBoundingClientRect().top); };
+        const attach = (layer) => {
+            if (watched.has(layer)) return;
+            watched.add(layer);
+            record(layer);
+            new global.MutationObserver(() => {
+                const motion = enabled() && typeof global.Element?.prototype?.animate === 'function';
+                for (const el of layer.children) {
+                    const before = tops.get(el);
+                    const now = el.getBoundingClientRect().top;
+                    if (motion && before != null && Math.abs(before - now) > 1) {
+                        el.animate([{ translate: `0 ${before - now}px` }, { translate: '0 0' }], { duration: 460, easing: 'cubic-bezier(.34, 1.36, .5, 1)', composite: 'add' });
+                    }
+                    tops.set(el, now);
+                }
+            }).observe(layer, { childList: true });
+        };
+        const scan = () => { for (const layer of doc.querySelectorAll('body > .mtst-layer')) attach(layer); };
+        scan();
+        new global.MutationObserver(scan).observe(doc.body, { childList: true });
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 
