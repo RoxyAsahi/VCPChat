@@ -979,8 +979,8 @@ function initialize(options) {
             for (const lrcPath of possibleLrcPaths) {
                 try {
                     if (await fs.pathExists(lrcPath)) {
-                        const content = await fs.readFile(lrcPath, 'utf-8');
-                        return content;
+                        // 自己放进歌词目录的 .lrc 常是 GBK 或带 BOM 的 UTF-8/UTF-16
+                        return require('../lyrics/decodeLyricText').decodeLyricText(await fs.readFile(lrcPath));
                     }
                 } catch (error) {
                     console.error(`[Music] Error reading lyric file ${lrcPath}:`, error);
