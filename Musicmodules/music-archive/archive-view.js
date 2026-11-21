@@ -1668,8 +1668,15 @@
         refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
+        // body 的 style 每次切歌都会变（底栏按封面取的色调），只有底栏高度变了才影响版面
+        const dockSafe = () => document.body.style.getPropertyValue('--music-dock-safe-bottom');
+        let lastDockSafe = dockSafe();
         const bodyObserver = new MutationObserver(() => {
             const cls = document.body.className;
+            const classChanged = cls !== lastBodyClass;
+            const safe = dockSafe();
+            const safeChanged = safe !== lastDockSafe;
+            lastDockSafe = safe;
             const themeChanged = cls.includes('light-theme') !== lastBodyClass.includes('light-theme');
             const stageChanged = cls.includes('music-stage-active') !== lastBodyClass.includes('music-stage-active');
             const enteringChanged = cls.includes('music-stage-entering') !== lastBodyClass.includes('music-stage-entering');
@@ -1685,7 +1692,9 @@
                 updatePlaying(true);
                 goToPlaying();
             }
-            resize();
+            // 档案页没显示时不排版：经典视图下每次切歌都会走到这里，强制一次样式计算和布局。
+            // 切回档案页时 setMode 会重新 resize。
+            if (isShown() && (classChanged || safeChanged)) resize();
             kick();
         });
         bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });

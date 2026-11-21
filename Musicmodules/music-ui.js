@@ -62,7 +62,32 @@ function setupUI(app) {
     let renderedBase = null;
     let renderedTitles = null;
     let renderedBaseLength = -1;
+    // 档案页开着时经典列表整个藏着：上千首歌的 <li> 不在这时重建（删一首歌、重扫、换排序都会走到这里，
+    // 每次都是几千个节点的增删，之后档案页一读布局就要为它们付样式计算）。记下要画什么，切回经典视图再画。
+    let deferred = null;
+    const classicHidden = () => document.body.classList.contains('music-archive-on');
+    app.classicPendingSongs = null;
     app.renderPlaylist = (filtered) => {
+        if (classicHidden()) {
+            deferred = { filtered };
+            app.classicPendingSongs = (filtered || app.playlist).slice();
+            app.updateAllCount();
+            return;
+        }
+        deferred = null;
+        app.classicPendingSongs = null;
+        renderNow(filtered);
+    };
+    if (typeof MutationObserver === 'function') {
+        new MutationObserver(() => {
+            if (!deferred || classicHidden()) return;
+            const { filtered } = deferred;
+            deferred = null;
+            app.classicPendingSongs = null;
+            renderNow(filtered);
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+    const renderNow = (filtered) => {
         const songs = filtered || app.playlist;
         const items = app.playlistEl.children;
         const unchanged = renderedSongs
