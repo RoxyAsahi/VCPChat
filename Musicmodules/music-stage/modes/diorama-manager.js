@@ -260,7 +260,10 @@
             // The saloon is lit from its own ceiling and sits a little lower.
             renderer.toneMappingExposure = 1.15 * (1 + swell * 0.12 + breath) * (1 - 0.2 * (pose.cabinView || 0));
             const bars = settings.letterbox !== false && settings.geometryMode !== 'corridor'
-                ? Math.max(0, (height - width / 2.39) / 2) * (1 - pose.state.openness * 0.75) : 0;
+                // A tall window would lose most of the picture to a 2.39:1 frame;
+                // the bars stop at the depth they reach on a 16:9 desktop window.
+                ? Math.min(Math.max(0, (height - width / 2.39) / 2), height * 0.14)
+                    * (1 - pose.state.openness * 0.75) : 0;
             // Lyrics stay clear of the frame edge, the letterbox bars and the track card.
             lyrics.update(time, settings, audio, camera,
                 { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height), avoid: overlay.box });

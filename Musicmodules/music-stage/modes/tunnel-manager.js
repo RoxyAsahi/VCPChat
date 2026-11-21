@@ -3168,12 +3168,13 @@
                 sungMain: { value: new T.Color() },
                 sub: { value: new T.Color() },
                 ink: { value: new T.Color() },
-                outline: { value: new T.Color() }
+                outline: { value: new T.Color() },
+                hop: { value: 0 }, hopStart: { value: -1 }, hopHeight: { value: 0 }
             },
             vertexShader: `
                 attribute vec2 aCenter, aLocal, aTiming;
                 attribute float aKind;
-                uniform float time, motion;
+                uniform float time, motion, hop, hopStart, hopHeight;
                 varying vec2 vUv, vLocal, vTiming;
                 varying float vActive, vKind;
                 void main() {
@@ -3188,6 +3189,8 @@
                     pos.xy *= 1.0 + pulse * 0.025;
                     pos.y += pulse * 0.12;
                     pos.z += pulse * 0.18;
+                    // The word being sung when the music hits hops and settles.
+                    pos.y += hop * motion * hopHeight * (1.0 - aKind) * step(abs(aTiming.x - hopStart), 0.001);
                     pos.xy += aCenter;
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
                 }
@@ -3232,6 +3235,7 @@
         const glyphColorUniforms = ['waitMain', 'sungMain', 'sub', 'ink', 'outline'];
         let glyphCanvas = document.createElement('canvas');
         let glyphMesh = null;
+        let glyphStarts = [], glyphEnd = -Infinity, glyphOnsets = 0;
         let glyphTexture = null;
         let glyphLine = null;
         let glyphTop = 0;
@@ -3252,6 +3256,7 @@
             glyphColorUniforms.forEach(key => uniforms[key].value.copy(glyphMaterial.uniforms[key].value));
             uniforms.map.value = glyphTexture;
             uniforms.motion.value = 0;
+            uniforms.hop.value = 0;
             glyphMesh.material = fadingGlyphMaterial;
             lyricAnchorGroup.add(glyphMesh);
             fadingGlyph = { mesh: glyphMesh, texture: glyphTexture, bottom: glyphBottom,
@@ -3262,6 +3267,7 @@
         };
 
         const clearGlyphStage = () => {
+            glyphStarts = []; glyphEnd = -Infinity;
             if (glyphMesh) {
                 glyphStage.remove(glyphMesh);
                 glyphMesh.geometry.dispose();
@@ -3474,6 +3480,11 @@
                     geometry.setAttribute('aTiming', new T.Float32BufferAttribute(timings, 2));
                     geometry.setAttribute('aKind', new T.Float32BufferAttribute(kinds, 1));
                     geometry.setIndex(indices);
+                    const mainCells = cells.filter(cell => !cell.isSub);
+                    glyphStarts = mainCells.map(cell => cell.start).filter(Number.isFinite).sort((a, b) => a - b);
+                    glyphEnd = Math.max(-Infinity, ...mainCells.map(cell => cell.end).filter(Number.isFinite));
+                    glyphMaterial.uniforms.hopHeight.value = mainCells.length ? mainCells[0].h * unit * 0.16 : 0;
+                    glyphMaterial.uniforms.hopStart.value = -1;
 
                     glyphTexture = new T.CanvasTexture(glyphCanvas);
                     glyphTexture.generateMipmaps = false;
@@ -3822,6 +3833,15 @@
                 glyphMaterial.uniforms.time.value = time;
                 glyphMaterial.uniforms.alpha.value = glyphAlpha;
                 glyphMaterial.uniforms.motion.value = motionAmount;
+                // A hit in the music picks the word being sung (or the last one
+                // begun, between words) and keeps it through the fall.
+                if (audioState.onsets !== glyphOnsets) {
+                    glyphOnsets = audioState.onsets;
+                    let picked = -1;
+                    if (time < glyphEnd) for (const start of glyphStarts) if (start <= time) picked = start;
+                    glyphMaterial.uniforms.hopStart.value = picked;
+                }
+                glyphMaterial.uniforms.hop.value = clamp(audioState.impact || 0);
                 if (glyphMesh) glyphMesh.position.y = 0;
                 if (fadingGlyph && glyphMesh) {
                     // Keep the ink of the two full blocks apart, including translations.
@@ -4268,6 +4288,7 @@
         // song's words put away while the host waits for the new lyrics; the
         // new song then starts under the last of that picture, dissolving.
         const veil = U.createHandoverVeil(mode.root);
+        const onset = R.createAudioOnset();
         let leaving = null, revealPending = false;
         const wantsCanvasSmoothing = () => !(global.MusicStageDioramaOptics?.active(mode.config, {}) ?? false);
         // The settings as drawn: the chosen tier, less what the frame rate made it drop.
@@ -4397,6 +4418,7 @@
             const seeking = lastTime === null || dt < -0.1 || dt > 0.5;
             const live = Boolean(frame.isPlaying) && dt > 0 && !settings.reducedMotion;
             const reactivity = clamp(settings.audioReactivity ?? 1, 0, 2);
+            const hit = onset.update(frame);
 
             const audio = live
                 ? {
@@ -4410,6 +4432,8 @@
             world.update(time, frame, settings, {
                 seek: seeking,
                 playing: live,
+                impact: live ? hit.impact * reactivity : 0,
+                onsets: hit.onsets,
                 dt: seeking ? 0 : Math.max(0, Math.min(0.08, dt)),
                 ...audio
             }, camera);
