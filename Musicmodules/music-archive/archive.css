@@ -525,6 +525,20 @@ body.music-reduce-motion .archive-lyrics { animation: none; }
 .archive-lyrics-track p:hover b { opacity: .9; }
 /* 正在唱：目录选中行同款记号（小方块 + 延伸到行尾的细线），字变成墨色加粗 */
 .archive-lyrics-track p.on b { color: var(--ar-ink); opacity: 1; font-weight: 750; }
+/* 逐字：正在唱的那一行，唱过的字是墨色，没唱到的淡一些；正在唱的那个字按剩余时长从左往右填 */
+.archive-lyrics-track b.ww .w { white-space: pre; }
+.archive-lyrics-track p.on b.ww { --lw-dim: color-mix(in srgb, var(--ar-ink) 34%, transparent); }
+.archive-lyrics-track p.on b.ww .w {
+    background-image: linear-gradient(var(--ar-ink), var(--ar-ink)), linear-gradient(var(--lw-dim), var(--lw-dim));
+    background-repeat: no-repeat; background-size: 0% 100%, 100% 100%;
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.archive-lyrics-track p.on b.ww .w.sung { background-size: 100% 100%, 100% 100%; }
+.archive-lyrics-track p.on b.ww .w.singing { background-size: 100% 100%, 100% 100%; transition: background-size var(--d, .3s) linear; }
+.archive-lyrics-track p.on b.ww .w.held { background-size: var(--p, 0%) 100%, 100% 100%; }
+body.music-reduce-motion .archive-lyrics-track p.on b.ww .w.singing { transition: none; }
+/* 手动翻歌词时：正在唱的那一行以外的行稍微亮一点，方便找；停手后自己回去 */
+.archive-lyrics.browsing .archive-lyrics-track b { opacity: .8; }
 .archive-lyrics-track p.on em { color: var(--ar-ink); opacity: .8; }
 .archive-lyrics-track p.on::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--ar-square); }
 .archive-lyrics-track p.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 9.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
