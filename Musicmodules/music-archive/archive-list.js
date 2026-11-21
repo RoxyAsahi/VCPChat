@@ -716,6 +716,19 @@
                     if (row && row.type === 'track') { e.preventDefault(); play(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
+                case 'Delete': {
+                    // 在歌单里按 Delete：把选中的（或多选的几首）从这个歌单移除，可以撤销。曲库本身不用这个键删
+                    if (inInput) return;
+                    const row = selectedRowData();
+                    if (!row || row.type !== 'track') return;
+                    const picked = multi.size > 1 && multi.has(keyOf(row));
+                    const scope = picked ? batchScope() : scopeOf(row);
+                    if (!scope || scope.type !== 'playlist') return;
+                    e.preventDefault();
+                    removeFromPlaylistBatch(scope, pickedIndices(row));
+                    if (picked) clearMulti();
+                    break;
+                }
                 case 'a': case 'A':
                     if (inInput || !(e.ctrlKey || e.metaKey)) return;
                     e.preventDefault();
