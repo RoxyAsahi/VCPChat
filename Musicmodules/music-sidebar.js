@@ -141,9 +141,17 @@ function setupSidebar(app) {
             if (app.contextMenu.getBoundingClientRect().top < 10) app.contextMenu.style.top = '10px';
             if (rect.left < 10) app.contextMenu.style.left = '10px';
             // 右边放不下「添加到歌单」的子菜单时，往左边展开（不然歌单名被窗口边裁掉）
+            // 窗口窄到两边都放不下时（最小宽度 420），挑空间大的一边，把子菜单收窄到放得下，歌单名用省略号
             const sub = app.contextMenu.querySelector('.context-submenu');
+            if (sub) sub.style.maxWidth = '';
             const subWidth = sub ? Math.max(sub.offsetWidth, 160) : 160;
-            app.contextMenu.classList.toggle('sub-left', app.contextMenu.getBoundingClientRect().right + subWidth + 12 > window.innerWidth);
+            const box = app.contextMenu.getBoundingClientRect();
+            const roomRight = window.innerWidth - box.right - 4 - 8;
+            const roomLeft = box.left - 4 - 8;
+            const left = subWidth > roomRight && roomLeft > roomRight;
+            app.contextMenu.classList.toggle('sub-left', left);
+            const room = Math.floor(left ? roomLeft : roomRight);
+            if (sub && subWidth > room) sub.style.maxWidth = `${Math.max(room, 120)}px`;
             // 从按下右键的那一点长出来
             window.MusicFluid?.bud(app.contextMenu, { x, y });
         });
@@ -152,7 +160,7 @@ function setupSidebar(app) {
     app.updatePlaylistSubmenu = () => {
         app.playlistSubmenu.innerHTML = app.customPlaylists.length === 0 ? '<div class="submenu-empty">暂无歌单</div>' : '';
         app.customPlaylists.forEach(pl => {
-            const item = document.createElement('div'); item.className = 'submenu-item'; item.textContent = pl.name;
+            const item = document.createElement('div'); item.className = 'submenu-item'; item.textContent = pl.name; item.title = pl.name;
             item.addEventListener('click', (e) => { e.stopPropagation(); app.addSelectedTracksToPlaylist(pl.id); app.contextMenu.classList.remove('visible'); });
             app.playlistSubmenu.appendChild(item);
         });

@@ -1679,6 +1679,11 @@
                 followWidth();
             }
             document.body.classList.toggle('music-dock-beside-list', Boolean(edge));
+            const mistPad = edge ? `${Math.round(Math.max(0, left - edge))}px` : '';
+            if (host.style.getPropertyValue('--md-mist-pad') !== mistPad) {
+                if (mistPad) host.style.setProperty('--md-mist-pad', mistPad); else host.style.removeProperty('--md-mist-pad');
+                fluid?.layout();
+            }
             // 首页按抽屉占掉的宽度重排（archive-view 的 resize 读 roomRight），区块让开，不被抽屉盖住
             roomRight = open ? DRAWER_W : 0;
             document.body.classList.toggle('music-drawer-open', open);

@@ -1283,8 +1283,10 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 /* ---------- 经典列表：标题 / 歌手 / 时长三列，表头排序 ---------- */
 .music-list-head {
     display: grid;
-    /* 第一格对齐行号那一列，放「添加时间」排序；后三格和每行的三列对齐 */
-    grid-template-columns: 24px minmax(0, 1.8fr) minmax(0, 1fr) 52px;
+    /* 第一格对齐行号那一列，放「添加时间」排序；后面和每行的列一一对齐。
+       行里歌手和时长之间有一格 22px 的「喜欢」，表头也要空出这一格，不然表头的标题、歌手两栏比行里宽，
+       「歌手」两个字会落在歌手名右边 20 多像素 */
+    grid-template-columns: 24px minmax(0, 1.8fr) minmax(0, 1fr) 22px 52px;
     align-items: end;
     column-gap: 12px;
     padding: 6px 16px 6px 16px;
@@ -1299,7 +1301,7 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 
 .music-list-sort.is-title { grid-column: 2; grid-row: 1; }
 .music-list-sort.is-artist { grid-column: 3; grid-row: 1; }
-.music-list-sort.is-duration { grid-column: 4; grid-row: 1; }
+.music-list-sort.is-duration { grid-column: 5; grid-row: 1; }
 
 .music-list-sort {
     display: inline-flex;
