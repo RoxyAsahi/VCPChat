@@ -287,6 +287,34 @@
      * target (the lens, the water) compiles differently from one drawn to the
      * canvas, so it is compiled for each place the frame will draw it.
      */
+    /*
+     * Compile what the scene draws and wait until the driver has linked it.
+     * The renderer's own wait throws from a timer once the renderer has been
+     * disposed (a stage left before its warm-up finished); this one just stops.
+     */
+    const compileReady = (renderer, scene, camera) => {
+        if (!renderer.compileAsync || !renderer.properties) {
+            renderer.compile(scene, camera);
+            return Promise.resolve();
+        }
+        const waiting = renderer.compile(scene, camera);
+        return new Promise((resolve) => {
+            const check = () => {
+                try {
+                    for (const material of waiting) {
+                        const program = renderer.properties.get(material)?.currentProgram;
+                        if (!program || program.isReady()) waiting.delete(material);
+                    }
+                } catch {
+                    waiting.clear();
+                }
+                if (!waiting.size) resolve();
+                else setTimeout(check, 10);
+            };
+            check();
+        });
+    };
+
     const precompile = async (T, renderer, scene, camera, { canvas = true, offscreen = true, report = true } = {}) => {
         const previous = renderer.getRenderTarget();
         const probe = offscreen ? new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType }) : null;
@@ -294,8 +322,7 @@
             for (const target of [canvas ? null : undefined, probe || undefined]) {
                 if (target === undefined) continue;
                 renderer.setRenderTarget(target);
-                if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
-                else renderer.compile(scene, camera);
+                await compileReady(renderer, scene, camera);
             }
         } catch (error) {
             console.warn('[MusicStage] shader warm-up skipped:', error);
@@ -396,6 +423,7 @@
         createHandoverVeil,
         createFrameCap, durationChanged,
         precompile,
+        compileReady,
         warmLensless,
         tier,
         clamp,
