@@ -155,18 +155,31 @@
             wanted.forEach(i => { if (!mounted.has(i)) mountBlock(blocks[i]); });
         };
 
-        // Reading zoom, capped so the whole line block fits across the viewport.
+        // The track card sits in the top-left corner; when it reaches down to the
+        // reading line, lines start to the right of it instead of underneath.
+        const card = U.watchOverlay(mode.root);
+        mode.scope.add(() => card.destroy());
         const MARGIN = 28;
+        const leftLimit = () => {
+            const box = card.box;
+            if (!box) return MARGIN;
+            const cardBottom = (1 - box.bottom) / 2 * height;
+            if (cardBottom < height * 0.44 - 90) return MARGIN;
+            return Math.max(MARGIN, (box.right + 1) / 2 * width + 24);
+        };
+        // Reading zoom, capped so the whole line block fits across the viewport.
         const readScale = block => Math.min(
             clamp(Math.min(width, height) * 0.09 / block.fontSize, 0.9, 2),
-            Math.max(0.5, (width - MARGIN * 2) / block.width)
+            Math.max(0.5, (width - leftLimit() - MARGIN) / block.width)
         );
         // Follow the reading head, but never pan so far that the current block
         // runs off either side of the window (narrow windows cut lines otherwise).
         const keepBlock = (block, pose) => {
-            const reach = (width * 0.5 - MARGIN) / pose.scale;
-            const low = block.x + block.width - reach, high = block.x + reach;
+            const right = (width * 0.5 - MARGIN) / pose.scale;
+            const low = block.x + block.width - right;
+            const high = block.x + (width * 0.5 - leftLimit()) / pose.scale;
             if (low <= high) pose.x = clamp(pose.x, low, high);
+            else if (low <= block.x + right) pose.x = clamp(pose.x, low, block.x + right);
             return pose;
         };
 

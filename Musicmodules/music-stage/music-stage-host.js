@@ -143,8 +143,8 @@
             { key: 'lyricLayout', label: '歌词构图', type: 'select', options: [['lines', '整句分行'], ['phrases', '短语分组'], ['staircase', '阶梯短语'], ['editorial-track', '纵横连续版轨'], ['starbloom', '繁星如盛']] },
             { key: 'trackVerticalChance', label: '版轨纵排概率', type: 'range', min: 0.1, max: 0.9, step: 0.05, unit: '%' },
             { key: 'trackJunction', label: '版轨交错幅度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'trackLookAhead', label: '镜头前路预瞄', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'trackMinSegment', label: '错栏断句最短字数', type: 'range', min: 2, max: 8, step: 1, unit: '字' },
+            { key: 'trackLookAhead', label: '镜头提前看下一段', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+            { key: 'trackMinSegment', label: '换栏最短字数', type: 'range', min: 2, max: 8, step: 1, unit: '字' },
             { key: 'phraseLength', label: '短语目标字数', type: 'range', min: 6, max: 24, step: 1, unit: '字' },
             { key: 'phraseEmphasis', label: '短语聚光', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'cameraTracking', label: '逐词追焦', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -155,7 +155,7 @@
             { key: 'releaseDuration', label: '句尾消散', type: 'range', min: 0, max: 1.5, step: 0.05, unit: 's' },
             { key: 'lensDistortion', label: '镜头光学畸变', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
             { key: 'lensDispersion', label: '径向色散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'rgbShift', label: 'RGB 偏移', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+            { key: 'rgbShift', label: '色彩错位', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'grain', label: '胶片颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'contrast', label: '对比度增强', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -172,7 +172,7 @@
             { key: 'decorOpacity', label: '装饰可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
             { key: 'decorMotion', label: '装饰运动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
         ];
-        const lyricLayoutStyle = { key: 'layoutStyle', label: '构图风格', type: 'select', options: [['calm', '平静'], ['normal', '原作标准'], ['chaotic', '奔放']] };
+        const lyricLayoutStyle = { key: 'layoutStyle', label: '构图风格', type: 'select', options: [['calm', '平静'], ['normal', '标准'], ['chaotic', '奔放']] };
         const tuningDefinitions = Object.freeze({
             tempera: [
                 { key: 'cameraIntensity', label: '镜头强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
@@ -181,7 +181,7 @@
                 { key: 'showBlocks', label: '色块场景', type: 'toggle' },
                 { key: 'showDecor', label: '装饰元素', type: 'toggle' },
                 { key: 'textInversion', label: '演唱强调色', type: 'toggle' },
-                { key: 'postProcess', label: '光学后处理（节能档关闭）', type: 'toggle' },
+                { key: 'postProcess', label: '光学后期（节能档关闭）', type: 'toggle' },
                 ...pixiTuningDefinitions
             ],
             sonnet: [
@@ -190,7 +190,7 @@
                 { key: 'guideLines', label: '轨迹线', type: 'toggle' },
                 { key: 'showBackground', label: '主场景', type: 'toggle' },
                 { key: 'showDecor', label: '背景装饰', type: 'toggle' },
-                { key: 'postProcess', label: '光学后处理（节能档关闭）', type: 'toggle' },
+                { key: 'postProcess', label: '光学后期（节能档关闭）', type: 'toggle' },
                 ...pixiTuningDefinitions
             ],
             diorama: [
@@ -206,14 +206,14 @@
                 { key: 'vignette', label: '镜头暗角', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'narrativeStations', label: '沿线站台与电线杆', type: 'toggle' },
                 { key: 'stationIntensity', label: '沿线设施密度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'waterReflection', label: '全局水面反射', type: 'toggle' },
-                { key: 'waterStrength', label: '水面反射强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'waterReflection', label: '水面倒影', type: 'toggle' },
+                { key: 'waterStrength', label: '倒影强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'cameraSpeed', label: '镜头速度', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'motionAmount', label: '运动幅度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'audioReactivity', label: '空间音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricFont', label: '歌词字体', type: 'select', options: [['sans', '黑体'], ['serif', '宋体（明朝）'], ['kai', '楷体']] },
-                { key: 'coverTint', label: '天色随封面（封面的主色染进天空与极光，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: 'x' },
+                { key: 'coverTint', label: '天色随封面（封面的主色染进天空与极光，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'showParticles', label: '天球星空', type: 'toggle' },
                 { key: 'geometryMode', label: '取景方式', type: 'select', options: [['clouds', '电影取景'], ['corridor', '全幅取景']] },
                 { key: 'cabinFrame', label: '车窗前景（侧望窗外时淡入）', type: 'toggle' },
@@ -222,7 +222,7 @@
             ],
             luminous: [
                 ...vectorDecorControls,
-                { key: 'fontScale', label: '文字比例', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'semanticLayout', label: '语义与标点组合', type: 'toggle' },
                 lyricLayoutStyle,
                 ...lyricPerformanceControls,
@@ -234,7 +234,7 @@
             partita: [
                 ...vectorDecorControls,
                 { key: 'guidePulse', label: '短语引导光点', type: 'toggle' },
-                { key: 'fontScale', label: '文字比例', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'glow', label: '逐字辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'breathing', label: '整句呼吸', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 lyricLayoutStyle,
@@ -251,8 +251,8 @@
                 { key: 'breathing', label: '构图呼吸', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 ...lyricPerformanceControls,
                 { key: 'motion', label: '词片运动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'fontScale', label: '文字比例', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
-                { key: 'widthRatio', label: '构图宽度', type: 'range', min: 0.5, max: 0.95, step: 0.01, unit: '' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'widthRatio', label: '构图宽度', type: 'range', min: 0.5, max: 0.95, step: 0.01, unit: '%' },
                 { key: 'glow', label: '辉光强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ],
             fume: [
@@ -269,8 +269,8 @@
                 { key: 'hidePrintSymbols', label: '隐藏打印标记', type: 'toggle' }
             ],
             starborn: [
-                { key: 'transitionLock', label: '转场锁定', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
-                { key: 'avoidRepeat', label: '避免重复', type: 'toggle' }
+                { key: 'transitionLock', label: '换场最短间隔', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
+                { key: 'avoidRepeat', label: '不连续用同一舞台', type: 'toggle' }
             ],
             kowloon: [
                 { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
@@ -298,14 +298,14 @@
                 { key: 'showShips', label: '飞船', type: 'toggle' },
                 { key: 'showStations', label: '空间站', type: 'toggle' },
                 { key: 'dissolveAmount', label: '点阵消散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-                { key: 'textHoldRatio', label: '歌词驻留', type: 'range', min: 0, max: 0.8, step: 0.05, unit: '%' },
+                { key: 'textHoldRatio', label: '已唱歌词驻留', type: 'range', min: 0, max: 0.8, step: 0.05, unit: '%' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'lyricFont', label: '歌词字体', type: 'select', options: [['sans', '黑体'], ['serif', '宋体（明朝）'], ['kai', '楷体']] },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
                 { key: 'glow', label: '点阵辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'coverTint', label: '星云随封面（封面的主色染进星云，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: 'x' }
+                { key: 'coverTint', label: '星云随封面（封面的主色染进星云，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' }
             ]
         });
         const state = {
