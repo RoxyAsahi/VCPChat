@@ -134,3 +134,36 @@ test('slide also runs vertically (top/height), leading edge first, and lands exa
     assert.equal(parseFloat(drop.style.top), 60);
     assert.equal(parseFloat(drop.style.height), 30);
 });
+
+test('a watched menu melts back to the item that was clicked when it closes, and only after it finished growing', async () => {
+    const dom = new JSDOM(`<!doctype html><body><div class="context-menu"></div></body>`, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const { window } = dom;
+    const frames = [];
+    let now = 0;
+    window.performance.now = () => now;
+    window.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+    window.cancelAnimationFrame = () => {};
+    const timers = [];
+    window.setTimeout = (fn) => { timers.push(fn); return timers.length; };
+    window.clearTimeout = () => {};
+    window.eval(fs.readFileSync(path.join(ROOT, 'Musicmodules/music-dock/music-fluid-kit.js'), 'utf8'));
+    const doc = window.document;
+    if (doc.readyState === 'loading') await new Promise((r) => doc.addEventListener('DOMContentLoaded', r, { once: true }));
+    const menu = doc.querySelector('.context-menu');
+    menu.getBoundingClientRect = () => ({ left: 300, top: 120, width: 200, height: 260, right: 500, bottom: 380 });
+    const tick = () => new Promise((r) => window.queueMicrotask ? window.queueMicrotask(r) : Promise.resolve().then(r));
+    // 关得太快（还没长完）：不画
+    menu.classList.add('visible'); await tick();
+    menu.classList.remove('visible'); await tick();
+    assert.equal(doc.querySelector('svg.mf-goo'), null);
+    // 长完再关：缩回一滴，流向点的那一项
+    menu.classList.add('visible'); await tick();
+    timers.splice(0).forEach((fn) => fn());
+    doc.body.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, clientX: 360, clientY: 200 }));
+    menu.classList.remove('visible'); await tick();
+    const goo = doc.querySelector('svg.mf-goo');
+    assert.ok(goo, 'melting drawn');
+    assert.equal(goo.querySelector('circle').getAttribute('cx'), '360.0');
+    for (let i = 0; i < 20; i++) { now += 40; frames.splice(0).forEach((fn) => fn()); }
+    assert.equal(doc.querySelector('svg.mf-goo'), null);
+});

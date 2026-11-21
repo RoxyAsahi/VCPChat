@@ -271,11 +271,51 @@
             observer.observe(node, { attributes: true, attributeFilter: ['class'] });
         }
     };
-    if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', watchDialogs, { once: true });
-    else watchDialogs();
+    // ───────── 菜单：合上时缩回一滴，流回刚点的那一项 ─────────
+    // 菜单打开时由各处自己调 bud；这里只看着它什么时候合上。打开后等长完再记下样子（关得太快就不画）。
+    // isOpen(node) 判断开着没有；右键菜单是 visible 类，档案排序菜单是 hidden 属性。
+    const watched = new WeakSet();
+    function watchPop(node, isOpen = (n) => !n.hidden) {
+        if (!node || watched.has(node) || typeof global.MutationObserver !== 'function') return;
+        watched.add(node);
+        let open = isOpen(node);
+        let snap = null;
+        let timer = 0;
+        const remember = () => { timer = 0; if (isOpen(node)) snap = snapshot(node); };
+        if (open) timer = global.setTimeout(remember, DURATION + 40);
+        new global.MutationObserver(() => {
+            const now = isOpen(node);
+            if (now === open) {
+                // 开着的时候换了位置（又在别处右键）：等新位置长完再重新记
+                if (now) { snap = null; global.clearTimeout(timer); timer = global.setTimeout(remember, DURATION + 40); }
+                return;
+            }
+            open = now;
+            if (now) {
+                snap = null;
+                global.clearTimeout(timer);
+                timer = global.setTimeout(remember, DURATION + 40);
+                return;
+            }
+            global.clearTimeout(timer);
+            timer = 0;
+            const fresh = lastPress && Date.now() - lastPress.at < 1500 ? lastPress : null;
+            if (snap && fresh) melt(snap, fresh, { duration: 260 });
+            snap = null;
+        }).observe(node, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    }
+    const watchMenus = () => {
+        for (const node of global.document.querySelectorAll('.context-menu')) {
+            watchPop(node, (n) => n.classList.contains('visible') && n.style.display !== 'none');
+        }
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); };
+    if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
 
     // 最近 1.5 秒内按下指针的那一点；键盘打开的东西拿不到时返回 null，由调用方决定从哪里长
     const recentPress = () => (lastPress && Date.now() - lastPress.at < 1500 ? { x: lastPress.x, y: lastPress.y } : null);
 
-    global.MusicFluid = Object.freeze({ bud, melt, snapshot, slide, cancel, enabled, recentPress });
+    global.MusicFluid = Object.freeze({ bud, melt, snapshot, watchPop, slide, cancel, enabled, recentPress });
 })(typeof window !== 'undefined' ? window : globalThis);
