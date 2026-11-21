@@ -769,8 +769,20 @@
                     const exitDuration = Math.min(node.constellation ? 2.4 : 0.4,
                         Math.max(0.001, (nextStart - node.phrase.end) * (node.constellation ? 1 : 0.5)));
                     const enter = D.smooth((time - node.phrase.start + enterDuration) / enterDuration);
-                    const exit = D.smooth((time - node.phrase.end) / exitDuration);
-                    node.mat.uniforms.fade.value = enter * (1 - exit);
+                    const ending = D.smooth((time - node.phrase.end) / exitDuration);
+                    // The last page on a board, when the next line goes up on
+                    // another board, stays on, dimmed, while the camera turns
+                    // from one board to the other: a blank board in the middle
+                    // of the picture reads as a fault, the line just heard on it
+                    // does not. It is gone by the time the next line starts, and
+                    // before the camera draws level with the board.
+                    const nextEncounter = phrases[i + 1] && track.pageEncounter.get(phrases[i + 1].id);
+                    const linger = node.encounter && track.timeAt && nextEncounter !== undefined
+                        && nextEncounter !== node.encounter.id
+                        ? R.clamp(Math.min(nextStart, track.timeAt(node.encounter.address)) - node.phrase.end, 0, 10) : 0;
+                    const exit = linger > 1 ? D.smooth((time - node.phrase.end - linger + 0.8) / 0.8) : ending;
+                    node.mat.uniforms.fade.value = enter * (1 - exit)
+                        * (linger > 1 ? 1 - 0.4 * D.smooth((time - node.phrase.end) / 0.8) : 1);
                     node.group.visible = node.mat.uniforms.fade.value > 0;
                     const moving = !options.reducedMotion && (tuning.motionAmount ?? 1) > 0
                         && (options.animationIntensity ?? 1) > 0;
@@ -803,11 +815,11 @@
                             const singing = time < glyph.endTime;
                             return Math.max(level, singing ? 0.55 + Math.exp(-age * 8) * 0.45
                                 : 0.4 * (1 - D.smooth((time - glyph.endTime) / 0.7)));
-                        }, 0) * enter * (1 - exit);
+                        }, 0) * enter * (1 - ending);
                         sign.performance.uniforms.light.value = Math.max(sign.performance.uniforms.light.value, activation);
                         sign.performance.uniforms.bins.value = audio.spectrum || sign.performance.uniforms.bins.value;
                         if (time >= node.phrase.end && time < node.phrase.end + exitDuration)
-                            sign.performance.uniforms.closing.value = exit;
+                            sign.performance.uniforms.closing.value = ending;
                         sign.back.emissiveIntensity = activation * 0.035;
                         // The lamps go down ahead of a line and come back only once
                         // the board has stood empty for a while, so they do not
@@ -816,7 +828,7 @@
                             * (1 - D.smooth((time - node.phrase.end - 1.6) / 2.4)));
                         sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby * (1 - 0.8 * sign.held));
                     }
-                    if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * enter * (1 - exit);
+                    if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * node.mat.uniforms.fade.value;
                     if (node.constellation) keepInFrame(node, camera, frame);
                 }
                 // A malformed/overlapping vocal timeline can still produce two
