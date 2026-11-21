@@ -24,6 +24,17 @@ function setupUtils(app) {
         });
     };
 
+    // 分享当前曲目到聊天；分享不了（远程曲目、文件已不在）时给个提示。
+    app.shareCurrentTrack = async () => {
+        if (!app.pendingTrackPath || !app.api?.shareMusicTrack) return;
+        try {
+            const result = await app.api.shareMusicTrack(app.pendingTrackPath);
+            if (result && result.success === false && result.message) window.MusicToast?.show?.({ message: result.message });
+        } catch (error) {
+            console.error('[Music] Share failed:', error);
+        }
+    };
+
     app.formatTime = (seconds) => {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);

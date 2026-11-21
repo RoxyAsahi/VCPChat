@@ -961,13 +961,23 @@ function initialize(options) {
             }
         });
 
-        ipcMain.handle('music-share-track', (event, filePath) => {
+        ipcMain.handle('music-share-track', async (event, filePath) => {
+            // 聊天附件只收本地文件：远程（WebDAV）曲目和已经不在磁盘上的文件在这里就说清楚，
+            // 不然要到聊天窗口里才弹一个看不懂的「附加失败」。
+            if (typeof filePath !== 'string' || /^https?:\/\//i.test(filePath)) {
+                return { success: false, message: '远程曲目不能作为附件分享' };
+            }
+            if (!(await fs.pathExists(filePath))) {
+                return { success: false, message: '这首歌的文件已经不在原来的位置了' };
+            }
             if (mainWindow && !mainWindow.isDestroyed()) {
                 console.log(`[Music] Forwarding shared file to renderer: ${filePath}`);
                 mainWindow.webContents.send('add-file-to-input', filePath);
                 if (mainWindow.isMinimized()) mainWindow.restore();
                 mainWindow.focus();
+                return { success: true };
             }
+            return { success: false, message: '主窗口没有打开' };
         });
 
         ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject }) => {

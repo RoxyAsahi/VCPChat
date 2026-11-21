@@ -827,9 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         app.addFolderBtn.onclick = () => app.api?.addMusicFolder?.();
-        app.shareBtn.onclick = () => {
-            if (app.pendingTrackPath) app.api?.shareMusicTrack?.(app.pendingTrackPath);
-        };
+        app.shareBtn.onclick = () => app.shareCurrentTrack();
 
         app.deviceSelect.onchange = () => app.configureOutput();
         app.wasapiSwitch.onchange = () => { if (!app.wasapiSwitch._programmaticUpdate) app.configureOutput(); };

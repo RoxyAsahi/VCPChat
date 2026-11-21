@@ -959,7 +959,8 @@
             }
         };
         listen(el.share, 'click', () => {
-            if (app.pendingTrackPath) app.api?.shareMusicTrack?.(app.pendingTrackPath);
+            if (app.shareCurrentTrack) app.shareCurrentTrack();
+            else if (app.pendingTrackPath) app.api?.shareMusicTrack?.(app.pendingTrackPath);
         });
 
         // ───────── 音量 ─────────
