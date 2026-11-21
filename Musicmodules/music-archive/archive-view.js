@@ -462,6 +462,8 @@
             refs.cat.textContent = col.name;
             refs.catPos.textContent = count ? '第 ' + (r + 1) + ' / ' + count + ' 首' : '';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
+            // 标题被省略号截断时，悬停能看到完整曲名
+            refs.ftitle.title = t ? refs.ftitle.textContent : '';
             const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
             // 空列：告诉人下一步怎么做
             const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';

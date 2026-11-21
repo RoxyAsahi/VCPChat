@@ -9,7 +9,7 @@
 
     const LETTER_H = 20;  // 首字母分组前的留白（字母本身在左侧外边距里）
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
-    const ROW_H = 58;     // 曲目行高
+    const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];
@@ -29,6 +29,7 @@
             <span class="archive-glyph-search" aria-hidden="true"></span>
             <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目">
             <span class="archive-key" aria-hidden="true">/</span>
+            <button type="button" class="archive-list-clear" data-l="clear" aria-label="清除检索" title="清除检索（Esc）"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             <div class="archive-list-recentq mf-glass" data-l="recentQ" role="listbox" aria-label="最近检索" hidden></div>
         </label>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
@@ -774,6 +775,17 @@
                 // 有检索词时第一条就是最可能的结果，直接选中，回车即可播放
                 if (state.query.trim()) edgeRow(false);
             }, 30); // 570 首时一次检索约 5–15ms，去抖只为合并连续按键，不再让人等
+        });
+        // 有检索词时右边出现 ✕：点一下清空，焦点留在输入框里接着打字（显示 / 隐藏只靠 CSS 的 :placeholder-shown）
+        r.clear?.addEventListener('mousedown', (e) => e.preventDefault());
+        r.clear?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!r.input.value) return;
+            r.input.value = '';
+            flushQuery();
+            r.input.focus();
+            paintRecentQ();
         });
         r.input.addEventListener('focus', paintRecentQ);
         r.input.addEventListener('input', paintRecentQ);

@@ -284,6 +284,11 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-search input::placeholder { color: var(--ar-muted); opacity: .8; }
 .archive-list-search input::-webkit-search-cancel-button { display: none; }
 .archive-list-search:focus-within .archive-key { opacity: 0; }
+.archive-list-clear { display: grid; place-items: center; width: 24px; height: 24px; margin: -4px -4px -4px 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ar-muted); cursor: pointer; transition: color .12s, background-color .12s; }
+.archive-list-clear:hover { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+.archive-list-clear:active { transform: scale(.92); }
+.archive-list-search input:placeholder-shown ~ .archive-list-clear { display: none; }
+.archive-list-search input:not(:placeholder-shown) ~ .archive-key { display: none; }
 .archive-list-search { position: relative; z-index: 6; } /* 浮层要盖住下面的分类行（检索框自己是一个独立层叠上下文） */
 /* 最近检索：检索框聚焦且为空时，在框下面浮出一块共用玻璃（不挤动下面的分类和目录） */
 .archive-list-recentq { position: absolute; left: -12px; right: -12px; top: calc(100% + 8px); z-index: 30; padding: 6px; font-size: 13px; cursor: default; }
@@ -430,6 +435,12 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-row .rt { grid-auto-flow: column; align-items: center; }
 .archive-list-row .rt .lk { text-decoration: none; font-size: 12px; color: var(--ar-accent-text, var(--ar-accent)); opacity: .9; }
 .archive-list-row:hover .tx em, .archive-list-row:hover .rt { color: var(--ar-ink); }
+/* 悬停整行铺一层很淡的底，按下再深一点（和 Apple Music / Spotify 的行一样）；左边多铺 10px 把悬停出现的播放钮也包进来 */
+.archive-list-row { --row-wash: transparent; border-radius: 8px; background: var(--row-wash); box-shadow: -10px 0 0 var(--row-wash); transition: background-color .12s, box-shadow .12s; }
+.archive-list-row:hover { --row-wash: color-mix(in srgb, var(--ar-ink) 5%, transparent); }
+.archive-list-row:active { --row-wash: color-mix(in srgb, var(--ar-ink) 9%, transparent); }
+.archive-list-row .go:active { transform: scale(.92); }
+.archive-list.grabbing .archive-list-row, .archive-list.has-multi .archive-list-row:not(:hover) { --row-wash: transparent; }
 /* 选中：说明块同款记号，左边实心小方块 + 一条细线延伸到行尾 */
 .archive-list-row.on .tx b { font-weight: 750; }
 .archive-list-row.on::before { content: ""; position: absolute; left: 0; top: 4px; width: 6px; height: 6px; background: var(--ar-square); }
@@ -795,3 +806,61 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 /* 键盘提示放大到 12px 后，在宽档靠下限（1600×900 一类）会一直伸到右下页脚「正在播放」上面；
    改到页脚上面一行，并且不超过说明块右边 */
 .archive-hint { bottom: 62px; max-width: calc(100% - var(--ar-col) - 59px); overflow: hidden; text-overflow: ellipsis; }
+
+/* ═════════ 顶部收紧：左上标题、右上导航都往上提，封面缩小 ═════════
+   整个顶部区域上移 36（设计像素）；靠这条顶线定位的目录、歌词、资料卡、窄档说明块跟着上移同样距离 */
+.archive-brand { top: 72px; }
+.archive-nav { top: 88px; }
+.archive-list { top: 229px; }
+.archive-lyrics { top: 229px; }
+.archive-detail-back { top: 190px; }
+.archive-detail-card { top: 214px; max-height: calc(100% - 214px - 72px - var(--archive-dock-lift, 0px)); }
+.archive-hud.short .archive-detail-card { top: 200px; max-height: calc(100% - 200px - 48px - var(--archive-dock-lift, 0px)); }
+.archive-hud.short .archive-detail-back { top: 170px; }
+.archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { top: 264px; }
+.archive-hud.narrow.short .archive-callout, .archive-hud.narrow.short .archive-empty { top: 234px; }
+.archive-hud.narrow .archive-list { top: 214px; }
+.archive-hud.narrow.short .archive-list { top: 202px; }
+.archive-hud.list-open .archive-brand { top: 64px; }
+.archive-hud.list-open .archive-list,
+.archive-hud.narrow.list-open .archive-list, .archive-hud.narrow.short.list-open .archive-list { top: 164px; }
+
+/* 封面：从 232 缩到 150，放在说明块右端、底边停在分隔线上方，不再往上伸到导航那一行；
+   标题给封面让出宽度 */
+.archive-cover { width: 150px; height: 150px; top: -73px; left: calc(58px + 653px - 150px); }
+.archive-hud.mid .archive-cover { left: calc(58px + min(653px, calc(100% - 116px)) - 150px); }
+.archive-hud.has-lyrics .archive-cover { left: calc(58px + 373px - 120px); top: -43px; width: 120px; height: 120px; }
+.archive-hud.short .archive-cover { width: 120px; height: 120px; top: -43px; left: calc(58px + 653px - 120px); }
+.archive-hud.mid.short .archive-cover { left: calc(58px + min(653px, calc(100% - 116px)) - 120px); }
+.archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { left: auto; right: 59px; width: 120px; height: 120px; top: -43px; }
+.archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(653px + 58px - 150px - 24px); }
+.archive-hud.mid .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 150px - 24px); }
+.archive-hud.short .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 120px - 24px); }
+.archive-hud.has-lyrics .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(373px + 58px - 120px - 24px); }
+.archive-hud.narrow .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(100% - 59px - 120px - 24px); }
+
+/* 曲名不越过分隔线右端（没封面时原来最多伸到 760，超长曲名会比分隔线还长） */
+.archive-file-title { max-width: calc(653px + 58px); }
+.archive-hud.mid .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px); }
+.archive-hud.has-lyrics .archive-file-title { max-width: calc(373px + 58px); }
+.archive-hud.narrow .archive-file-title { max-width: calc(100% - 59px); }
+/* 空曲库：目录、加入歌单、歌词、正在播放都没有可用的东西，顶栏只留设置 */
+#music-archive-view.is-empty .archive-nav > [data-act="list"],
+#music-archive-view.is-empty .archive-nav > [data-act="save"],
+#music-archive-view.is-empty .archive-nav > [data-act="lyrics"],
+#music-archive-view.is-empty .archive-nav > [data-act="now"] { display: none; }
+
+/* ═════════ 比例收紧（顶部收紧之后的整体构图） ═════════
+   目录行高 58 → 52：同样高度多放一行；左下「这一组里的位置」大数字 58 → 46，不再和标题抢重心；
+   说明块里标题到分隔线、摘要到「播放」的间距收紧，整块更像一张卡；封面底边对齐曲名底边 */
+.archive-list-row { height: 52px; }
+.archive-counter > div { font-size: 46px; gap: 16px; }
+.archive-counter i { font-size: 26px; }
+.archive-rule { margin-top: 28px; }
+.archive-callout-acts { margin-top: 32px; }
+.archive-cover { top: -70px; }
+.archive-hud.has-lyrics .archive-cover, .archive-hud.short .archive-cover, .archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { top: -40px; }
+
+/* 底栏抽屉打开时它盖住右侧一大块，右上导航只剩半个「☰ 目」露在抽屉左边：整排先让开，关上再回来 */
+.archive-nav { transition: opacity .2s; }
+body:has(#music-dock-root .md-pnl.md-open) .archive-nav { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s, visibility 0s linear .2s; }

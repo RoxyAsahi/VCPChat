@@ -40,6 +40,13 @@
     artist: ART[Math.floor(rnd() * ART.length)],
     album: ALB[Math.floor(rnd() * ALB.length)]
   }));
+  // ?long：一半曲目换成超长的标题、歌手、专辑，用来看截断
+  if (q.has('long')) playlist.forEach((t, i) => {
+    if (i % 2) return;
+    t.title = t.title.replace(/\.flac$/, '') + '（在很远很远的海边等最后一班电车 Extended Live Version 2026 Remaster）.flac';
+    t.artist = t.artist + ' feat. Hoshino Tsubame & The Paper Lanterns Orchestra';
+    t.album = t.album + ' — 夜行列车与玻璃信号 Deluxe Edition';
+  });
   const pick = (k, off) => Array.from({ length: Math.min(n, k) }, (_, i) => playlist[(i * 7 + off) % n]?.path).filter(Boolean);
   const app = window.app = {
     playlist,
