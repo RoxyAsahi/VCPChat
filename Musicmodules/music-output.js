@@ -4,9 +4,18 @@
 function setupOutput(app) {
     app.populateDeviceList = async (forceRefresh = false) => {
         if (!app.api?.getMusicDevices) return;
+        // 引擎没起来、列设备失败时，下拉框原来是空的（一个选项都没有，看着像坏了）：至少留一个「默认设备」
+        const keepDefault = () => {
+            if (app.deviceSelect.options.length) return;
+            const opt = document.createElement('option');
+            opt.value = 'default';
+            opt.textContent = '默认设备';
+            app.deviceSelect.appendChild(opt);
+            app.deviceSelect.value = 'default';
+        };
         try {
             const result = await app.api.getMusicDevices({ refresh: forceRefresh });
-            if (result.status === 'success' && result.devices) {
+            if (result?.status === 'success' && result.devices) {
                 app.deviceSelect.innerHTML = '';
                 const defaultOption = document.createElement('option');
                 defaultOption.value = 'default';
@@ -42,8 +51,8 @@ function setupOutput(app) {
                 const current = app.currentDeviceId === null || app.currentDeviceId === undefined ? 'default' : String(app.currentDeviceId);
                 const known = [...app.deviceSelect.querySelectorAll('option')].some((o) => String(o.value) === current);
                 app.deviceSelect.value = known ? current : 'default';
-            }
-        } catch (e) { console.error("Error populating device list:", e); }
+            } else keepDefault();
+        } catch (e) { console.error("Error populating device list:", e); keepDefault(); }
     };
 
     // 引擎打开输出时退回了什么（新引擎在 /state 的 output_fallback 里报；旧引擎没有这个字段，什么都不显示）。
