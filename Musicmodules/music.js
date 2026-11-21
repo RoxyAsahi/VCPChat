@@ -1239,7 +1239,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const setupElectronHandlers = () => {
         if (!app.api?.onMusicScanStart) return;
-        app.api.onMusicScanStart(() => { app.loadingIndicator.style.display = 'flex'; app.scanProgressContainer.style.display = 'none'; });
+        // 同时在扫几个文件夹（连着拖进来、或扫描途中又加了一个）：先扫完的那个不能把「正在扫描」藏掉。
+        let activeScans = 0;
+        app.api.onMusicScanStart(() => { activeScans += 1; app.loadingIndicator.style.display = 'flex'; app.scanProgressContainer.style.display = 'none'; });
         app.api.onMusicScanProgress((data) => {
             app.scanProgressContainer.style.display = 'block';
             const percent = data.total > 0 ? Math.min(100, (data.current / data.total) * 100) : 0;
@@ -1271,7 +1273,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
             const addedDuringScan = scanAddedPaths;
             const playingPath = app.playlist[app.currentTrackIndex]?.path;
-            app.loadingIndicator.style.display = 'none';
+            activeScans = Math.max(0, activeScans - 1);
+            if (!activeScans) app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
             const newPlaylist = Array.isArray(data) ? data : (data.tracks || []);
             const folderPath = Array.isArray(data) ? null : (data.folderPath || null);
