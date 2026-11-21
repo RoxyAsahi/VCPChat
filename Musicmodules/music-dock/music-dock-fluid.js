@@ -189,8 +189,11 @@
             svg.setAttribute('viewBox', `0 0 ${geo.layerW} ${LAYER_H}`);
             svg.style.left = `${geo.left}px`;
             svg.style.bottom = `${geo.bottom}px`;
-            mist.style.left = `${Math.round(rect.left + rect.width / 2 - (rect.width + 360) / 2)}px`;
-            mist.style.width = `${Math.round(rect.width + 360)}px`;
+            // 雾床平时左右各伸出 180px；播放条挪到目录旁边时 music-dock.js 会把它收窄（--md-mist-pad），不糊到目录上
+            const padVar = parseFloat(host.style.getPropertyValue('--md-mist-pad'));
+            const pad = Number.isFinite(padVar) ? Math.max(0, Math.min(180, padVar)) : 180;
+            mist.style.left = `${Math.round(rect.left - pad)}px`;
+            mist.style.width = `${Math.round(rect.width + pad * 2)}px`;
             mist.style.bottom = `${Math.max(0, geo.bottom - 16)}px`;
             for (const f of fitted) { setAttr(f, 'x', 0); setAttr(f, 'width', geo.layerW); }
             holeD = '';
