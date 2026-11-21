@@ -545,7 +545,7 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-detail-back { position: absolute; left: 59px; top: 226px; font-size: 18px; font-weight: 600; letter-spacing: .4px; display: flex; align-items: center; gap: 14px; }
 .archive-detail-back:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-detail-card {
-    position: absolute; right: 59px; top: 250px; width: 700px;
+    position: absolute; right: 59px; top: 250px; width: 700px; box-sizing: border-box;
     max-height: calc(100% - 250px - 72px - var(--archive-dock-lift, 0px));
     overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
     pointer-events: auto;
