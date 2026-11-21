@@ -326,7 +326,53 @@
         }).observe(node, { attributes: true, attributeFilter: ['hidden'] });
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); };
+    // ───────── 一排文字按钮：手指底下的那一汪跟着流过去 ─────────
+    // 平时什么都没有；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，在按钮之间移动时像液体一样流过去，
+    // 指针离开这一排就淡掉。只加一个装饰元素，不改按钮本身的样子。
+    const TRAILS = [{ item: '.archive-nav > button', key: 'archive-nav', pad: 14 }];
+    const watchTrails = () => {
+        const doc = global.document;
+        const dropOf = (row) => {
+            let drop = row.querySelector(':scope > .mf-trail');
+            if (!drop) {
+                drop = doc.createElement('i');
+                drop.className = 'mf-trail';
+                drop.setAttribute('aria-hidden', 'true');
+                row.prepend(drop);
+            }
+            return drop;
+        };
+        doc.addEventListener('pointerover', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            for (const t of TRAILS) {
+                const btn = target.closest(t.item);
+                if (!btn || btn.disabled) continue;
+                const row = btn.parentElement;
+                const drop = dropOf(row);
+                const fresh = !drop.classList.contains('mf-on');
+                if (fresh) slides.delete(t.key);
+                slide(drop, { left: btn.offsetLeft - t.pad, width: btn.offsetWidth + t.pad * 2 }, { key: t.key, lead: 160, trail: 320 });
+                drop.classList.add('mf-on');
+                return;
+            }
+        }, true);
+        doc.addEventListener('pointerout', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            for (const t of TRAILS) {
+                const btn = target.closest(t.item);
+                if (!btn) continue;
+                const row = btn.parentElement;
+                const next = event.relatedTarget;
+                if (next instanceof global.Node && row.contains(next) && next !== row) return;
+                row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
+                return;
+            }
+        }, true);
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 
