@@ -73,13 +73,15 @@
      * 右键菜单的键盘操作。菜单本身是播放器的 #track-context-menu（几行 div），这里在档案页打开它之后接管按键：
      * ↑ ↓ Home End 移动，Enter / 空格执行，→ 打开「加入歌单」子菜单、← 收回，Esc / Tab 关闭并把焦点还回去。
      * 菜单关掉（visible 类没了）就自动撤掉这些处理。
+     * playlist: true 时直接展开「加入歌单」子菜单（顶栏「＋ 加入歌单」按钮用，和 Spotify 的「添加到歌单」一样直接给歌单列表）。
      */
-    const menuKeyboard = (app, { restore = null } = {}) => {
+    const menuKeyboard = (app, { restore = null, playlist = false } = {}) => {
         const menu = app.contextMenu || document.getElementById('track-context-menu');
         if (!menu || !menu.classList.contains('visible')) return null;
         const shown = (el) => !el.hidden && el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
         const topItems = () => [...menu.querySelectorAll(':scope > .context-menu-item')].filter(shown);
         let sub = null; // 打开着的子菜单所在的那一项
+        let direct = false; // 一打开就是歌单列表：Esc 直接整个关掉，← 才回到上一层
         const subItems = () => (sub ? [...sub.querySelectorAll('.submenu-item')] : []);
         const items = () => (sub ? subItems() : topItems());
         const prep = (el) => { el.setAttribute('role', 'menuitem'); el.tabIndex = -1; };
@@ -125,7 +127,7 @@
                     finish();
                     break;
                 }
-                case 'Escape': if (sub) closeSub(); else close(); break;
+                case 'Escape': if (sub && !direct) closeSub(); else close(); break;
                 case 'Tab': close(); break;
                 default: return;
             }
@@ -135,7 +137,14 @@
         const observer = new MutationObserver(() => { if (!menu.classList.contains('visible')) finish({ focusBack: false }); });
         observer.observe(menu, { attributes: true, attributeFilter: ['class'] });
         document.addEventListener('keydown', onKey, true);
-        focusAt(0);
+        const plItem = playlist ? topItems().find((el) => el.classList.contains('has-submenu')) : null;
+        if (plItem && subItemsOf(plItem).length) { openSub(plItem); direct = true; }
+        else if (plItem) {
+            // 还没有歌单：子菜单只露出「暂无歌单」，焦点落到紧跟着的「新建歌单并添加」
+            plItem.classList.add('archive-kbd-sub');
+            const list = topItems();
+            focusAt(Math.min(list.indexOf(plItem) + 1, list.length - 1));
+        } else focusAt(0);
         return { close };
     };
 

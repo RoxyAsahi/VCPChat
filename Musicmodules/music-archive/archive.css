@@ -298,8 +298,10 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-recentq .rq:hover button { opacity: 1; }
 
 .archive-list-kinds { display: flex; align-items: baseline; margin: 16px 0 10px var(--gutter); font-size: 12px; letter-spacing: 1.3px; white-space: nowrap; }
-.archive-list-kinds > button { color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
-.archive-list-kinds > button + button::before { content: "／"; display: inline-block; margin: 0 10px; color: var(--ar-muted); font-weight: 400; opacity: .7; }
+.archive-list-kinds > button { position: relative; color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
+/* 分隔号放在按钮外面：键盘焦点框和点击范围只包文字本身，不把「／」也框进去 */
+.archive-list-kinds > button + button { margin-left: 32px; }
+.archive-list-kinds > button + button::before { content: "／"; position: absolute; right: calc(100% + 10px); width: 12px; text-align: center; color: var(--ar-muted); font-weight: 400; opacity: .7; pointer-events: none; }
 .archive-list-kinds > button:hover { color: var(--ar-ink); }
 .archive-list-kinds > button.on { color: var(--ar-ink); font-weight: 700; }
 
