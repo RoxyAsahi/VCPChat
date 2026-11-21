@@ -824,5 +824,17 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { left: auto; right: 59px; width: 120px; height: 120px; top: -43px; }
 .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(653px + 58px - 150px - 24px); }
 .archive-hud.mid .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 150px - 24px); }
-.archive-hud.short .archive-callout:has(.archive-cover.on) .archive-file-title, .archive-hud.has-lyrics .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 120px - 24px); }
+.archive-hud.short .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 120px - 24px); }
+.archive-hud.has-lyrics .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(373px + 58px - 120px - 24px); }
 .archive-hud.narrow .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(100% - 59px - 120px - 24px); }
+
+/* 曲名不越过分隔线右端（没封面时原来最多伸到 760，超长曲名会比分隔线还长） */
+.archive-file-title { max-width: calc(653px + 58px); }
+.archive-hud.mid .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px); }
+.archive-hud.has-lyrics .archive-file-title { max-width: calc(373px + 58px); }
+.archive-hud.narrow .archive-file-title { max-width: calc(100% - 59px); }
+/* 空曲库：目录、加入歌单、歌词、正在播放都没有可用的东西，顶栏只留设置 */
+#music-archive-view.is-empty .archive-nav > [data-act="list"],
+#music-archive-view.is-empty .archive-nav > [data-act="save"],
+#music-archive-view.is-empty .archive-nav > [data-act="lyrics"],
+#music-archive-view.is-empty .archive-nav > [data-act="now"] { display: none; }
