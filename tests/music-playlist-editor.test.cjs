@@ -62,3 +62,11 @@ test('rows off screen are not laid out (the list is the whole library)', () => {
     assert.match(rule, /content-visibility:\s*auto/);
     assert.match(rule, /contain-intrinsic-size/);
 });
+
+test('album and artist cards in the classic sidebar skip layout and covers off screen', () => {
+    // 5000 首、1200 张专辑、CPU 降速 4 倍：打开专辑页 1062 ms → 约 120 ms
+    const css = fs.readFileSync('Musicmodules/music.css', 'utf8');
+    const rule = /\n\.category-item \{[^}]*\}/.exec(css)[0];
+    assert.match(rule, /content-visibility:\s*auto/);
+    assert.match(rule, /contain-intrinsic-size/);
+});

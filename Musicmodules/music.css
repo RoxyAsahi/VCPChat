@@ -1872,6 +1872,9 @@ body.sidebar-is-scrolling .sidebar-playlist li {
     border-radius: 10px;
     cursor: pointer;
     transition: background 0.2s ease;
+    /* 曲库大时专辑能有上千个：看不见的不排版，封面也等滚到了才读 */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 42px; /* 内容高，不含上下 padding */
 }
 
 .category-item:hover {
@@ -2356,7 +2359,7 @@ body.light-theme .dialog-btn.cancel {
     transition: background 0.15s ease;
     /* 编辑歌单时列表是整个曲库（几千行）：看不见的行不排版，打开和每次搜索都快一截 */
     content-visibility: auto;
-    contain-intrinsic-size: auto 54px;
+    contain-intrinsic-size: auto 36px; /* 内容高，不含上下 padding */
 }
 
 .music-modal-song-item:hover {
