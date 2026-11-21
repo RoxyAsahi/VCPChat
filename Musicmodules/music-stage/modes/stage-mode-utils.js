@@ -432,7 +432,38 @@
         };
     };
 
+    /*
+     * The stage's track card sits over the top-left of the picture. Where a
+     * mode is free to move its words, it keeps them out from under the card.
+     * The card's box is read only when it or the stage changes size, never
+     * per frame, and handed out in the picture's own -1..1 units (y up).
+     */
+    const watchOverlay = (root, selector = '.music-stage-id3') => {
+        const card = root?.closest?.('.music-stage')?.querySelector?.(selector) || null;
+        let box = null;
+        const measure = () => {
+            box = null;
+            if (!card || !root.isConnected) return;
+            const view = root.getBoundingClientRect(), r = card.getBoundingClientRect();
+            if (!view.width || !view.height || !r.width || !r.height) return;
+            if (global.getComputedStyle?.(card)?.display === 'none') return;
+            const x = px => (px - view.left) / view.width * 2 - 1;
+            const y = px => 1 - (px - view.top) / view.height * 2;
+            box = { left: x(r.left), right: x(r.right), top: y(r.top), bottom: y(r.bottom) };
+            if (box.right <= -1 || box.left >= 1 || box.bottom >= 1 || box.top <= -1) box = null;
+        };
+        const observer = card && global.ResizeObserver ? new global.ResizeObserver(measure) : null;
+        observer?.observe(card);
+        observer?.observe(root);
+        return {
+            get box() { return box; },
+            measure,
+            destroy() { observer?.disconnect(); box = null; }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
+        watchOverlay,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, durationChanged,

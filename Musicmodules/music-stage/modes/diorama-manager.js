@@ -28,6 +28,7 @@
         // and settles down into its first shot, the old sky dissolving into
         // the new. `leaving` holds the old song's last frame and when it went.
         const veil = U.createHandoverVeil(mode.root);
+        const overlay = U.watchOverlay(mode.root);
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
         // themeHold: one more picture in the old colours, kept for the dissolve.
@@ -259,8 +260,9 @@
             renderer.toneMappingExposure = 1.15 * (1 + swell * 0.12 + breath) * (1 - 0.2 * (pose.cabinView || 0));
             const bars = settings.letterbox !== false && settings.geometryMode !== 'corridor'
                 ? Math.max(0, (height - width / 2.39) / 2) * (1 - pose.state.openness * 0.75) : 0;
-            // Lyrics stay clear of the frame edge and of the letterbox bars.
-            lyrics.update(time, settings, audio, camera, { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height) });
+            // Lyrics stay clear of the frame edge, the letterbox bars and the track card.
+            lyrics.update(time, settings, audio, camera,
+                { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height), avoid: overlay.box });
             events.update(time, settings, drawn().quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
@@ -429,6 +431,7 @@
         });
         mode.scope.add(() => {
             veil.destroy();
+            overlay.destroy();
             global.clearTimeout(settleTimer);
             global.clearTimeout(contextTimer);
             disposeGraphics();
