@@ -372,3 +372,22 @@ body:not(.light-theme) #music-dock-root .md-scn-b.md-on {
 #music-dock-root .md-offv { border-radius: 9999px; }
 #music-dock-root .md-offv.md-lit { color: var(--mf-tint); }
 body.music-reduce-motion #music-dock-root :is(.md-scn-b, .md-off .md-ib):active { transform: none; }
+
+/* ───────── 开关：方块像一滴液体流到另一头 ─────────
+ * 外形还是音乐窗口那套细线方框里的方块（music-skin.css），只换动作：
+ * 不再整块平移，而是前沿先到、后沿慢半拍跟上，中途被拉长，到了再收回原来的大小。
+ * 用 left/right 两条边分别过渡；过渡时长取「目标状态」上写的，所以往哪边走，哪边的边就快。 */
+.switch .slider::before,
+.switch .slider.round::before {
+  width: auto;
+  right: 16px;
+  transform: none;
+  transition: left .14s cubic-bezier(.3, .7, 0, 1), right .44s cubic-bezier(.3, .7, 0, 1), background-color .2s ease;
+}
+.switch input:checked + .slider::before {
+  left: 16px;
+  right: 2px;
+  transform: none;
+  transition: right .14s cubic-bezier(.3, .7, 0, 1), left .44s cubic-bezier(.3, .7, 0, 1), background-color .2s ease;
+}
+body.music-reduce-motion .switch .slider::before { transition: background-color .12s; }
