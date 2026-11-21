@@ -716,6 +716,19 @@
                     if (row && row.type === 'track') { e.preventDefault(); play(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
+                case 'Delete': {
+                    // 在歌单里按 Delete：把选中的（或多选的几首）从这个歌单移除，可以撤销。曲库本身不用这个键删
+                    if (inInput) return;
+                    const row = selectedRowData();
+                    if (!row || row.type !== 'track') return;
+                    const picked = multi.size > 1 && multi.has(keyOf(row));
+                    const scope = picked ? batchScope() : scopeOf(row);
+                    if (!scope || scope.type !== 'playlist') return;
+                    e.preventDefault();
+                    removeFromPlaylistBatch(scope, pickedIndices(row));
+                    if (picked) clearMulti();
+                    break;
+                }
                 case 'a': case 'A':
                     if (inInput || !(e.ctrlKey || e.metaKey)) return;
                     e.preventDefault();
@@ -794,6 +807,24 @@
             return pl ? { type: 'playlist', id: pl.id, name: pl.name } : null;
         };
         r.viewport.addEventListener('contextmenu', (e) => {
+            // 在分组标题上右键：整组选上，打开批量菜单（和 Spotify 在专辑上右键一样，能整组下一首播放、加入队列、加入歌单）
+            const headNode = e.target.closest('.archive-list-group');
+            const headK = headNode ? Number(headNode.dataset.k) : -1;
+            if (headNode && groupPlayable(state.rows[headK])) {
+                e.preventDefault();
+                multi.clear();
+                let first = -1;
+                for (let j = headK + 1; j < state.rows.length && state.rows[j].type === 'track'; j++) { multi.add(keyOf(state.rows[j])); if (first < 0) first = j; }
+                if (first < 0) return;
+                state.selectedRow = first;
+                state.selected = state.rows[first].i;
+                multiAnchor = first;
+                paintMulti();
+                render();
+                if (multi.size > 1) openBatchMenu(e.clientX, e.clientY, { title: state.rows[headK].label });
+                else { app.contextMenuTrackIndex = state.rows[first].i; app.contextMenuScopeHint = scopeOf(state.rows[first]); app.showContextMenu?.(e.clientX, e.clientY); }
+                return;
+            }
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
             if (!row || row.type !== 'track') return;
@@ -1099,18 +1130,20 @@
                 after();
             } });
         };
-        const openBatchMenu = (x, y, { keyboard = false } = {}) => {
+        const openBatchMenu = (x, y, { keyboard = false, title = '' } = {}) => {
             closeBatchMenu();
             const indices = pickedIndices(null);
             if (indices.length < 2) return;
             const scope = batchScope();
+            const groupFirst = title ? state.selectedRow : -1; // 从分组标题打开时，这一组的第一行
             const item = (act, zh, en, extra = '') => `<button type="button" role="menuitem" data-batch="${act}"${extra}><span>${esc(zh)}</span>${en ? `<i>${en}</i>` : ''}</button>`;
             const menu = batchMenu = document.createElement('div');
             menu.className = 'archive-batch-menu';
             menu.setAttribute('role', 'menu');
             menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
-            menu.innerHTML = `<header>已选 ${indices.length} 首</header>`
-                + item('play', '播放所选')
+            menu.innerHTML = `<header>${title ? `${esc(title)} · ${indices.length} 首` : `已选 ${indices.length} 首`}</header>`
+                + item('play', title ? '播放这一组' : '播放所选')
+                + item('shuffle', '随机播放')
                 + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
                 + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
@@ -1136,11 +1169,25 @@
                 closeBatchMenu({ focus: true });
                 if (act === 'play') {
                     // 播放所选：只放这几首，按目录里的顺序，队列名叫「所选 N 首」
-                    const k = findRow(indices[0], null);
+                    const k = groupFirst >= 0 ? groupFirst : findRow(indices[0], null);
+                    const row = state.rows[k];
+                    const group = (groupFirst >= 0 && groupOf(groupFirst)) || { name: `所选 ${indices.length} 首`, items: indices.slice() };
+                    clearMulti();
+                    if (row) pickRow(k);
+                    play(row ? row.i : indices[0], row ? row.ctx : null, { stage: false, group });
+                } else if (act === 'shuffle') {
+                    // 随机播放：把这几首洗一遍当作这次的队列，播放模式不动（和 Spotify 在专辑上点随机一样，只影响这一次）
+                    const order = indices.slice();
+                    for (let n = order.length - 1; n > 0; n--) { const m = Math.floor(Math.random() * (n + 1)); [order[n], order[m]] = [order[m], order[n]]; }
+                    const base = (groupFirst >= 0 && groupOf(groupFirst)) || null;
+                    const name = (base ? base.name : `所选 ${indices.length} 首`) + ' · 随机';
+                    let k = -1;
+                    if (groupFirst >= 0) { for (let j = groupFirst; j < state.rows.length && state.rows[j].type === 'track'; j++) if (state.rows[j].i === order[0]) { k = j; break; } }
+                    if (k < 0) k = findRow(order[0], null);
                     const row = state.rows[k];
                     clearMulti();
                     if (row) pickRow(k);
-                    play(indices[0], row ? row.ctx : null, { stage: false, group: { name: `所选 ${indices.length} 首`, items: indices.slice() } });
+                    play(order[0], row ? row.ctx : null, { stage: false, group: { name, items: order } });
                 } else if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
                 else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
