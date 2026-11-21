@@ -693,3 +693,11 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-footer > span:nth-child(3) { display: none; }
 .archive-queue[hidden] + span { margin-left: 0; }
 .archive-hud.list-open .archive-nav > [data-act="search"] { display: none; }
+/* 接着听：和「播放这一组」同一行，小一号，曲名太长就截断 */
+.archive-brand-resume { margin: 18px 0 0 30px; display: inline-flex; align-items: baseline; gap: 8px; max-width: calc(100% - 170px); font-size: 13px; letter-spacing: .4px; color: var(--ar-muted); vertical-align: top; padding-top: 3px; }
+.archive-brand-resume[hidden] { display: none; }
+.archive-brand-play[hidden] + .archive-brand-resume { margin-left: 0; max-width: 100%; }
+.archive-brand-resume > b { font-weight: 600; color: var(--ar-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-brand-resume > span:last-child { font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.archive-brand-resume:hover, .archive-brand-resume:hover > b { color: var(--ar-accent-text, var(--ar-accent)); }
+#music-archive-view.is-detail .archive-brand-resume, #music-archive-view.is-empty .archive-brand-resume, #music-archive-view.is-loading .archive-brand-resume { visibility: hidden; }

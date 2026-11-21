@@ -1489,3 +1489,36 @@ test('首页文字：没有装饰用的英文，左上是当前分组名和首�
     assert.match(f.text('ctxSub'), /^\d+ 首/);
     f.close();
 });
+
+test('接着听：有上次没听完的歌时显示在「播放这一组」旁边，点了放那首并跳到原位置', async () => {
+    let resume = null;
+    const seeks = [];
+    const f = fixture({ setup: (w, app) => {
+        app.musicStats = { resume: () => resume };
+        app.seekTo = (s) => { seeks.push(s); };
+    } });
+    const doc = f.w.document;
+    const btn = doc.querySelector('[data-act="resume"]');
+    assert.ok(btn.hidden, '没有记录时不显示');
+    resume = { track: f.app.playlist[12], position: 133, at: Date.now() };
+    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change', { detail: { path: '/m/12' } }));
+    assert.equal(btn.hidden, false);
+    assert.equal(f.text('resumeLabel'), '接着听');
+    assert.equal(f.text('resumeName'), 'Song 12');
+    assert.equal(f.text('resumeAt'), '2:13');
+    btn.click();
+    assert.equal(f.app.currentTrackIndex, 12);
+    f.app.engineTrackPath = '/m/12';
+    await new Promise((r) => f.w.setTimeout(r, 400));
+    assert.deepEqual(seeks, [133]);
+    // 正在放的就是它：不显示；停在这首没放：写「继续播放」
+    f.app.isPlaying = true;
+    f.view.refresh?.();
+    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change'));
+    assert.ok(btn.hidden);
+    f.app.isPlaying = false;
+    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change'));
+    assert.equal(btn.hidden, false);
+    assert.equal(f.text('resumeLabel'), '继续播放');
+    f.close();
+});
