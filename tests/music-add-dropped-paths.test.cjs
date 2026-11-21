@@ -65,3 +65,36 @@ test('music-add-paths scans dropped folders and files and ignores anything else'
     assert.deepEqual(completes[1].tracks.map((t) => path.basename(t.path)), ['single.mp3']);
     assert.deepEqual(await handlers.get('music-add-paths')({ sender }, 'nope'), { added: 0 });
 });
+
+test('dropping the same folder again while it is still being scanned does not read it a second time', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'music-twice-'));
+    const album = path.join(dir, 'album');
+    fs.mkdirSync(album);
+    for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(album, `${i}.mp3`), mp3(`t${i}`));
+    const handlers = new Map();
+    const electron = {
+        ipcMain: { on() {}, handle: (n, fn) => handlers.set(n, fn), removeListener() {} },
+        BrowserWindow: function () {}, app: { getPath: () => dir }, dialog: {}, shell: {}, nativeTheme: {}
+    };
+    const original = Module._load;
+    Module._load = function (request, ...rest) { return request === 'electron' ? electron : original.call(this, request, ...rest); };
+    try {
+        const file = require.resolve('../modules/ipc/musicHandlers.js');
+        delete require.cache[file];
+        require(file).initialize({ mainWindow: null, openChildWindows: [], startAudioEngine() {}, stopAudioEngine() {}, APP_DATA_ROOT_IN_PROJECT: dir });
+    } finally {
+        Module._load = original;
+    }
+    const sent = [];
+    const sender = new EventEmitter();
+    sender.id = 7;
+    sender.isDestroyed = () => false;
+    sender.send = (channel, payload) => sent.push({ channel, payload });
+    const add = handlers.get('music-add-paths');
+    await Promise.all([add({ sender }, [album]), add({ sender }, [album + path.sep])]);
+    assert.equal(sent.filter((m) => m.channel === 'music-scan-start').length, 1, 'one scan for the folder');
+    assert.equal(sent.filter((m) => m.channel === 'music-scan-complete').length, 1);
+    // 扫完以后再拖一次是新的一次扫描（比如加了新歌）
+    await add({ sender }, [album]);
+    assert.equal(sent.filter((m) => m.channel === 'music-scan-start').length, 2);
+});

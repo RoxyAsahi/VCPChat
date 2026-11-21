@@ -288,7 +288,21 @@ async function followTrackChange(state) {
 
 // 扫一个文件夹（或几首单曲），把进度和结果发回发起的窗口。只给 filePaths 时 folderPath 为空：
 // 窗口收到后只加不删（不会把「没扫到」的歌当成被删了）。
-async function runLibraryScan(event, { folderPath = null, filePaths } = {}) {
+// 同一个窗口正在扫的文件夹：扫描途中再选一次同一个文件夹（或连着拖两次）不再从头读第二遍，
+// 两遍并行时 CPU 和硬盘占双份，结束时还会连着整理、保存两次曲库。
+const runningFolderScans = new Map();
+function runLibraryScan(event, options = {}) {
+    const folderPath = options.folderPath || null;
+    if (!folderPath) return scanLibrary(event, options);
+    const key = `${event.sender?.id ?? ''}|${path.resolve(folderPath).replace(/[\\/]+$/, '').toLowerCase()}`;
+    const running = runningFolderScans.get(key);
+    if (running) return running;
+    const scan = scanLibrary(event, options).finally(() => runningFolderScans.delete(key));
+    runningFolderScans.set(key, scan);
+    return scan;
+}
+
+async function scanLibrary(event, { folderPath = null, filePaths } = {}) {
     const sendToRequester = (channel, payload) => {
         if (event.sender && !event.sender.isDestroyed()) {
             event.sender.send(channel, payload);
