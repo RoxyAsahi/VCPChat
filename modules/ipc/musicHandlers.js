@@ -15,7 +15,6 @@ const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
-const { createLibraryFolders } = require('./musicLibraryFolders');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -56,7 +55,6 @@ let musicWindowPromise = null; // To handle concurrent window creation requests
 let pendingPlaybackForNewWindow = null; // 用于在新窗口创建时传递待播放曲目及可选演出模式
 let ipcHandlersRegistered = false;
 let desktopLyrics = null; // 桌面歌词条（musicDesktopLyrics.js），注册 IPC 时创建
-let libraryFolders = null; // 记住的曲库文件夹，自动同步（musicLibraryFolders.js）
 const MUSIC_CRASH_LIMIT = 3;
 const MUSIC_CRASH_WINDOW_MS = 60 * 1000;
 
@@ -180,7 +178,6 @@ function createOrFocusMusicWindow() {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
                 desktopLyrics?.musicReady();
-                libraryFolders?.musicReady().catch(err => console.error('[Music] 曲库文件夹同步没启动:', err));
                 // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
@@ -222,7 +219,6 @@ function createOrFocusMusicWindow() {
             audioEngineApi('/stop').catch(err => console.error("[Music] Failed to send stop command on close:", err));
 
             desktopLyrics?.musicClosed();
-            libraryFolders?.musicClosed();
             openChildWindows = openChildWindows.filter(win => win !== musicWindow);
             musicWindow = null;
             currentSongInfo = null; // 清理歌曲信息
@@ -620,16 +616,6 @@ function initialize(options) {
             stateFile: path.join(APP_DATA_ROOT_IN_PROJECT, 'music-desktop-lyrics.json'),
             projectRoot: path.join(__dirname, '..', '..')
         });
-        libraryFolders = createLibraryFolders({
-            ipcMain,
-            getMusicWindow: () => musicWindow,
-            stateFile: path.join(APP_DATA_ROOT_IN_PROJECT, 'music-library-folders.json'),
-            readPlaylist: readPlaylistFile,
-            scan: async (folderPath) => {
-                const scanned = await scanFolder({ folderPath, coverCachePath: MUSIC_COVER_CACHE_DIR, knownTracks: await readPlaylistFile() });
-                return { tracks: scanned.tracks, aborted: scanned.stats.aborted };
-            }
-        });
         ipcMain.on('open-music-window', async () => {
             try {
                 await createOrFocusMusicWindow();
@@ -964,7 +950,6 @@ function initialize(options) {
             }
 
             await runLibraryScan(event, { folderPath: result.filePaths[0] });
-            libraryFolders?.remember(result.filePaths[0]).catch(() => {});
         });
 
         // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
@@ -978,10 +963,7 @@ function initialize(options) {
                 if (stat?.isDirectory()) folders.push(raw);
                 else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
-            for (const folderPath of folders) {
-                await runLibraryScan(event, { folderPath });
-                libraryFolders?.remember(folderPath).catch(() => {});
-            }
+            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
             if (files.length) await runLibraryScan(event, { filePaths: files });
             return { folders: folders.length, files: files.length };
         });

@@ -448,7 +448,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupMusicRadio?.(app); // 电台与自动续播：一组放完接着放相似的歌，右键「从这首开电台」
         window.setupMusicSmart?.(app); // 智能歌单：检索框里的条件词（喜欢、没听过、次数>N……），存下来自己更新
         window.setupMusicDesktopLyrics?.(app); // 桌面歌词：开着时把当前行送给桌面上的歌词条
-        window.setupMusicLibrarySync?.(app); // 曲库文件夹：记住加过的文件夹，里面增删歌自动跟上
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 
@@ -1252,10 +1251,12 @@ document.addEventListener('DOMContentLoaded', () => {
             app.playlist = app.playlist.concat(fresh);
             if (!scanBatchTimer) scanBatchTimer = setTimeout(flushScanBatches, 400);
         });
-        // 把一次扫描结果并进曲库：文件夹里还在的原地更新、新的接上、不在了的删掉（只删这个文件夹里面的）。
-        // 返回 { added, removed, updated }。曲库文件夹的后台同步（music-library-sync）也走这里。
-        app.mergeScanResult = (data, { addedDuringScan = null, skipIfUnchanged = false } = {}) => {
+        app.api.onMusicScanComplete((data) => {
+            clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
+            // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
+            const addedDuringScan = scanAddedPaths;
             const playingPath = app.playlist[app.currentTrackIndex]?.path;
+            app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
             const newPlaylist = Array.isArray(data) ? data : (data.tracks || []);
             const folderPath = Array.isArray(data) ? null : (data.folderPath || null);
@@ -1273,7 +1274,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const updatedPlaylist = [];
             const handledPaths = new Set();
-            let added = 0, removed = 0, updated = 0;
             // 这次扫描途中先接上去的曲目：先从原位置拿掉，下面按磁盘顺序放回（用同一个对象）。
             // 同时在扫的另一个文件夹接上去的不归这次管，留在原处。
             const appended = new Map();
@@ -1286,13 +1286,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (scannedPaths.has(track.path)) {
                     // 已有的曲目原地更新信息，保住对象本身：歌单视图、队列、播放历史都拿着它。
-                    const fresh = scannedMap.get(track.path);
-                    if (['title', 'artist', 'album', 'duration', 'albumArt'].some(k => fresh[k] !== undefined && fresh[k] !== track[k])) updated++;
-                    Object.assign(track, fresh);
+                    Object.assign(track, scannedMap.get(track.path));
                     updatedPlaylist.push(track);
                     handledPaths.add(track.path);
                 } else if (insideFolder(track.path)) {
-                    removed++;
                     // Track belongs to the scanned folder but was NOT found in new scan
                     // → file was deleted from disk, remove it from playlist
                     // (skip adding it)
@@ -1305,14 +1302,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add brand-new tracks that weren't in the existing playlist
             for (const track of newPlaylist) {
                 if (!handledPaths.has(track.path)) {
-                    if (!appended.has(track.path)) added++;
                     const early = appended.get(track.path);
                     updatedPlaylist.push(early ? Object.assign(early, track) : track);
                 }
             }
 
-            // 后台同步什么都没变：不换数组、不重画、不存盘
-            if (skipIfUnchanged && !added && !removed && !updated) return { added, removed, updated };
+            if (scanAddedPaths && !scanAddedPaths.size) scanAddedPaths = null;
             app.playlist = updatedPlaylist;
             if (playingPath) {
                 const at = updatedPlaylist.findIndex(t => t.path === playingPath);
@@ -1320,15 +1315,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             app.renderPlaylist(); app.renderSidebarContent(app.currentSidebarView);
             app.api.saveMusicPlaylist(app.playlist);
-            return { added, removed, updated };
-        };
-        app.api.onMusicScanComplete((data) => {
-            clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
-            // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
-            const addedDuringScan = scanAddedPaths;
-            app.loadingIndicator.style.display = 'none';
-            app.mergeScanResult(data, { addedDuringScan });
-            if (scanAddedPaths && !scanAddedPaths.size) scanAddedPaths = null;
         });
         if (app.api?.onThemeUpdated) {
             app.api.onThemeUpdated((theme) => app.applyTheme(theme));

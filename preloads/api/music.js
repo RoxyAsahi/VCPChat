@@ -29,12 +29,6 @@ module.exports = {
         onDesktopLyricsState: on('music-desktop-lyrics-state'),
         onDesktopLyricsPrefs: on('music-desktop-lyrics-prefs'),
         sendDesktopLyricsCommand: send('music-desktop-lyrics-command', 'command', 'value'),
-        // 记住的曲库文件夹：打开播放器时静默对一遍、文件夹有变动自动跟上（modules/ipc/musicLibraryFolders.js）
-        getLibraryFolders: invoke('music-library-folders-get'),
-        removeLibraryFolder: invoke('music-library-folders-remove', 'folderPath'),
-        syncLibraryFolders: invoke('music-library-folders-sync'),
-        onLibraryFoldersChanged: on('music-library-folders-changed'),
-        onMusicLibrarySync: on('music-library-sync'),
 
         // 播放列表
         getMusicPlaylist: invoke('get-music-playlist'),
