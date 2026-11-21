@@ -322,6 +322,10 @@ body.light-theme .archive-list { --glow: .85; }
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 16px, #000 64px, #000 calc(100% - 36px), transparent 100%);
     mask-image: linear-gradient(to bottom, transparent 0, transparent 16px, #000 64px, #000 calc(100% - 36px), transparent 100%);
 }
+.archive-list-viewport.at-top {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 36px), transparent 100%);
+}
 .archive-list-viewport::-webkit-scrollbar { display: none; }
 .archive-list-spacer { position: relative; width: 100%; }
 .archive-list-viewport { cursor: grab; }

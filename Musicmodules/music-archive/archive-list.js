@@ -417,6 +417,8 @@
             state.raf = 0;
             if (!el.isConnected || el.hidden) return;
             const top = r.viewport.scrollTop;
+            // 滚在最上面时顶上没有东西可淡出，第一行不该被遮淡
+            r.viewport.classList.toggle('at-top', top <= 1);
             const h = r.viewport.clientHeight || 600;
             syncThumb(top, h);
             if (!state.rows.length) { r.sticky.textContent = ''; return; }
