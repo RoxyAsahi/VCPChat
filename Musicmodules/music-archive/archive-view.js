@@ -857,6 +857,9 @@
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
             renderDetail();
+            // 还没放过歌时底栏不写「正在播放 全部曲目」（没有在播放的东西）
+            const queueEl = refs.queue?.parentElement;
+            if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
             // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
             const prevPlaying = state.playingIndex;
