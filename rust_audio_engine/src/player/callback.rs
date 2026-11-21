@@ -548,7 +548,6 @@ pub fn audio_callback_lockfree(
 
                 shared.pending_ready.store(false, Ordering::Release);
                 shared.needs_preload.store(false, Ordering::Relaxed);
-                shared.dsp_reset_pending.store(true, Ordering::Release);
 
                 // Signal events via bitmask (single atomic op)
                 shared.event_flags.fetch_or(
@@ -564,16 +563,12 @@ pub fn audio_callback_lockfree(
                 let pending_gain_db = f64::from_bits(pending_gain_bits);
                 loudness_state.set_target_gain(pending_gain_db);
 
-                // Reset every canonical DSP domain and preserve the existing
-                // source-to-device Rubato geometry for the next normalized track.
-                dsp_pipeline.reset();
-                let _ = convolver.reset();
-                if let Some(processor) = resampler.as_mut() {
-                    let _ = processor.reset();
-                }
+                // Same rate and channels (checked above): keep EQ, convolver, limiter and
+                // resampler state running, exactly as if both tracks were one file. Resetting
+                // here restarted the output chain from silence at every join and dropped the
+                // old track's tail still inside the resampler — an audible dip on live albums.
                 resample_leftover.clear();
                 *resample_leftover_pos = 0;
-                shared.dsp_reset_pending.store(false, Ordering::Release);
 
                 // Continue straight into the next track in this same block
                 // instead of emitting a block of silence at the boundary.
@@ -1054,6 +1049,48 @@ mod tests {
         harness.render(&mut output);
         assert_eq!(harness.shared.state.load(), PlayerState::Stopped);
         assert_ne!(harness.shared.event_flags.load(Ordering::Relaxed) & EVENT_PLAYBACK_ENDED, 0);
+    }
+
+    /// A continuous recording split into two tracks must come out exactly as if it were one:
+    /// no DSP restart at the join (that is what makes live albums dip).
+    fn render_split(split: Option<usize>) -> Vec<f64> {
+        let mut harness = StreamingHarness::new();
+        let all = tone(12_000);
+        match split {
+            None => harness.shared.audio_buffer.store(TrackBuffer::from_samples(all, 2)),
+            Some(at) => {
+                harness.shared.audio_buffer.store(TrackBuffer::from_samples(all[..at * 2].to_vec(), 2));
+                harness.shared.pending_buffer.store(Some(TrackBuffer::from_samples(all[at * 2..].to_vec(), 2)));
+                harness.shared.pending_total_frames.store((12_000 - at) as u64, Ordering::Relaxed);
+                harness.shared.pending_sample_rate.store(44_100, Ordering::Relaxed);
+                harness.shared.pending_channels.store(2, Ordering::Relaxed);
+                harness.shared.pending_ready.store(true, Ordering::Release);
+            }
+        }
+        harness.shared.total_frames.store(split.unwrap_or(12_000) as u64, Ordering::Relaxed);
+        let mut out = Vec::new();
+        let mut block = vec![0.0; 512 * 2];
+        for _ in 0..16 {
+            harness.render(&mut block);
+            out.extend_from_slice(&block);
+        }
+        out
+    }
+
+    fn max_join_error() -> f64 {
+        let one = render_split(None);
+        let two = render_split(Some(3_001));
+        let peak = one.iter().fold(0.0f64, |m, s| m.max(s.abs()));
+        assert!(peak > 0.02, "signal reaches the output (peak {peak})");
+        one.iter().zip(&two).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max)
+    }
+
+    #[test]
+    fn gapless_join_continues_like_one_track() {
+        // Before: the next track restarted from silence (error 0.067 on a 0.1 tone).
+        // What is left is the loudness stage re-applying the (equal) target gain: < -70 dB.
+        let e = max_join_error();
+        assert!(e < 2e-4, "join error {e}");
     }
 
     #[test]
