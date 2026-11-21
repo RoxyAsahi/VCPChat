@@ -216,6 +216,7 @@ void main() {
         const runs = wordRuns(glyphs);
         const wide = text => /[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u.test(text) ? 1 : 0.55;
         let phrase = 0, count = 0, span = 0;
+        const cuts = [];
         glyphs.forEach((glyph, index) => {
             const previous = glyphs[index - 1];
             const naturalBreak = previous && (/[，。！？；、,.!?;:：]/u.test(previous.text)
@@ -232,9 +233,28 @@ void main() {
                 count = 0;
                 span = 0;
             }
+            if (count === 0 && phrase > 0 && !naturalBreak) cuts.push(index);
             glyph.phrase = phrase;
             if (glyph.text.trim()) count += 1;
             span += wide(glyph.text);
+        });
+        // A row cut that leaves a single glyph on its own (an eight-glyph
+        // line on a seven-glyph row) moves back to the word start nearest
+        // the middle, so the line splits into two balanced rows.
+        cuts.forEach(cut => {
+            const phraseAt = glyphs[cut].phrase;
+            const tail = glyphs.filter(g => g.phrase === phraseAt && g.text.trim()).length;
+            if (tail !== 1) return;
+            const first = glyphs.findIndex(g => g.phrase === phraseAt - 1);
+            const end = cut + glyphs.slice(cut).filter(g => g.phrase === phraseAt).length;
+            const middle = (first + end) / 2;
+            let best = -1;
+            for (let i = first + 2; i <= end - 2; i += 1) {
+                const starts = wordSegmenter ? runs[i] > 0 : /[぀-ヿ㐀-鿿]/u.test(glyphs[i].text);
+                if (starts && glyphs[i].text.trim() && (best < 0 || Math.abs(i - middle) < Math.abs(best - middle))) best = i;
+            }
+            if (best < 0) return;
+            for (let i = best; i < cut; i += 1) glyphs[i].phrase = phraseAt;
         });
         const groups = [];
         glyphs.forEach(glyph => {
