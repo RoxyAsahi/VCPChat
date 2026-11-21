@@ -1093,7 +1093,8 @@ function setupPlayer(app) {
                 await app.api.queueNextMusicTrack({
                     path: nextTrackToPreload.path,
                     username: nextTrackToPreload.username,
-                    password: nextTrackToPreload.password
+                    password: nextTrackToPreload.password,
+                    serverId: nextTrackToPreload.serverId
                 });
             } catch (e) {
                 console.error('[Music.js] Preload failed:', e);

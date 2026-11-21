@@ -200,6 +200,7 @@ const loomManagerModule = require('./modules/loom/VCPLoomManager');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
 const audioEngineEndpoint = require('./modules/services/audioEngineEndpoint');
 const { launchAudioEngine, describeExit: describeAudioEngineExit } = require('./modules/services/audioEngineLauncher');
+const audioEngineOrphan = require('./modules/services/audioEngineOrphan');
 const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
 const { SenderTaskRegistry } = require('./modules/services/senderTaskRegistry');
 const { ChatDataServiceFacade } = require('./modules/services/chatDataService');
@@ -354,6 +355,7 @@ const CANVAS_CACHE_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'canvas'); // Canva
 const NOTES_AGENT_ID = 'notes_attachments_agent';
 
 let audioEngineProcess = null; // To hold the python audio engine process
+let audioEngineOrphanChecked = false;
 let mainWindow;
 let tray = null;
 let vcpLogWebSocket;
@@ -667,12 +669,22 @@ function startAudioEngine() {
         audioEngineStopPromise = null;
         isAudioEngineStopping = false;
 
+        // 上次 VCPChat 被强行结束时留下的引擎：确认是它以后先结束掉，免得一直占内存、端口，还可能在出声。
+        const enginePidFile = path.join(APP_DATA_ROOT_IN_PROJECT, 'audio-engine.pid.json');
+        if (!audioEngineOrphanChecked) {
+            audioEngineOrphanChecked = true;
+            await audioEngineOrphan.reapOrphan(enginePidFile, { binaryPath: rustBinaryPath }).catch((error) => {
+                console.warn('[Main] Leftover audio engine check failed:', error?.message || error);
+            });
+        }
+
         const { port } = await launchAudioEngine({
             binaryPath: rustBinaryPath,
             spawnProcess: spawn,
             onStdout: (text) => console.log(`[AudioEngine STDOUT]: ${text.trim()}`),
             onProcess: (child, attemptPort) => {
                 audioEngineProcess = child;
+                if (child.pid) audioEngineOrphan.writeRecord(enginePidFile, { pid: child.pid, ownerPid: process.pid, binary: rustBinaryPath, at: Date.now() });
                 child.stderr.on('data', (data) => {
                     const logLine = data.toString().trim();
                     if (logLine && !logLine.includes('GET /state HTTP/1.1')) {
@@ -682,6 +694,7 @@ function startAudioEngine() {
                 });
                 child.on('close', (code, signal) => {
                     console.log(`[Main] Audio Engine process on port ${attemptPort} exited with code ${code}`);
+                    audioEngineOrphan.clearRecord(enginePidFile, child.pid);
                     if (audioEngineProcess !== child) return;
                     const wasReady = audioEngineEndpoint.getStatus().state === 'ready';
                     const wasStopping = isAudioEngineStopping;

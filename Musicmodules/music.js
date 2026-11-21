@@ -1236,8 +1236,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const scannedMap = new Map(newPlaylist.map(t => [t.path, t]));
             const scannedPaths = new Set(scannedMap.keys());
 
-            // Normalize folder path for prefix matching (ensure trailing separator)
-            const folderPrefix = folderPath ? folderPath.replace(/[\\/]+$/, '') : null;
+            // 只有真的在这个文件夹里面的曲目才算「这次该扫到」：D:\Music 不能把 D:\Music2 里的歌也算进来。
+            // 扫描本身失败（failed）时什么都不删，免得一次读取错误把整个文件夹从曲库里清掉。
+            const folderKey = folderPath && !data.failed
+                ? String(app.normalizePathForCompare(folderPath) || '').replace(/\/+$/, '') + '/'
+                : null;
+            const insideFolder = (p) => Boolean(folderKey) && String(app.normalizePathForCompare(p) || '').startsWith(folderKey);
 
             const updatedPlaylist = [];
             const handledPaths = new Set();
@@ -1256,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     Object.assign(track, scannedMap.get(track.path));
                     updatedPlaylist.push(track);
                     handledPaths.add(track.path);
-                } else if (folderPrefix && track.path.startsWith(folderPrefix)) {
+                } else if (insideFolder(track.path)) {
                     // Track belongs to the scanned folder but was NOT found in new scan
                     // → file was deleted from disk, remove it from playlist
                     // (skip adding it)

@@ -192,6 +192,11 @@ function setupWebDav(app) {
                     app.webdavScannedTracks = result.tracks || [];
                     app.webdavImportBtn.disabled = app.webdavScannedTracks.length === 0;
                     app.webdavImportBtn.textContent = `导入 ${app.webdavScannedTracks.length} 首到全部`;
+                } else {
+                    // 读不到服务器：别留着上一次的结果让人误导入。
+                    app.webdavScannedTracks = [];
+                    app.webdavImportBtn.disabled = true;
+                    app.webdavImportBtn.textContent = `扫描失败：${result?.message || '服务器没有响应'}`;
                 }
             } catch (err) {
                 alert('扫描出错: ' + err.message);

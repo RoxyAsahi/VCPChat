@@ -19,7 +19,10 @@ function setupLyrics(app) {
                     original: line.original || line.fullText || '',
                     translation: line.translation || '',
                     romanization: line.romanization || ''
-                })) : []
+                })) : [],
+                // 刚切歌、还在找词时别让 AI 以为这首没有歌词。
+                loading: Boolean(track) && !app.currentLyrics.length
+                    && app.lyricsLoadingToken != null && app.lyricsLoadingToken === app.lyricsRequestToken
             }
         });
     });
@@ -28,7 +31,19 @@ function setupLyrics(app) {
     const LYRIC_MISS_TTL_MS = 10 * 60 * 1000;
     const LYRIC_SEARCH_SETTLE_MS = 500;
 
-    app.fetchAndDisplayLyrics = async (artist, title, options = {}) => {
+    // 找词期间记下这次请求；被新请求或手选歌词取代后自然不算在找。
+    app.fetchAndDisplayLyrics = async (...args) => {
+        const run = loadLyrics(...args);
+        const token = app.lyricsRequestToken;
+        app.lyricsLoadingToken = token;
+        try {
+            return await run;
+        } finally {
+            if (app.lyricsLoadingToken === token) app.lyricsLoadingToken = null;
+        }
+    };
+
+    const loadLyrics = async (artist, title, options = {}) => {
         app.resetLyrics();
         const requestToken = app.lyricsRequestToken;
         if (!app.api?.getMusicLyrics) return;

@@ -718,7 +718,12 @@ function initialize(options) {
         });
 
         // --- Gapless Playback Handlers ---
-        ipcMain.handle('music-queue-next', (event, { path, username, password }) => {
+        ipcMain.handle('music-queue-next', (event, { path, username, password, serverId }) => {
+            // 远程曲目预载要带上它所在服务器的账号；不然引擎用的是上一次配置的那台，换台就预载失败。
+            if (!username && !password) {
+                const creds = webdavManager.credentialsForTrack?.({ serverId, path });
+                if (creds?.username && creds?.password) ({ username, password } = creds);
+            }
             return audioEngineApi('/queue_next', 'POST', { path, username, password });
         });
 
