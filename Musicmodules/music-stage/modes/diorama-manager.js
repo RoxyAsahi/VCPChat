@@ -31,7 +31,7 @@
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity, drawnAt = 0;
         const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
         const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
@@ -282,6 +282,7 @@
             // Dissolve once the new song's first picture is really there.
             else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
+            drawnAt = performance.now();
         };
         const initialize = () => {
             if (initializing) return initializing;
@@ -352,7 +353,7 @@
             // seconds) dissolves from where the ride was instead of cutting.
             const at = R.finiteNumber(frame.playbackTime);
             if (initialized && latest && lastTime !== null && !leaving && !arriving && !themeHold
-                && frame.lines === source && Math.abs(at - lastTime) > 2 && !options().reducedMotion
+                && frame.lines === source && Math.abs(at - lastTime - (frame?.isPlaying ? (performance.now() - drawnAt) / 1000 : 0)) > 2 && !options().reducedMotion
                 && performance.now() - lastJumpAt > 600) {
                 lastJumpAt = performance.now();
                 themeHold = true;
