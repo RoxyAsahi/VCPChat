@@ -19,7 +19,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     const narrow = name.includes('narrow');
     // --size=760x600：指定窗口大小（不给时窄窗口是 900×700）
     const size = args.size ? args.size.split('x').map(Number) : null;
-    const page = await browser.newPage({ viewport: { width: size ? size[0] : narrow ? 900 : W, height: size ? size[1] : narrow ? 700 : H }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: size ? size[0] : narrow ? 900 : W, height: size ? size[1] : narrow ? 700 : H }, deviceScaleFactor: Number(args.dpr || 1) });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
@@ -30,6 +30,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     if (name.includes('playing')) qs.set('playing', '');
     if (name.includes('nolyr')) qs.set('nolyrics', ''); else if (name.includes('lyrics')) qs.set('lyrics', '');
     if (name.includes('plzero')) qs.set('emptypl', '');
+    if (name.includes('long')) qs.set('long', '');
     if (args.n) qs.set('n', args.n);
     await page.goto(base + '?' + qs.toString(), { timeout: 120000 });
     await page.waitForFunction(() => window.__ready);

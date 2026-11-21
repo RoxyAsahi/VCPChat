@@ -795,3 +795,34 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 /* 键盘提示放大到 12px 后，在宽档靠下限（1600×900 一类）会一直伸到右下页脚「正在播放」上面；
    改到页脚上面一行，并且不超过说明块右边 */
 .archive-hint { bottom: 62px; max-width: calc(100% - var(--ar-col) - 59px); overflow: hidden; text-overflow: ellipsis; }
+
+/* ═════════ 顶部收紧（Roxy 11-21：左上标题、右上导航都往上提，封面缩小） ═════════
+   整个顶部区域上移 36（设计像素）；靠这条顶线定位的目录、歌词、资料卡、窄档说明块跟着上移同样距离 */
+.archive-brand { top: 72px; }
+.archive-nav { top: 88px; }
+.archive-list { top: 229px; }
+.archive-lyrics { top: 229px; }
+.archive-detail-back { top: 190px; }
+.archive-detail-card { top: 214px; max-height: calc(100% - 214px - 72px - var(--archive-dock-lift, 0px)); }
+.archive-hud.short .archive-detail-card { top: 200px; max-height: calc(100% - 200px - 48px - var(--archive-dock-lift, 0px)); }
+.archive-hud.short .archive-detail-back { top: 170px; }
+.archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { top: 264px; }
+.archive-hud.narrow.short .archive-callout, .archive-hud.narrow.short .archive-empty { top: 234px; }
+.archive-hud.narrow .archive-list { top: 214px; }
+.archive-hud.narrow.short .archive-list { top: 202px; }
+.archive-hud.list-open .archive-brand { top: 64px; }
+.archive-hud.list-open .archive-list,
+.archive-hud.narrow.list-open .archive-list, .archive-hud.narrow.short.list-open .archive-list { top: 164px; }
+
+/* 封面：从 232 缩到 150，放在说明块右端、底边停在分隔线上方，不再往上伸到导航那一行；
+   标题给封面让出宽度 */
+.archive-cover { width: 150px; height: 150px; top: -73px; left: calc(58px + 653px - 150px); }
+.archive-hud.mid .archive-cover { left: calc(58px + min(653px, calc(100% - 116px)) - 150px); }
+.archive-hud.has-lyrics .archive-cover { left: calc(58px + 373px - 120px); top: -43px; width: 120px; height: 120px; }
+.archive-hud.short .archive-cover { width: 120px; height: 120px; top: -43px; left: calc(58px + 653px - 120px); }
+.archive-hud.mid.short .archive-cover { left: calc(58px + min(653px, calc(100% - 116px)) - 120px); }
+.archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { left: auto; right: 59px; width: 120px; height: 120px; top: -43px; }
+.archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(653px + 58px - 150px - 24px); }
+.archive-hud.mid .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 150px - 24px); }
+.archive-hud.short .archive-callout:has(.archive-cover.on) .archive-file-title, .archive-hud.has-lyrics .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(min(653px, calc(100% - 116px)) + 58px - 120px - 24px); }
+.archive-hud.narrow .archive-callout:has(.archive-cover.on) .archive-file-title { max-width: calc(100% - 59px - 120px - 24px); }
