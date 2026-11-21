@@ -10,6 +10,12 @@
  *   --ar-*  也用于列表视图（侧栏、档案卡、声学处理、歌词栏），和档案页同一套纸面与墨色
  *   --ms-*  舞台页上浮着的界面（顶部页签、舞台档案卡、舞台设置），
  *           舞台背景深浅不定，所以单独一组，并在 body.music-stage-active 下生效
+ *
+ * 进出舞台时会切换的那几组变量不挂在 body 上，只挂在读它们的几块界面上：舞台、底栏、
+ * 标题栏、提示条。经典视图和档案页不读这些变量，可曲库有上万行，变量一挂在 body 上，
+ * 进舞台那一下就得把整棵曲库树重新算一遍样式。这里要列出具体节点，不能写 :not(...)：
+ * :not() 会让浏览器把 body 下所有节点都标成要重算。新增读 --ms-* / --md-* 的
+ * body 直接子节点时，要把它加进下面的列表。
  */
 body {
   /* 共用 */
@@ -205,7 +211,7 @@ body.light-theme {
  * stage-theme-light/dark 同步成 body 上的 music-stage-light/dark，这里让舞台浮层、
  * 底栏和面板跟舞台的深浅走，而不是跟应用主题。
  */
-body.music-stage-active.music-stage-dark {
+body.music-stage-active.music-stage-dark > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer) {
   --ms-ink: #f2f3ef;
   --ms-muted: rgba(242, 243, 239, .74);
   --ms-faint: rgba(242, 243, 239, .42);
@@ -233,7 +239,7 @@ body.music-stage-active.music-stage-dark {
   --md-handle-bg: rgba(0, 0, 0, .4);
 }
 
-body.music-stage-active.music-stage-light {
+body.music-stage-active.music-stage-light > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer) {
   --ms-ink: #141517;
   --ms-muted: rgba(20, 21, 23, .72);
   --ms-faint: rgba(20, 21, 23, .46);
@@ -267,15 +273,15 @@ body.music-stage-active.music-stage-light {
  * 的时间字只有 1.9:1。这里只在舞台里提高胶囊底色不透明度、提亮深色时间字，
  * 实测后正文和时间字在 95% 的像素上都到 4.5:1 以上（WCAG AA）。
  */
-body.music-stage-active:not(.light-theme):not(.music-stage-light),
-body.music-stage-active.music-stage-dark {
+body.music-stage-active:not(.light-theme):not(.music-stage-light) > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer),
+body.music-stage-active.music-stage-dark > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer) {
   --md-time: rgb(212, 212, 216);
   --md-capsule-bg: rgba(0, 0, 0, .3);
   --md-capsule-bg-hover: rgba(0, 0, 0, .38);
 }
 
-body.music-stage-active.light-theme:not(.music-stage-dark),
-body.music-stage-active.music-stage-light {
+body.music-stage-active.light-theme:not(.music-stage-dark) > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer),
+body.music-stage-active.music-stage-light > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer) {
   --md-capsule-bg: rgba(255, 255, 255, .7);
   --md-capsule-bg-open: rgba(255, 255, 255, .78);
   --md-capsule-bg-hover: rgba(255, 255, 255, .76);
@@ -286,6 +292,6 @@ body.music-stage-active.music-stage-light {
  * 用 body:not(.light-theme) 提高优先级，压过底栏样式表里同名的默认值。
  * 底栏的胶囊、快捷行、把手、面板其余取值不动。
  */
-body:not(.light-theme):not(.music-stage-active) {
+body:not(.light-theme):not(.music-stage-active) > :is(#music-stage, #music-dock-root, #custom-title-bar, .mtst-layer) {
   --md-time: rgb(161, 161, 170);
 }
