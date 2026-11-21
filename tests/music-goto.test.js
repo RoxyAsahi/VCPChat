@@ -33,3 +33,11 @@ test('refuses when the track has no artist, or the archive page is not showing',
     assert.equal(setup({ mode: 'classic' }).app.goToGroup(0, 'artist'), false);
     assert.equal(setup({ stage: true }).app.goToGroup(0, 'album'), false);
 });
+
+test('copy text is "title - artist" without the file extension', () => {
+    const { copyText } = require(path.join(__dirname, '../Musicmodules/music-goto.js'));
+    const app = { stripAudioExtension: (s) => s.replace(/\.flac$/, '') };
+    assert.equal(copyText(app, { title: '晴天.flac', artist: 'Ren' }), '晴天 - Ren');
+    assert.equal(copyText({}, { title: 'Night Train.mp3', artist: '' }), 'Night Train');
+    assert.equal(copyText(app, null), '');
+});

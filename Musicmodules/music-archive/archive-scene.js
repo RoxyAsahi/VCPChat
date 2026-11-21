@@ -240,6 +240,10 @@
             }
         };
         paintUniform();
+        /* 选中卡卡身往强调色偏一点、圆点换成强调色：浏览时一眼能看出选的是哪张（实例下标随镜头变，每帧对一次） */
+        const accent = new THREE.Color('#c8a15a');
+        let accentIdx = -1;
+        let ACCENT_MIX = 0.1, accentMix = -1; const accentTmp = new THREE.Color();
 
         // ---- 卡面标题：只给相机附近几列看得见的卡贴，贴片池循环复用 ----
         // 每张贴片一块小画布，换卡时只重画这一块；一帧最多重画几块，避免滚动时卡顿。
@@ -422,6 +426,9 @@
             labelEpoch++;
             for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat]) m.envMapIntensity = lighting.env;
             const to = lookOf(colors, lighting);
+            if (colors.accent) accent.set(colors.accent);
+            ACCENT_MIX = dark ? 0.1 : 0.42;
+            accentIdx = -1;
             const parts = { card: new THREE.Color(colors.card), badge: new THREE.Color(colors.badge), groove: new THREE.Color(colors.groove) };
             const T = nowS();
             if (!wave || reducedMotion()) {
@@ -430,6 +437,7 @@
                 applyLook(look);
                 Object.assign(tint, parts);
                 paintUniform();
+                accentIdx = -1;
                 paintTag();
             } else {
                 const from = lookFade ? lookAt(lookFade, T) : { ...look };
@@ -731,7 +739,7 @@
             const baseLane = Math.round(camLane.v);
             const baseRow = Math.round(camRow.v);
             labelWanted.clear();
-            let i = 0;
+            let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
                 for (let ri = -ROWS_BEFORE; ri < ROWS_AFTER; ri++) {
                     const lane = baseLane + li;
@@ -754,7 +762,7 @@
                     else if (returning.size) { const r = returning.get(lane + ':' + row); if (r) y += r.v; }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
                     dummy.rotation.y = isTarget ? inspect.v : 0;
-                    if (isTarget) { targetPos.copy(dummy.position); }
+                    if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
                     const dl = lane - target.lane, dr = row - target.row;
                     if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
@@ -779,6 +787,19 @@
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
             if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
+            // 取出详情时卡身回到原色（封面卡不染色），跟着取出进度淡掉
+            const mix = ACCENT_MIX * (1 - detailK);
+            if (tinting || targetIdx !== accentIdx || Math.abs(mix - accentMix) > 0.002) {
+                if (accentIdx >= 0 && accentIdx !== targetIdx && !tinting) { cards.setColorAt(accentIdx, tint.card); rings.setColorAt(accentIdx, tint.badge); }
+                if (targetIdx >= 0) {
+                    if (tinting) cards.getColorAt(targetIdx, accentTmp); else accentTmp.copy(tint.card);
+                    cards.setColorAt(targetIdx, accentTmp.lerp(accent, mix));
+                    rings.setColorAt(targetIdx, accent);
+                }
+                accentIdx = targetIdx;
+                accentMix = mix;
+                cards.instanceColor.needsUpdate = rings.instanceColor.needsUpdate = true;
+            }
 
             placeCamera(reduced);
             placeCover();

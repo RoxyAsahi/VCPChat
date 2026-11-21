@@ -433,6 +433,7 @@
             refs.ticks.querySelector('.archive-ticks-tip').textContent = count ? tickTip(current) : '';
         };
 
+        let searchCtx = null;   // 目录检索中：{ q, n }
         const renderHud = (force = false) => {
             const col = column();
             if (!col) return;
@@ -451,9 +452,16 @@
             refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
             // 按首字母拆开的列，大标题还是「全部曲目」，字母写在下面一行
             const letterCol = col.kind === 'letter';
-            refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-            refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+            if (searchCtx) {
+                // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
+                refs.ctxName.textContent = '检索「' + searchCtx.q + '」';
+                refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
+            } else {
+                refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
+                refs.ctxSub.textContent = (letterCol ? col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
+            }
             refs.playCol.disabled = !count;
+            refs.playCol.hidden = Boolean(searchCtx);
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
@@ -693,6 +701,11 @@
             if (url && !entry) { const e2 = state.coverCache.get(url); e2?.img.addEventListener('load', syncDetailCover, { once: true }); }
             kick();
         };
+        // 资料卡滚到底（或本来就放得下）时去掉底边淡出
+        const syncDetailEnd = () => {
+            const card = refs.detail?.querySelector('.archive-detail-card');
+            if (card) card.classList.toggle('at-end', card.scrollTop + card.clientHeight >= card.scrollHeight - 2);
+        };
         const renderDetail = () => {
             if (!detailOpen) return;
             const index = selectedIndex();
@@ -752,6 +765,7 @@
                 refs.dMore.appendChild(li);
             }
             syncDetailCover();
+            syncDetailEnd();
         };
         const openDetail = () => {
             if (selectedIndex() < 0) return;
@@ -766,6 +780,7 @@
                 refs.tip.classList.remove('on');
             }
             renderDetail();
+            global.requestAnimationFrame?.(syncDetailEnd);
             refs.dPlay.focus({ preventScroll: true });
             kick();
         };
@@ -849,6 +864,9 @@
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
             renderDetail();
+            // 还没放过歌时底栏不写「正在播放 全部曲目」（没有在播放的东西）
+            const queueEl = refs.queue?.parentElement;
+            if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
             // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
             const prevPlaying = state.playingIndex;
@@ -1187,6 +1205,7 @@
                     floor: v('--ar-floor', '#192125'),
                     badge: v('--ar-badge', '#5d676b'),
                     groove: v('--ar-groove', '#4a5559'),
+                    accent: v('--ar-accent', '#c8a15a'),
                     font: v('--mt-font-archive', 'sans-serif')
                 },
                 dark: !document.body.classList.contains('light-theme')
@@ -1257,6 +1276,7 @@
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
             syncDetailRoom(sc);
+            if (detailOpen) syncDetailEnd();
             syncLyrics();
             updateLabelMask();
             kick();
@@ -1632,6 +1652,7 @@
         document.addEventListener('visibilitychange', onVisibility);
         const onLikeChange = () => { if (detailOpen) renderDetail(); };
         document.addEventListener('music-like-change', onLikeChange);
+        refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
         const bodyObserver = new MutationObserver(() => {
@@ -1726,6 +1747,7 @@
                 fileNumber: (t, i) => fileNumber(t, i),
                 onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
+                onResults: (q, n) => { searchCtx = q ? { q, n } : null; renderHud(); },
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });

@@ -28,16 +28,17 @@
         // and settles down into its first shot, the old sky dissolving into
         // the new. `leaving` holds the old song's last frame and when it went.
         const veil = U.createHandoverVeil(mode.root);
+        const overlay = U.watchOverlay(mode.root);
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity, drawnAt = 0;
         const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
         const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
         const wantsCanvasSmoothing = () => !(Optics()?.active(mode.config) ?? false);
         const onset = R.createAudioOnset();
-        const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
+        const audio = { energy: 0, impact: 0, onsets: 0, vocal: 0, spectrum: new Float32Array(24) };
         let appliedPalette = null;
         const palette = () => (themeHold && appliedPalette) || services?.app?.stagePalette || {};
         const dayLens = {};
@@ -196,6 +197,7 @@
                 const gain = R.clamp(settings.audioReactivity ?? 1, 0, 2);
                 audio.energy = live.energy * gain;
                 audio.impact = live.impact * gain;
+                audio.onsets = live.onsets;
                 const target = R.clamp(frame.audio?.vocal) * gain;
                 audio.vocal = seek ? target : audio.vocal
                     + (target - audio.vocal) * (1 - Math.exp(-dt * (target > audio.vocal ? 16 : 5)));
@@ -228,10 +230,12 @@
             const outdoors = 1 - R.clamp(pose.cabinView || 0);
             // Opening inside the saloon: no sky to come down from; the dissolve does it.
             if (arriving && outdoors < 0.5) arriving = 0;
-            // Advance by drawn frames, at most a thirtieth of a second each, so
-            // the rebuild's long first frame cannot swallow the move.
+            // Advance by real time, but a frame that took longer than a quarter
+            // second (the rebuild's first frame) counts for a thirtieth, so it
+            // cannot swallow the move; on a slow machine the move still keeps time.
             const now = performance.now();
-            const step = Math.min(1 / 30, Math.max(0, (now - (tiltClock || now)) / 1000));
+            const gap = Math.max(0, (now - (tiltClock || now)) / 1000);
+            const step = gap > 0.25 ? 1 / 30 : Math.min(0.1, gap);
             tiltClock = leaving || arriving ? now : 0;
             if (leaving) leaving.tilt = Math.min(1, (leaving.tilt || 0) + step / LEAVE_TILT_S);
             if (arriving) arriving = Math.min(1, arriving + step / ARRIVE_TILT_S);
@@ -256,9 +260,13 @@
             // The saloon is lit from its own ceiling and sits a little lower.
             renderer.toneMappingExposure = 1.15 * (1 + swell * 0.12 + breath) * (1 - 0.2 * (pose.cabinView || 0));
             const bars = settings.letterbox !== false && settings.geometryMode !== 'corridor'
-                ? Math.max(0, (height - width / 2.39) / 2) * (1 - pose.state.openness * 0.75) : 0;
-            // Lyrics stay clear of the frame edge and of the letterbox bars.
-            lyrics.update(time, settings, audio, camera, { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height) });
+                // A tall window would lose most of the picture to a 2.39:1 frame;
+                // the bars stop at the depth they reach on a 16:9 desktop window.
+                ? Math.min(Math.max(0, (height - width / 2.39) / 2), height * 0.14)
+                    * (1 - pose.state.openness * 0.75) : 0;
+            // Lyrics stay clear of the frame edge, the letterbox bars and the track card.
+            lyrics.update(time, settings, audio, camera,
+                { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height), avoid: overlay.box });
             events.update(time, settings, drawn().quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
@@ -276,10 +284,11 @@
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(), lens);
             else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving || themeHold) veil.capture(renderer.domElement);
+            if (leaving || themeHold) veil.capture(renderer.domElement, { every: themeHold ? 0 : 250 });
             // Dissolve once the new song's first picture is really there.
             else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
+            drawnAt = performance.now();
         };
         const initialize = () => {
             if (initializing) return initializing;
@@ -345,6 +354,17 @@
                 leaving = null;
                 arriving = 1e-6;
                 lyrics?.setVisible(true);
+            }
+            // A jump within the song (the progress bar, a skip of a few
+            // seconds) dissolves from where the ride was instead of cutting.
+            const at = R.finiteNumber(frame.playbackTime);
+            if (initialized && latest && lastTime !== null && !leaving && !arriving && !themeHold
+                && frame.lines === source && Math.abs(at - lastTime - (frame?.isPlaying ? (performance.now() - drawnAt) / 1000 : 0)) > 2 && !options().reducedMotion
+                && performance.now() - lastJumpAt > 600) {
+                lastJumpAt = performance.now();
+                themeHold = true;
+                try { update({ ...latest, playbackTime: lastTime }, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 450; }
             }
             update(frame);
         };
@@ -415,6 +435,7 @@
         });
         mode.scope.add(() => {
             veil.destroy();
+            overlay.destroy();
             global.clearTimeout(settleTimer);
             global.clearTimeout(contextTimer);
             disposeGraphics();

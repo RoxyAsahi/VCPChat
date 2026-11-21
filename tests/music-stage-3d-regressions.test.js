@@ -171,7 +171,7 @@ test('3D modes draw to a pixel budget and step down while frames are slow', () =
     scale.tick(now);
     assert.equal(run(16.7, 600), 0, 'a held frame rate changes nothing');
     assert.equal(run(4000, 3), 0, 'a hidden window is not a slow renderer');
-    assert.ok(run(33.3, 200) >= 1, 'thirty frames a second steps down');
+    assert.ok(run(33.3, 100) >= 1, 'thirty frames a second steps down');
     assert.ok(scale.factor < 1 && scale.factor >= 0.55);
     assert.ok(scale.ratio('standard', 2560, 1440) < large);
     const low = scale.factor;
@@ -216,6 +216,10 @@ test('3D stages step down pixels, then a tier, and only get pixels back on their
     assert.equal(scale.steps, 2);
     assert.equal(scale.quality('standard'), 'standard');
     assert.ok(scale.factor < 0.75);
+    // One slow judgement more is not enough to give up an effect tier: a song
+    // change or another busy app can do that for a second.
+    for (let i = 0; i < 50; i++) { now += 33; assert.equal(scale.tick(now, 16.7), false); }
+    assert.equal(scale.quality('standard'), 'standard');
     // Still slow: the tier below (no lens, 30 fps cap).
     assert.ok(run(33, 16.7));
     assert.equal(scale.quality('standard'), 'energy-saving');
@@ -256,4 +260,54 @@ test('the canvas shaders for a lens-less tier are compiled in the background bef
     // Without background compiling it would only move the stall, so it is skipped (and marked done).
     assert.equal(U.warmLensless(T, renderer(false), scene, camera, { steps: 1 }, 'standard'), true);
     assert.equal(compiled.length, 1);
+});
+
+
+test('the track card box is handed to 3D modes in picture units, and only when it is shown', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const doc = dom.window.document;
+    const stage = doc.createElement('div'); stage.className = 'music-stage';
+    const root = doc.createElement('section');
+    const card = doc.createElement('aside'); card.className = 'music-stage-id3';
+    stage.append(root, card); doc.body.append(stage);
+    root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 500 });
+    card.getBoundingClientRect = () => ({ left: 16, right: 216, top: 50, bottom: 175, width: 200, height: 125 });
+    let observed = 0;
+    dom.window.ResizeObserver = class { constructor(fn) { this.fn = fn; } observe() { observed += 1; } disconnect() {} };
+    const overlay = U.watchOverlay(root);
+    assert.equal(observed, 2, 'card and stage are watched, nothing is read per frame');
+    assert.equal(overlay.box, null);
+    overlay.measure();
+    const box = overlay.box;
+    assert.ok(Math.abs(box.left - -0.96) < 1e-9 && Math.abs(box.right - -0.46) < 1e-9);
+    assert.ok(Math.abs(box.top - 0.8) < 1e-9 && Math.abs(box.bottom - 0.3) < 1e-9);
+    card.style.display = 'none';
+    overlay.measure();
+    assert.equal(overlay.box, null, 'a hidden card is not avoided');
+    overlay.destroy();
+    assert.equal(U.watchOverlay(doc.createElement('div')).box, null, 'a mode outside the stage has no card');
+});
+
+test('the handover veil reads the 3D picture back at most four times a second while waiting', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const root = dom.window.document.createElement('div');
+    const veil = U.createHandoverVeil(root);
+    const canvas = root.querySelector('canvas');
+    let reads = 0;
+    canvas.getContext = () => ({ drawImage() { reads += 1; } });
+    let now = 1000;
+    dom.window.performance.now = () => now;
+    const source = { width: 640, height: 360 };
+    for (let i = 0; i < 60; i++) { veil.capture(source); now += 16.7; }
+    assert.ok(veil.captured);
+    assert.equal(reads, 4, 'one second at 60 fps: four reads');
+    // A theme switch needs exactly the picture on screen now.
+    veil.capture(source, { every: 0 });
+    assert.equal(reads, 5);
+    // A new size is read at once.
+    veil.capture({ width: 800, height: 450 });
+    assert.equal(reads, 6);
+    veil.destroy();
 });

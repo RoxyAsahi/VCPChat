@@ -165,7 +165,7 @@
         let frames = 0;
         let steady = 0;
         let patience = 900;
-        let longRun = 0;
+        let longRun = 0, strikes = 0;
         let derivedFrom = null, derived = null, derivedDrop = 0;
         const taken = () => LADDER.slice(0, rung);
         const scaleSteps = () => taken().filter(step => step === 'scale').length;
@@ -198,7 +198,7 @@
                 return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * this.factor);
             },
             // Start again from the top, e.g. after the listener chose a tier.
-            reset() { rung = 0; frames = 0; steady = 0; patience = 900; },
+            reset() { rung = 0; frames = 0; steady = 0; patience = 900; strikes = 0; },
             // Feed the time of every drawn frame, and the interval the frame
             // cap aims for. Returns true when the drawing changed.
             tick(now, aim = 0) {
@@ -220,10 +220,16 @@
                 const slow = Math.max(23, aim * 1.3);
                 const fast = Math.max(17.6, aim * 1.08);
                 if (average > slow && rung < LADDER.length) {
-                    rung += 1;
                     frames = 0; steady = 0;
+                    // A tier drop does not come back by itself, so a moment of
+                    // load (a song change, another app busy) must not cause it:
+                    // it takes two slow judgements in a row.
+                    if (LADDER[rung] === 'tier' && ++strikes < 2) return false;
+                    strikes = 0;
+                    rung += 1;
                     return true;
                 }
+                strikes = 0;
                 // A dropped tier caps the frame rate lower, so the frame times can no
                 // longer show whether it would cope: it stays down until the
                 // listener picks a tier again (reset).
@@ -388,12 +394,20 @@
         veil.setAttribute('aria-hidden', 'true');
         veil.width = 1; veil.height = 1;
         root.appendChild(veil);
-        let context = null, captured = false, timer = 0;
-        const empty = () => { veil.width = 1; veil.height = 1; captured = false; };
+        let context = null, captured = false, timer = 0, takenAt = -Infinity;
+        const empty = () => { veil.width = 1; veil.height = 1; captured = false; takenAt = -Infinity; };
         return {
             get captured() { return captured; },
-            capture(source) {
+            // Reading the 3D picture back stalls until the GPU has drawn it, so
+            // while a mode is waiting on the next song it keeps one picture a
+            // quarter of a second rather than every frame: on the slow sky it
+            // looks at by then, nobody can tell the difference.
+            capture(source, { every = 250 } = {}) {
                 if (!source || !source.width) return;
+                const now = global.performance?.now?.() ?? Date.now();
+                if (captured && now - takenAt < every
+                    && veil.width === source.width && veil.height === source.height) return;
+                takenAt = now;
                 if (veil.width !== source.width || veil.height !== source.height) {
                     veil.width = source.width; veil.height = source.height;
                     context = null;
@@ -418,7 +432,38 @@
         };
     };
 
+    /*
+     * The stage's track card sits over the top-left of the picture. Where a
+     * mode is free to move its words, it keeps them out from under the card.
+     * The card's box is read only when it or the stage changes size, never
+     * per frame, and handed out in the picture's own -1..1 units (y up).
+     */
+    const watchOverlay = (root, selector = '.music-stage-id3') => {
+        const card = root?.closest?.('.music-stage')?.querySelector?.(selector) || null;
+        let box = null;
+        const measure = () => {
+            box = null;
+            if (!card || !root.isConnected) return;
+            const view = root.getBoundingClientRect(), r = card.getBoundingClientRect();
+            if (!view.width || !view.height || !r.width || !r.height) return;
+            if (global.getComputedStyle?.(card)?.display === 'none') return;
+            const x = px => (px - view.left) / view.width * 2 - 1;
+            const y = px => 1 - (px - view.top) / view.height * 2;
+            box = { left: x(r.left), right: x(r.right), top: y(r.top), bottom: y(r.bottom) };
+            if (box.right <= -1 || box.left >= 1 || box.bottom >= 1 || box.top <= -1) box = null;
+        };
+        const observer = card && global.ResizeObserver ? new global.ResizeObserver(measure) : null;
+        observer?.observe(card);
+        observer?.observe(root);
+        return {
+            get box() { return box; },
+            measure,
+            destroy() { observer?.disconnect(); box = null; }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
+        watchOverlay,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, durationChanged,

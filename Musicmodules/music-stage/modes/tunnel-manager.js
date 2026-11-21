@@ -3168,12 +3168,13 @@
                 sungMain: { value: new T.Color() },
                 sub: { value: new T.Color() },
                 ink: { value: new T.Color() },
-                outline: { value: new T.Color() }
+                outline: { value: new T.Color() },
+                hop: { value: 0 }, hopStart: { value: -1 }, hopHeight: { value: 0 }
             },
             vertexShader: `
                 attribute vec2 aCenter, aLocal, aTiming;
                 attribute float aKind;
-                uniform float time, motion;
+                uniform float time, motion, hop, hopStart, hopHeight;
                 varying vec2 vUv, vLocal, vTiming;
                 varying float vActive, vKind;
                 void main() {
@@ -3188,6 +3189,8 @@
                     pos.xy *= 1.0 + pulse * 0.025;
                     pos.y += pulse * 0.12;
                     pos.z += pulse * 0.18;
+                    // The word being sung when the music hits hops and settles.
+                    pos.y += hop * motion * hopHeight * (1.0 - aKind) * step(abs(aTiming.x - hopStart), 0.001);
                     pos.xy += aCenter;
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
                 }
@@ -3223,6 +3226,30 @@
             `
         });
         const fadingGlyphMaterial = glyphMaterial.clone();
+        // Words are drawn over whatever the flight passes, and a pale planet
+        // or ring going by behind a line eats its contrast. A soft shade of
+        // the page colour sits behind the line: on empty sky it disappears,
+        // over a lit body it keeps the words standing off it.
+        const glyphScrim = new T.Mesh(new T.PlaneGeometry(1, 1), new T.ShaderMaterial({
+            transparent: true, depthTest: false, depthWrite: false,
+            uniforms: { color: { value: new T.Color() }, alpha: { value: 0 }, aspect: { value: 4 } },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform vec3 color; uniform float alpha, aspect; varying vec2 vUv;
+                void main() {
+                    vec2 p = abs(vUv - 0.5) * 2.0;
+                    float edge = 1.0 / aspect;
+                    float d = length(max(vec2(p.x - (1.0 - edge * 1.6), p.y - 0.45), 0.0)
+                        / vec2(edge * 1.6, 0.55));
+                    float shade = 1.0 - smoothstep(0.0, 1.0, d);
+                    gl_FragColor = vec4(color, alpha * shade);
+                    #include <colorspace_fragment>
+                }`
+        }));
+        glyphScrim.renderOrder = 29;
+        glyphScrim.frustumCulled = false;
+        glyphScrim.visible = false;
+        glyphStage.add(glyphScrim);
         // A hidden stand-in carries the glyph material from the start, so it is
         // compiled with the rest of the scene and not at the first lyric.
         const glyphWarmup = new T.Mesh(new T.PlaneGeometry(1, 1), glyphMaterial);
@@ -3232,6 +3259,7 @@
         const glyphColorUniforms = ['waitMain', 'sungMain', 'sub', 'ink', 'outline'];
         let glyphCanvas = document.createElement('canvas');
         let glyphMesh = null;
+        let glyphStarts = [], glyphEnd = -Infinity, glyphOnsets = 0;
         let glyphTexture = null;
         let glyphLine = null;
         let glyphTop = 0;
@@ -3252,6 +3280,7 @@
             glyphColorUniforms.forEach(key => uniforms[key].value.copy(glyphMaterial.uniforms[key].value));
             uniforms.map.value = glyphTexture;
             uniforms.motion.value = 0;
+            uniforms.hop.value = 0;
             glyphMesh.material = fadingGlyphMaterial;
             lyricAnchorGroup.add(glyphMesh);
             fadingGlyph = { mesh: glyphMesh, texture: glyphTexture, bottom: glyphBottom,
@@ -3262,6 +3291,8 @@
         };
 
         const clearGlyphStage = () => {
+            glyphStarts = []; glyphEnd = -Infinity;
+            glyphScrim.visible = false;
             if (glyphMesh) {
                 glyphStage.remove(glyphMesh);
                 glyphMesh.geometry.dispose();
@@ -3474,6 +3505,11 @@
                     geometry.setAttribute('aTiming', new T.Float32BufferAttribute(timings, 2));
                     geometry.setAttribute('aKind', new T.Float32BufferAttribute(kinds, 1));
                     geometry.setIndex(indices);
+                    const mainCells = cells.filter(cell => !cell.isSub);
+                    glyphStarts = mainCells.map(cell => cell.start).filter(Number.isFinite).sort((a, b) => a - b);
+                    glyphEnd = Math.max(-Infinity, ...mainCells.map(cell => cell.end).filter(Number.isFinite));
+                    glyphMaterial.uniforms.hopHeight.value = mainCells.length ? mainCells[0].h * unit * 0.16 : 0;
+                    glyphMaterial.uniforms.hopStart.value = -1;
 
                     glyphTexture = new T.CanvasTexture(glyphCanvas);
                     glyphTexture.generateMipmaps = false;
@@ -3500,6 +3536,18 @@
                     glyphMesh.frustumCulled = false;
                     glyphMesh.renderOrder = 30;
                     glyphStage.add(glyphMesh);
+                    let left = Infinity, right = -Infinity;
+                    cells.forEach(cell => {
+                        const half = cell.w * unit * cell.fit * 0.5;
+                        left = Math.min(left, cell.cx - half); right = Math.max(right, cell.cx + half);
+                    });
+                    const padX = (glyphTop - glyphBottom) * 0.55, padY = (glyphTop - glyphBottom) * 0.45;
+                    const scrimW = right - left + padX * 2, scrimH = glyphTop - glyphBottom + padY * 2;
+                    glyphScrim.scale.set(scrimW, scrimH, 1);
+                    glyphScrim.position.set((left + right) / 2, (glyphTop + glyphBottom) / 2, -0.01);
+                    glyphScrim.material.uniforms.aspect.value = Math.max(1, scrimW / scrimH);
+                    glyphScrim.material.uniforms.color.value.copy(colors.background);
+                    glyphScrim.visible = true;
 
                     // 一次性采样整张图集的 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
                     const pixelW = glyphCanvas.width;
@@ -3822,6 +3870,16 @@
                 glyphMaterial.uniforms.time.value = time;
                 glyphMaterial.uniforms.alpha.value = glyphAlpha;
                 glyphMaterial.uniforms.motion.value = motionAmount;
+                glyphScrim.material.uniforms.alpha.value = glyphAlpha * (stagePalette.light ? 0.4 : 0.6);
+                // A hit in the music picks the word being sung (or the last one
+                // begun, between words) and keeps it through the fall.
+                if (audioState.onsets !== glyphOnsets) {
+                    glyphOnsets = audioState.onsets;
+                    let picked = -1;
+                    if (time < glyphEnd) for (const start of glyphStarts) if (start <= time) picked = start;
+                    glyphMaterial.uniforms.hopStart.value = picked;
+                }
+                glyphMaterial.uniforms.hop.value = clamp(audioState.impact || 0);
                 if (glyphMesh) glyphMesh.position.y = 0;
                 if (fadingGlyph && glyphMesh) {
                     // Keep the ink of the two full blocks apart, including translations.
@@ -3831,6 +3889,7 @@
                     fadingGlyphMaterial.uniforms.time.value = time;
                     fadingGlyphMaterial.uniforms.alpha.value = fadingGlyph.alpha * (1 - handoffProgress);
                 }
+                if (glyphMesh) glyphScrim.position.y = (glyphTop + glyphBottom) / 2 + glyphMesh.position.y;
                 const releaseIn = smooth(exitPhase / 0.22);
                 const releaseOut = 1 - smooth((exitPhase - 0.58) / 0.42);
                 // Hand over from particles to type at entry and leave room for the line to fade before release.
@@ -4258,7 +4317,7 @@
         let lastTime = null;
         let paletteKey = '';
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity, drawnAt = 0;
         // Something other than the clock changed since the last drawn frame.
         let dirty = true;
         let canvasSmoothing = null;
@@ -4268,6 +4327,7 @@
         // song's words put away while the host waits for the new lyrics; the
         // new song then starts under the last of that picture, dissolving.
         const veil = U.createHandoverVeil(mode.root);
+        const onset = R.createAudioOnset();
         let leaving = null, revealPending = false;
         const wantsCanvasSmoothing = () => !(global.MusicStageDioramaOptics?.active(mode.config, {}) ?? false);
         // The settings as drawn: the chosen tier, less what the frame rate made it drop.
@@ -4397,6 +4457,7 @@
             const seeking = lastTime === null || dt < -0.1 || dt > 0.5;
             const live = Boolean(frame.isPlaying) && dt > 0 && !settings.reducedMotion;
             const reactivity = clamp(settings.audioReactivity ?? 1, 0, 2);
+            const hit = onset.update(frame);
 
             const audio = live
                 ? {
@@ -4410,6 +4471,8 @@
             world.update(time, frame, settings, {
                 seek: seeking,
                 playing: live,
+                impact: live ? hit.impact * reactivity : 0,
+                onsets: hit.onsets,
                 dt: seeking ? 0 : Math.max(0, Math.min(0.08, dt)),
                 ...audio
             }, camera);
@@ -4424,9 +4487,10 @@
                     { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
             } else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
-            if (leaving || themeHold) veil.capture(renderer.domElement);
+            if (leaving || themeHold) veil.capture(renderer.domElement, { every: themeHold ? 0 : 100 });
             else if (revealPending) { revealPending = false; veil.reveal(revealMs); revealMs = 1000; }
             lastTime = time;
+            drawnAt = performance.now();
         };
 
         const initialize = () => {
@@ -4494,6 +4558,15 @@
             // The host went back to the song on screen (skipped back): just carry on.
             if (leaving && frame?.lines === source
                 && (frame.track?.path || frame.track?.title || 'tunnel-track') === identity) leaving = null;
+            // A jump within the song dissolves from where the flight was instead of cutting.
+            const at = finiteNumber(frame?.playbackTime, 0);
+            if (initialized && latest && lastTime !== null && !leaving && !themeHold && frame?.lines === source
+                && Math.abs(at - lastTime - (frame?.isPlaying ? (performance.now() - drawnAt) / 1000 : 0)) > 2 && !tuning().reducedMotion && performance.now() - lastJumpAt > 600) {
+                lastJumpAt = performance.now();
+                themeHold = true;
+                try { update({ ...latest, playbackTime: lastTime }, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 450; }
+            }
             update(frame);
         };
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };

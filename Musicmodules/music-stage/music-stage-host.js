@@ -841,10 +841,23 @@
                 verticalBand: Math.ceil(inset + verticalAmplitude + 24) };
         };
 
+        // Reading the stage's size every frame forces a layout every frame;
+        // keep it from the resize observer and read it only when unknown.
+        let rootSize = null;
+        if (global.ResizeObserver) {
+            const observer = new global.ResizeObserver(() => { rootSize = null; });
+            observer.observe(root);
+            scope.add(() => observer.disconnect());
+        }
+        const stageSize = () => {
+            if (!rootSize || !global.ResizeObserver) rootSize = { width: root.clientWidth, height: root.clientHeight };
+            return rootSize;
+        };
         const resizeEdgeCanvas = (frame) => {
             if (!edgeContext) return false;
-            const width = Math.max(1, root.clientWidth);
-            const height = Math.max(1, root.clientHeight);
+            const size = stageSize();
+            const width = Math.max(1, size.width);
+            const height = Math.max(1, size.height);
             // A glowing line gains nothing from more than this.
             const dpr = Math.min(1.5, frame.viewport?.dpr || global.devicePixelRatio || 1);
             if (
@@ -1549,16 +1562,26 @@
             app.api?.seekMusic?.(target);
         });
         scope.listen(global, 'keydown', onKeyDown);
+        // Dragging a window edge fires resize many times a frame, and each
+        // resize redraws the whole 3D picture: do it once per frame.
+        let resizeFrame = 0;
+        scope.add(() => global.cancelAnimationFrame?.(resizeFrame));
         scope.listen(global, 'resize', () => {
+            rootSize = null;
             edgeCanvasState.width = 0;
             edgeCanvasState.height = 0;
-            const viewport = {
-                width: global.innerWidth,
-                height: global.innerHeight,
-                dpr: Math.min(2, global.devicePixelRatio || 1)
-            };
-            state.modeInstance?.resize?.(viewport);
-            state.leaving?.instance.resize?.(viewport);
+            if (resizeFrame) return;
+            resizeFrame = global.requestAnimationFrame(() => {
+                resizeFrame = 0;
+                if (state.destroyed) return;
+                const viewport = {
+                    width: global.innerWidth,
+                    height: global.innerHeight,
+                    dpr: Math.min(2, global.devicePixelRatio || 1)
+                };
+                state.modeInstance?.resize?.(viewport);
+                state.leaving?.instance.resize?.(viewport);
+            });
         });
         scope.listen(document, 'visibilitychange', () => {
             // A hidden window would leave the old mode half faded out; finish the switch.
