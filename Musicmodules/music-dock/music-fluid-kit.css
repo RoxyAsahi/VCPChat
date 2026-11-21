@@ -687,3 +687,21 @@ body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before 
 .archive-nav { isolation: isolate; }
 .archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
 body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }
+/* 左侧目录的曲目行：竖着流，横向和行对齐（行从 --gutter 开始） */
+.archive-list-spacer { isolation: isolate; }
+.archive-list-spacer > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  left: var(--gutter, 0px);
+  right: 0;
+  width: auto;
+  height: 0;
+  border-radius: 16px;
+  transform: scale(.96, .7);
+  background:
+    radial-gradient(70% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 12%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.archive-list-spacer > .mf-trail.mf-on { transform: none; }
+.archive-list.grabbing .archive-list-spacer > .mf-trail,
+.archive-list.has-multi .archive-list-spacer > .mf-trail { opacity: 0; }

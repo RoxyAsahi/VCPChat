@@ -330,8 +330,9 @@
     // 平时什么都没有；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，在按钮之间移动时像液体一样流过去，
     // 指针离开这一排就淡掉。只加一个装饰元素，不改按钮本身的样子。
     const TRAILS = [
-        { item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
-        { item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+        { row: '.archive-nav', item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
+        { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+        { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -345,30 +346,40 @@
             }
             return drop;
         };
+        // 按钮在这一排里的位置；排可能被整体缩放（档案页会按窗口大小缩放），所以按排自己的尺寸换算回去
+        const placeIn = (row, btn, t) => {
+            const rr = row.getBoundingClientRect(), br = btn.getBoundingClientRect();
+            if (t.axis === 'y') {
+                const k = rr.height ? row.offsetHeight / rr.height : 1;
+                return { top: (br.top - rr.top) * k - t.pad, height: br.height * k + t.pad * 2 };
+            }
+            const k = rr.width ? row.offsetWidth / rr.width : 1;
+            return { left: (br.left - rr.left) * k - t.pad, width: br.width * k + t.pad * 2 };
+        };
         doc.addEventListener('pointerover', (event) => {
             const target = event.target;
             if (!(target instanceof global.Element)) return;
             for (const t of TRAILS) {
                 const btn = target.closest(t.item);
-                if (!btn || btn.disabled) continue;
-                const row = btn.parentElement;
+                const row = btn?.closest(t.row);
+                if (!row || btn.disabled) continue;
                 const drop = dropOf(row);
                 const fresh = !drop.classList.contains('mf-on');
                 if (fresh) slides.delete(t.key);
-                slide(drop, { left: btn.offsetLeft - t.pad, width: btn.offsetWidth + t.pad * 2 }, { key: t.key, lead: 160, trail: 320 });
+                slide(drop, placeIn(row, btn, t), { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
                 drop.classList.add('mf-on');
                 return;
             }
         }, true);
+        // 在按钮之间的空隙里不算离开；指针出了整排才淡掉
         doc.addEventListener('pointerout', (event) => {
             const target = event.target;
             if (!(target instanceof global.Element)) return;
             for (const t of TRAILS) {
-                const btn = target.closest(t.item);
-                if (!btn) continue;
-                const row = btn.parentElement;
+                const row = target.closest(t.row);
+                if (!row) continue;
                 const next = event.relatedTarget;
-                if (next instanceof global.Node && row.contains(next) && next !== row) return;
+                if (next instanceof global.Node && row.contains(next)) return;
                 row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
                 return;
             }
