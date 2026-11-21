@@ -662,3 +662,46 @@ body.music-reduce-motion :is(.dialog, .lyrics-fetch-search) input { transition: 
 @keyframes mf-notice-breathe { 50% { opacity: .45; transform: scale(.8); } }
 body.music-fl-low .audio-engine-notice { backdrop-filter: none; -webkit-backdrop-filter: none; }
 body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before { animation: none; }
+
+/* ───────── 档案顶栏（目录、检索、加入歌单……）和「播放 / 详情」：手底下的那一汪 ─────────
+ * 按钮本身不变；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，换按钮时流过去，离开就淡掉。
+ * 位置由 music-fluid-kit.js 的 watchTrails 用 MusicFluid.slide 推。 */
+.mf-trail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0;
+  height: var(--mf-trail-h, 38px);
+  margin-top: calc(var(--mf-trail-h, 38px) / -2);
+  z-index: -1;
+  border-radius: 9999px;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 140% at 50% 120%, color-mix(in srgb, var(--mf-tint) 14%, transparent), transparent 70%),
+    var(--mf-hover);
+  opacity: 0;
+  transform: scale(.7, .5);
+  transition: opacity .22s ease, transform .3s cubic-bezier(.34, 1.56, .5, 1);
+}
+.mf-trail.mf-on { opacity: 1; transform: none; }
+.archive-nav { isolation: isolate; }
+.archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
+body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }
+/* 左侧目录的曲目行：竖着流，横向和行对齐（行从 --gutter 开始） */
+.archive-list-spacer { isolation: isolate; }
+.archive-list-spacer > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  left: var(--gutter, 0px);
+  right: 0;
+  width: auto;
+  height: 0;
+  border-radius: 16px;
+  transform: scale(.96, .7);
+  background:
+    radial-gradient(70% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 12%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+.archive-list-spacer > .mf-trail.mf-on { transform: none; }
+.archive-list.grabbing .archive-list-spacer > .mf-trail,
+.archive-list.has-multi .archive-list-spacer > .mf-trail { opacity: 0; }
