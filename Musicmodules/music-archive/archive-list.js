@@ -1143,6 +1143,7 @@
             menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
             menu.innerHTML = `<header>${title ? `${esc(title)} · ${indices.length} 首` : `已选 ${indices.length} 首`}</header>`
                 + item('play', title ? '播放这一组' : '播放所选')
+                + item('shuffle', '随机播放')
                 + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
                 + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
@@ -1174,6 +1175,19 @@
                     clearMulti();
                     if (row) pickRow(k);
                     play(row ? row.i : indices[0], row ? row.ctx : null, { stage: false, group });
+                } else if (act === 'shuffle') {
+                    // 随机播放：把这几首洗一遍当作这次的队列，播放模式不动（和 Spotify 在专辑上点随机一样，只影响这一次）
+                    const order = indices.slice();
+                    for (let n = order.length - 1; n > 0; n--) { const m = Math.floor(Math.random() * (n + 1)); [order[n], order[m]] = [order[m], order[n]]; }
+                    const base = (groupFirst >= 0 && groupOf(groupFirst)) || null;
+                    const name = (base ? base.name : `所选 ${indices.length} 首`) + ' · 随机';
+                    let k = -1;
+                    if (groupFirst >= 0) { for (let j = groupFirst; j < state.rows.length && state.rows[j].type === 'track'; j++) if (state.rows[j].i === order[0]) { k = j; break; } }
+                    if (k < 0) k = findRow(order[0], null);
+                    const row = state.rows[k];
+                    clearMulti();
+                    if (row) pickRow(k);
+                    play(order[0], row ? row.ctx : null, { stage: false, group: { name, items: order } });
                 } else if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
                 else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
