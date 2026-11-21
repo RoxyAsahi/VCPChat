@@ -369,9 +369,7 @@
                 left: (br.left - rr.left) * kx + row.scrollLeft - t.pad, width: br.width * kx + t.pad * 2,
             };
         };
-        doc.addEventListener('pointerover', (event) => {
-            const target = event.target;
-            if (!(target instanceof global.Element)) return;
+        const follow = (target) => {
             for (const t of TRAILS) {
                 const btn = target.closest(t.item);
                 const row = btn?.closest(t.row);
@@ -389,6 +387,30 @@
                     slide(drop, to, { key: t.key, axis: t.axis || 'x', lead: 160, trail: 320 });
                 }
                 drop.classList.add('mf-on');
+                return;
+            }
+        };
+        doc.addEventListener('pointerover', (event) => {
+            if (event.target instanceof global.Element) follow(event.target);
+        }, true);
+        // 用键盘（Tab、方向键）在一排里移动时，那一汪也跟着焦点流过去；鼠标点出来的焦点不算
+        doc.addEventListener('focusin', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            let visible = false;
+            try { visible = target.matches(':focus-visible'); } catch (_) { /* 老内核 */ }
+            if (visible) follow(target);
+        }, true);
+        doc.addEventListener('focusout', (event) => {
+            const target = event.target;
+            if (!(target instanceof global.Element)) return;
+            for (const t of TRAILS) {
+                const row = target.closest(t.row);
+                if (!row) continue;
+                const next = event.relatedTarget;
+                if (next instanceof global.Node && row.contains(next)) return;
+                if (row.matches(':hover')) return;
+                row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
                 return;
             }
         }, true);
