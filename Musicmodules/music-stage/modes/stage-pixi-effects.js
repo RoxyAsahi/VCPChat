@@ -941,7 +941,7 @@ void main() {
             entryDecor.addChild(graphic);
 
             const marker = new PIXI.Text({
-                text: `${String(lineIndex + 1).padStart(2, '0')} / ${point.vertical ? 'VERTICAL' : 'HORIZONTAL'}`,
+                text: String(lineIndex + 1).padStart(2, '0'),
                 style: {
                     fontFamily: '"Segoe UI", sans-serif',
                     fontSize: Math.max(9, fontSize * 0.16),

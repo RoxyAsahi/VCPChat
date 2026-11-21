@@ -25,7 +25,7 @@
         stageContainer.style.overflow = 'hidden';
         mode.root.append(stageContainer);
 
-        const kicker = createElement('div', 'tempera-kicker', 'TEMPERA / PIXI MG DIRECTOR');
+        const kicker = createElement('div', 'tempera-kicker', '凝彩');
         const translation = createElement('div', 'stage-translation tempera-translation');
         mode.root.append(kicker, translation);
 
@@ -76,6 +76,8 @@
             latestFrame = frame;
             resize();
             renderLine(frame);
+            const caption = `凝彩 · ${Utils.lineCounter(frame)}`;
+            if (kicker.textContent !== caption) kicker.textContent = caption;
             const tuning = getTuning();
             director?.update(frame, tuning);
             mode.root.style.setProperty('--stage-vocal', Number(frame.audio?.vocal || 0).toFixed(4));
