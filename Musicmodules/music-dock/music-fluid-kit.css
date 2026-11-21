@@ -791,3 +791,12 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
 }
 #music-archive-view :is(.archive-nav, .archive-callout-acts):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
+
+/* ───────── 弹窗里的滚动条 ─────────
+ * 全局滚动条是 6px、强调色的滑块（themes.css，带 !important），在玻璃弹窗里太跳。
+ * 这里只换它读的颜色变量：轨道透明，滑块是一根淡淡的墨色胶囊，指针移上去才深一点。 */
+:is(.music-modal-overlay, .dialog-overlay) {
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: color-mix(in srgb, var(--mf-ink) 18%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--mf-ink) 34%, transparent);
+}
