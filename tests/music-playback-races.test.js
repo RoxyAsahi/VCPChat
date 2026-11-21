@@ -776,3 +776,31 @@ test('an engine that came back empty after a restart gets the track loaded again
     await app.playTrack();
     assert.equal(app.calls[0], 'load:a', 'play reloads instead of sending play to an empty engine');
 });
+
+// 引擎进程没了的时候切歌：不是歌的问题，不能把好好的歌标成坏文件、再自动跳下一首（下一首也一样失败）。
+test('a load that fails because the engine is gone does not mark the song broken or skip', async t => {
+    const app = setup({ musicLoad: async () => ({ status: 'error', message: 'fetch failed' }) });
+    const notices = [];
+    app.showPlaybackNotice = (m) => notices.push(m);
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip?.(); });
+    await app.loadTrack(1, true);
+    assert.equal(app.failedTracks.has(app.playlist[1]), false, 'the song is not greyed out as broken');
+    assert.equal(app.currentTrackIndex, 1);
+    await tick(30);
+    assert.equal(app.currentTrackIndex, 1, 'no automatic skip to the next song');
+    assert.equal(notices.length, 1);
+    assert.match(notices[0], /加载中断：连不上音频引擎/);
+});
+
+test('when the engine dies in the middle of a load, the wait ends early with the same message', async t => {
+    const app = setup({ getMusicState: async () => ({ status: 'error', message: 'fetch failed' }) });
+    const notices = [];
+    app.showPlaybackNotice = (m) => notices.push(m);
+    t.after(() => { app.stopStatePolling(); app.cancelFailureSkip?.(); });
+    const started = Date.now();
+    await app.loadTrack(1, true);
+    assert.ok(Date.now() - started < 8000, 'does not sit out the 12 second load timeout');
+    assert.equal(app.isTrackLoading, false);
+    assert.equal(app.failedTracks.has(app.playlist[1]), false);
+    assert.match(notices[0] || '', /加载中断：连不上音频引擎/);
+});

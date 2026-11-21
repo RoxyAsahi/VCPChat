@@ -272,9 +272,20 @@ function setupPlayer(app) {
         if (had === Boolean(detail) && !detail) return;
         try { globalThis.document?.dispatchEvent?.(new CustomEvent('music-track-health', { detail: { track, failed: Boolean(detail), reason: detail || '' } })); } catch (error) {}
     };
+    // 连不上本机音频引擎（进程退出了）：不是这首歌的问题。以前照样把歌标灰成「坏文件」、几秒后跳下一首，
+    // 下一首也一样失败，连着把好几首好好的歌都标坏。
+    const ENGINE_GONE = /^fetch failed$|socket hang up|econnrefused (127\.0\.0\.1|::1|localhost)/i;
+    app.isEngineGone = (message) => ENGINE_GONE.test(String(message || '').trim());
     const handleLoadFailure = (track, reason, requestId, wanted) => {
         const name = app.stripAudioExtension(track?.title) || '这首歌';
         const raw = String(reason);
+        const rawReason = raw.startsWith('加载失败：') ? raw.slice(5) : raw;
+        if (app.isEngineGone(rawReason)) {
+            app.cancelFailureSkip?.();
+            app.failureStreak = 0;
+            app.showPlaybackNotice(`加载中断：${describeEngineError(rawReason)}`);
+            return;
+        }
         const detail = raw.startsWith('加载失败：') ? describeEngineError(raw.slice(5)) : raw;
         markFailed(track, detail || '无法播放');
         app.showPlaybackNotice(raw.startsWith('加载失败：') ? `加载失败：${detail}` : raw);
@@ -420,6 +431,7 @@ function setupPlayer(app) {
                 const startedAt = Date.now();
                 const targetPath = app.normalizePathForCompare(track.path);
                 let pollInterval = 120;
+                let unreachable = 0;
 
                 // 引擎会把整首歌解码完才算加载好，长曲目或开了升频会超过十几秒。
                 // 只要还在收到解码进度就继续等，完全没动静才判超时。
@@ -435,6 +447,10 @@ function setupPlayer(app) {
                     const stateResult = await app.api.getMusicState();
                     if (requestId !== app.pendingLoadRequestId) return 'stale';
                     if (app.engineLoadErrorSeq !== loadErrorSeq) return 'error';
+                    // 引擎进程没了：连着几次连不上就别再等满超时，直接按「连不上引擎」收尾
+                    if (stateResult?.status !== 'success' && app.isEngineGone(stateResult?.message)) {
+                        if (++unreachable >= 6) { app.engineLoadError = stateResult.message; return 'error'; }
+                    } else unreachable = 0;
                     if (stateResult && stateResult.status === 'success' && stateResult.state) {
                         const state = stateResult.state;
                         const loadedPath = app.normalizePathForCompare(state.file_path);
