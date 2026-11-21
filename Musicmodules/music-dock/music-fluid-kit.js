@@ -528,7 +528,20 @@
      * 按下的那一刻先记住各块的位置和大小，类名换完以后量一次新位置，再用 transform 从旧位置补间回来。
      * 每帧只动 transform 和 opacity，不碰排版；整个过程只排版两次（按下前、换完后）。
      * 新出现的块（目录本身）从左边淡入滑进来；消失的块不做（已经 display:none）。 */
-    const HUD_FLIP = ['.archive-brand', '.archive-counter', '.archive-callout', '.archive-nav', '.archive-bottom', '.archive-list'];
+    // s：要跟的块；font：字号会变的（按新旧字号比 scale，不按宽度）；in：嵌在哪个也在动的块里（减掉外层的位移，免得算两遍）
+    const HUD_FLIP = [
+        { s: '.archive-brand' },
+        { s: '.archive-brand h1', in: '.archive-brand', font: true },
+        { s: '.archive-brand > div', in: '.archive-brand', font: true },
+        { s: '.archive-brand-play', in: '.archive-brand' },
+        { s: '.archive-brand-resume', in: '.archive-brand' },
+        { s: '.archive-counter' },
+        { s: '.archive-callout' },
+        { s: '.archive-nav' },
+        { s: '.archive-bottom' },
+        { s: '.archive-list' },
+        { s: '.archive-list-foot', in: '.archive-list' }
+    ];
     const watchHud = () => {
         const doc = global.document;
         if (typeof global.MutationObserver !== 'function') return;
@@ -540,11 +553,13 @@
             let before = null;
             const measure = () => {
                 const out = new Map();
-                for (const sel of HUD_FLIP) {
-                    const el = hud.querySelector(sel);
+                for (const t of HUD_FLIP) {
+                    const el = hud.querySelector(t.s);
                     if (!el) continue;
                     const r = el.getBoundingClientRect();
-                    out.set(sel, r.width || r.height ? { el, x: r.left, y: r.top, w: r.width, h: r.height } : null);
+                    out.set(t.s, r.width || r.height
+                        ? { el, x: r.left, y: r.top, w: r.width, h: r.height, fs: t.font ? parseFloat(global.getComputedStyle(el).fontSize) || 0 : 0 }
+                        : null);
                 }
                 return out;
             };
@@ -561,20 +576,26 @@
                 if (!first || !enabled()) return;
                 const last = measure();
                 const ease = 'cubic-bezier(.32, .72, 0, 1)';
-                for (const [sel, to] of last) {
+                const delta = new Map();
+                for (const t of HUD_FLIP) {
+                    const to = last.get(t.s), from = first.get(t.s);
+                    if (to && from) delta.set(t.s, { dx: from.x - to.x, dy: from.y - to.y });
+                }
+                for (const t of HUD_FLIP) {
+                    const to = last.get(t.s);
                     if (!to) continue;
-                    const from = first.get(sel);
+                    const from = first.get(t.s);
                     if (!from) {
-                        // 新出现的：从左边一点点淡入
-                        to.el.animate([{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: ease });
+                        // 新出现的：从左边一点点淡入（嵌在别的块里的不单独动，跟着外层）
+                        if (!t.in || !last.get(t.in) || first.get(t.in)) {
+                            to.el.animate([{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: ease });
+                        }
                         continue;
                     }
-                    const dx = from.x - to.x, dy = from.y - to.y;
-                    const sx = to.w ? from.w / to.w : 1, sy = to.h ? from.h / to.h : 1;
-                    const scaled = Math.abs(sx - 1) > 0.02 || Math.abs(sy - 1) > 0.02;
-                    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && !scaled) continue;
-                    // 文字块按宽度等比缩放（字号变了）；面板只平移，不拉伸里面的字
-                    const k = sel === '.archive-list' ? 1 : (scaled ? sx : 1);
+                    const outer = t.in ? delta.get(t.in) : null;
+                    const dx = from.x - to.x - (outer?.dx || 0), dy = from.y - to.y - (outer?.dy || 0);
+                    const k = t.font && from.fs && to.fs ? from.fs / to.fs : 1;
+                    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(k - 1) < 0.02) continue;
                     to.el.animate([
                         { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${k})` },
                         { transformOrigin: '0 0', transform: 'none' }
