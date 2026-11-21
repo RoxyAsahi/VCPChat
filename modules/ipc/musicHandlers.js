@@ -199,6 +199,27 @@ function createOrFocusMusicWindow() {
     return musicWindowPromise;
 }
 
+// 无缝切到下一首时不走 music-load，「当前播放」注入会一直报上一首。
+// 窗口每次换歌都会发胶囊状态，按它的路径跟上；新窗口顺带给出歌手和专辑，旧窗口只给路径时从曲库里查。
+async function followTrackChange(state) {
+    const trackPath = typeof state?.trackKey === 'string' ? state.trackKey : '';
+    if (!trackPath || currentSongInfo?.path === trackPath) return;
+    let info = null;
+    if (typeof state.artist === 'string' || typeof state.album === 'string') {
+        info = { title: state.title, artist: state.artist, album: state.album };
+    } else {
+        const track = (await readPlaylistFile()).find(t => t && t.path === trackPath);
+        info = track ? { title: track.title, artist: track.artist, album: track.album } : { title: state.title };
+    }
+    if (!musicWindow || musicCapsuleState.trackKey !== trackPath) return; // 查曲库期间又换了歌或窗口关了
+    currentSongInfo = {
+        title: String(info.title || '').slice(0, 512) || '未知标题',
+        artist: String(info.artist || '').slice(0, 512) || '未知艺术家',
+        album: String(info.album || '').slice(0, 512) || '未知专辑',
+        path: trackPath
+    };
+}
+
 // --- Playlist file helpers ---
 async function readPlaylistFile() {
     try {
@@ -523,6 +544,7 @@ function initialize(options) {
             };
             publishMusicCapsule();
             if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
+            followTrackChange(state).catch(() => {});
         });
         ipcMain.on('music-capsule-command', (event, command) => {
             if (!mainWindow || event.sender !== mainWindow.webContents) return;
@@ -556,7 +578,8 @@ function initialize(options) {
                 currentSongInfo = {
                     title: track.title || '未知标题',
                     artist: track.artist || '未知艺术家',
-                    album: track.album || '未知专辑'
+                    album: track.album || '未知专辑',
+                    path: track.path
                 };
                 
                 // 检查是否是 WebDAV 远程曲目
