@@ -1519,6 +1519,19 @@ body.music-reduce-motion .md-mist { transition: none; }
     mask-composite: add;
   }
 }
+/* 抽屉左边放不下播放条时（music-dock.js syncShift 的 md-raise）：和窄窗一样，抽屉底边抬到播放条上面，底色往下渐隐 */
+#music-dock-root.md-raise .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
+#music-dock-root.md-raise .md-pnl .md-dockrow { padding-right: 0; }
+#music-dock-root.md-raise .md-drbg {
+  -webkit-mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
+  mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
 /* 节能档（没有流体层）的把手也停在凹口圆心上 */
 #music-dock-root.md-fl-low .md-hdl { right: 16px; bottom: 16px; }
 

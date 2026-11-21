@@ -1658,7 +1658,12 @@
             const open = state.panelOpen && vw >= COMPACT_BELOW;
             const edge = listEdge(vw);
             const lo = edge ? edge + LIST_GAP : 12;               // 播放条左缘最远能到这里
-            const room = open ? vw - DRAWER_W - 24 : vw - (edge ? 24 : 12); // 播放条右缘最远能到这里
+            let room = open ? vw - DRAWER_W - 24 : vw - (edge ? 24 : 12); // 播放条右缘最远能到这里
+            // 抽屉左边剩下的地方连最短的播放条（280）都放不下（窗口不宽、目录又开着）：抽屉底边抬到播放条上面，
+            // 播放条从抽屉下面过，只给右下角的关闭小环让出位置。不这样的话歌名会压在抽屉底部的页签上。
+            const raise = open && room - lo < 280;
+            if (raise) room = vw - 72;
+            host.classList.toggle('md-raise', raise);
             const span = room - lo;
             let barW = natural;
             let left = vw / 2 - natural / 2;
@@ -1666,6 +1671,10 @@
                 // 目录开着：缩短，放在剩下那段的正中
                 barW = Math.max(280, Math.min(natural, LIST_BAR_MAX, span));
                 left = span >= barW ? lo + (span - barW) / 2 : lo;
+            } else if (raise) {
+                // 抽屉抬起来了：只避开右下角的小环
+                barW = Math.max(280, Math.min(natural, room - 12));
+                left = Math.max(12, Math.min(vw / 2 - barW / 2, room - barW));
             } else if (open) {
                 // 只有抽屉：窗口不够宽、让位以后会被挤出左边，就把播放条收窄（最窄 280）
                 if (natural > room - 12) barW = Math.max(280, room - 12);
