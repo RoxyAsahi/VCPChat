@@ -7,13 +7,9 @@
 //! ordering. Readers only perform atomic loads and memcpy, so the callback can
 //! read while decoding continues without locks or allocation.
 //!
-//! The whole track stays resident, which keeps random-access seeking,
-//! gapless swaps and the resample cache working unchanged. Samples are
-//! stored as f32 and widened to f64 on read: that halves the resident size
-//! (a 5-minute 96 kHz stereo track is ~230 MB instead of ~460 MB, and the
-//! gapless preload holds a second one). f32 represents every 16- and 24-bit
-//! source sample exactly, and its rounding of resampled output (~-150 dBFS)
-//! is far below any DAC's noise floor; all DSP still runs in f64.
+//! The whole track stays resident (same memory profile as the previous
+//! decode-everything-first design), which keeps random-access seeking,
+//! gapless swaps and the resample cache working unchanged.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -31,7 +27,7 @@ const ESTIMATE_HEADROOM_SLOTS: usize = 64;
 
 pub struct TrackBuffer {
     channels: usize,
-    slots: Box<[OnceLock<Box<[f32]>>]>,
+    slots: Box<[OnceLock<Box<[f64]>>]>,
     ready_frames: AtomicU64,
     complete: AtomicBool,
     estimated_frames: u64,
@@ -154,7 +150,7 @@ impl TrackBuffer {
             if end > chunk.len() {
                 break;
             }
-            out.extend(chunk[start..end].iter().map(|&sample| f64::from(sample)));
+            out.extend_from_slice(&chunk[start..end]);
             frame += take;
         }
         frame - start_frame
@@ -165,23 +161,15 @@ impl TrackBuffer {
     pub fn for_each_chunk(&self, mut visit: impl FnMut(&[f64])) {
         let ready = self.ready_frames() as usize;
         let mut frame = 0usize;
-        let mut wide = Vec::with_capacity(CHUNK_FRAMES * self.channels);
         for slot in self.slots.iter() {
             if frame >= ready {
                 break;
             }
             let Some(chunk) = slot.get() else { break };
             let frames = (chunk.len() / self.channels).min(ready - frame);
-            wide.clear();
-            wide.extend(chunk[..frames * self.channels].iter().map(|&sample| f64::from(sample)));
-            visit(&wide);
+            visit(&chunk[..frames * self.channels]);
             frame += frames;
         }
-    }
-
-    /// Bytes held by published samples (for logs and tests).
-    pub fn resident_bytes(&self) -> usize {
-        self.slots.iter().filter_map(OnceLock::get).map(|chunk| chunk.len() * std::mem::size_of::<f32>()).sum()
     }
 
     /// Copy the published samples into one contiguous vector (tests only).
@@ -196,7 +184,7 @@ impl TrackBuffer {
 /// The single producer for a [`TrackBuffer`].
 pub struct TrackBufferWriter {
     buffer: Arc<TrackBuffer>,
-    staging: Vec<f32>,
+    staging: Vec<f64>,
     next_slot: usize,
     written_frames: u64,
 }
@@ -230,7 +218,7 @@ impl TrackBufferWriter {
         while !samples.is_empty() {
             let room = chunk_samples - self.staging.len();
             let take = room.min(samples.len());
-            self.staging.extend(samples[..take].iter().map(|&sample| sample as f32));
+            self.staging.extend_from_slice(&samples[..take]);
             samples = &samples[take..];
             if self.staging.len() == chunk_samples {
                 self.publish_staging()?;
@@ -290,21 +278,6 @@ mod tests {
 
     fn ramp(frames: usize, channels: usize) -> Vec<f64> {
         (0..frames * channels).map(|i| i as f64).collect()
-    }
-
-    #[test]
-    fn stores_four_bytes_per_sample_and_keeps_24_bit_samples_exact() {
-        let frames = CHUNK_FRAMES * 3;
-        // Every 24-bit PCM value, scaled the way the decoder does, survives the f32 store.
-        let samples: Vec<f64> = (0..frames * 2)
-            .map(|i| ((i as i64 * 7919) % (1 << 23) - (1 << 22)) as f64 / (1u32 << 23) as f64)
-            .collect();
-        let buffer = TrackBuffer::from_samples(samples.clone(), 2);
-        assert_eq!(buffer.resident_bytes(), frames * 2 * 4);
-        let mut out = Vec::with_capacity(frames * 2);
-        assert_eq!(buffer.extend_into(0, frames, &mut out), frames);
-        assert_eq!(out, samples);
-        assert_eq!(buffer.to_vec(), samples);
     }
 
     #[test]
