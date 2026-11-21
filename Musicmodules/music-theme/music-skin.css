@@ -1440,6 +1440,9 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
     letter-spacing: 1.3px;
     color: var(--ar-muted);
 }
+#playlist[data-empty-text]:empty::after {
+    content: attr(data-empty-text);
+}
 
 /* ---------- 滑条：一条细线上一个实心方块，和小方块记号一个意思 ---------- */
 .acoustic-drawer-body input[type="range"] {
