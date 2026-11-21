@@ -3779,7 +3779,8 @@
 
             // 1. 采样导演状态与确定性航道弧长
             const actState = timeline.sampleState(time);
-            const activeLine = frame?.activeLine || null;
+            // Marker lines ("●●●", "//") time a break; they are not shown.
+            const activeLine = frame?.activeLine && R.readableText(frame.activeLine.fullText) ? frame.activeLine : null;
             const lineIdx = activeLine?.index ?? -1;
             const shot = (lineIdx >= 0 && timeline.lineShots[lineIdx]) ? timeline.lineShots[lineIdx] : null;
 

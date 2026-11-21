@@ -160,6 +160,25 @@ test('the 3D stages take the cover\'s most vivid hue into their sky, and a grey 
     dom.window.close();
 });
 
+test('marker lines and placeholder translations never reach a 3D stage', () => {
+    const dom = createDom();
+    const { MusicStageRuntime: R, MusicStageDioramaDirector: Director } = loadStage(dom, 'Musicmodules/music-stage/modes/diorama-director.js');
+    assert.equal(R.readableText('●●●'), false);
+    assert.equal(R.readableText(' // '), false);
+    assert.equal(R.readableText('——'), false);
+    assert.equal(R.readableText('海'), true);
+    assert.equal(R.readableText('Love 2'), true);
+    assert.equal(R.resolveSupplementalText({ translation: '//' }), '');
+    assert.equal(R.resolveSupplementalText({ translation: ' Sea ' }), 'Sea');
+    const lines = R.normalizeLines([
+        { time: 10, original: '清晨的站台' }, { time: 14, original: '●●●' },
+        { time: 30, original: '//' }, { time: 34, original: '列车带走昨夜的梦' }
+    ]);
+    const timeline = Director.compile({ lines, trackId: 't', duration: 60 });
+    assert.deepEqual(timeline.lines.map(line => line.fullText), ['清晨的站台', '列车带走昨夜的梦']);
+    dom.window.close();
+});
+
 test('diorama rain is off unless chosen, and only takes its three settings', () => {
     const dom = createDom();
     const { MusicStageConfig: Config } = loadStage(dom);
