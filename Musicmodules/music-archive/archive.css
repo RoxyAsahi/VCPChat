@@ -865,3 +865,6 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 
 /* 设置抽屉开着、剩下的宽度只够「目录 + 说明块」：底部只留上下曲目，分组切换收起（目录里就能换分组），不和刻度挤在一起 */
 .archive-hud.squeeze .archive-lanes { display: none; }
+/* 设置抽屉开着让位后 HUD 只剩九百多宽：资料卡还按 700 宽靠右，左边只剩两百来像素，取出的卡挤不下被遮住。
+   跟窄窗口一样改成从 46% 到右边，左边留给取出的卡 */
+.archive-hud.squeeze .archive-detail-card { width: auto; left: 46%; right: 40px; }
