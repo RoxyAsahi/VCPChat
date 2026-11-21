@@ -486,3 +486,25 @@ test('the playing list is named after the playlist as it is now: renamed follows
     app.filteredPlaylistSource = null;
     assert.equal(app.playbackSourceName(), '');
 });
+
+test('switching play mode after a preload re-fills the engine slot for the new mode', async () => {
+    const { app, preloads, preload } = setup({ count: 6 });
+    let cancels = 0;
+    app.api.cancelMusicPreload = async () => { cancels++; };
+    app.currentTrackIndex = 2;
+    assert.equal(await preload(), 'C:/m/3.flac');
+    app.isPreloadingNext = false;
+    app.currentPlayMode = 1; // 单曲循环
+    app.refreshPreload();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(cancels, 1);
+    assert.equal(preloads.pop(), 'C:/m/2.flac', 'repeat-one loops the playing track');
+    app.isPreloadingNext = false;
+    app.currentPlayMode = 2; // 随机
+    app.refreshPreload();
+    await new Promise((r) => setTimeout(r, 0));
+    const picked = preloads.pop();
+    assert.notEqual(picked, 'C:/m/2.flac');
+    app.nextTrack();
+    assert.equal(app.playlist[app.currentTrackIndex].path, picked, 'next plays what was preloaded');
+});
