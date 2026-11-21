@@ -120,6 +120,19 @@ test('mode settings keep their own ranges', () => {
     dom.window.close();
 });
 
+test('the sung-word hop has its own strength on the two 3D stages only', () => {
+    const dom = createDom();
+    const { MusicStageConfig: Config } = loadStage(dom);
+    assert.equal(Config.get().modes.diorama.lyricHop, 1);
+    assert.equal(Config.get().modes.tunnel.lyricHop, 1);
+    Config.setModePatch('diorama', { lyricHop: 5 });
+    assert.equal(Config.get().modes.diorama.lyricHop, 2);
+    Config.setModePatch('tunnel', { lyricHop: 0 });
+    assert.equal(Config.get().modes.tunnel.lyricHop, 0);
+    assert.equal(Config.get().modes.luminous.lyricHop, undefined);
+    dom.window.close();
+});
+
 test('diorama rain is off unless chosen, and only takes its three settings', () => {
     const dom = createDom();
     const { MusicStageConfig: Config } = loadStage(dom);

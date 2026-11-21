@@ -3879,7 +3879,7 @@
                     if (time < glyphEnd) for (const start of glyphStarts) if (start <= time) picked = start;
                     glyphMaterial.uniforms.hopStart.value = picked;
                 }
-                glyphMaterial.uniforms.hop.value = clamp(audioState.impact || 0);
+                glyphMaterial.uniforms.hop.value = clamp(audioState.impact || 0) * clamp(settingVal('lyricHop', 1), 0, 2);
                 if (glyphMesh) glyphMesh.position.y = 0;
                 if (fadingGlyph && glyphMesh) {
                     // Keep the ink of the two full blocks apart, including translations.
