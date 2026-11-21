@@ -68,7 +68,9 @@
             const heroScale = value(t.heroScale, 1, 0.82, 1.32);
             const spacing = value(t.articleSpacing, 1, 0.65, 1.6);
             const columns = width < 600 ? 2 : width < 1100 ? 3 : 4;
-            const columnWidth = clamp(width * 0.42, 260, 460);
+            // Columns about a dozen glyphs wide, so the page reads as a dense
+            // article with the neighbouring lines in view, not one line adrift.
+            const columnWidth = clamp(width * 0.24, 240, 320);
             const gap = 18 * spacing;
             paperWidth = columns * columnWidth + (columns - 1) * gap;
             const skyline = Array(columns).fill(0);
@@ -369,7 +371,8 @@
                     const current = i === index && time >= b.line.startTime;
                     const passed = time >= lineEnd;
                     const dim = passed ? ease((time - lineEnd) / hold) : 0;
-                    entry.element.style.opacity = String(current ? 1 : passed ? 0.58 - dim * 0.45 : 0.13);
+                    // Upcoming lines read as faint print (block dim only), not just a bare number.
+                    entry.element.style.opacity = String(current ? 1 : passed ? 0.58 - dim * 0.45 : 0.2);
                     entry.element.classList.toggle('is-current', current);
                     // Keep measured geometry stable when hiding the decorative header.
                     entry.number.style.visibility = t.hidePrintSymbols === true ? 'hidden' : 'visible';
@@ -377,7 +380,7 @@
                         const progress = clamp((time - glyph.start) / Math.max(0.04, glyph.end - glyph.start));
                         const printed = time >= glyph.start;
                         const active = printed && time < glyph.end;
-                        glyph.span.style.opacity = printed ? '1' : '0.22';
+                        glyph.span.style.opacity = printed || !current ? '1' : '0.22';
                         glyph.span.style.setProperty('--print-progress', `${progress * 100}%`);
                         glyph.span.style.setProperty('--print-pulse', String(active && intensity() > 0 ? Math.sin(progress * Math.PI) : 0));
                         glyph.span.classList.toggle('is-printing', active);
