@@ -867,10 +867,14 @@
     <div id="webdav-server-dialog" class="dialog-overlay">
         <div class="dialog glass-panel">
             <h3>添加 WebDAV 服务器</h3>
-            <input type="text" id="webdav-server-name" placeholder="名称，比如「我的 NAS」" style="margin-bottom:8px;">
-            <input type="url" id="webdav-server-url" placeholder="地址，比如 http://nas.local/dav/" style="margin-bottom:8px;">
-            <input type="text" id="webdav-server-username" placeholder="用户名（可不填）" style="margin-bottom:8px;">
-            <input type="password" id="webdav-server-password" placeholder="密码（可不填）" style="margin-bottom:8px;">
+            <label class="music-field-label" for="webdav-server-name">名称</label>
+            <input type="text" id="webdav-server-name" placeholder="比如「我的 NAS」" style="margin-bottom:8px;">
+            <label class="music-field-label" for="webdav-server-url">地址</label>
+            <input type="url" id="webdav-server-url" placeholder="比如 http://nas.local/dav/" style="margin-bottom:8px;">
+            <label class="music-field-label" for="webdav-server-username">用户名</label>
+            <input type="text" id="webdav-server-username" placeholder="可不填" style="margin-bottom:8px;">
+            <label class="music-field-label" for="webdav-server-password">密码</label>
+            <input type="password" id="webdav-server-password" placeholder="可不填" style="margin-bottom:8px;">
             <div class="dialog-actions">
                 <button class="dialog-btn cancel" id="webdav-dialog-cancel">取消</button>
                 <button class="dialog-btn" id="webdav-dialog-test">测试连接</button>
