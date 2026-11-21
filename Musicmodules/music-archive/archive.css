@@ -284,6 +284,18 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-search input::placeholder { color: var(--ar-muted); opacity: .8; }
 .archive-list-search input::-webkit-search-cancel-button { display: none; }
 .archive-list-search:focus-within .archive-key { opacity: 0; }
+.archive-list-search { position: relative; z-index: 6; } /* 浮层要盖住下面的分类行（检索框自己是一个独立层叠上下文） */
+/* 最近检索：检索框聚焦且为空时，在框下面浮出一块共用玻璃（不挤动下面的分类和目录） */
+.archive-list-recentq { position: absolute; left: -12px; right: -12px; top: calc(100% + 8px); z-index: 30; padding: 6px; font-size: 13px; cursor: default; }
+.archive-list-recentq[hidden] { display: none; }
+.archive-list-recentq header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 4px; font-size: 11px; letter-spacing: 1.2px; color: var(--mf-ink2, var(--ar-muted)); }
+.archive-list-recentq header button, .archive-list-recentq .rq button { border: 0; background: none; font: inherit; color: var(--mf-ink2, var(--ar-muted)); cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+.archive-list-recentq header button:hover, .archive-list-recentq .rq button:hover { color: var(--mf-ink, var(--ar-ink)); }
+.archive-list-recentq .rq { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 11px; color: var(--mf-ink, var(--ar-ink)); cursor: pointer; }
+.archive-list-recentq .rq span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-list-recentq .rq button { opacity: 0; font-size: 11px; }
+.archive-list-recentq .rq:hover { background: var(--mf-hover, rgba(127, 127, 127, .1)); }
+.archive-list-recentq .rq:hover button { opacity: 1; }
 
 .archive-list-kinds { display: flex; align-items: baseline; margin: 16px 0 10px var(--gutter); font-size: 12px; letter-spacing: 1.3px; white-space: nowrap; }
 .archive-list-kinds > button { color: var(--ar-muted); padding: 2px 0; transition: color .2s; }
