@@ -67,3 +67,9 @@ test('a server that refuses the connection says so plainly, and the folder can b
     assert.doesNotMatch(doc.getElementById('files').textContent, /打不开/);
     dom.window.close();
 });
+
+test('a WebDAV request that fails inside Node ("fetch failed") is about the server, not the audio engine', () => {
+    const { dom, app } = load();
+    assert.equal(app.webdavReason("Error invoking remote method 'webdav-list-directory': TypeError: fetch failed", 'x'), '连不上服务器，检查网络或 WebDAV 地址');
+    dom.window.close();
+});

@@ -38,3 +38,16 @@ test('the failure notice uses the plain text', () => {
     const src = fs.readFileSync('Musicmodules/music-player.js', 'utf8');
     assert.match(src, /describeEngineError\(raw\.slice\(5\)\)/);
 });
+
+test('an engine that has exited, and the main process\'s own messages, read as plain Chinese too', () => {
+    assert.match(describe('fetch failed'), /连不上音频引擎/);
+    assert.match(describe('No song loaded to play.'), /还没有加载歌曲/);
+    assert.equal(describe('音频引擎 8 秒内没有响应（/play）'), '音频引擎 8 秒内没有响应', 'the endpoint path is not shown');
+    assert.match(describe('HTTP error: error sending request for url (http://nas/a.flac): connection refused'), /连不上服务器/, 'a NAS that refuses is still the server, not the engine');
+});
+
+test('a failed play or pause shows the plain reason, not the raw message', () => {
+    const src = fs.readFileSync('Musicmodules/music-player.js', 'utf8');
+    assert.doesNotMatch(src, /showPlaybackNotice\(`(播放|暂停)失败：\$\{result\?\.message \|\|/);
+    assert.match(src, /播放失败：\$\{result\?\.message \? describeEngineError\(result\.message\)/);
+});

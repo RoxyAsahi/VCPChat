@@ -12,7 +12,7 @@ function setupWebDav(app) {
         if (!raw) return fallback;
         if (/\b404\b/.test(raw)) return notFound;
         // 主进程连 WebDAV 时 Node 抛的网络错误（connect ECONNREFUSED 等）：以前落到通用说明，拼出「服务器没有响应：连不上服务」
-        if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|getaddrinfo|socket hang up/i.test(raw)) return '连不上服务器，检查网络或 WebDAV 地址';
+        if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|getaddrinfo|socket hang up|fetch failed/i.test(raw)) return '连不上服务器，检查网络或 WebDAV 地址';
         const described = typeof describeEngineError === 'function' ? describeEngineError(raw) : raw;
         if (/[\u4e00-\u9fff]/.test(described)) return described;
         return window.MusicErrorText ? window.MusicErrorText(raw, fallback) : fallback;
