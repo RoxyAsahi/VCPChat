@@ -87,6 +87,13 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }
+    if (name.includes('daily')) {
+      // 假的每日推荐：曲库里隔一首挑一首，共 30 首；跳到最前面那一列
+      await page.evaluate(() => { const lib = window.app.playlist; window.app.dailyMix = () => lib.filter((_, i) => i % 2).slice(0, 30); window.app.archiveView.refresh(); });
+      await page.waitForTimeout(300);
+      for (let i = 0; i < 30 && await page.evaluate(() => window.app.archiveView.debug().lane) !== 0; i++) { await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(60); }
+      await page.waitForTimeout(900);
+    }
     if (name.includes('resume')) {
       // 假的听歌记录：上次第 8 首听到 2:13
       await page.evaluate(() => { const t = window.app.playlist[8]; window.app.musicStats = { resume: () => ({ track: t, position: 133, at: Date.now() }) }; document.dispatchEvent(new CustomEvent('music-stats-change')); });

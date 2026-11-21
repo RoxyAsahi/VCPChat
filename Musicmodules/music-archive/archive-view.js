@@ -303,6 +303,9 @@
             letters0 = new Map();
             for (const c of letters) for (const g of c.groups) letters0.set(g, c.id);
             const front = [];
+            // 每日推荐（按听歌记录和喜欢挑的 30 首，一天内固定）：放在最前面一列，和最近播放、收藏一样是一组卡
+            const daily = dailyIndices();
+            if (daily.length) front.push({ id: 'daily', kind: 'daily', name: '每日推荐', ref: 'DAILY', items: daily });
             const recent = recentIndices();
             if (recent.length) front.push({ id: 'recent', kind: 'recent', name: '最近播放', ref: 'RECENT FILES', items: recent });
             const fav = favoritePaths();
@@ -313,7 +316,16 @@
             }
             return { columns: [...front, ...letters, ...base.slice(1)], letterOf: letters0 };
         };
-        const columnsKey = () => sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
+        const dailyIndices = () => {
+            let mix = [];
+            try { mix = typeof app.dailyMix === 'function' ? app.dailyMix() || [] : []; } catch (e) { mix = []; }
+            if (!mix.length) return [];
+            const byPath = pathIndex();
+            return mix.map((t) => byPath.get(Model.normalizePath(t && t.path))).filter((i) => i !== undefined);
+        };
+        // 每日推荐跨天会换：日期也算进列的指纹
+        const dailyKey = () => (typeof app.dailyMix === 'function' ? new Date().toISOString().slice(0, 10) : '');
+        const columnsKey = () => dailyKey() + '\n' + sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
         const buildColumns = (prepared = null) => {
             const out = prepared && prepared.cols && prepared.colsKey === columnsKey() && prepared.index === searchIndex ? prepared.cols : computeColumns(searchIndex);
             letterOf = out.letterOf;

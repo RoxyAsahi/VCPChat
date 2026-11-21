@@ -1546,3 +1546,21 @@ test('键盘：目录在 Tab 顺序里紧跟左上标题；检索框里 Tab 只�
     assert.equal(f.view.list.kind, 'recent');
     f.close();
 });
+
+test('每日推荐：有推荐时阵列最前面多一列「每日推荐」，播放这一组就放这 30 首', () => {
+    const f = fixture({ n: 80, setup: (w, app) => { app.dailyMix = () => app.playlist.slice(10, 40); } });
+    const cols = f.view.debug().columns;
+    assert.equal(cols[0].id, 'daily');
+    assert.equal(cols[0].n, 30);
+    // 跳到这一列，标题写「每日推荐」，播放这一组的队列就是这 30 首
+    while (f.view.debug().lane !== 0) f.key('ArrowLeft');
+    assert.equal(f.text('ctxName'), '每日推荐');
+    f.w.document.querySelector('[data-act="play-col"]').click();
+    const load = f.calls.find((c) => c[0] === 'load');
+    assert.equal(f.app.playlist[load[1]].path, '/m/10');
+    assert.equal(load[2], 30);
+    f.close();
+    const g = fixture({ n: 80 });
+    assert.notEqual(g.view.debug().columns[0].id, 'daily', '没有 dailyMix 时不加这一列');
+    g.close();
+});
