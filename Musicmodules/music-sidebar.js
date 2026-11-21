@@ -115,6 +115,10 @@ function setupSidebar(app) {
             const rect = app.contextMenu.getBoundingClientRect();
             if (rect.right > window.innerWidth) app.contextMenu.style.left = `${window.innerWidth - rect.width - 10}px`;
             if (rect.bottom > window.innerHeight) app.contextMenu.style.top = `${window.innerHeight - rect.height - 10}px`;
+            // 右边放不下「添加到歌单」的子菜单时，往左边展开（不然歌单名被窗口边裁掉）
+            const sub = app.contextMenu.querySelector('.context-submenu');
+            const subWidth = sub ? Math.max(sub.offsetWidth, 160) : 160;
+            app.contextMenu.classList.toggle('sub-left', app.contextMenu.getBoundingClientRect().right + subWidth + 12 > window.innerWidth);
             // 从按下右键的那一点长出来
             window.MusicFluid?.bud(app.contextMenu, { x, y });
         });
