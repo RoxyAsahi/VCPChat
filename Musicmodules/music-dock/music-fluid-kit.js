@@ -125,38 +125,42 @@
     // 位置是相对父元素的 left/width（像素）。第一次放、降低动态时直接落位。
     // 标记所在的那一排每次都会重画（新的元素）时，传同一个 key，就能接着上一次的位置流过去。
     const slides = new Map();
-    function slide(el, to, { lead = 220, trail = 380, key = null } = {}) {
+    // axis: 'x'（默认，用 left/width）或 'y'（用 top/height，比如歌词里当前那一行背后的那滴）
+    function slide(el, to, { lead = 220, trail = 380, key = null, axis = 'x' } = {}) {
         if (!el || !to) return;
+        const [P, S] = axis === 'y' ? ['top', 'height'] : ['left', 'width'];
+        const goal = { pos: Number(to[P]), size: Number(to[S]) };
+        if (!Number.isFinite(goal.pos) || !Number.isFinite(goal.size)) return;
         const id = key || el;
         const prev = slides.get(id);
         if (prev?.frame) global.cancelAnimationFrame(prev.frame);
-        const place = (l, w) => { el.style.left = `${l.toFixed(1)}px`; el.style.width = `${Math.max(0, w).toFixed(1)}px`; };
+        const place = (pos, size) => { el.style[P] = `${pos.toFixed(1)}px`; el.style[S] = `${Math.max(0, size).toFixed(1)}px`; };
         const from = prev?.at;
         const motion = Boolean(global.document?.body) && !global.document.body.classList.contains('music-reduce-motion') && typeof global.requestAnimationFrame === 'function';
-        if (!from || !motion || (Math.abs(from.left - to.left) < 0.5 && Math.abs(from.width - to.width) < 0.5)) {
-            place(to.left, to.width);
-            slides.set(id, { at: { left: to.left, width: to.width }, frame: 0 });
+        if (!from || !motion || (Math.abs(from.pos - goal.pos) < 0.5 && Math.abs(from.size - goal.size) < 0.5)) {
+            place(goal.pos, goal.size);
+            slides.set(id, { at: { ...goal }, frame: 0 });
             return;
         }
         el.style.transition = 'none';
-        const right = to.left > from.left;
-        const s0 = from.left, e0 = from.left + from.width;
-        const s1 = to.left, e1 = to.left + to.width;
+        const forward = goal.pos > from.pos;
+        const s0 = from.pos, e0 = from.pos + from.size;
+        const s1 = goal.pos, e1 = goal.pos + goal.size;
         const clock = () => global.performance?.now?.() ?? Date.now();
         const t0 = clock();
         const out = (t) => 1 - Math.pow(1 - t, 3);
-        const state = { at: { left: s0, width: from.width }, frame: 0 };
+        const state = { at: { pos: s0, size: from.size }, frame: 0 };
         slides.set(id, state);
         const step = () => {
             const ms = clock() - t0;
             const a = out(Math.min(1, ms / lead));
             const b = out(Math.min(1, ms / trail));
-            // 往右走：右沿是前沿；往左走：左沿是前沿
-            const start = lerp(s0, s1, right ? b : a);
-            const end = lerp(e0, e1, right ? a : b);
-            state.at = { left: start, width: end - start };
+            // 往前（右、下）走：后面那条边是前沿；往回走：前面那条边是前沿
+            const start = lerp(s0, s1, forward ? b : a);
+            const end = lerp(e0, e1, forward ? a : b);
+            state.at = { pos: start, size: end - start };
             place(start, end - start);
-            if (ms >= trail) { state.frame = 0; state.at = { left: to.left, width: to.width }; place(to.left, to.width); return; }
+            if (ms >= trail) { state.frame = 0; state.at = { ...goal }; place(goal.pos, goal.size); return; }
             state.frame = global.requestAnimationFrame(step);
         };
         step();

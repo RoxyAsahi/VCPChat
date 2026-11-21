@@ -435,3 +435,23 @@ body.music-fl-low #music-dock-root .md-keys-box { -webkit-backdrop-filter: none;
 #music-dock-root .md-keys-box dd { color: var(--mf-ink2); }
 /* 面板本身拿焦点只是为了让键盘留在里面，不画全局焦点框（要压过 :focus-visible:not(#messageInput) 那条） */
 #music-dock-root .md-keys-box:focus-visible:not(#messageInput) { outline: none; }
+
+/* ───────── 歌词页：当前那一行背后的一滴玻璃 ─────────
+ * 位置由 music-dock.js 用 MusicFluid.slide（竖着）流过去；这里只管样子。文字在它上面，不糊。 */
+#music-dock-root .md-lyrl { position: relative; isolation: isolate; }
+#music-dock-root .md-lyr-drop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 0;
+  z-index: -1;
+  border-radius: 14px;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 140% at 0% 50%, color-mix(in srgb, var(--mf-tint) 18%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+#music-dock-root .md-lyrl p { border-radius: 14px; }
+#music-dock-root .md-lyrl p:hover { background: var(--mf-hover); }
+#music-dock-root .md-lyrl p.md-on:hover { background: none; }
