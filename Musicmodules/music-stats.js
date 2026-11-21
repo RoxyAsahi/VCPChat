@@ -10,6 +10,7 @@
 //       app.musicStats.top(n) → [path]（按次数，次数一样按最近）
 //       app.musicStats.forgotten({ minPlays, days, limit }) → [path]（以前常听、很久没碰的）
 //       app.musicStats.lastPlayed(n) → [path]
+//       app.musicStats.resume() → { track, position, at } | null（上次没听完的那首，首页「接着听」）
 // 变化时在 document 上发 `music-stats-change`（detail: { path }）。
 
 (function (global) {
@@ -43,6 +44,23 @@
             const raw = JSON.parse(storage?.getItem(KEY) || 'null');
             if (raw && raw.v === 1 && raw.t && typeof raw.t === 'object') table = raw.t;
         } catch (e) { table = {}; }
+        // 接着听：上次没听完的那一首（路径、位置、时间），和次数表分开存
+        const RESUME_KEY = 'musicPlayResume';
+        let resume = null;
+        try {
+            const raw = JSON.parse(storage?.getItem(RESUME_KEY) || 'null');
+            if (raw && typeof raw.path === 'string') resume = raw;
+        } catch (e) { resume = null; }
+        let resumeSaved = 0;
+        const setResume = (next, force = false) => {
+            const changed = (resume && resume.path) !== (next && next.path);
+            resume = next;
+            const t = now();
+            if (!force && !changed && t - resumeSaved < 5000) return;
+            resumeSaved = t;
+            try { if (resume) storage?.setItem(RESUME_KEY, JSON.stringify(resume)); else storage?.removeItem?.(RESUME_KEY); } catch (e) { /* 只是方便 */ }
+            if (changed) announce(next ? next.path : null);
+        };
         let saveTimer = null;
         const save = () => {
             if (saveTimer !== null) return;
@@ -101,6 +119,9 @@
             session.lastPos = pos;
             if (d > 0 && pos >= d - 1.5) session.ended = true; // 放到结尾自然切走的不算跳过
             if (!session.counted && playedEnough(session.listened, d)) { session.counted = true; bump(path, 'play'); }
+            // 听了 10 秒以上、离结尾还有 10 秒以上：记成「接着听」；放完了就清掉
+            if (session.ended) { if (resume && resume.path === path) setResume(null); }
+            else if (playing && pos >= 10 && (!(d > 0) || pos < d - 10)) setResume({ path, position: Math.floor(pos), at });
         };
 
         // 只在播放时开计时器（每秒一次）；暂停后停掉，空闲时没有任何计时器
@@ -146,9 +167,20 @@
                 const score = Math.log2(1 + s.plays) - 0.6 * Math.log2(1 + s.skips);
                 return Math.max(0, Math.min(1, score / 5));
             },
+            // 首页「接着听」：{ track, position, at } 或 null（那首歌已不在曲库里也返回 null）
+            resume() {
+                if (!resume) return null;
+                const k = normPath(resume.path);
+                const track = (app.playlist || []).find((t) => normPath(t && t.path) === k);
+                return track ? { track, position: resume.position, at: resume.at } : null;
+            },
             tick,
             sync,
-            flush() { if (saveTimer !== null) { global.clearTimeout(saveTimer); saveTimer = null; } try { storage?.setItem(KEY, JSON.stringify({ v: 1, t: table })); } catch (e) { /* 同上 */ } }
+            flush() {
+                if (saveTimer !== null) { global.clearTimeout(saveTimer); saveTimer = null; }
+                try { storage?.setItem(KEY, JSON.stringify({ v: 1, t: table })); } catch (e) { /* 同上 */ }
+                if (resume) setResume(resume, true);
+            }
         };
         app.musicStats = api;
         global.addEventListener?.('beforeunload', () => api.flush());

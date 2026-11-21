@@ -8,7 +8,7 @@ const { setupMusicStats, playedEnough } = require(path.join(__dirname, '../Music
 function setup(saved) {
     let t = 1_000_000_000;
     const store = new Map(saved ? [['musicPlayStats', saved]] : []);
-    const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+    const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
     globalThis.document = { dispatchEvent() {} };
     globalThis.CustomEvent = class { constructor(type, init) { this.detail = init?.detail; } };
     const app = {
@@ -60,4 +60,17 @@ test('top and forgotten lists, and it survives a reload', () => {
     assert.deepEqual(again.stats.forgotten(), ['C:\\Music\\A.flac']);
     assert.equal(playedEnough(30, 0), false);
     assert.equal(playedEnough(240, 900), true);
+});
+
+test('resume remembers the unfinished track and clears once it ends', () => {
+    const { app, stats, play, store } = setup();
+    assert.equal(stats.resume(), null);
+    play(40);
+    stats.flush();
+    const r = stats.resume();
+    assert.equal(r.track, app.playlist[0]);
+    assert.equal(r.position, 40);
+    assert.match(store.get('musicPlayResume'), /"position":40/);
+    app.pos = 199; stats.tick();
+    assert.equal(stats.resume(), null);
 });
