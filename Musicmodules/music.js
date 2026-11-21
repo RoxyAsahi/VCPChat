@@ -1354,6 +1354,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     app.updateUIWithState = (state, options = {}) => {
         if (!state) return;
+        app.syncOutputFallback?.(state);
         // 切歌加载期间引擎报的还是上一首（或已停止）的状态，写进界面会让进度条和按钮乱跳。
         if (app.isTrackLoading && !options.force) return;
         app.lastKnownCurrentTime = state.current_time; app.lastKnownDuration = state.duration;
@@ -1432,6 +1433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.deviceSelect.value = s.device_id === null ? 'default' : s.device_id;
         app.wasapiSwitch._programmaticUpdate = true; app.wasapiSwitch.checked = s.exclusive_mode;
         Promise.resolve().then(() => app.wasapiSwitch._programmaticUpdate = false);
+        app.syncOutputFallback?.(s);
         if (s.eq_enabled !== undefined) {
             app.eqEnabled = s.eq_enabled; app.eqSwitch._programmaticUpdate = true;
             app.eqSwitch.checked = s.eq_enabled;

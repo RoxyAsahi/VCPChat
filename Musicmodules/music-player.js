@@ -508,6 +508,7 @@ function setupPlayer(app) {
         if (result?.status === 'success') {
             app.lastCommandTime = Date.now();
             app.startStatePolling();
+            app.checkOutputFallbackSoon?.();
         } else {
             app.playIntent = false;
             app.isChangingState = false;

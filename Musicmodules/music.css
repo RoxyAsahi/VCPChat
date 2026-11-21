@@ -2996,3 +2996,13 @@ body.light-theme .dialog-btn.cancel {
 #noise-shaper-section.is-inactive > .block-content {
     opacity: 0.45;
 }
+
+/* 引擎没能按设置打开输出（独占打不开、声卡不在了）时，设备下面说一句实际在用什么 */
+.output-fallback-note {
+    grid-column: 1 / -1;
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--music-text-secondary);
+}
+.output-fallback-note[hidden] { display: none; }

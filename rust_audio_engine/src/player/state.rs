@@ -300,6 +300,19 @@ impl AtomicPlayerState {
     }
 }
 
+/// Exclusive mode was asked for but could not be opened; playing in shared mode.
+pub const OUTPUT_FELL_BACK_FROM_EXCLUSIVE: u8 = 1;
+/// The chosen output device is gone (unplugged, renumbered); playing on the default.
+pub const OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE: u8 = 2;
+
+/// Names for the `output_fallback` bits, as reported in `/state`.
+pub fn output_fallback_names(bits: u8) -> Vec<&'static str> {
+    let mut names = Vec::new();
+    if bits & OUTPUT_FELL_BACK_FROM_EXCLUSIVE != 0 { names.push("exclusive"); }
+    if bits & OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE != 0 { names.push("device"); }
+    names
+}
+
 /// Shared state between audio thread and main thread
 pub struct SharedState {
     pub state: AtomicPlayerState,
@@ -319,6 +332,10 @@ pub struct SharedState {
     pub fade_target: std::sync::atomic::AtomicU32,
     pub fade_gain: std::sync::atomic::AtomicU32,
     pub exclusive_mode: AtomicBool,
+    /// What the last stream open had to fall back from (`OUTPUT_FELL_BACK_*` bits).
+    /// Without this the UI keeps showing exclusive mode / the chosen device
+    /// while the engine is actually playing shared / on the default device.
+    pub output_fallback: AtomicU8,
     pub device_id: std::sync::atomic::AtomicI64,
     pub volume: std::sync::atomic::AtomicU64,
     pub file_path: RwLock<Option<String>>,
@@ -406,6 +423,7 @@ impl SharedState {
             fade_target: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fade_gain: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             exclusive_mode: AtomicBool::new(false),
+            output_fallback: AtomicU8::new(0),
             device_id: std::sync::atomic::AtomicI64::new(-1),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
             file_path: RwLock::new(None),

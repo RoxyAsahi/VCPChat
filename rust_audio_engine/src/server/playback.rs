@@ -330,6 +330,8 @@ async fn configure_output(
         return HttpResponse::InternalServerError().json(ApiResponse::error(&e));
     }
 
+    // The next stream open reports afresh what it had to fall back from.
+    player.shared_state().output_fallback.store(0, std::sync::atomic::Ordering::Relaxed);
     if let Some(exclusive) = body.exclusive {
         player.exclusive_mode = exclusive;
         player

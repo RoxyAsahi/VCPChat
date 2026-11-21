@@ -369,6 +369,9 @@ pub struct StateResponse {
     volume: f32,
     device_id: Option<usize>,
     exclusive_mode: bool,
+    /// What the output had to fall back from when it was last opened:
+    /// "exclusive" (playing shared) and/or "device" (playing on the default device).
+    output_fallback: Vec<&'static str>,
     eq_type: String,
     eq_enabled: bool,
     fir_taps: usize,
@@ -737,6 +740,9 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
         volume,
         device_id: if device_id >= 0 { Some(device_id as usize) } else { None },
         exclusive_mode: player.exclusive_mode,
+        output_fallback: crate::player::output_fallback_names(
+            shared.output_fallback.load(std::sync::atomic::Ordering::Relaxed),
+        ),
         eq_type,
         eq_enabled,
         fir_taps,

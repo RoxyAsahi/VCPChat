@@ -15,7 +15,8 @@ mod track_buffer;
 pub use state::{AudioCommand, PlayerState, SharedState, AudioDeviceInfo,
     EVENT_LOAD_COMPLETE, EVENT_LOAD_ERROR, EVENT_TRACK_CHANGED,
     EVENT_PLAYBACK_ENDED, EVENT_NEEDS_PRELOAD_RESET, EVENT_COMMAND_APPLIED,
-    EVENT_DECODE_COMPLETE};
+    EVENT_DECODE_COMPLETE, output_fallback_names, OUTPUT_FELL_BACK_FROM_EXCLUSIVE,
+    OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE};
 pub use track_buffer::{TrackBuffer, CHUNK_FRAMES};
 pub use gapless::GaplessManager;
 
@@ -1280,6 +1281,36 @@ mod loudness_cache_tests {
         // The file changes: the old value is not trusted any more.
         write_wav(&wav, 1.5);
         assert_eq!(cached_loudness(Some(&db), &path), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stream_that_had_to_fall_back_says_so() {
+        // 独占打不开（这台机器根本没有独占）、选的设备不在了：都要能从 /state 看出来，
+        // 不然界面一直显示「独占」「某某声卡」，实际在用共享模式、默认设备。
+        let dir = std::env::temp_dir().join(format!("vcp-fallback-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("a.wav");
+        write_wav(&wav, 1.0);
+        let mut player = AudioPlayer::new(AppConfig::default());
+        let shared = player.shared_state();
+        player.exclusive_mode = true;
+        shared.exclusive_mode.store(true, Ordering::Relaxed);
+        player.select_device(Some(4096)).unwrap();
+        player.load(&wav.to_string_lossy()).unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while player.is_loading() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        player.play().unwrap();
+        while shared.output_fallback.load(Ordering::Relaxed) == 0 && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let bits = shared.output_fallback.load(Ordering::Relaxed);
+        let names = output_fallback_names(bits);
+        assert!(names.contains(&"device"), "{names:?}");
+        // 没有独占的平台上一定是退回了共享模式（Windows 上取决于声卡，这里不判）
+        if !cfg!(windows) { assert!(names.contains(&"exclusive"), "{names:?}"); }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

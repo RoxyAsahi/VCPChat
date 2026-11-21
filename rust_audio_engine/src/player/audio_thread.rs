@@ -127,17 +127,25 @@ pub fn audio_thread_main(
                 stream_key = None;
                 stream_failed.store(false, Ordering::Release);
 
+                let mut fallback = 0u8;
                 #[cfg(windows)]
                 if use_exclusive {
-                    if handle_wasapi_exclusive(
+                    match handle_wasapi_exclusive(
                         &cmd_rx,
                         &shared_state,
                         &dsp_ctx,
                         &loudness_state,
                         &spectrum_tap,
                     ) {
-                        continue;
+                        ExclusiveOutcome::Handled => continue,
+                        // Asked to shut down while playing exclusively: don't
+                        // reopen the device in shared mode on the way out.
+                        ExclusiveOutcome::Shutdown => break,
+                        ExclusiveOutcome::CouldNotOpen => {}
                     }
+                }
+                if use_exclusive {
+                    fallback |= super::OUTPUT_FELL_BACK_FROM_EXCLUSIVE;
                 }
 
                 let host = cpal::default_host();
@@ -156,11 +164,13 @@ pub fn audio_thread_main(
                         .and_then(|mut devices| devices.nth(id))
                         .or_else(|| {
                             log::warn!("Device ID {} not found, falling back to default", id);
+                            fallback |= super::OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE;
                             host.default_output_device()
                         })
                 } else {
                     host.default_output_device()
                 };
+                shared_state.output_fallback.store(fallback, Ordering::Relaxed);
 
                 let device = match device {
                     Some(d) => {
@@ -826,6 +836,16 @@ fn apply_measured_loudness(
 }
 
 #[cfg(windows)]
+enum ExclusiveOutcome {
+    /// Played (or failed in a way that must not fall back); back to the command loop.
+    Handled,
+    /// The exclusive device could not be opened: open a shared stream instead.
+    CouldNotOpen,
+    /// Shutdown arrived while playing exclusively.
+    Shutdown,
+}
+
+#[cfg(windows)]
 #[allow(clippy::too_many_arguments)]
 fn handle_wasapi_exclusive(
     cmd_rx: &Receiver<AudioCommand>,
@@ -833,7 +853,7 @@ fn handle_wasapi_exclusive(
     dsp_ctx: &Arc<LockfreeDspContext>,
     loudness_state: &Arc<AtomicLoudnessState>,
     spectrum_tap: &SpectrumTap,
-) -> bool {
+) -> ExclusiveOutcome {
     log::info!("Starting TRUE WASAPI exclusive mode playback...");
 
     let sample_rate = shared_state.sample_rate.load(Ordering::Relaxed) as u32;
@@ -842,13 +862,13 @@ fn handle_wasapi_exclusive(
     if channels == 0 {
         log::error!("Invalid channels");
         shared_state.state.store(PlayerState::Stopped);
-        return true;
+        return ExclusiveOutcome::Handled;
     }
 
     if let Err(error) = dsp_ctx.set_convolver_sample_rate(sample_rate) {
         log::error!("Failed to configure WASAPI convolver source rate: {}", error);
         shared_state.state.store(PlayerState::Stopped);
-        return true;
+        return ExclusiveOutcome::Handled;
     }
     dsp_ctx.reclaim_retired_convolver();
 
@@ -884,14 +904,14 @@ fn handle_wasapi_exclusive(
             Ok(mut processor) => {
                 if processor.set_sample_rate(sample_rate).is_err() {
                     shared_state.state.store(PlayerState::Stopped);
-                    return true;
+                    return ExclusiveOutcome::Handled;
                 }
                 processor
             }
             Err(error) => {
                 log::error!("Failed to acquire WASAPI convolver consumer: {}", error);
                 shared_state.state.store(PlayerState::Stopped);
-                return true;
+                return ExclusiveOutcome::Handled;
             }
         };
 
@@ -955,7 +975,7 @@ fn handle_wasapi_exclusive(
             if let Err(e) = wasapi_player.play() {
                 log::error!("Failed to start WASAPI playback: {}", e);
                 shared_state.state.store(PlayerState::Stopped);
-                return true;
+                return ExclusiveOutcome::Handled;
             }
 
             shared_state.state.store(PlayerState::Playing);
@@ -969,7 +989,7 @@ fn handle_wasapi_exclusive(
             if wasapi_player.get_state() == WasapiState::Stopped {
                 log::error!("WASAPI: Failed to start playback after waiting");
                 shared_state.state.store(PlayerState::Stopped);
-                return true;
+                return ExclusiveOutcome::Handled;
             }
 
             log::info!("WASAPI: Playback started, entering monitoring loop");
@@ -1020,7 +1040,7 @@ fn handle_wasapi_exclusive(
                         }
                         AudioCommand::Shutdown => {
                             drop(wasapi_player);
-                            return false;
+                            return ExclusiveOutcome::Shutdown;
                         }
                         AudioCommand::Applied(seq) => publish_applied(shared_state, seq),
                         AudioCommand::LoudnessMeasured { generation, integrated_lufs } => {
@@ -1044,11 +1064,11 @@ fn handle_wasapi_exclusive(
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
 
-            true
+            ExclusiveOutcome::Handled
         }
         Err(e) => {
             log::error!("Failed to create WASAPI player: {}. Falling back to cpal.", e);
-            false
+            ExclusiveOutcome::CouldNotOpen
         }
     }
 }
