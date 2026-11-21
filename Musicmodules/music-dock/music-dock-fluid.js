@@ -42,9 +42,17 @@
         const in1 = make('stop', { offset: '.45' }, inner);
         const in2 = make('stop', { offset: '.9' }, inner);
 
-        const holeMask = make('mask', { id: id('hole'), maskUnits: 'userSpaceOnUse' }, defs);
-        const holeBg = make('rect', { x: 0, y: 0, fill: '#fff' }, holeMask);
-        const holeC = make('circle', { r: 0, fill: '#000' }, holeMask);
+        // 小环在播放条上挖出的凹口：用裁剪路径（整层的矩形减去一个圆，evenodd），不用遮罩。
+        // 这块形状被三道模糊各引用一次；遮罩要逐次按亮度栅格化，每帧提交时贵得多，裁剪只是几何运算，样子一样（凹口本来就是硬边的圆）。
+        const holeClip = make('clipPath', { id: id('hole'), clipPathUnits: 'userSpaceOnUse' }, defs);
+        const holePath = make('path', { 'clip-rule': 'evenodd', d: '' }, holeClip);
+        let holeD = '';
+        const setHole = (cx, cy, r) => {
+            const W = geo.layerW, H = LAYER_H;
+            let d = `M0 0H${W}V${H}H0Z`;
+            if (r > 0.05) d += `M${(cx - r).toFixed(1)} ${cy.toFixed(1)}a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(2 * r).toFixed(2)} 0a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(-2 * r).toFixed(2)} 0Z`;
+            if (d !== holeD) { holeD = d; holePath.setAttribute('d', d); }
+        };
 
         const hGrad = make('linearGradient', { id: id('h'), gradientUnits: 'userSpaceOnUse', y1: 0, y2: 0 }, defs);
         make('stop', { offset: '0', 'stop-color': '#fff' }, hGrad);
@@ -83,7 +91,7 @@
         make('feGaussianBlur', { stdDeviation: 18 }, bloom);
         const filters = [goo, vapor, bloom];
 
-        const body = make('g', { id: id('body'), mask: `url(#${id('hole')})` }, defs);
+        const body = make('g', { id: id('body'), 'clip-path': `url(#${id('hole')})` }, defs);
         const barR = make('rect', {}, body);
         const playC = make('circle', {}, body);
         const bumpC = make('circle', { r: 0 }, body);
@@ -184,8 +192,8 @@
             mist.style.left = `${Math.round(rect.left + rect.width / 2 - (rect.width + 360) / 2)}px`;
             mist.style.width = `${Math.round(rect.width + 360)}px`;
             mist.style.bottom = `${Math.max(0, geo.bottom - 16)}px`;
-            for (const f of filters) { setAttr(f, 'width', geo.layerW); setAttr(f, 'height', LAYER_H); }
-            setAttr(holeBg, 'width', geo.layerW); setAttr(holeBg, 'height', LAYER_H);
+            for (const f of fitted) { setAttr(f, 'x', 0); setAttr(f, 'width', geo.layerW); }
+            holeD = '';
             setAttr(solidR, 'width', geo.layerW); setAttr(solidR, 'height', LAYER_H);
             setAttr(feather, 'width', geo.layerW); setAttr(feather, 'height', LAYER_H);
             const spill = 12; // 加上 4px 羽化 ≈ 外沿 16px
@@ -277,6 +285,18 @@
                 || Math.abs(s.show.v - showTarget()) > 0.01 || Math.abs(s.size.v - sizeTarget()) > 0.01
                 || Math.abs(s.ring.y - s.ring.ty) > 0.5;
         };
+        // 三组模糊（实心、雾、光晕）每帧都要重算，算的范围就是滤镜区域。
+        // 区域默认是整层（320 高），但平时只有播放条那一条看得见（雾的遮罩只放开条外 16px）。
+        // 所以把区域的上沿收到「最高的那块液体」再往上留出模糊的余量，音量水滴、快捷胶囊升起时跟着放开。
+        // 余量 56px ≥ 光晕模糊 3σ（18×3=54），遮罩里看得见的部分算出来和整层算的完全一样。
+        // 两块遮罩（实心/雾的分界、雾的外沿）也一样：遮罩按区域逐帧算亮度，区域收小，算得就少。
+        const FILTER_MARGIN = 56;
+        const fitted = [...filters, solidMask, vapMask];
+        const fitFilters = (topBody) => {
+            const top = Math.min(topBody, geo.y - 16) - FILTER_MARGIN;
+            const y = Math.max(0, Math.floor(top / 8) * 8);
+            for (const f of fitted) { setAttr(f, 'y', y); setAttr(f, 'height', LAYER_H - y); }
+        };
         let lastGrow = '';
         const draw = (force = false) => {
             const sol = s.solidity.v;
@@ -312,6 +332,7 @@
             } else {
                 setAttr(quickB, 'height', 0); setAttr(quickNeck, 'width', 0); setAttr(quickSolid, 'opacity', 0); setAttr(vapQuick, 'width', 0);
             }
+            fitFilters(Math.min(geo.y + 6 - Math.max(0, s.bump.r), vy, q.v > 0.01 && q.w > 0 ? geo.y + 4 + (q.y - geo.y - 4) * q.v : geo.y));
             const rx = s.ring.x;
             const ry = s.ring.y;
             const near = Math.hypot(rx - s.ring.tx, ry - s.ring.ty) < 120 && s.ring.docked;
@@ -319,7 +340,7 @@
             const sz = s.size.v;
             // 凹口跟着小环：环藏起来时凹口愈合；环落在条上方很远时也不开口。
             const touch = Math.max(0, Math.min(1, 1 - (geo.y - 2 - ry - 20) / 40));
-            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R * sh * touch * (0.45 + 0.55 * sz) : 0);
+            setHole(rx, ry, near ? HOLE_R * sh * touch * (0.45 + 0.55 * sz) : 0);
             setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 * sh : 0);
             if (ring) {
                 const vh = win.innerHeight || 0;
