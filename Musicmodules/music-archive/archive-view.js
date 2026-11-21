@@ -701,6 +701,11 @@
             if (url && !entry) { const e2 = state.coverCache.get(url); e2?.img.addEventListener('load', syncDetailCover, { once: true }); }
             kick();
         };
+        // 资料卡滚到底（或本来就放得下）时去掉底边淡出
+        const syncDetailEnd = () => {
+            const card = refs.detail?.querySelector('.archive-detail-card');
+            if (card) card.classList.toggle('at-end', card.scrollTop + card.clientHeight >= card.scrollHeight - 2);
+        };
         const renderDetail = () => {
             if (!detailOpen) return;
             const index = selectedIndex();
@@ -760,6 +765,7 @@
                 refs.dMore.appendChild(li);
             }
             syncDetailCover();
+            syncDetailEnd();
         };
         const openDetail = () => {
             if (selectedIndex() < 0) return;
@@ -774,6 +780,7 @@
                 refs.tip.classList.remove('on');
             }
             renderDetail();
+            global.requestAnimationFrame?.(syncDetailEnd);
             refs.dPlay.focus({ preventScroll: true });
             kick();
         };
@@ -857,6 +864,9 @@
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
             renderDetail();
+            // 还没放过歌时底栏不写「正在播放 全部曲目」（没有在播放的东西）
+            const queueEl = refs.queue?.parentElement;
+            if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
             // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
             const prevPlaying = state.playingIndex;
@@ -1266,6 +1276,7 @@
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
             syncDetailRoom(sc);
+            if (detailOpen) syncDetailEnd();
             syncLyrics();
             updateLabelMask();
             kick();
@@ -1641,6 +1652,7 @@
         document.addEventListener('visibilitychange', onVisibility);
         const onLikeChange = () => { if (detailOpen) renderDetail(); };
         document.addEventListener('music-like-change', onLikeChange);
+        refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
         const bodyObserver = new MutationObserver(() => {

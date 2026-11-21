@@ -561,7 +561,7 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-detail-back { position: absolute; left: 59px; top: 226px; font-size: 18px; font-weight: 600; letter-spacing: .4px; display: flex; align-items: center; gap: 14px; }
 .archive-detail-back:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-detail-card {
-    position: absolute; right: 59px; top: 250px; width: 700px;
+    position: absolute; right: 59px; top: 250px; width: 700px; box-sizing: border-box;
     max-height: calc(100% - 250px - 72px - var(--archive-dock-lift, 0px));
     overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
     pointer-events: auto;
@@ -641,3 +641,14 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-tip span { font-size: 12px; color: var(--ar-muted); overflow: hidden; text-overflow: ellipsis; }
 .archive-tip span:empty { display: none; }
 .archive-brand-play[hidden] { display: none; }
+.archive-queue[hidden] { display: none; }
+.archive-queue[hidden] + span { margin-left: auto; }
+/* 资料卡内容比卡高时底边淡出，看得出下面还能滚；矮窗口（笔记本、底栏展开）收紧标题和间距，多放几行 */
+.archive-detail-card { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), transparent); }
+.archive-detail-card.at-end { -webkit-mask-image: none; mask-image: none; }
+.archive-hud.short .archive-detail-card { top: 236px; padding-top: 20px; max-height: calc(100% - 236px - 48px - var(--archive-dock-lift, 0px)); }
+.archive-hud.short .archive-detail-back { top: 206px; }
+.archive-hud.short .archive-detail-album { margin-top: 16px; }
+.archive-hud.short .archive-detail-card h2 { font-size: 34px; margin-top: 6px; }
+.archive-hud.short .archive-detail-actions { margin-top: 20px; padding-bottom: 18px; }
+.archive-hud.short .archive-detail-actions > button { height: 42px; }

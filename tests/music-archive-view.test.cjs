@@ -863,6 +863,16 @@ test('目录检索时左上标题写检索词和结果数，清掉检索恢复�
     f.close();
 });
 
+test('还没放过歌时底栏不写「正在播放」', () => {
+    const f = fixture({ setup: (w, app) => { app.currentTrackIndex = -1; } });
+    const q = f.w.document.querySelector('.archive-queue');
+    assert.ok(q.hidden, '没有在播放的歌');
+    f.close();
+    const g = fixture();
+    assert.equal(g.w.document.querySelector('.archive-queue').hidden, false, '播放器里有当前曲目时显示');
+    g.close();
+});
+
 test('空的原因各有说法：检索没结果、空歌单、还没有播放记录', () => {
     const f = fixture({ playlists: [{ id: 'e', name: '空歌单', tracks: [] }] });
     const empty = () => f.view.list.el.querySelector('[data-l="empty"]');
