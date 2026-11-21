@@ -1875,6 +1875,7 @@
             ['L', '喜欢 / 取消喜欢当前这首（档案页里是打字检索）'],
             ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
             ['Ctrl + L', '档案页里定位当前播放'],
+            ['Alt + ↑ / ↓', '档案页歌单里把选中的歌上移 / 下移一位'],
             ['/', '档案页里打开检索'],
             ['字母 / 数字', '档案页里直接打字就是检索目录'],
             ['?', '打开这张快捷键表（档案页里用 Ctrl + K 搜「快捷键」）'],
@@ -1906,8 +1907,19 @@
             }
             closePop(); setQuick(false);
             helpEl.hidden = false;
-            requestAnimationFrame(() => helpEl.classList.add('md-open'));
-            helpEl.querySelector('.md-keys-box').focus({ preventScroll: true });
+            const box = helpEl.querySelector('.md-keys-box');
+            if (global.MusicFluid?.enabled()) {
+                // 从按下的那一点（键盘打开时从底栏中间）长出来：先让面板直接落到最终位置，量好了再交给液体去画
+                box.style.transition = 'none';
+                helpEl.classList.add('md-open');
+                void box.offsetWidth;
+                box.style.transition = '';
+                const from = global.MusicFluid.recentPress() || { x: global.innerWidth / 2, y: global.innerHeight - 60 };
+                global.MusicFluid.bud(box, from, { duration: 480 });
+            } else {
+                requestAnimationFrame(() => helpEl.classList.add('md-open'));
+            }
+            box.focus({ preventScroll: true });
         };
         const seekBy = (delta) => {
             const d = duration();
