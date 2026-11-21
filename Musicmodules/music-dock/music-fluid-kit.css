@@ -663,16 +663,16 @@ body.music-reduce-motion :is(.dialog, .lyrics-fetch-search) input { transition: 
 body.music-fl-low .audio-engine-notice { backdrop-filter: none; -webkit-backdrop-filter: none; }
 body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before { animation: none; }
 
-/* ───────── 档案顶栏（目录、检索、加入歌单……）：手底下的那一汪 ─────────
+/* ───────── 档案顶栏（目录、检索、加入歌单……）和「播放 / 详情」：手底下的那一汪 ─────────
  * 按钮本身不变；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，换按钮时流过去，离开就淡掉。
  * 位置由 music-fluid-kit.js 的 watchTrails 用 MusicFluid.slide 推。 */
-.archive-nav > .mf-trail {
+.mf-trail {
   position: absolute;
   top: 50%;
   left: 0;
   width: 0;
-  height: 38px;
-  margin-top: -19px;
+  height: var(--mf-trail-h, 38px);
+  margin-top: calc(var(--mf-trail-h, 38px) / -2);
   z-index: -1;
   border-radius: 9999px;
   pointer-events: none;
@@ -683,6 +683,7 @@ body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before 
   transform: scale(.7, .5);
   transition: opacity .22s ease, transform .3s cubic-bezier(.34, 1.56, .5, 1);
 }
-.archive-nav > .mf-trail.mf-on { opacity: 1; transform: none; }
+.mf-trail.mf-on { opacity: 1; transform: none; }
 .archive-nav { isolation: isolate; }
-body.music-reduce-motion .archive-nav > .mf-trail { transition: opacity .12s; transform: none; }
+.archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
+body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }

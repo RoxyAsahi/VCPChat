@@ -329,7 +329,10 @@
     // ───────── 一排文字按钮：手指底下的那一汪跟着流过去 ─────────
     // 平时什么都没有；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，在按钮之间移动时像液体一样流过去，
     // 指针离开这一排就淡掉。只加一个装饰元素，不改按钮本身的样子。
-    const TRAILS = [{ item: '.archive-nav > button', key: 'archive-nav', pad: 14 }];
+    const TRAILS = [
+        { item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
+        { item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+    ];
     const watchTrails = () => {
         const doc = global.document;
         const dropOf = (row) => {
