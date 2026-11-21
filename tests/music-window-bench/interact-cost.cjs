@@ -3,7 +3,7 @@
  * next track, search typing, switching list kinds and sorts, queueing, removing a track,
  * rescanning. Reports wall time and the long tasks (> 50 ms) each action causes.
  *
- *   node tests/music-window-bench/interact-cost.cjs [--n=5000] [--cpu=4]
+ *   node tests/music-window-bench/interact-cost.cjs [--n=5000] [--cpu=4] [--settle=20000]
  *
  * Software rendering and CPU throttling: compare runs with each other, not with a real machine.
  */
@@ -54,7 +54,10 @@ const FAKE = ({ n }) => {
     await page.addInitScript(FAKE, { n: N });
     await page.goto(`http://127.0.0.1:${server.address().port}/Musicmodules/music.html`, { timeout: 180000, waitUntil: 'commit' });
     await page.waitForFunction((n) => window.app?.playlist?.length === n && window.app.archiveView, N, { timeout: 180000 });
-    await page.waitForTimeout(4000);
+    // 拼音表到了以后档案页要分片重算全部检索条目；软件渲染下要十几秒。没等完就量，
+    // 头几步（删歌、排序、选行）会把这次重算算进去，数字大好几倍。
+    await page.waitForFunction(() => window.pinyinPro, null, { timeout: 180000 }).catch(() => {});
+    await page.waitForTimeout(Number(args.settle) || 20000);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
 
@@ -113,6 +116,10 @@ const FAKE = ({ n }) => {
     }, 3000));
     rows.push(await profiledMeasure('classic view', () => document.querySelector('[data-act="classic"]')?.click(), 2000));
     rows.push(await profiledMeasure('playing, classic, 5 s', async () => { await app.playTrack?.(); await new Promise((r) => setTimeout(r, 5000)); }, 100));
+    rows.push(await profiledMeasure('classic search: type "live"', async () => {
+        for (const s of ['l', 'li', 'liv', 'live']) { app.searchInput.value = s; app.searchInput.dispatchEvent(new Event('input')); await new Promise((r) => setTimeout(r, 120)); }
+    }, 2000));
+    rows.push(await profiledMeasure('classic search: clear', () => { app.searchInput.value = ''; app.searchInput.dispatchEvent(new Event('input')); }, 2000));
     rows.push(await profiledMeasure('next track x5 (classic)', async () => { for (let i = 0; i < 5; i++) { app.nextTrack(); await new Promise((r) => setTimeout(r, 150)); } }, 2000));
     console.log(errors.length ? 'page errors: ' + errors.join(' | ') : 'no page errors');
     if (args.out) require('node:fs').writeFileSync(args.out, JSON.stringify({ n: N, cpu: CPU, rows }, null, 2));

@@ -976,7 +976,11 @@ document.addEventListener('DOMContentLoaded', () => {
         app.playlistEl.addEventListener('scroll', markSidebarScrolling, { passive: true });
 
         // 经典列表当前显示的顺序（可能按标题、歌手等排过序）。
-        app.classicOrder = () => Array.from(app.playlistEl.children, li => app.playlist[Number(li.dataset.index)]).filter(Boolean);
+        app.classicOrder = () => {
+            // 档案页开着时经典列表还没重画，按它待画的那组歌算
+            if (app.classicPendingSongs) { const inLib = new Set(app.playlist); return app.classicPendingSongs.filter(t => inLib.has(t)); }
+            return Array.from(app.playlistEl.children, li => app.playlist[Number(li.dataset.index)]).filter(Boolean);
+        };
         app.playlistEl.addEventListener('click', (e) => {
             const li = e.target.closest?.('li');
             if (!li || !app.playlistEl.contains(li)) return;
