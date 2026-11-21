@@ -154,9 +154,17 @@
          * 多个词（空格分开）都要匹配上；返回按得分排好的曲库下标。
          */
         const query = (q, { kind = 'all', only = null, limit = Infinity } = {}) => {
+            // 智能条件词（喜欢、没听过、次数>N、>5分钟……，见 music-smart.js）先筛一遍，剩下的词照常检索
+            let pool = only ? only : entries.map((_, i) => i);
+            const smart = global.MusicSmart && global.MusicSmart.ctx ? global.MusicSmart.parse(q) : null;
+            if (smart && smart.preds.length) {
+                const ctx = global.MusicSmart.ctx();
+                pool = pool.filter((i) => list[i] && smart.preds.every((p) => p.test(list[i], ctx)));
+                q = smart.text;
+                if (!norm(q).trim()) return pool.slice(0, limit);
+            }
             const terms = norm(q).split(/\s+/).filter(Boolean);
             const fields = kind === 'artist' ? [['artist', 2]] : kind === 'album' ? [['album', 1]] : FIELDS;
-            const pool = only ? only : entries.map((_, i) => i);
             if (!terms.length) return only ? pool.slice(0, limit) : [];
             const hits = [];
             pool.forEach((i, order) => {

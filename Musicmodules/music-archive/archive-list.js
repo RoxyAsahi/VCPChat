@@ -49,7 +49,7 @@
         <div class="archive-list-thumb" data-l="thumb" aria-hidden="true" hidden></div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
-            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em>
+            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
         </div>`;
 
     /*
@@ -173,7 +173,9 @@
             box.innerHTML = '<header><span>最近检索</span><button type="button" data-rq-clear>清除</button></header>'
                 + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条">✕</button></div>`).join('');
         };
-        const play = (...args) => { rememberQuery(); return opts.onPlay(...args); };
+        // 目录里「为你 · 每日推荐」那一节对应阵列的 daily 列，告诉阵列时换成列 id
+        const columnCtx = (ctx) => (ctx === 'recent:daily' ? 'daily' : ctx);
+        const play = (i, ctx, ...rest) => { rememberQuery(); return opts.onPlay(i, columnCtx(ctx), ...rest); };
 
         const state = {
             kind: 'all',
@@ -275,6 +277,8 @@
             if (!out.count) { r.pos.textContent = '---'; r.tot.textContent = pad(0, 3); }   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();
+            // 有检索词、有结果时给「存为智能歌单」（多选时让给多选说明）
+            r.saveSmart.hidden = !(q0 && out.count && app.createSmartPlaylist) || multi.size > 1;
             if (q0 !== state.lastReported || out.count !== state.lastCount) { state.lastReported = q0; state.lastCount = out.count; opts.onResults?.(q0, out.count); }
             if (!out.count) {
                 // 空的原因不同，说法也不同：没搜到、曲库是空的、还没有歌单、还没播过
@@ -649,7 +653,25 @@
         };
 
         /* 阵列那边换了选中：列表跟着高亮并滚到那一行 */
+        // 阵列切到「每日推荐」「最近播放」这两列时，目录自动切到「为你」并停在对应那一节；
+        // 阵列离开这两列时，切回自动切换之前的分类（用户自己换过分类就不再自动切回）
+        const ARRAY_SECTIONS = { daily: 'recent:daily', recent: 'recent' };
+        let autoKind = null;
+        const followArray = (ctx) => {
+            if (state.query.trim()) return;
+            if (ARRAY_SECTIONS[ctx] && state.kind !== 'recent') {
+                const from = state.kind;
+                setKind('recent', { auto: true });
+                autoKind = from;
+            } else if (!ARRAY_SECTIONS[ctx] && ctx && autoKind && state.kind === 'recent') {
+                const back = autoKind;
+                autoKind = null;
+                setKind(back, { auto: true });
+            }
+        };
         const reveal = (i, ctx, { center = false, quiet = false } = {}) => {
+            followArray(ctx);
+            if (state.kind === 'recent' && ARRAY_SECTIONS[ctx]) ctx = ARRAY_SECTIONS[ctx];
             state.selected = i;
             state.preferCtx = ctx;
             const k = findRow(i, ctx);
@@ -672,7 +694,7 @@
             state.selected = row.i;
             state.preferCtx = row.ctx;
             scrollToRow(k);
-            opts.onPick(row.i, row.ctx);
+            opts.onPick(row.i, columnCtx(row.ctx));
             render();
         };
         const stepRow = (dir, n = 1) => {
@@ -737,6 +759,10 @@
         r.input.addEventListener('input', paintRecentQ);
         r.input.addEventListener('blur', () => { if (r.recentQ) r.recentQ.hidden = true; });
         // 在列表里按下不让检索框失焦（否则点不到）
+        r.saveSmart.addEventListener('click', () => {
+            const q = state.query.trim();
+            if (q && app.createSmartPlaylist) app.createSmartPlaylist(q);
+        });
         r.recentQ?.addEventListener('pointerdown', (e) => e.preventDefault());
         r.recentQ?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1540,11 +1566,13 @@
          * 只有离开之后选中的歌变了（在阵列里换了卡、播了别的歌），才改为跟到选中那一行。
          */
         const kindScroll = new Map();
-        const setKind = (kind) => {
+        const setKind = (kind, { auto = false } = {}) => {
+            if (!auto) autoKind = null;
             if (kind === state.kind) return;
             kindScroll.set(state.kind, { top: r.viewport.scrollTop, selected: state.selected, query: state.query });
             state.kind = kind;
-            try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ }
+            // 跟着阵列自动切的不记住，下次打开还是用户自己选的分类
+            if (!auto) { try { localStorage.setItem('musicArchiveListKind', kind); } catch (e) { /* 只是记住上次 */ } }
             r.viewport.scrollTop = 0;
             rebuild();
             const k = findRow(state.selected, null);
