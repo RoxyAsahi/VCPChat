@@ -228,7 +228,11 @@
             const index = opts.getIndex();
             if (!index) return;
             let anchor = null;
-            if (steady && state.rows.length) {
+            if (steady && state.rows.length && state.selectedRow >= 0 && inView(state.selectedRow) && state.rows[state.selectedRow]) {
+                // 选中的那行就在眼前：让它留在原处（启动时曲库一批批进来，目录不该漂到别的字母去）
+                const row = state.rows[state.selectedRow];
+                anchor = { i: row.i, ctx: row.ctx, dy: state.offsets[state.selectedRow] - r.viewport.scrollTop };
+            } else if (steady && state.rows.length) {
                 const top = r.viewport.scrollTop;
                 for (let k = 0; k < state.rows.length; k++) {
                     if (state.offsets[k] < top || state.rows[k].type !== 'track') continue;
