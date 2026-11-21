@@ -461,6 +461,10 @@
                 // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
                 refs.ctxName.textContent = '检索「' + searchCtx.q + '」';
                 refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果 · Esc 清除';
+            } else if (!tracks().length) {
+                // 空曲库：左上不写「全部曲目 · 0 首」，下面的空状态说明会告诉人怎么加歌
+                refs.ctxName.textContent = '曲库';
+                refs.ctxSub.textContent = '还没有歌曲';
             } else {
                 refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
                 refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
