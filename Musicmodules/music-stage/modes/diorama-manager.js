@@ -328,7 +328,12 @@
                     if (renderer?.domElement !== canvas) return;
                     recoverContext();
                 });
+                // Built a step a frame, so the way in keeps moving meanwhile.
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 world = global.MusicStageDioramaWorld.create(T, scene);
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 lyrics = global.MusicStageDioramaLyrics.create(T, scene);
                 events = global.MusicStageDioramaEvents.create(T, scene);
                 optics = global.MusicStageDioramaOptics?.create(T);
@@ -340,6 +345,8 @@
                 await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
                 if (mode.destroyed || !renderer) return;
                 if (!canvasSmoothing) await optics?.precompile?.(renderer);
+                if (mode.destroyed || !renderer) return;
+                await U.breathe();
                 if (mode.destroyed || !renderer) return;
                 initialized = true;
                 dirty = true;
