@@ -614,3 +614,4 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-tip b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .archive-tip span { font-size: 12px; color: var(--ar-muted); overflow: hidden; text-overflow: ellipsis; }
 .archive-tip span:empty { display: none; }
+.archive-brand-play[hidden] { display: none; }
