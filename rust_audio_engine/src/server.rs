@@ -518,6 +518,40 @@ mod settings_eq_tests {
     }
 
     #[test]
+    fn the_output_choice_survives_a_restart_and_follows_the_device_by_name() {
+        // 选好的声卡和独占模式以前不存盘，每次重开都回到默认设备、共享模式。
+        let names = vec!["Speakers".to_string(), "USB DAC".to_string()];
+        let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+        let saved = player.select_device_by_list(Some(1), &names);
+        assert_eq!(saved.as_deref(), Some("USB DAC"));
+
+        // 重开时多插了一个耳机，USB DAC 排到了第 3 个
+        let settings = PersistentSettings { device_id: Some(1), device_name: saved, exclusive_mode: true, ..PersistentSettings::default() };
+        let later = vec!["Speakers".to_string(), "Headphones".to_string(), "USB DAC".to_string()];
+        let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+        restore_output_choice(&mut player, &settings, &later);
+        let shared = player.shared_state();
+        assert_eq!(shared.device_id.load(std::sync::atomic::Ordering::Relaxed), 2, "still the USB DAC, not the headphones");
+        assert!(player.exclusive_mode && shared.exclusive_mode.load(std::sync::atomic::Ordering::Relaxed));
+
+        // 拔掉了：用默认设备，但记着名字，插回来还用它
+        let unplugged = vec!["Speakers".to_string()];
+        let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+        restore_output_choice(&mut player, &settings, &unplugged);
+        assert_eq!(player.shared_state().device_id.load(std::sync::atomic::Ordering::Relaxed), -1);
+        assert_eq!(player.shared_state().device_name.read().as_deref(), Some("USB DAC"));
+    }
+
+    #[test]
+    fn settings_written_before_device_names_still_restore_by_position() {
+        let settings = PersistentSettings { device_id: Some(1), ..PersistentSettings::default() };
+        let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+        restore_output_choice(&mut player, &settings, &["A".to_string(), "B".to_string()]);
+        assert_eq!(player.shared_state().device_id.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(player.shared_state().device_name.read().as_deref(), Some("B"));
+    }
+
+    #[test]
     fn applying_saved_dither_updates_the_actual_dsp_snapshot() {
         let mut player = AudioPlayer::new(crate::config::AppConfig::default());
         for enabled in [false, true, false] {
@@ -554,11 +588,22 @@ mod settings_eq_tests {
 }
 
 /// Apply persisted settings to player on startup
+/// Output device and exclusive mode chosen last time. The device is found by
+/// name (its list position shifts when USB devices come and go).
+fn restore_output_choice(player: &mut AudioPlayer, settings: &PersistentSettings, names: &[String]) {
+    player.exclusive_mode = settings.exclusive_mode;
+    player.shared_state().exclusive_mode.store(settings.exclusive_mode, std::sync::atomic::Ordering::Relaxed);
+    if settings.device_name.is_some() || settings.device_id.is_some() {
+        player.restore_device(settings.device_name.as_deref(), settings.device_id, names);
+    }
+}
+
 fn apply_settings_to_player(player: &mut AudioPlayer, settings: &PersistentSettings) {
     // Volume
     player.set_volume(settings.volume as f64);
     
-    // Device settings are applied separately via configure_output API
+    // Output device and exclusive mode: restored once at start-up (restore_output_choice),
+    // not on every /save_settings, which would enumerate devices each time.
     
     // EQ — gate on persisted enable flag so a disabled EQ stays off across restarts
     // Also used by /save_settings on a live player: remove the old FIR backend
@@ -908,6 +953,7 @@ pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSe
     {
         let settings = settings_manager.lock().get_settings();
         apply_settings_to_player(&mut player, &settings);
+        restore_output_choice(&mut player, &settings, &AudioPlayer::output_device_names());
         log::info!("Applied persisted settings to audio engine");
     }
 

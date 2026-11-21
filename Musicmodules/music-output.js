@@ -38,6 +38,10 @@ function setupOutput(app) {
                     });
                     app.deviceSelect.appendChild(group);
                 }
+                // 重建选项会把选中项清回第一个：放回引擎正在用的那个，不然打开窗口总显示「默认设备」。
+                const current = app.currentDeviceId === null || app.currentDeviceId === undefined ? 'default' : String(app.currentDeviceId);
+                const known = [...app.deviceSelect.querySelectorAll('option')].some((o) => String(o.value) === current);
+                app.deviceSelect.value = known ? current : 'default';
             }
         } catch (e) { console.error("Error populating device list:", e); }
     };

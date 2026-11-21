@@ -64,3 +64,37 @@ test('the window asks the engine where the sound actually went after play starts
     const html = fs.readFileSync(path.join(__dirname, '../Musicmodules/music.html'), 'utf8');
     assert.match(html, /id="output-fallback-note"[^>]*hidden/);
 });
+
+test('refreshing the device list keeps the device the engine is using selected', async () => {
+    // 打开窗口时先按引擎状态选中设备，再拉设备列表；以前拉完列表选中项就回到「默认设备」。
+    const options = [];
+    const groups = [];
+    const select = {
+        value: 'default', disabled: false,
+        set innerHTML(v) { options.length = 0; },
+        appendChild(node) { if (node.tag === 'optgroup') { groups.push(node); node.children.forEach((c) => options.push(c)); } else options.push(node); },
+        querySelectorAll: () => options
+    };
+    const context = vm.createContext({
+        console, setTimeout, clearTimeout,
+        document: {
+            getElementById: () => null,
+            createElement: (tag) => {
+                const el = { tag, children: [], value: '', textContent: '' };
+                el.appendChild = (c) => { el.children.push(c); if (groups.includes(el)) options.push(c); };
+                return el;
+            }
+        }
+    });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-output.js'), 'utf8'), context);
+    const app = {
+        deviceSelect: select, wasapiSwitch: { checked: false }, currentDeviceId: 2,
+        api: { getMusicDevices: async () => ({ status: 'success', devices: { preferred: [{ id: 2, name: 'USB DAC' }], other: [{ id: 0, name: 'Speakers' }] } }) }
+    };
+    context.setupOutput(app);
+    await app.populateDeviceList(false);
+    assert.equal(String(select.value), '2');
+    app.currentDeviceId = 9; // 引擎报的设备已经不在列表里
+    await app.populateDeviceList(false);
+    assert.equal(select.value, 'default');
+});

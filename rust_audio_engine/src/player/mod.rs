@@ -16,7 +16,7 @@ pub use state::{AudioCommand, PlayerState, SharedState, AudioDeviceInfo,
     EVENT_LOAD_COMPLETE, EVENT_LOAD_ERROR, EVENT_TRACK_CHANGED,
     EVENT_PLAYBACK_ENDED, EVENT_NEEDS_PRELOAD_RESET, EVENT_COMMAND_APPLIED,
     EVENT_DECODE_COMPLETE, output_fallback_names, OUTPUT_FELL_BACK_FROM_EXCLUSIVE,
-    OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE};
+    OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE, resolve_output_device};
 pub use track_buffer::{TrackBuffer, CHUNK_FRAMES};
 pub use gapless::GaplessManager;
 
@@ -267,6 +267,38 @@ impl AudioPlayer {
         self.shared_state.device_id.store(id_value, Ordering::Relaxed);
         log::info!("Device selected: {:?}", device_id);
         Ok(())
+    }
+
+    /// Choose the output device by id (its position in `list_devices`) and
+    /// remember its name, so the same device is found again after the list
+    /// shifts. Returns the name that was recorded.
+    pub fn select_device_by_list(&mut self, device_id: Option<usize>, names: &[String]) -> Option<String> {
+        let name = device_id.and_then(|id| names.get(id).cloned());
+        *self.shared_state.device_name.write() = name.clone();
+        let _ = self.select_device(device_id);
+        name
+    }
+
+    /// Put back a saved output choice: find the saved device by name in the
+    /// current list (falls back to the saved position for settings written
+    /// before names were kept).
+    pub fn restore_device(&mut self, saved_name: Option<&str>, saved_id: Option<usize>, names: &[String]) {
+        let (index, missing) = resolve_output_device(names, saved_name, saved_id);
+        if missing {
+            log::warn!("Saved output device {:?} / {:?} not present, using the default", saved_name, saved_id);
+        }
+        // Keep the name even when the device is away, so it is picked again once plugged back in.
+        *self.shared_state.device_name.write() = saved_name.map(str::to_string)
+            .or_else(|| index.and_then(|i| names.get(i).cloned()));
+        let _ = self.select_device(index);
+    }
+
+    /// Names of the output devices, in list order (what `list_devices` ids index).
+    pub fn output_device_names() -> Vec<String> {
+        let host = cpal::default_host();
+        host.output_devices()
+            .map(|devices| devices.map(|d| d.name().unwrap_or_default()).collect())
+            .unwrap_or_default()
     }
 
     /// Remember EBU R128 measurements across plays (and restarts).

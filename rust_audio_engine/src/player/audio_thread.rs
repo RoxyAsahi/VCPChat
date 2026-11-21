@@ -128,6 +128,18 @@ pub fn audio_thread_main(
                 stream_failed.store(false, Ordering::Release);
 
                 let mut fallback = 0u8;
+                // Exclusive mode opens the device by position too: point it at
+                // the named device's current position first.
+                #[cfg(windows)]
+                if use_exclusive {
+                    let wanted_name = shared_state.device_name.read().clone();
+                    if let Some(name) = wanted_name {
+                        let names = super::AudioPlayer::output_device_names();
+                        if let (Some(i), _) = super::resolve_output_device(&names, Some(&name), None) {
+                            shared_state.device_id.store(i as i64, Ordering::Relaxed);
+                        }
+                    }
+                }
                 #[cfg(windows)]
                 if use_exclusive {
                     match handle_wasapi_exclusive(
@@ -157,16 +169,24 @@ pub fn audio_thread_main(
                     None
                 };
 
-                let device = if let Some(id) = requested_device_id {
-                    log::info!("Attempting to select device by ID: {}", id);
-                    host.output_devices()
-                        .ok()
-                        .and_then(|mut devices| devices.nth(id))
-                        .or_else(|| {
-                            log::warn!("Device ID {} not found, falling back to default", id);
-                            fallback |= super::OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE;
-                            host.default_output_device()
-                        })
+                // The chosen device is looked up by name when we have one: its
+                // position shifts when other devices are plugged in or out.
+                let wanted_name = shared_state.device_name.read().clone();
+                let device = if requested_device_id.is_some() || wanted_name.is_some() {
+                    let mut listed: Vec<cpal::Device> = host.output_devices().map(|d| d.collect()).unwrap_or_default();
+                    let names: Vec<String> = listed.iter().map(|d| d.name().unwrap_or_default()).collect();
+                    let (index, missing) = super::resolve_output_device(&names, wanted_name.as_deref(), requested_device_id);
+                    if let Some(i) = index {
+                        shared_state.device_id.store(i as i64, Ordering::Relaxed);
+                    }
+                    if missing {
+                        log::warn!("Output device {:?} / {:?} not found, falling back to default", wanted_name, requested_device_id);
+                        fallback |= super::OUTPUT_FELL_BACK_TO_DEFAULT_DEVICE;
+                    }
+                    match index {
+                        Some(i) => Some(listed.swap_remove(i)),
+                        None => host.default_output_device(),
+                    }
                 } else {
                     host.default_output_device()
                 };

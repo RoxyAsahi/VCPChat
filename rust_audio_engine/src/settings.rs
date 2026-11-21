@@ -17,6 +17,9 @@ pub struct PersistentSettings {
     
     // Device settings
     pub device_id: Option<usize>,
+    /// Name of the chosen output device. The id is only its position in the
+    /// device list, which shifts when a USB device is plugged in or out.
+    pub device_name: Option<String>,
     pub exclusive_mode: bool,
     
     // EQ settings
@@ -64,6 +67,7 @@ impl Default for PersistentSettings {
         Self {
             volume: 0.7,
             device_id: None,
+            device_name: None,
             exclusive_mode: false,
             eq_type: "IIR".to_string(),
             eq_enabled: false,
@@ -163,6 +167,9 @@ impl SettingsManager {
         if let Some(device_id) = update.device_id {
             self.settings.device_id = device_id;
         }
+        if let Some(device_name) = update.device_name {
+            self.settings.device_name = device_name;
+        }
         if let Some(exclusive_mode) = update.exclusive_mode {
             self.settings.exclusive_mode = exclusive_mode;
         }
@@ -250,6 +257,8 @@ impl SettingsManager {
 pub struct PersistentSettingsUpdate {
     pub volume: Option<f32>,
     pub device_id: Option<Option<usize>>,
+    #[serde(default)]
+    pub device_name: Option<Option<String>>,
     pub exclusive_mode: Option<bool>,
     pub eq_type: Option<String>,
     pub eq_enabled: Option<bool>,

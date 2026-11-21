@@ -324,11 +324,11 @@ async fn configure_output(
     data: web::Data<Arc<AppState>>,
     body: web::Json<ConfigureOutputRequest>,
 ) -> HttpResponse {
+    let names = AudioPlayer::output_device_names();
     let mut player = data.player.lock();
 
-    if let Err(e) = player.select_device(body.device_id) {
-        return HttpResponse::InternalServerError().json(ApiResponse::error(&e));
-    }
+    // Remember the device by name as well: its id is only a position in the list.
+    let device_name = player.select_device_by_list(body.device_id, &names);
 
     // The next stream open reports afresh what it had to fall back from.
     player.shared_state().output_fallback.store(0, std::sync::atomic::Ordering::Relaxed);
@@ -338,6 +338,17 @@ async fn configure_output(
             .shared_state()
             .exclusive_mode
             .store(exclusive, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    // Keep the choice across restarts (it used to reset to the default device in shared mode).
+    let update = crate::settings::PersistentSettingsUpdate {
+        device_id: Some(body.device_id),
+        device_name: Some(device_name),
+        exclusive_mode: Some(player.exclusive_mode),
+        ..Default::default()
+    };
+    if let Err(e) = data.settings_manager.lock().update(update) {
+        log::warn!("Could not save the output choice: {}", e);
     }
 
     HttpResponse::Ok().json(ApiResponse::success_with_state(

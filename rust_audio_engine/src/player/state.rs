@@ -313,6 +313,23 @@ pub fn output_fallback_names(bits: u8) -> Vec<&'static str> {
     names
 }
 
+/// Where the chosen output device is in the current list. A name, when known,
+/// wins over the saved position (positions shift as devices come and go).
+/// Returns the index to open and whether the chosen device was missing.
+pub fn resolve_output_device(names: &[String], wanted_name: Option<&str>, wanted_id: Option<usize>) -> (Option<usize>, bool) {
+    if let Some(name) = wanted_name {
+        return match names.iter().position(|n| n == name) {
+            Some(i) => (Some(i), false),
+            None => (None, true),
+        };
+    }
+    match wanted_id {
+        Some(id) if id < names.len() => (Some(id), false),
+        Some(_) => (None, true),
+        None => (None, false),
+    }
+}
+
 /// Shared state between audio thread and main thread
 pub struct SharedState {
     pub state: AtomicPlayerState,
@@ -337,6 +354,9 @@ pub struct SharedState {
     /// while the engine is actually playing shared / on the default device.
     pub output_fallback: AtomicU8,
     pub device_id: std::sync::atomic::AtomicI64,
+    /// Name of the chosen device; when set, the stream is opened on the device
+    /// with this name wherever it now sits in the list (`device_id` is updated).
+    pub device_name: RwLock<Option<String>>,
     pub volume: std::sync::atomic::AtomicU64,
     pub file_path: RwLock<Option<String>>,
     pub eq_type: RwLock<String>,
@@ -425,6 +445,7 @@ impl SharedState {
             exclusive_mode: AtomicBool::new(false),
             output_fallback: AtomicU8::new(0),
             device_id: std::sync::atomic::AtomicI64::new(-1),
+            device_name: RwLock::new(None),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
             file_path: RwLock::new(None),
             eq_type: RwLock::new("IIR".to_string()),
