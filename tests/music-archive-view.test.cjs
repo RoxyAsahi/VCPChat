@@ -1367,6 +1367,19 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     f.close();
 });
 
+test('音乐窗口最小宽度（420）走很窄的排版：导航不压标题，分组切换不压曲名', () => {
+    const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 420 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.ok(hud.classList.contains('tiny'));
+    f.close();
+    const g = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1024 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
+    assert.ok(!g.w.document.querySelector('.archive-hud').classList.contains('tiny'), '1024 宽照常');
+    g.close();
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive/archive.css'), 'utf8');
+    assert.match(css, /\.archive-hud\.tiny \.archive-nav \{[^}]*top:/);
+    assert.match(css, /\.archive-hud\.tiny \.archive-lanes > div \{ display: none; \}/);
+});
+
 test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检索、歌词这些入口不藏', () => {
     const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1280 }); Object.defineProperty(w, 'innerHeight', { value: 800 }); } });
     const hud = f.w.document.querySelector('.archive-hud');
