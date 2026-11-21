@@ -1421,7 +1421,12 @@
                 return;
             }
             if (state.lyricsSource !== app.currentLyrics) { renderBody(); return; }
-            const index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            let index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            // 暂停着打开（比如重开窗口停在 0:08）时歌词模块不更新当前行，这里按进度自己找一次，不然一行都不亮
+            if (index < 0 && !app.isPlaying && typeof app.lyricIndexAt === 'function' && currentTime() > 0) {
+                const at = app.lyricIndexAt(currentTime());
+                if (Number.isInteger(at)) index = at;
+            }
             if (!force && index === state.lyricIndex) return;
             box.querySelector('p.md-on')?.classList.remove('md-on');
             state.lyricIndex = index;
