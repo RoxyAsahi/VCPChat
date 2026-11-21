@@ -1524,3 +1524,25 @@ test('接着听：有上次没听完的歌时显示在「播放这一组」旁�
     assert.equal(f.text('resumeLabel'), '继续播放');
     f.close();
 });
+
+test('键盘：目录在 Tab 顺序里紧跟左上标题；检索框里 Tab 只在有字时换分类，到最后一类就放焦点出去', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    const brand = doc.querySelector('.archive-brand');
+    assert.ok(brand.nextElementSibling.classList.contains('archive-list'), '目录挪到标题后面');
+    const input = doc.querySelector('.archive-list-search input');
+    const tab = (shiftKey = false) => {
+        const e = new f.w.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+        input.dispatchEvent(e);
+        return e.defaultPrevented;
+    };
+    assert.equal(tab(), false, '空框里 Tab 是普通的下一个控件');
+    assert.equal(f.view.list.kind, 'all');
+    input.value = 'Song';
+    input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
+    assert.equal(tab(true), false, '第一类再 Shift+Tab 就出去，不绕到最后一类');
+    for (const k of ['artist', 'album', 'playlist', 'recent']) { assert.equal(tab(), true); assert.equal(f.view.list.kind, k); }
+    assert.equal(tab(), false, '最后一类再 Tab 就出去，不绕回第一类');
+    assert.equal(f.view.list.kind, 'recent');
+    f.close();
+});

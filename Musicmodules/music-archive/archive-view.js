@@ -1832,6 +1832,11 @@
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
+            // 目录是后加进来的，放在 HUD 最后，Tab 要走完右边所有按钮才到它。挪到左上标题后面，
+            // Tab 顺序就跟看到的一样：标题、播放这一组、目录（搜索框、分类、曲目），再到右边
+            const listEl = refs.hud.querySelector(':scope > .archive-list');
+            const brandEl = refs.hud.querySelector(':scope > .archive-brand');
+            if (listEl && brandEl) brandEl.after(listEl);
         }
         // 右侧滚动歌词（播放器取到歌词时显示；窄窗口、经典视图、播放页里不显示）
         const LyricsLib = global.MusicArchiveLyrics;

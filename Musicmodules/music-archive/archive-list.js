@@ -826,11 +826,17 @@
                     } else openMenuForRow(state.selectedRow);
                     break;
                 }
-                case 'Tab':
-                    if (!inInput) return;
+                case 'Tab': {
+                    // 检索框里有字时 Tab 换分类（在别的分类里看同一个检索词）；到了最后一类（Shift+Tab 到了第一类）
+                    // 就不再绕回去，焦点照常离开检索框，键盘用户不会被困住。框里没字时 Tab 就是普通的下一个控件
+                    if (!inInput || !r.input.value) return;
+                    const at = KINDS.findIndex(([k]) => k === state.kind);
+                    const next = at + (e.shiftKey ? -1 : 1);
+                    if (next < 0 || next >= KINDS.length) return;
                     e.preventDefault();
-                    setKind(KINDS[(KINDS.findIndex(([k]) => k === state.kind) + (e.shiftKey ? KINDS.length - 1 : 1)) % KINDS.length][0]);
+                    setKind(KINDS[next][0]);
                     break;
+                }
                 default: return;
             }
             e.stopPropagation();

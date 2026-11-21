@@ -703,3 +703,6 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 #music-archive-view.is-detail .archive-brand-resume, #music-archive-view.is-empty .archive-brand-resume, #music-archive-view.is-loading .archive-brand-resume { visibility: hidden; }
 /* 空曲库：没有可搜的东西，目录的搜索框和分类标签也收起来，只留空状态说明 */
 #music-archive-view.is-empty .archive-list-search, #music-archive-view.is-empty .archive-list-kinds, #music-archive-view.is-empty .archive-list-viewport { visibility: hidden; }
+/* 目录在 DOM 里挪到了标题后面（Tab 顺序），靠层级继续盖在底部那些层上面；检索框得到焦点时下划线换成强调色 */
+.archive-list { z-index: 2; }
+.archive-list-search:focus-within { border-bottom-color: var(--ar-accent); }
