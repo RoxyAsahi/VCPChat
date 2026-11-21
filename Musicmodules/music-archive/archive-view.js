@@ -1342,7 +1342,7 @@
             updatePlaying(true);
         };
 
-        const NARROW_W = 1300, MID_W = 1720;
+        const TINY_W = 760, NARROW_W = 1300, MID_W = 1720;
         const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
         const resize = () => {
             const w = root.clientWidth || global.innerWidth;
@@ -1356,6 +1356,8 @@
             // 窄：只留阵列和说明块；中等（笔记本常见的 1280×800 就在这档）：目录照常开着，说明块挪到目录右边
             refs.hud.classList.toggle('narrow', w / sc < NARROW_W);
             refs.hud.classList.toggle('mid', w / sc >= NARROW_W && w / sc < MID_W);
+            // 很窄（音乐窗口最小 420 宽时就在这档）：右上的导航挤到标题上、分组切换压在曲名上，改成另一种摆法。
+            refs.hud.classList.toggle('tiny', w / sc < TINY_W);
             if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
@@ -1660,9 +1662,10 @@
                     case 'left': stepLane(-1); break;
                     case 'right': stepLane(1); break;
                     case 'search': openSearch(); break;
-                    case 'list': closeDetail(); setListOpen(!listOpen()); break;
+                    // 取出看详情时目录和歌词都藏着：这时按它们是想回去看，不是想关掉
+                    case 'list': if (detailOpen) { closeDetail(); setListOpen(true); } else setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
-                    case 'lyrics': wantLyrics(!state.lyricsOn); break;
+                    case 'lyrics': if (detailOpen) { closeDetail(); if (!state.lyricsOn) wantLyrics(true); } else wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;

@@ -1497,7 +1497,8 @@ body.music-reduce-motion .md-mist { transition: none; }
 }
 @media (max-width: 639.98px) {
   .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
-  .md-pnl .md-dockrow { padding-right: 0; }
+  /* 窄窗口下小环还悬在页签这一行的右端：给它让出位置，「声音」页签不再被盖住 */
+  .md-pnl .md-dockrow { padding-right: 56px; }
   .md-drbg {
     -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
     mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
@@ -1725,3 +1726,5 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
   visibility: hidden;
   pointer-events: none;
 }
+/* 空闲预热那一下（music-dock.js warmFx）：照常算样式和排版，但仍不占地方、看不见 */
+#music-dock-root .md-fx-sc.md-fx-park.md-fx-warm { content-visibility: visible; }

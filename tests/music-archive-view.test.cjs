@@ -1369,6 +1369,19 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     f.close();
 });
 
+test('音乐窗口最小宽度（420）走很窄的排版：导航不压标题，分组切换不压曲名', () => {
+    const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 420 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
+    const hud = f.w.document.querySelector('.archive-hud');
+    assert.ok(hud.classList.contains('tiny'));
+    f.close();
+    const g = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1024 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
+    assert.ok(!g.w.document.querySelector('.archive-hud').classList.contains('tiny'), '1024 宽照常');
+    g.close();
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive/archive.css'), 'utf8');
+    assert.match(css, /\.archive-hud\.tiny \.archive-nav \{[^}]*top:/);
+    assert.match(css, /\.archive-hud\.tiny \.archive-lanes > div \{ display: none; \}/);
+});
+
 test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检索、歌词这些入口不藏', () => {
     const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1280 }); Object.defineProperty(w, 'innerHeight', { value: 800 }); } });
     const hud = f.w.document.querySelector('.archive-hud');
@@ -1443,6 +1456,21 @@ test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡�
     f.view.openDetail();
     f.key('ArrowRight');
     assert.equal(f.view.detailOpen, false, '换分组时把卡放回');
+    f.close();
+});
+
+test('取出详情时按顶栏「目录」：放回卡片并打开目录，不会把目录关掉', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    const btn = doc.querySelector('.archive-nav [data-act="list"]');
+    if (btn.getAttribute('aria-pressed') !== 'true') btn.click();
+    assert.equal(btn.getAttribute('aria-pressed'), 'true');
+    f.view.openDetail();
+    btn.click();
+    assert.equal(f.view.detailOpen, false);
+    assert.equal(btn.getAttribute('aria-pressed'), 'true', '目录还开着');
+    btn.click();
+    assert.equal(btn.getAttribute('aria-pressed'), 'false', '不在详情里时照常开关');
     f.close();
 });
 
@@ -1591,6 +1619,7 @@ test('目录换分类：阵列和左上标题跟过去；检索第一条结果�
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
     assert.ok(hud.classList.contains('no-match'));
     assert.equal(f.text('ctxSub'), '没有结果');
+    assert.ok(f.view.list.el.querySelector('.archive-list-foot').classList.contains('zero'));
     f.close();
 });
 

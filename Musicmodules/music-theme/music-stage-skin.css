@@ -773,3 +773,10 @@ body.music-stage-active #custom-title-bar button {
     color: var(--md-t1);
     background: var(--md-fill);
 }
+
+/* 舞台左上的曲目卡：「TRACK DATABASE / FILE NUMBER: TRK-xxxx」是样板里的装饰英文，编号也是随便算出来的，
+   对听歌的人没有意义；卡片直接从歌名开始。 */
+.music-stage-track-kicker { display: none; }
+/* 专辑本来想接在歌手后面同一行，可歌手是块级，专辑总是掉到下一行，行首还挂着一个「 · 」；索性各占一行，去掉点 */
+.music-stage-track-album { display: block; }
+.music-stage-track-album::before { content: none; }

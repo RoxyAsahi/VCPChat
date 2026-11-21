@@ -90,12 +90,15 @@ function setupLyrics(app) {
 
             // 自动下载与手动搜索严格复用同一条候选搜索、解析和写盘链路。
             // 这避免单体 fetchMusicLyrics 接口与手动候选接口出现 provider 行为差异。
-            app.lyricsList.innerHTML = '<li class="no-lyrics">正在跨平台审计高精度歌词...</li>';
+            app.lyricsList.innerHTML = '<li class="no-lyrics">正在找歌词…</li>';
             // 连续切歌时路过的歌不联网：停留片刻仍是这首才开始搜索。
             await new Promise(resolve => setTimeout(resolve, LYRIC_SEARCH_SETTLE_MS));
             if (requestToken !== app.lyricsRequestToken) return;
             try {
                 let fetched = null;
+                // 搜索或下载本身失败（多半是断网）不算「这首没有歌词」：不记进短期不再搜的名单，
+                // 网络好了再放这首就会重新找。
+                let failed = false;
                 if (app.api.searchMusicLyricsCandidates && app.api.applyMusicLyricsCandidate) {
                     const searchResult = await app.api.searchMusicLyricsCandidates({
                         artist,
@@ -104,6 +107,7 @@ function setupLyrics(app) {
                         album
                     });
                     if (requestToken !== app.lyricsRequestToken) return;
+                    if (searchResult?.success === false) failed = true;
 
                     const durationDifference = candidate => duration > 0 && candidate.durationMs > 0
                         ? Math.abs(candidate.durationMs - duration * 1000) : Infinity;
@@ -122,6 +126,7 @@ function setupLyrics(app) {
                             title: normalizedTitle
                         });
                         if (requestToken !== app.lyricsRequestToken) return;
+                        if (!applyResult?.success) failed = true;
                         if (applyResult?.success && applyResult.lyrics) {
                             fetched = applyResult.lyrics;
                             console.log(
@@ -153,6 +158,8 @@ function setupLyrics(app) {
                         app.currentLyrics = app.parseLrc(fetched);
                     }
                     app.renderLyrics();
+                } else if (failed) {
+                    app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败，检查网络后重新播放这首</li>';
                 } else {
                     lyricSearchMisses.set(missKey, Date.now() + LYRIC_MISS_TTL_MS);
                     app.lyricsList.innerHTML = '<li class="no-lyrics">暂无歌词</li>';
@@ -691,7 +698,7 @@ function setupLyrics(app) {
         app.targetScrollY = 0;
         app.lyricUserScrolling = false;
         if (app.lyricUserScrollTimer) clearTimeout(app.lyricUserScrollTimer);
-        app.lyricsList.innerHTML = '<li class="no-lyrics">加载歌词中...</li>';
+        app.lyricsList.innerHTML = '<li class="no-lyrics">正在加载歌词…</li>';
         app.lyricsList.style.transform = 'translate3d(0, 0px, 0)';
     };
 }
