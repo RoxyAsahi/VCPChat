@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_AAC, CODEC_TYPE_NULL};
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{MetadataOptions, StandardTagKey, Value};
@@ -612,8 +612,24 @@ impl StreamingDecoder {
 
         // Read encoder delay and end padding for gapless playback
         // These are set by encoders like MP3, AAC, Opus to ensure sample-accurate decoding
-        let encoder_delay = codec_params.delay.unwrap_or(0);
-        let end_padding = codec_params.padding.unwrap_or(0);
+        let mut encoder_delay = codec_params.delay.unwrap_or(0);
+        let mut end_padding = codec_params.padding.unwrap_or(0);
+        let mut duration_secs = duration_secs;
+
+        // AAC in MP4/M4A: the demuxer leaves the priming in (edit list / iTunSMPB are not applied),
+        // so every track of a gapless album would start with ~23-48 ms of encoder warm-up.
+        if !is_url && encoder_delay == 0 && end_padding == 0 && codec_params.codec == CODEC_TYPE_AAC {
+            if let Some(g) = crate::mp4_gapless::read_file(path.as_ref(), sample_rate) {
+                encoder_delay = g.delay.min(u32::MAX as u64) as u32;
+                if let (Some(total), Some(valid)) = (total_frames, g.valid_frames) {
+                    let after = total.saturating_sub(g.delay);
+                    // Within rounding of the edit list the sample table is the better length.
+                    let keep = if after.abs_diff(valid) <= g.tolerance { after } else { valid.min(after) };
+                    end_padding = total.saturating_sub(g.delay).saturating_sub(keep).min(u32::MAX as u64) as u32;
+                    duration_secs = Some(keep as f64 / sample_rate as f64);
+                }
+            }
+        }
 
         if encoder_delay > 0 || end_padding > 0 {
             log::debug!(

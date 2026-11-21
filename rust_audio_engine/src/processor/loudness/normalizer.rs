@@ -210,6 +210,27 @@ impl LoudnessNormalizer {
         }
     }
 
+    /// Gain that brings a track measured at `integrated_lufs` to the target.
+    /// Non-finite measurements (silence, very short tracks) give 0 dB.
+    pub fn gain_for_integrated_loudness(&self, integrated_lufs: f64) -> f64 {
+        if integrated_lufs.is_finite() {
+            self.config.target_lufs - integrated_lufs
+        } else {
+            0.0
+        }
+    }
+
+    /// True when `mode` can take the gain from the track's ReplayGain tags.
+    pub fn has_tag_gain(mode: NormalizationMode, metadata: &crate::decoder::TrackMetadata) -> bool {
+        match mode {
+            NormalizationMode::ReplayGainTrack => metadata.rg_track_gain.is_some(),
+            NormalizationMode::ReplayGainAlbum => {
+                metadata.rg_album_gain.is_some() || metadata.rg_track_gain.is_some()
+            }
+            _ => false,
+        }
+    }
+
     /// Calculate gain for gapless preload with mode awareness (Bug-4 fix)
     ///
     /// For ReplayGain modes, reads gain from metadata tags instead of EBU R128 analysis.
