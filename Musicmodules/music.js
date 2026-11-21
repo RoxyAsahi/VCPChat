@@ -535,6 +535,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const setupEventListeners = () => {
+        // 从资源管理器拖进来的文件：拦下默认动作，不然 Chromium 会跳去打开那个文件，整个播放器被换掉。
+        // 窗口里自己的拖拽（行拖到底栏入队）不带 Files，不受影响。
+        const isFileDrag = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+        document.addEventListener('dragover', (event) => {
+            if (!isFileDrag(event)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'none';
+        });
+        document.addEventListener('drop', (event) => { if (isFileDrag(event)) event.preventDefault(); });
+
         const formatCandidateDuration = (durationMs) => {
             const seconds = Math.max(0, Math.round((durationMs || 0) / 1000));
             return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
