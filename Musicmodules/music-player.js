@@ -466,6 +466,8 @@ function setupPlayer(app) {
     };
 
     app.seekTo = async (seconds) => {
+        // 时长还不知道（0）或进度条量不到宽度时会算出 NaN；引擎把 NaN 当 0，歌会跳回开头。
+        if (!Number.isFinite(seconds) || seconds < 0) return { status: 'error', message: 'invalid seek position' };
         const epoch = ++app.controlEpoch;
         app.lastKnownCurrentTime = seconds;
         app.lastStateUpdateTime = Date.now();

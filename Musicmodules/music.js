@@ -800,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const offsetX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
             const width = rect.width;
 
-            if (app.lastKnownDuration > 0) {
+            if (app.lastKnownDuration > 0 && width > 0) {
                 const newTime = (offsetX / width) * app.lastKnownDuration;
                 // Update UI immediately
                 app.progress.style.width = `${(newTime / app.lastKnownDuration) * 100}%`;

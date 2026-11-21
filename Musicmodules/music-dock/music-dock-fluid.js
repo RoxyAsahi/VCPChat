@@ -316,7 +316,7 @@
             if (growText !== lastGrow) { lastGrow = growText; host.style.setProperty('--md-vgrow', growText); }
             if (s.split.p < 1) {
                 const e = s.split.p;
-                setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
+                setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', Math.max(0, (geo.h / 2 - 4) * (1 - e)));
                 setAttr(vapSplit, 'x', geo.x + geo.w - geo.h); setAttr(vapSplit, 'y', geo.y - 12); setAttr(vapSplit, 'height', geo.h + 24); setAttr(vapSplit, 'width', geo.h + 200); setAttr(vapSplit, 'rx', geo.h / 2);
             } else { setAttr(splitC, 'r', 0); setAttr(vapSplit, 'width', 0); }
             // 快捷操作胶囊：从播放条顶边升起，和条之间拉出一道细颈。
@@ -341,7 +341,7 @@
             // 凹口跟着小环：环藏起来时凹口愈合；环落在条上方很远时也不开口。
             const touch = Math.max(0, Math.min(1, 1 - (geo.y - 2 - ry - 20) / 40));
             setHole(rx, ry, near ? HOLE_R * sh * touch * (0.45 + 0.55 * sz) : 0);
-            setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 * sh : 0);
+            setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? Math.max(0, 95 * sh) : 0); // 弹簧回弹会短暂小于 0，负半径是无效属性
             if (ring) {
                 const vh = win.innerHeight || 0;
                 const layerTop = vh - geo.bottom - LAYER_H;
