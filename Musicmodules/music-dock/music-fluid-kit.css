@@ -278,3 +278,33 @@ body.music-fl-low .mtst { backdrop-filter: none; -webkit-backdrop-filter: none; 
 #music-dock-root .md-sld:focus-visible:not(#messageInput) { outline: none; }
 #music-dock-root .md-sld:focus-visible .md-sld-kn { box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 0 0 3px var(--mf-ink); }
 body.music-reduce-motion #music-dock-root :is(.md-sld-tr, .md-sld-kn) { transition: none; }
+
+/* ───────── 底栏的心形：点亮时像一滴液体鼓起来 ─────────
+ * 没喜欢时是一道线框；喜欢了就填满强调色。点亮那一下先压扁再鼓过头、回弹，外面荡开一圈淡淡的光。 */
+#music-dock-root .md-like { position: relative; }
+#music-dock-root .md-like svg { transition: color .2s ease; }
+#music-dock-root .md-like.md-liked { opacity: 1; color: var(--mf-tint); }
+#music-dock-root .md-like.md-liked svg path { fill: currentColor; }
+#music-dock-root .md-like:disabled { opacity: .3; pointer-events: none; }
+#music-dock-root .md-like.md-like-pop svg { animation: mf-like-pop .52s cubic-bezier(.34, 1.4, .5, 1); }
+#music-dock-root .md-like.md-like-pop::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mf-tint) 60%, transparent);
+  animation: mf-like-ring .52s ease-out forwards;
+}
+@keyframes mf-like-pop {
+  0% { transform: scale(1); }
+  22% { transform: scale(.72, .66); }
+  60% { transform: scale(1.22, 1.16); }
+  100% { transform: scale(1); }
+}
+@keyframes mf-like-ring {
+  0% { opacity: .9; transform: scale(.6); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+body.music-reduce-motion #music-dock-root .md-like.md-like-pop svg,
+body.music-reduce-motion #music-dock-root .md-like.md-like-pop::after { animation: none; }

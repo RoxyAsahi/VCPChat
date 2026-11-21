@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const ROOT = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-function setup() {
+function setup(patch) {
     const dom = new JSDOM(`<!doctype html><body>
         <div class="main-content"><div class="settings-container" id="dsp"></div></div>
         <div class="track-title">未选择歌曲</div><div class="track-artist"></div><div class="album-art"></div>
@@ -61,6 +61,7 @@ function setup() {
         stageHost: { toggle() { calls.push('stage'); }, enter() { calls.push('enter'); }, modeId: 'luminous', setMode(id) { calls.push(['mode', id]); } }
     };
     app.volumeSlider.addEventListener('input', () => calls.push(['volume', app.volumeSlider.value]));
+    if (patch) patch(app, window);
     const dock = window.initMusicDock(app);
     return { dom, window, doc, app, dock, calls };
 }
@@ -801,7 +802,8 @@ test('the bar keeps one "more" button on the right; the quick row above it holds
         const bar = doc.querySelector('.md-cap');
         const more = doc.querySelector('[data-md="more"]');
         const quick = doc.querySelector('.md-quick');
-        assert.deepEqual([...bar.querySelectorAll('.md-slots button')].map((b) => b.dataset.md), ['more'], 'no duplicate buttons left on the bar');
+        // 喜欢的接口不在时心形不出现；底栏上就只剩「更多」
+        assert.deepEqual([...bar.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['more'], 'no duplicate buttons left on the bar');
         assert.deepEqual([...quick.querySelectorAll('button')].map((b) => b.dataset.md || b.dataset.q), ['mode', 'queue', 'stage', 'fx', 'vol']);
         assert.equal(more.getAttribute('aria-expanded'), 'false');
 
@@ -830,6 +832,42 @@ test('the bar keeps one "more" button on the right; the quick row above it holds
         assert.ok(doc.querySelector('.md-pnl').classList.contains('md-open'));
     } finally {
         dock.destroy();
+        window.close();
+    }
+});
+
+test('the heart on the bar follows the like API: click toggles, outside changes resync, only lighting up swells', () => {
+    const liked = new Set();
+    const { window, doc, app, dock } = setup((a, w) => {
+        a.isLiked = (t) => Boolean(t && liked.has(t.path));
+        a.toggleLike = (t) => {
+            const on = !liked.has(t.path);
+            if (on) liked.add(t.path); else liked.delete(t.path);
+            w.document.dispatchEvent(new w.CustomEvent('music-like-change', { detail: { tracks: [t], liked: on } }));
+        };
+    });
+    try {
+        const heart = doc.querySelector('[data-md="like"]');
+        assert.equal(heart.hidden, false);
+        assert.deepEqual([...doc.querySelectorAll('.md-slots button')].map((b) => b.dataset.md), ['like', 'more']);
+        assert.equal(heart.getAttribute('aria-pressed'), 'false');
+        heart.click();
+        assert.ok(liked.has('C:/a.flac'));
+        assert.equal(heart.getAttribute('aria-pressed'), 'true');
+        assert.equal(heart.getAttribute('aria-label'), '取消喜欢');
+        assert.ok(heart.classList.contains('md-like-pop'), 'lighting up plays the swell');
+        // 别处（档案菜单）取消了喜欢，心形跟着变
+        liked.delete('C:/a.flac');
+        doc.dispatchEvent(new window.CustomEvent('music-like-change', { detail: { tracks: [app.playlist[0]], liked: false } }));
+        assert.equal(heart.getAttribute('aria-pressed'), 'false');
+        // 取消喜欢不播放鼓起的动作
+        heart.classList.remove('md-like-pop');
+        liked.add('C:/a.flac');
+        heart.click();
+        assert.equal(heart.getAttribute('aria-pressed'), 'false');
+        assert.ok(!heart.classList.contains('md-like-pop'));
+    } finally {
+        dock?.destroy?.();
         window.close();
     }
 });
