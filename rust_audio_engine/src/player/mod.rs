@@ -535,6 +535,7 @@ impl AudioPlayer {
         let mut announced = false;
         let started = std::time::Instant::now();
 
+        let mut decode_failed = false;
         let outcome = pump.run(
             &mut writer,
             || !is_current(),
@@ -573,12 +574,13 @@ impl AudioPlayer {
             Err(e) => {
                 // Already playing: keep what was decoded and end the track there.
                 log::error!("Decode error after playback started ({}): {}", path, e);
+                decode_failed = true;
             }
             Ok(PumpOutcome::Finished) => {}
         }
 
         let integrated_lufs = pump.integrated_loudness();
-        if let Some(lufs) = integrated_lufs {
+        if let Some(lufs) = integrated_lufs.filter(|_| !decode_failed) {
             store_loudness(loudness_cache, path, lufs);
         }
         let total_frames = writer.finish();
@@ -608,7 +610,10 @@ impl AudioPlayer {
             shared_state.raise_events(EVENT_DECODE_COMPLETE);
         }
 
-        if let Some(ref cp) = cache_path {
+        // A track cut short by a read error is not cached: the cache would replay the cut
+        // version every time, even once the file or the network is fine again. Its partial
+        // loudness is not remembered either.
+        if let Some(ref cp) = cache_path.as_ref().filter(|_| !decode_failed) {
             if let Err(e) = save_cache_with_header(cp, &buffer, final_target_sr, channels as u32) {
                 log::warn!("Failed to save cache: {}", e);
             }
@@ -1286,5 +1291,34 @@ mod loudness_cache_tests {
             assert!(load_in_mode(&path, &db, mode).is_some(), "{mode:?} left the gain unset");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_song_cut_short_by_a_read_error_is_not_cached() {
+        // 3 s of 44.1 kHz WAV over HTTP; every chunk after the second fails for good, so the
+        // decode stops after playback has started.
+        let dir = std::env::temp_dir().join(format!("vcp-cut-cache-{}", std::process::id()));
+        let cache_dir = dir.join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let wav = dir.join("song.wav");
+        write_wav(&wav, 3.0);
+        let (url, _) = crate::decoder::range_retry_tests::serve(std::fs::read(&wav).unwrap(), |n| if n < 2 { 0 } else { 1 });
+
+        let shared = Arc::new(SharedState::new());
+        let generation = shared.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let (tx, rx) = unbounded::<AudioCommand>();
+        let loudness = Arc::new(crate::processor::AtomicLoudnessState::new(200.0, 44_100).unwrap());
+        let config = AppConfig {
+            target_samplerate: Some(48_000),
+            use_cache: true,
+            cache_dir: Some(cache_dir.clone()),
+            ..AppConfig::default()
+        };
+        AudioPlayer::stream_load(&url, None, &config, None, &shared, &tx, &loudness, generation, None);
+        drop(tx);
+        assert!(rx.iter().any(|c| matches!(c, AudioCommand::LoadComplete { .. })), "playback started");
+        let cached = std::fs::read_dir(&cache_dir).map(|d| d.count()).unwrap_or(0);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(cached, 0, "the cut-short decode was saved to the resample cache");
     }
 }
