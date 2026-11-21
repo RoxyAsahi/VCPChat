@@ -49,7 +49,7 @@
         <div class="archive-list-thumb" data-l="thumb" aria-hidden="true" hidden></div>
         <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
-            <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
+            <b data-l="pos">000</b><i data-l="sep">/</i><span data-l="tot">首</span><em data-l="multiNote" hidden></em><button type="button" class="archive-list-smart" data-l="saveSmart" hidden title="把这条检索存成歌单：以后曲库、听歌记录变了，歌单自己跟着变">存为智能歌单</button>
         </div>`;
 
     /*
@@ -276,7 +276,7 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
-            if (!out.count) { r.pos.textContent = '---'; r.tot.textContent = pad(0, 3); }   // 没有结果时 render 不会走到计数那里，别留着上一次的数
+            if (!out.count) setFoot(0, 0);   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();
             // 有检索词、有结果时给「存为智能歌单」（多选时让给多选说明）
@@ -378,7 +378,7 @@
                 }
                 const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
                 const len = groupLength(k);
-                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${pad(row.n)}${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
+                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${row.n} 首${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
                     + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
             }
             const t = tracks()[row.i] || {};
@@ -543,10 +543,17 @@
             const sel = state.selectedRow;
             let nth = 0;
             if (sel >= 0) for (let k = 0; k <= sel; k++) if (state.rows[k].type === 'track') nth++;
-            r.pos.textContent = sel >= 0 ? pad(nth, 3) : '---';
-            r.tot.textContent = pad(state.count, 3);
+            setFoot(sel >= 0 ? nth : 0, state.count);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
+        // 底部计数：选中了一首是「012 / 120」；没选中时不放「--- / 120」这种占位，直接说「120 首」
+        function setFoot(nth, count) {
+            const idle = !(nth > 0);
+            r.pos.textContent = pad(idle ? count : nth, 3);
+            r.sep.hidden = idle;
+            r.tot.textContent = idle ? '首' : pad(count, 3);
+            r.pos.parentElement.classList.toggle('idle', idle);
+        }
 
         /* 右边的细滚动条：看得出目录有多长、现在在哪，也可以直接拖 */
         const THUMB_PAD = [56, 30]; // 目录上下两头是渐隐的，滚动条不伸进去

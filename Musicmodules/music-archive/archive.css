@@ -468,6 +468,8 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-foot { display: flex; align-items: baseline; gap: 16px; margin-left: var(--gutter); padding-top: 12px; }
 .archive-list-foot b { font-size: 44px; line-height: 1; font-weight: 400; font-variant-numeric: tabular-nums; }
 .archive-list-foot i { font-style: normal; font-weight: 300; font-size: 26px; color: var(--ar-slash, var(--ar-muted)); }
+.archive-list-foot i[hidden] { display: none; }
+.archive-list-foot.idle span { font-size: 15px; letter-spacing: 1px; color: var(--ar-muted); }
 .archive-list-foot span { font-size: 18px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
 /* 窄窗口：目录盖在阵列上，柔光更实一些 */
