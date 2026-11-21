@@ -118,7 +118,7 @@
             count += 1;
             recent.unshift(entry.id);
             recent.splice(2);
-            cue.textContent = `STAR BORN · ${String(count).padStart(2, '0')} / ${entry.label}`;
+            cue.textContent = `星诞 · ${String(count).padStart(2, '0')} / ${entry.label}`;
             mode.root.dataset.directedMode = entry.id;
             mode.root.dataset.transitionCount = String(count);
             lastTransition = frame.playbackTime;
