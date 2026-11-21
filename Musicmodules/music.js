@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAY_MODES = Object.freeze(['repeat', 'repeat-one', 'shuffle']);
     const storedPlayMode = localStorage.getItem(PLAY_MODE_STORAGE_KEY);
     const initialPlayModeIndex = Math.max(0, PLAY_MODES.indexOf(storedPlayMode));
+    const LOUDNESS_MODE_ALIASES = Object.freeze({ album: 'replaygain_album', streaming: 'track' });
+    const normalizeLoudnessMode = (mode) => LOUDNESS_MODE_ALIASES[mode] || mode || 'track';
 
     const app = {
         // --- DOM Elements ---
@@ -846,10 +848,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         app.firTapsSelect.onchange = () => app.sendEqSettings();
         app.eqPresetSelect.onchange = (e) => app.applyEqPreset(e.target.value);
-        app.ditherSwitch.onchange = () => app.updateOptimizations();
+        app.ditherSwitch.onchange = () => { app.syncDitherSection(); app.updateOptimizations(); };
         app.replaygainSwitch.onchange = () => {
             if (app.replaygainSwitch._programmaticUpdate) return;
             app.loudnessModeSelect.value = app.replaygainSwitch.checked ? 'replaygain_track' : 'track';
+            // 只换模式不开归一化，开关亮了却什么都不变。
+            if (app.replaygainSwitch.checked) app.loudnessSwitch.checked = true;
             app.updateLoudnessSettings();
         };
         app.upsamplingSelect.onchange = () => app.configureUpsampling();
@@ -1435,6 +1439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app._syncedFirTaps = parseInt(app.firTapsSelect.value, 10) || 1023;
         if (s.dither_enabled !== undefined) {
             app.ditherSwitch._programmaticUpdate = true; app.ditherSwitch.checked = s.dither_enabled;
+            app.syncDitherSection();
             Promise.resolve().then(() => app.ditherSwitch._programmaticUpdate = false);
         }
         if (s.output_bits !== undefined) {
@@ -1470,8 +1475,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (s.loudness_enabled !== undefined) {
             app.loudnessEnabled = s.loudness_enabled;
             app.loudnessSwitch.checked = s.loudness_enabled;
-            app.loudnessMode = s.loudness_mode;
-            app.loudnessModeSelect.value = s.loudness_mode;
+            // 「专辑」和「流媒体」两档已并掉：引擎里专辑就是按专辑标签，流媒体和单曲实测一样。
+            app.loudnessMode = normalizeLoudnessMode(s.loudness_mode);
+            app.loudnessModeSelect.value = app.loudnessMode;
             app.targetLufs = s.target_lufs;
             app.loudnessLufsSlider.value = s.target_lufs;
             app.loudnessPreampDb = s.preamp_db;

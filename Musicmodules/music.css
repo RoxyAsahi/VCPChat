@@ -2984,3 +2984,8 @@ body.light-theme .dialog-btn.cancel {
     color: var(--music-text-secondary);
     word-break: break-word;
 }
+
+/* 抖动处理关掉时，噪声整形的位深和曲线不起作用 */
+#noise-shaper-section.is-inactive > .block-content {
+    opacity: 0.45;
+}
