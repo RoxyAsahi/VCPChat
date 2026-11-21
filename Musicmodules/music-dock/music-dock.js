@@ -434,6 +434,7 @@
             const edge = a + fraction * (b - a);
             for (const trk of el.tracks) {
                 trk.firstElementChild.style.transform = `scaleX(${edge.toFixed(5)})`;
+                trk.style.setProperty('--md-edge', edge.toFixed(5));
                 trk.querySelector('.md-kn-rail').style.transform = `translateX(${(edge * 100).toFixed(3)}%)`;
                 trk.setAttribute('aria-valuenow', String(Math.round(t)));
             }
