@@ -524,7 +524,68 @@
         attach();
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); watchDetail(); };
+    /* 首页目录开合（.archive-hud.list-open）：布局由档案页一次切到终态，这里用 FLIP 把这一下变成连续的移动——
+     * 按下的那一刻先记住各块的位置和大小，类名换完以后量一次新位置，再用 transform 从旧位置补间回来。
+     * 每帧只动 transform 和 opacity，不碰排版；整个过程只排版两次（按下前、换完后）。
+     * 新出现的块（目录本身）从左边淡入滑进来；消失的块不做（已经 display:none）。 */
+    const HUD_FLIP = ['.archive-brand', '.archive-counter', '.archive-callout', '.archive-nav', '.archive-bottom', '.archive-list'];
+    const watchHud = () => {
+        const doc = global.document;
+        if (typeof global.MutationObserver !== 'function') return;
+        let tries = 0;
+        const attach = () => {
+            const hud = doc.querySelector('#music-archive-view .archive-hud');
+            if (!hud) { if (++tries < 60) global.setTimeout(attach, 500); return; }
+            let open = hud.classList.contains('list-open');
+            let before = null;
+            const measure = () => {
+                const out = new Map();
+                for (const sel of HUD_FLIP) {
+                    const el = hud.querySelector(sel);
+                    if (!el) continue;
+                    const r = el.getBoundingClientRect();
+                    out.set(sel, r.width || r.height ? { el, x: r.left, y: r.top, w: r.width, h: r.height } : null);
+                }
+                return out;
+            };
+            // 开合都是由一次按键或点击触发的：在它的处理函数之前（捕获阶段）先记下旧位置
+            const remember = () => { if (enabled()) before = { at: Date.now(), map: measure() }; };
+            doc.addEventListener('pointerdown', remember, true);
+            doc.addEventListener('keydown', remember, true);
+            new global.MutationObserver(() => {
+                const now = hud.classList.contains('list-open');
+                if (now === open) return;
+                open = now;
+                const first = before && Date.now() - before.at < 1500 ? before.map : null;
+                before = null;
+                if (!first || !enabled()) return;
+                const last = measure();
+                const ease = 'cubic-bezier(.32, .72, 0, 1)';
+                for (const [sel, to] of last) {
+                    if (!to) continue;
+                    const from = first.get(sel);
+                    if (!from) {
+                        // 新出现的：从左边一点点淡入
+                        to.el.animate([{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: ease });
+                        continue;
+                    }
+                    const dx = from.x - to.x, dy = from.y - to.y;
+                    const sx = to.w ? from.w / to.w : 1, sy = to.h ? from.h / to.h : 1;
+                    const scaled = Math.abs(sx - 1) > 0.02 || Math.abs(sy - 1) > 0.02;
+                    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && !scaled) continue;
+                    // 文字块按宽度等比缩放（字号变了）；面板只平移，不拉伸里面的字
+                    const k = sel === '.archive-list' ? 1 : (scaled ? sx : 1);
+                    to.el.animate([
+                        { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${k})` },
+                        { transformOrigin: '0 0', transform: 'none' }
+                    ], { duration: 520, easing: ease });
+                }
+            }).observe(hud, { attributes: true, attributeFilter: ['class'] });
+        };
+        attach();
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); watchDetail(); watchHud(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 
