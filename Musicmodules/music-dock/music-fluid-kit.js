@@ -201,5 +201,8 @@
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', watchDialogs, { once: true });
     else watchDialogs();
 
-    global.MusicFluid = Object.freeze({ bud, slide, cancel, enabled });
+    // 最近 1.5 秒内按下指针的那一点；键盘打开的东西拿不到时返回 null，由调用方决定从哪里长
+    const recentPress = () => (lastPress && Date.now() - lastPress.at < 1500 ? { x: lastPress.x, y: lastPress.y } : null);
+
+    global.MusicFluid = Object.freeze({ bud, slide, cancel, enabled, recentPress });
 })(typeof window !== 'undefined' ? window : globalThis);
