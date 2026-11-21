@@ -4258,7 +4258,7 @@
         let lastTime = null;
         let paletteKey = '';
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity;
         // Something other than the clock changed since the last drawn frame.
         let dirty = true;
         let canvasSmoothing = null;
@@ -4494,6 +4494,15 @@
             // The host went back to the song on screen (skipped back): just carry on.
             if (leaving && frame?.lines === source
                 && (frame.track?.path || frame.track?.title || 'tunnel-track') === identity) leaving = null;
+            // A jump within the song dissolves from where the flight was instead of cutting.
+            const at = finiteNumber(frame?.playbackTime, 0);
+            if (initialized && latest && lastTime !== null && !leaving && !themeHold && frame?.lines === source
+                && Math.abs(at - lastTime) > 2 && !tuning().reducedMotion && performance.now() - lastJumpAt > 600) {
+                lastJumpAt = performance.now();
+                themeHold = true;
+                try { update({ ...latest, playbackTime: lastTime }, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 450; }
+            }
             update(frame);
         };
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };

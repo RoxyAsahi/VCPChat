@@ -31,7 +31,7 @@
         // arriving: progress 0..1 of the settle into the new song (0 = none).
         let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
         // themeHold: one more picture in the old colours, kept for the dissolve.
-        let themeHold = false, revealMs = 1000;
+        let themeHold = false, revealMs = 1000, lastJumpAt = -Infinity;
         const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
         const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
@@ -345,6 +345,17 @@
                 leaving = null;
                 arriving = 1e-6;
                 lyrics?.setVisible(true);
+            }
+            // A jump within the song (the progress bar, a skip of a few
+            // seconds) dissolves from where the ride was instead of cutting.
+            const at = R.finiteNumber(frame.playbackTime);
+            if (initialized && latest && lastTime !== null && !leaving && !arriving && !themeHold
+                && frame.lines === source && Math.abs(at - lastTime) > 2 && !options().reducedMotion
+                && performance.now() - lastJumpAt > 600) {
+                lastJumpAt = performance.now();
+                themeHold = true;
+                try { update({ ...latest, playbackTime: lastTime }, true); } finally { themeHold = false; }
+                if (veil.captured) { revealPending = true; revealMs = 450; }
             }
             update(frame);
         };
