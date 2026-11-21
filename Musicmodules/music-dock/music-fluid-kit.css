@@ -629,3 +629,36 @@ body.light-theme .lyrics-fetch-modal .lyrics-feature-badge.word { background: rg
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 62%, transparent), 0 0 14px -2px color-mix(in srgb, var(--mf-tint) 40%, transparent);
 }
 body.music-reduce-motion :is(.dialog, .lyrics-fetch-search) input { transition: none; }
+
+/* ───────── 顶部的「音频引擎没有启动」提示 ─────────
+ * 不再是红描边的方框：一块和别处一样的玻璃，红色从左边里面透出来，标题前一颗小红点，出现后呼吸几下就停（不常驻动画，省电）。
+ * 出现时从窗口顶边正中滴下来再鼓满（music-fluid-kit.js 里的 watchNotices）。 */
+.audio-engine-notice {
+  border: 0;
+  border-radius: 20px;
+  padding: 11px 18px 11px 34px;
+  color: var(--mf-ink);
+  background:
+    radial-gradient(70% 160% at 0% 30%, rgba(229, 72, 77, .2), transparent 70%),
+    var(--mf-fill);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .35), 0 0 0 .5px var(--mf-rule);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+.audio-engine-notice-title { position: relative; }
+.audio-engine-notice-title::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: .5em;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #e5484d;
+  box-shadow: 0 0 10px rgba(229, 72, 77, .7);
+  animation: mf-notice-breathe 2.4s ease-in-out 5;
+}
+.audio-engine-notice-detail { color: var(--mf-ink2); }
+@keyframes mf-notice-breathe { 50% { opacity: .45; transform: scale(.8); } }
+body.music-fl-low .audio-engine-notice { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before { animation: none; }
