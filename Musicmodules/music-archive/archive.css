@@ -457,7 +457,7 @@ body.light-theme .archive-list { --glow: .85; }
 
 /* 窄窗口：目录盖在阵列上，柔光更实一些 */
 .archive-hud.narrow .archive-list { --gutter: 52px; top: 250px; width: min(calc(var(--gutter) + 400px), 100%); z-index: 3; }
-.archive-hud.narrow .archive-list::before { width: 100%; background: linear-gradient(to right, rgba(var(--ar-paper-rgb), .94) 0, rgba(var(--ar-paper-rgb), .9) 70%, rgba(var(--ar-paper-rgb), 0) 100%); }
+.archive-hud.narrow .archive-list::before { width: 100%; top: -12px; /* 不往上盖住「播放这一组」 */ background: linear-gradient(to right, rgba(var(--ar-paper-rgb), .94) 0, rgba(var(--ar-paper-rgb), .9) 70%, rgba(var(--ar-paper-rgb), 0) 100%); }
 .archive-hud.narrow .archive-list-foot em { white-space: normal; text-align: right; line-height: 1.5; }
 .archive-hud.narrow.list-open .archive-lanes,
 .archive-hud.narrow.list-open .archive-callout { visibility: hidden; }
