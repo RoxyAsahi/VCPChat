@@ -705,3 +705,18 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 .archive-list-spacer > .mf-trail.mf-on { transform: none; }
 .archive-list.grabbing .archive-list-spacer > .mf-trail,
 .archive-list.has-multi .archive-list-spacer > .mf-trail { opacity: 0; }
+/* 底栏抽屉的播放队列：同样竖着流；有这一汪时行本身不再换底色，拖动排序时藏起来 */
+#music-dock-root .md-ql { isolation: isolate; }
+#music-dock-root .md-ql > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 0;
+  border-radius: 14px;
+  transform: scale(.96, .7);
+}
+#music-dock-root .md-ql > .mf-trail.mf-on { transform: none; }
+#music-dock-root .md-ql:has(> .mf-trail.mf-on) .md-qi:not(.md-cur):hover { background: none; }
+#music-dock-root .md-ql:has(.md-qdrag) > .mf-trail { opacity: 0; }

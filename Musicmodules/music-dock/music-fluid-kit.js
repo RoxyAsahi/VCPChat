@@ -327,12 +327,14 @@
     };
 
     // ───────── 一排文字按钮：手指底下的那一汪跟着流过去 ─────────
+    // 那一汪加在这一排的最后（队列的行是由第一个子元素整体重画的，不能插在前面）。
     // 平时什么都没有；指针进到这一排时，手底下那个按钮背后凝出一汪浅玻璃，在按钮之间移动时像液体一样流过去，
     // 指针离开这一排就淡掉。只加一个装饰元素，不改按钮本身的样子。
     const TRAILS = [
         { row: '.archive-nav', item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
+        { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -342,7 +344,7 @@
                 drop = doc.createElement('i');
                 drop.className = 'mf-trail';
                 drop.setAttribute('aria-hidden', 'true');
-                row.prepend(drop);
+                row.append(drop);
             }
             return drop;
         };
@@ -351,10 +353,10 @@
             const rr = row.getBoundingClientRect(), br = btn.getBoundingClientRect();
             if (t.axis === 'y') {
                 const k = rr.height ? row.offsetHeight / rr.height : 1;
-                return { top: (br.top - rr.top) * k - t.pad, height: br.height * k + t.pad * 2 };
+                return { top: (br.top - rr.top) * k + row.scrollTop - t.pad, height: br.height * k + t.pad * 2 };
             }
             const k = rr.width ? row.offsetWidth / rr.width : 1;
-            return { left: (br.left - rr.left) * k - t.pad, width: br.width * k + t.pad * 2 };
+            return { left: (br.left - rr.left) * k + row.scrollLeft - t.pad, width: br.width * k + t.pad * 2 };
         };
         doc.addEventListener('pointerover', (event) => {
             const target = event.target;
