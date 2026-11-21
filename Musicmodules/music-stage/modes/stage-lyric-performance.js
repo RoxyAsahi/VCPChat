@@ -385,7 +385,10 @@
                 : compileError ? '歌词排版失败，请查看控制台'
                     : '等待音乐';
             if (compileError) empty.hidden = false;
-            translation.textContent = tuning.showTranslation === false ? '' : resolveSupplementalText(line);
+            // A translation goes with its line: once the line has left (an
+            // interlude, the outro) it does not stay on alone under nothing.
+            const supplemental = tuning.showTranslation === false || !alive ? '' : resolveSupplementalText(line);
+            if (translation.textContent !== supplemental) translation.textContent = supplemental;
             upcoming.textContent = tuning.showUpcoming === false ? '' : frame.nextLines[0]?.fullText || '';
             // Preheat only the next line, using the same bounded layout cache.
             const next = frame.nextLines[0];
