@@ -160,7 +160,8 @@ body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); col
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
   color: var(--mf-ink);
 }
-.music-modal-close-btn { border-radius: 9999px; }
+/* 关闭按钮是和底栏一样的 32px 圆形图标钮，× 用线条图标，不靠字体里的 ✕ 字形 */
+.music-modal-close-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 9999px; }
 .music-modal-close-btn:hover { background: var(--mf-hover); }
 /* 新建歌单这类小对话框：外层的面板样式把内边距清掉了，这里补回来 */
 .dialog-overlay .dialog.glass-panel { padding: 22px 22px 18px; width: 340px; }
@@ -405,7 +406,10 @@ body.music-reduce-motion .switch .slider::before { transition: background-color 
 /* ───────── 定时关闭 ─────────
  * 控制页第三块开关；点开后时长选项从那块里长出来（MusicFluid.bud），一排玻璃小开关。
  * 开着的时候底栏心形左边多一颗小胶囊显示剩余时间，数字等宽、不跳。 */
-#music-dock-root .md-slp { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0 2px; }
+/* 七个选项排成整齐的两行四格（「播完这首」占两格），不再随宽度折成参差的一行半 */
+#music-dock-root .md-slp { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px 0 2px; }
+#music-dock-root .md-slp .md-chip { justify-content: center; min-width: 0; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
+#music-dock-root .md-slp .md-chip:last-child { grid-column: span 2; }
 #music-dock-root .md-slp .md-chip { height: 30px; background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--md-fill); }
 #music-dock-root .md-slp .md-chip.md-lit { background: radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 26%, transparent), transparent 66%), var(--mf-fill); }
 body:not(.light-theme) #music-dock-root .md-slp .md-chip.md-lit { background: radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 30%, transparent), transparent 66%), rgba(255, 255, 255, .14); }
@@ -442,6 +446,11 @@ body:not(.light-theme) #music-dock-root .md-slp .md-chip.md-lit { background: ra
 }
 body.music-fl-low #music-dock-root .md-keys-box { -webkit-backdrop-filter: none; backdrop-filter: none; }
 #music-dock-root .md-keys-box kbd { border-radius: 8px; background: var(--mf-hover); box-shadow: inset 0 0 0 .5px var(--mf-rule); }
+/* 命令面板里的按键（Esc、行尾的快捷键）和快捷键表用同一种键帽，不再是直角细框 */
+#music-dock-root :is(.md-cmd-chip, .md-cmd-kbd, .md-cmd-foot kbd) { border-radius: 6px; background: var(--mf-hover); box-shadow: inset 0 0 0 .5px var(--mf-rule); }
+/* 命令面板空状态：浅色玻璃上原来只有 1.5–2:1，几乎看不见；提示按意思分成两行，不在「专辑:叶惠美」中间断开 */
+#music-dock-root .md-cmd-empty { color: var(--mf-ink); }
+#music-dock-root .md-cmd-empty .md-cmd-tip { color: var(--mf-ink2); font-size: 12px; line-height: 18px; }
 #music-dock-root .md-keys-box dd { color: var(--mf-ink2); }
 /* 面板本身拿焦点只是为了让键盘留在里面，不画全局焦点框（要压过 :focus-visible:not(#messageInput) 那条） */
 #music-dock-root .md-keys-box:focus-visible:not(#messageInput) { outline: none; }
@@ -463,6 +472,8 @@ body.music-fl-low #music-dock-root .md-keys-box { -webkit-backdrop-filter: none;
     var(--mf-hover);
 }
 #music-dock-root .md-lyrl p { border-radius: 14px; }
+/* 浅色玻璃上 .42 的墨色只有约 2.7:1，没唱到的行也要读得清；当前行靠粗细和纯墨色区分 */
+body.light-theme #music-dock-root .md-lyrl p:not(.md-on) { color: var(--md-t2); }
 #music-dock-root .md-lyrl p:hover { background: var(--mf-hover); }
 #music-dock-root .md-lyrl p.md-on:hover { background: none; }
 
@@ -556,6 +567,8 @@ body.music-reduce-motion .music-modal-overlay .music-modal-song-item:active .mus
 .webdav-modal .webdav-file-item.is-audio { color: var(--mf-ink); }
 .webdav-modal .webdav-file-item.is-audio .webdav-file-icon { color: var(--mf-tint); }
 .webdav-modal .webdav-server-remove {
+  display: grid;
+  place-items: center;
   width: 20px;
   height: 20px;
   padding: 0;

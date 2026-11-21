@@ -23,7 +23,7 @@ function setupWebDav(app) {
         app.webdavServers.forEach((server) => {
             const div = document.createElement('div');
             div.className = 'webdav-server-item' + (app.activeWebDavServer && app.activeWebDavServer.id === server.id ? ' active' : '');
-            div.innerHTML = `<span class="webdav-server-name">${esc(server.name)}</span><button class="webdav-server-remove" data-id="${esc(server.id)}" title="删除">×</button>`;
+            div.innerHTML = `<span class="webdav-server-name">${esc(server.name)}</span><button class="webdav-server-remove" data-id="${esc(server.id)}" title="删除这个服务器" aria-label="删除这个服务器"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
             div.querySelector('.webdav-server-name').addEventListener('click', () => {
                 app.activeWebDavServer = server;
                 app.webdavCurrentPath = '/';

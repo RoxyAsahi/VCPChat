@@ -391,7 +391,7 @@
             if (!state.items.length) {
                 list.innerHTML = input.value.trim()
                     ? `<div class="md-cmd-empty"><span>没有找到匹配的歌、歌单或操作</span></div>`
-                    : `<div class="md-cmd-empty"><span>输入歌名、歌手或专辑</span><span class="md-cmd-tip">只找某个歌手或专辑：写「歌手:周杰伦」「专辑:叶惠美」；也可以直接输入「暂停」「音量 50」</span></div>`;
+                    : `<div class="md-cmd-empty"><span>输入歌名、歌手或专辑</span><span class="md-cmd-tip">只找某个歌手或专辑：写「歌手:周杰伦」「专辑:叶惠美」</span><span class="md-cmd-tip">也可以直接输入「暂停」「音量 50」这样的指令</span></div>`;
                 input.removeAttribute('aria-activedescendant');
                 foot.hidden = true;
                 return;
