@@ -861,6 +861,7 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-cover { top: -70px; }
 .archive-hud.has-lyrics .archive-cover, .archive-hud.short .archive-cover, .archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { top: -40px; }
 
-/* 底栏抽屉打开时它盖住右侧一大块，右上导航只剩半个「☰ 目」露在抽屉左边：整排先让开，关上再回来 */
-.archive-nav { transition: opacity .2s; }
-body:has(#music-dock-root .md-pnl.md-open) .archive-nav { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s, visibility 0s linear .2s; }
+/* 右侧设置抽屉开着时整层按剩下的宽度排版（archive-view.js 的 drawerInset），导航跟着挪到抽屉左边，不再被盖住半个 */
+
+/* 设置抽屉开着、剩下的宽度只够「目录 + 说明块」：底部只留上下曲目，分组切换收起（目录里就能换分组），不和刻度挤在一起 */
+.archive-hud.squeeze .archive-lanes { display: none; }
