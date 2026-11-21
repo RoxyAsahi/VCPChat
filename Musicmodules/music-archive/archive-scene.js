@@ -710,7 +710,7 @@
             damp(shoulder, target.row, rate, dt);
             damp(focus, target.lane, rate, dt);
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
-            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 12, dt);
+            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 damp(r, 0, reduced ? 40 : 4.2, dt);
                 if (Math.abs(r.v) < 0.002 && Math.abs(r.vel) < 0.01) returning.delete(k);
