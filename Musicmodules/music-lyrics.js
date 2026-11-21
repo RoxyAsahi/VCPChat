@@ -201,17 +201,22 @@ function setupLyrics(app) {
         const rawEntries = [];
         // 只有时间戳、没有字的行是「这一句到这里结束」（间奏开始），记下来用来算每句的结束时间。
         const breaks = [];
+        // 文件自带的 [offset:+500]（毫秒，正数表示歌词提前出现），按 LRC 的约定从每个时间戳里减掉。
+        let fileOffset = 0;
+        const offsetTag = /^\[offset:\s*([+-]?\d+)\s*\]/im.exec(lrcContent);
+        if (offsetTag) fileOffset = Math.max(-600, Math.min(600, Number(offsetTag[1]) / 1000)) || 0;
         const stamp = (match) => {
             const minutes = parseInt(match[1], 10);
             const seconds = parseInt(match[2], 10);
             const milliseconds = parseInt(String(match[3] || '0').padEnd(3, '0'), 10);
-            return Number(((minutes * 60 + seconds + milliseconds / 1000) * app.lyricSpeedFactor + app.lyricOffset).toFixed(3));
+            const raw = Math.max(0, minutes * 60 + seconds + milliseconds / 1000 - fileOffset);
+            return Number((raw * app.lyricSpeedFactor + app.lyricOffset).toFixed(3));
         };
 
         for (const line of lines) {
             const trimmedLine = line.trim();
             if (!trimmedLine) continue;
-            // 忽略头部元数据（如 [ti:...], [ar:...] 等）
+            // 忽略头部元数据（如 [ti:...], [ar:...], [offset:...] 等）
             if (/^\[[a-zA-Z]+:/.test(trimmedLine)) continue;
 
             const text = trimmedLine.replace(timeRegex, '').trim();
@@ -246,6 +251,21 @@ function setupLyrics(app) {
         };
 
         const resultLines = [];
+        const scriptOf = (text) => {
+            const t = String(text);
+            if (/[\u3040-\u30ff\u31f0-\u31ff]/.test(t)) return 'kana';
+            if (/[\uac00-\ud7af\u1100-\u11ff]/.test(t)) return 'hangul';
+            if (/[\u3400-\u9fff\uf900-\ufaff]/.test(t)) return 'han';
+            if (/[a-z]/i.test(t)) return 'latin';
+            return 'other';
+        };
+        const isTranslationOf = (a, b) => {
+            const gap = Math.abs(b.time - a.time);
+            if (gap <= 0.05) return true;
+            if (gap > 0.8) return false;
+            const sa = scriptOf(a.text), sb = scriptOf(b.text);
+            return sa !== sb && sa !== 'other' && sb !== 'other';
+        };
 
         if (isTimeDecreasingAtSomePoint()) {
             // 前后分段型：找到分割点
@@ -298,8 +318,10 @@ function setupLyrics(app) {
                 const current = rawEntries[i];
                 const next = rawEntries[i + 1];
 
-                // 如果下一行的时间差在 0.8 秒之内，且下一行与当前行大概率为 原文 + 翻译 的关系
-                if (next && Math.abs(next.time - current.time) <= 0.8) {
+                // 下一行是不是这一行的翻译：时间戳相同（常见的双语格式），或者差在 0.8 秒之内而且换了一种文字
+                // （日文 → 中文、英文 → 中文）。同一种文字的两句挨得很近（快歌、重复的短句）是两句歌词，不合并，
+                // 不然第二句会被当成翻译，关掉翻译时就看不到了。
+                if (next && isTranslationOf(current, next)) {
                     resultLines.push({
                         time: current.time,
                         original: current.text,
