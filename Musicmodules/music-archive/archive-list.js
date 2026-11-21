@@ -998,6 +998,7 @@
             menu.setAttribute('role', 'menu');
             menu.setAttribute('aria-label', `已选 ${indices.length} 首`);
             menu.innerHTML = `<header>已选 ${indices.length} 首</header>`
+                + item('play', '播放所选')
                 + (typeof app.queuePlayNext === 'function' ? item('next', '下一首播放') : '')
                 + (typeof app.queueAdd === 'function' ? item('queue', '加入队列') : '')
                 + (typeof app.queuePlayNext === 'function' || typeof app.queueAdd === 'function' ? '<hr>' : '')
@@ -1021,7 +1022,14 @@
                     return;
                 }
                 closeBatchMenu({ focus: true });
-                if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
+                if (act === 'play') {
+                    // 播放所选：只放这几首，按目录里的顺序，队列名叫「所选 N 首」
+                    const k = findRow(indices[0], null);
+                    const row = state.rows[k];
+                    clearMulti();
+                    if (row) pickRow(k);
+                    opts.onPlay(indices[0], row ? row.ctx : null, { stage: false, group: { name: `所选 ${indices.length} 首`, items: indices.slice() } });
+                } else if (act === 'next' || act === 'queue') queueBatch(indices, act === 'next');
                 else if (act === 'like') app.toggleLike(indices.map((i) => tracks()[i]).filter(Boolean));
                 else if (act === 'pl') addToPlaylist(playlists().find((p, order) => String(p.id ?? order) === b.dataset.id), indices);
                 else if (act === 'pl-new') {
