@@ -227,6 +227,8 @@ test('空曲库显示空状态，回车什么也不做；刚打开的一小段�
     assert.deepEqual(f.calls, []);
     await wait(1650);
     assert.ok(root.classList.contains('is-empty'), '等过了还是没有歌才显示');
+    assert.equal(f.text('ctxName'), '曲库', '空曲库左上不写「全部曲目 · 0 首」');
+    assert.equal(f.text('ctxSub'), '还没有歌曲');
     assert.equal(root.classList.contains('is-loading'), false);
     assert.equal(f.text('status'), '');
     f.close();

@@ -701,3 +701,5 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-brand-resume > span:last-child { font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .archive-brand-resume:hover, .archive-brand-resume:hover > b { color: var(--ar-accent-text, var(--ar-accent)); }
 #music-archive-view.is-detail .archive-brand-resume, #music-archive-view.is-empty .archive-brand-resume, #music-archive-view.is-loading .archive-brand-resume { visibility: hidden; }
+/* 空曲库：没有可搜的东西，目录的搜索框和分类标签也收起来，只留空状态说明 */
+#music-archive-view.is-empty .archive-list-search, #music-archive-view.is-empty .archive-list-kinds, #music-archive-view.is-empty .archive-list-viewport { visibility: hidden; }
