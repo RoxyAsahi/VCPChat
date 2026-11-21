@@ -473,3 +473,18 @@ body.music-fl-low #music-dock-root .md-keys-box { -webkit-backdrop-filter: none;
     var(--mf-hover);
 }
 #music-dock-root .md-cmd-list:has(> .md-cmd-drop) .md-cmd-row.md-act { background: none; }
+
+/* ───────── 按下的手感统一：压扁一点，松手时鼓过头再回来 ─────────
+ * 抽屉里的圆形小按钮、弹窗按钮、提示条上的按钮都用同一条回弹曲线；按下时快、松手时慢。
+ * 抽屉里的小图标按钮也换成圆的，和玻璃的圆角一致。 */
+#music-dock-root .md-ib {
+  border-radius: 9999px;
+  transition: background-color .12s, color .12s, opacity .12s, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+#music-dock-root .md-ib:active { transform: scale(.86); transition-duration: .1s; }
+.dialog-btn,
+body.light-theme .dialog-btn { transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.dialog-btn:active:not(:disabled) { transform: scale(.94, .9); transition-duration: .1s; }
+.mtst .mtst-act { transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+.mtst .mtst-act:active { transform: scale(.92, .88); transition-duration: .1s; }
+body.music-reduce-motion :is(#music-dock-root .md-ib, .dialog-btn, .mtst .mtst-act):active { transform: none; }
