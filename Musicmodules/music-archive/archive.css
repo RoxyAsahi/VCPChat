@@ -765,3 +765,10 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 .archive-hud.mid.has-lyrics .archive-rule { width: calc(100% - 57px); }
 /* 窄而矮的窗口（如 960×640）：右下的换组箭头会压在说明块的分隔线上，挪到左下角（矮窗口下那里的大号计数已经收起），贴着底栏上方 */
 .archive-hud.narrow.short .archive-lanes { left: 59px; right: auto; bottom: 22px; } /* 在 .archive-bottom 里，底栏抬高已经算过一次 */
+
+/* 检索没有结果：标题已经说了「没有结果」，底部计数不再显示「000 首」 */
+.archive-list-foot.zero > b, .archive-list-foot.zero > i, .archive-list-foot.zero > span { visibility: hidden; }
+/* 小操作图标统一用线条 SVG（字形 ✎ ✕ 在 Windows 上走字体回退，粗细大小都对不上） */
+.archive-ico { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.archive-list-recentq .rq button .archive-ico { width: 12px; height: 12px; }
+.archive-list-group .acts button { display: inline-flex; align-items: center; padding: 2px; }

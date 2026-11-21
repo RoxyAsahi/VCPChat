@@ -151,7 +151,7 @@
 
         /*
          * 最近检索：检索后真的播了结果，才记下这个检索词（和 Spotify 一样，只是打字不算）。
-         * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，✕ 删一条，「清除」全删。
+         * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，叉号删一条，「清除」全删。
          * 只是这台机器上的方便，存在 localStorage 里。
          */
         const RECENT_Q_KEY = 'musicArchiveRecentQueries';
@@ -171,7 +171,7 @@
             box.hidden = !show;
             if (!show) return;
             box.innerHTML = '<header><span>最近检索</span><button type="button" data-rq-clear>清除</button></header>'
-                + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条">✕</button></div>`).join('');
+                + list.map((q, n) => `<div class="rq" role="option" data-rq="${n}"><span>${esc(q)}</span><button type="button" data-rq-del="${n}" aria-label="删除这条" title="删除这条"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
         };
         // 目录里「为你 · 每日推荐」那一节对应阵列的 daily 列，告诉阵列时换成列 id
         const columnCtx = (ctx) => (ctx === 'recent:daily' ? 'daily' : ctx);
@@ -379,7 +379,7 @@
                 const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
                 const len = groupLength(k);
                 return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${row.n} 首${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
-                    + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
+                    + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4"/></svg></button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>' : '');
             }
             const t = tracks()[row.i] || {};
             const meta = [t.artist, t.album].filter(Boolean).join(' · ') || '未知歌手';
@@ -553,6 +553,8 @@
             r.sep.hidden = idle;
             r.tot.textContent = idle ? '首' : pad(count, 3);
             r.pos.parentElement.classList.toggle('idle', idle);
+            // 检索没有结果时标题已经写了「没有结果」，底部不再摆一个「000 首」
+            r.pos.parentElement.classList.toggle('zero', !(count > 0));
         }
 
         /* 右边的细滚动条：看得出目录有多长、现在在哪，也可以直接拖 */
