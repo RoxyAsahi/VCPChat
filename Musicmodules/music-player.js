@@ -447,6 +447,7 @@ function setupPlayer(app) {
         app.lastKnownCurrentTime = seconds;
         app.lastStateUpdateTime = Date.now();
         app.syncMediaPosition?.(true);
+        app.syncLyricsAfterSeek?.();
         const result = await app.enqueueControl(() => app.api.seekMusic(seconds));
         if (epoch === app.controlEpoch && app.isPlaying) app.startStatePolling();
         return result;
