@@ -610,3 +610,22 @@ body.music-reduce-motion .lyrics-fetch-modal .lyrics-candidate.selected .lyrics-
 .lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(56, 217, 150, .16); color: #62e5aa; }
 body.light-theme .lyrics-fetch-modal .lyrics-feature-badge.word { background: rgba(26, 160, 104, .12); color: #11865a; }
 .lyrics-fetch-modal .lyrics-feature-badge.translation { color: var(--mf-tint); }
+
+/* ───────── 弹窗里的输入框 ─────────
+ * 不描边，是玻璃里一汪圆角的浅坑；聚焦时坑底亮一点，四周凝出一圈强调色细光，过渡带一点回弹。
+ * 新建歌单、添加云端服务器、获取歌词版本里的输入框都用这一种。 */
+:is(.dialog, .lyrics-fetch-search) input {
+  border: 0;
+  border-radius: 14px;
+  background: var(--mf-hover);
+  color: var(--mf-ink);
+  box-shadow: 0 0 0 0 transparent;
+  transition: background-color .18s ease, box-shadow .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+:is(.dialog, .lyrics-fetch-search) input::placeholder { color: var(--mf-ink2); }
+:is(.dialog, .lyrics-fetch-search) input:is(:focus, :focus-visible):not(#messageInput) {
+  outline: none;
+  background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--mf-hover);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 62%, transparent), 0 0 14px -2px color-mix(in srgb, var(--mf-tint) 40%, transparent);
+}
+body.music-reduce-motion :is(.dialog, .lyrics-fetch-search) input { transition: none; }
