@@ -228,7 +228,11 @@
             const index = opts.getIndex();
             if (!index) return;
             let anchor = null;
-            if (steady && state.rows.length) {
+            if (steady && state.rows.length && state.selectedRow >= 0 && inView(state.selectedRow) && state.rows[state.selectedRow]) {
+                // 选中的那行就在眼前：让它留在原处（启动时曲库一批批进来，目录不该漂到别的字母去）
+                const row = state.rows[state.selectedRow];
+                anchor = { i: row.i, ctx: row.ctx, dy: state.offsets[state.selectedRow] - r.viewport.scrollTop };
+            } else if (steady && state.rows.length) {
                 const top = r.viewport.scrollTop;
                 for (let k = 0; k < state.rows.length; k++) {
                     if (state.offsets[k] < top || state.rows[k].type !== 'track') continue;
@@ -331,6 +335,19 @@
         /* 分组标题上「播放这一组」：歌手、专辑、歌单、检索结果都有；首字母分隔和「全部」没有 */
         const groupPlayable = (row) => row && row.type === 'head' && !isLetter(row) && state.kind !== 'all';
 
+        // 分组总时长（专辑、歌手、歌单的头上那样「12 首 · 48 分钟」）；有的歌还没量出时长就写「约」
+        const groupLength = (k) => {
+            let sum = 0, known = 0, n = 0;
+            for (let j = k + 1; j < state.rows.length && state.rows[j].type === 'track'; j++) {
+                n++;
+                const d = durationOf(tracks()[state.rows[j].i], state.rows[j].i);
+                if (d > 0) { sum += d; known++; }
+            }
+            if (!known || known < n / 2) return '';
+            const min = Math.max(1, Math.round(sum / 60));
+            const text = min < 60 ? min + ' 分钟' : Math.floor(min / 60) + ' 小时' + (min % 60 ? ' ' + (min % 60) + ' 分' : '');
+            return (known < n ? '约 ' : '') + text;
+        };
         const rowHtml = (row, k) => {
             if (row.type === 'head') {
                 if (isLetter(row)) return letterHtml(row);
@@ -339,7 +356,8 @@
                     return `<span>删除「${esc(pl.name)}」？</span><button type="button" data-pl="delete-yes">删除</button><button type="button" data-pl="delete-no">取消</button>`;
                 }
                 const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
-                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>${gp}`
+                const len = groupLength(k);
+                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${pad(row.n)}${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
                     + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
             }
             const t = tracks()[row.i] || {};
@@ -739,6 +757,8 @@
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
+                    // Ctrl+Enter：下一首播放；Ctrl+Shift+Enter：加入队列末尾（选中的或多选的几首）
+                    if ((e.ctrlKey || e.metaKey) && row && row.type === 'track') { queueBatch(pickedIndices(row), !e.shiftKey); break; }
                     if (row && row.type === 'track') play(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
                     break;
                 }
