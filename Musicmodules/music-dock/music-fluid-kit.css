@@ -317,7 +317,7 @@ body.music-reduce-motion #music-dock-root .md-like.md-like-pop::after { animatio
   border-radius: 18px;
   transition: background .18s ease, color .18s ease, box-shadow .22s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
 }
-#music-dock-root .md-tile:hover { background: var(--mf-hover), var(--md-fill); }
+#music-dock-root .md-tile:hover { background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--md-fill); }
 #music-dock-root .md-tile:active { transform: scale(.95, .92); transition-duration: .1s; }
 #music-dock-root .md-tile.md-lit,
 #music-dock-root .md-chip.md-lit {
@@ -343,3 +343,32 @@ body:not(.light-theme) #music-dock-root :is(.md-tile, .md-chip).md-lit {
 #music-dock-root .md-chip:active:not(:disabled) { transform: scale(.94, .9); transition-duration: .1s; }
 body.music-reduce-motion #music-dock-root :is(.md-tile, .md-chip) { transition: background .12s, color .12s; }
 body.music-reduce-motion #music-dock-root :is(.md-tile, .md-chip):active { transform: none; }
+
+/* ───────── 舞台格子、歌词偏移步进器 ─────────
+ * 舞台格子展开时由 MusicFluid.bud 从「舞台」按钮里长出来；格子本身是小块玻璃，选中的那块透出强调色。
+ * 歌词偏移的「− 0.0 秒 +」是一整条玻璃胶囊，两头的按钮按下时压扁回弹。 */
+#music-dock-root .md-scn.mf-budding { animation: none; }
+#music-dock-root .md-scn-b {
+  border-radius: 9999px;
+  background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--md-fill);
+  transition: background .18s ease, color .18s ease, box-shadow .22s ease, transform .34s cubic-bezier(.34, 1.56, .5, 1);
+}
+#music-dock-root .md-scn-b:active { transform: scale(.94, .9); transition-duration: .1s; }
+#music-dock-root .md-scn-b.md-on {
+  background:
+    radial-gradient(110% 120% at 50% 130%, color-mix(in srgb, var(--mf-tint) 34%, transparent), transparent 70%),
+    var(--mf-fill);
+  color: var(--mf-ink);
+  box-shadow: var(--mf-glow);
+}
+body:not(.light-theme) #music-dock-root .md-scn-b.md-on {
+  background:
+    radial-gradient(110% 120% at 50% 130%, color-mix(in srgb, var(--mf-tint) 38%, transparent), transparent 70%),
+    rgba(255, 255, 255, .16);
+}
+#music-dock-root .md-off { border-radius: 9999px; padding: 3px; background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--md-fill); }
+#music-dock-root .md-off .md-ib { border-radius: 9999px; transition: transform .34s cubic-bezier(.34, 1.56, .5, 1), background-color .12s; }
+#music-dock-root .md-off .md-ib:active { transform: scale(.86); transition-duration: .1s; }
+#music-dock-root .md-offv { border-radius: 9999px; }
+#music-dock-root .md-offv.md-lit { color: var(--mf-tint); }
+body.music-reduce-motion #music-dock-root :is(.md-scn-b, .md-off .md-ib):active { transform: none; }
