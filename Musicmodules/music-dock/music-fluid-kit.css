@@ -720,3 +720,20 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 #music-dock-root .md-ql > .mf-trail.mf-on { transform: none; }
 #music-dock-root .md-ql:has(> .mf-trail.mf-on) .md-qi:not(.md-cur):hover { background: none; }
 #music-dock-root .md-ql:has(.md-qdrag) > .mf-trail { opacity: 0; }
+/* 右键菜单和子菜单：那一汪在菜单项之间竖着流；有它时菜单项本身不再换底色 */
+:is(.context-menu, .context-submenu) { isolation: isolate; }
+:is(.context-menu, .context-submenu) > .mf-trail {
+  top: 0;
+  margin-top: 0;
+  left: 6px;
+  right: 6px;
+  width: auto;
+  height: 0;
+  border-radius: 11px;
+  transform: scale(.94, .7);
+  background:
+    radial-gradient(80% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 16%, transparent), transparent 70%),
+    var(--mf-hover);
+}
+:is(.context-menu, .context-submenu) > .mf-trail.mf-on { transform: none; }
+:is(.context-menu, .context-submenu):has(> .mf-trail.mf-on) :is(.context-menu-item, .submenu-item):hover { background: none; }

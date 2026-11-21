@@ -335,6 +335,9 @@
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
+        // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
+        { row: '.context-submenu', item: '.context-submenu .submenu-item', key: 'ctx-sub', axis: 'y', pad: 0 },
+        { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -372,6 +375,10 @@
                 drop.classList.add('mf-on');
                 return;
             }
+        }, true);
+        // 右键菜单每次在新的地方打开：上次留下的那一汪先收掉，免得一打开就停在旧的位置
+        doc.addEventListener('contextmenu', () => {
+            for (const drop of doc.querySelectorAll(':is(.context-menu, .context-submenu) > .mf-trail.mf-on')) drop.classList.remove('mf-on');
         }, true);
         // 在按钮之间的空隙里不算离开；指针出了整排才淡掉
         doc.addEventListener('pointerout', (event) => {
