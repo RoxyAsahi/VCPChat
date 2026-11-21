@@ -561,27 +561,19 @@ function initialize(options) {
                 
                 // 检查是否是 WebDAV 远程曲目
                 if (track.isRemote || track.path.startsWith('http://') || track.path.startsWith('https://')) {
-                    // 如果有 serverId，使用它获取凭据
-                    if (track.serverId) {
+                    // 按 serverId 取账号；没有或服务器已删时，按地址落在哪台服务器下面（路径边界、最长前缀）。
+                    // 原来按纯前缀取第一台：同一台 NAS 上 /dav 和 /dav2 两个服务器时会拿错账号。
+                    const creds = webdavManager.credentialsForTrack?.({ serverId: track.serverId, path: track.path });
+                    if (creds?.username && creds?.password) {
                         return await webdavManager.configureAndLoad({
                             url: track.path,
-                            serverId: track.serverId
+                            username: creds.username,
+                            password: creds.password
                         });
                     }
-                    // 否则尝试通过 URL 匹配服务器
-                    const path = track.path;
-                    const matchingServer = webdavManager.listServers().find(s => {
-                        return path.startsWith(s.url);
-                    });
-                    if (matchingServer) {
-                        const creds = webdavManager.getServerCredentials(matchingServer.id);
-                        if (creds) {
-                            return await webdavManager.configureAndLoad({
-                                url: track.path,
-                                username: creds.username,
-                                password: creds.password
-                            });
-                        }
+                    if (track.serverId) {
+                        // 服务器已删：交给 configureAndLoad 给出明确的提示
+                        return await webdavManager.configureAndLoad({ url: track.path, serverId: track.serverId });
                     }
                 }
                 
