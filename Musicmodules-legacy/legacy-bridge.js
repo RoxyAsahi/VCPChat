@@ -13,10 +13,30 @@
 
     // ---- 1. 引擎地址 ----
     let engineWs = null;
+    let endpointReady = null;
     try {
-        api?.getAudioEngineEndpoint?.().then((ep) => { if (ep && ep.wsUrl) engineWs = ep.wsUrl; }).catch(() => {});
+        const asked = api?.getAudioEngineEndpoint?.();
+        if (asked && typeof asked.then === 'function') {
+            endpointReady = asked.then((ep) => { if (ep && ep.wsUrl) engineWs = ep.wsUrl; }).catch(() => {});
+        }
         api?.onAudioEngineStatus?.((ep) => { if (ep && ep.wsUrl) engineWs = ep.wsUrl; });
     } catch (e) { /* 旧主进程没有这个接口，就用默认端口 */ }
+
+    // 原版在 DOMContentLoaded 里同步连频谱，那时地址还没从主进程回来，只能连 63789；
+    // 引擎换了端口（63789 被系统预留时）就先失败一次，要等 5 秒重连，开头的频谱和播完事件都丢了。
+    // 所以让原版的 DOMContentLoaded 处理等地址回来再跑（最多等 1.5 秒）。
+    if (endpointReady && document.readyState === 'loading') {
+        const nativeAdd = document.addEventListener;
+        const waitForEndpoint = Promise.race([endpointReady, new Promise((r) => setTimeout(r, 1500))]);
+        document.addEventListener = function (type, listener, options) {
+            if (type === 'DOMContentLoaded' && typeof listener === 'function') {
+                const original = listener;
+                listener = function (event) { waitForEndpoint.then(() => original.call(this, event)); };
+            }
+            return nativeAdd.call(this, type, listener, options);
+        };
+        nativeAdd.call(document, 'DOMContentLoaded', () => { delete document.addEventListener; });
+    }
     const NativeWebSocket = window.WebSocket;
     if (NativeWebSocket) {
         const Bridged = function (url, protocols) {

@@ -706,3 +706,34 @@ test('a seek to a position that could not be worked out (NaN) is not sent to the
     await app.seekTo(12);
     assert.ok(app.calls.slice(before).some(c => c.startsWith('seek')));
 });
+
+test('a gapless switch restarts the playback clock and clears an old failure mark', async t => {
+    const app = setup();
+    t.after(() => app.stopStatePolling());
+    app.playModes = ['repeat'];
+    app.currentPlayMode = 0;
+    app.shuffleQueue = [];
+    app.fileUrl = p => p;
+    app.playlist[1].duration = 245;
+    // 第二首上次没加载成功，标灰过
+    app.failedTracks.set(app.playlist[1], '加载超时');
+    app.isPlaying = true;
+    app.lastKnownCurrentTime = 190;
+    app.lastStateUpdateTime = Date.now();
+    app.syncTrackIndexByPath('C:/music/b.flac');
+    assert.equal(app.currentTrackIndex, 1);
+    assert.equal(app.lastKnownCurrentTime, 0, 'lyrics and progress start from the top of the new song');
+    assert.equal(app.durationEl.textContent, '245');
+    assert.equal(app.progress.style.width, '0%');
+    assert.equal(app.failedTracks.has(app.playlist[1]), false, 'it played, so it is not broken');
+});
+
+test('a gapless switch reported with a different path spelling still finds the song by file name', async t => {
+    const app = setup();
+    t.after(() => app.stopStatePolling());
+    app.playModes = ['repeat'];
+    app.currentPlayMode = 0;
+    app.shuffleQueue = [];
+    app.syncTrackIndexByPath('\\\\?\\D:/elsewhere/B.FLAC');
+    assert.equal(app.currentTrackIndex, 1);
+});

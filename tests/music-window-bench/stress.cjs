@@ -71,7 +71,8 @@ const ACTIONS = {
 };
 const WEIGHTS = { toggle: 6, next: 5, prev: 2, seek: 3, pick: 3, context: 2, queue: 2, rescan: 1, mode: 1, ended: 2 };
 
-(async () => {
+module.exports = { FAKE };
+if (require.main === module) (async () => {
     const server = await require('../music-stage-bench/serve.cjs')(ROOT);
     const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
     const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
