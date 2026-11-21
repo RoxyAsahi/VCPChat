@@ -2572,6 +2572,23 @@ body.light-theme .dialog-btn.cancel {
 .webdav-file-list::-webkit-scrollbar { width: 4px; }
 .webdav-file-list::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
 
+/* 打不开文件夹时那行话后面的「重试」 */
+.webdav-retry-btn {
+    display: block;
+    margin-top: 10px;
+    padding: 4px 14px;
+    font: inherit;
+    font-size: 0.85em;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.webdav-retry-btn:hover { background: var(--hover-bg); }
+.webdav-retry-btn:focus-visible { outline: 2px solid var(--music-highlight); outline-offset: 2px; }
+
 .webdav-file-item {
     display: flex;
     align-items: center;
