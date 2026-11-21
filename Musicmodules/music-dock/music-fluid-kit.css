@@ -1162,3 +1162,14 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
 }
 /* 抽屉底部页签本身没有底色，给个圆角让焦点框是胶囊而不是直角框 */
 #music-dock-root .md-dockrow .md-seg button[role="tab"] { border-radius: 10px; }
+
+/* 云端导入：还没进任何目录时面包屑是空的，别留一条多出来的分隔线；左栏没有服务器时说一句，而不是一块空白 */
+.webdav-modal .webdav-breadcrumb:empty { display: none; }
+.webdav-modal .webdav-server-list:empty::before {
+  content: '还没有服务器';
+  display: block;
+  padding: 18px 8px;
+  color: var(--mf-ink2);
+  font-size: 13px;
+  text-align: center;
+}
