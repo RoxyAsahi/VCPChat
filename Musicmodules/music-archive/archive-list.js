@@ -74,11 +74,14 @@
      * 右键菜单的键盘操作。菜单本身是播放器的 #track-context-menu（几行 div），这里在档案页打开它之后接管按键：
      * ↑ ↓ Home End 移动，Enter / 空格执行，→ 打开「加入歌单」子菜单、← 收回，Esc / Tab 关闭并把焦点还回去。
      * 菜单关掉（visible 类没了）就自动撤掉这些处理。
+     * 鼠标右键打开的菜单也会接上（music-menu-order.js 里统一接，focus: false），不然方向键会落到后面的目录上。
      * playlist: true 时直接展开「加入歌单」子菜单（顶栏「＋ 加入歌单」按钮用，和 Spotify 的「添加到歌单」一样直接给歌单列表）。
      */
-    const menuKeyboard = (app, { restore = null, playlist = false } = {}) => {
+    const menuKeyboard = (app, { restore = null, playlist = false, focus = true } = {}) => {
         const menu = app.contextMenu || document.getElementById('track-context-menu');
         if (!menu || !menu.classList.contains('visible')) return null;
+        // 同一时间只留一份按键处理（鼠标右键接一次、键盘打开又接一次时，后来的顶掉先前的）
+        if (typeof menu.__kbdDetach === 'function') menu.__kbdDetach();
         const shown = (el) => !el.hidden && el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
         const topItems = () => [...menu.querySelectorAll(':scope > .context-menu-item')].filter(shown);
         let sub = null; // 打开着的子菜单所在的那一项
@@ -102,11 +105,14 @@
         const finish = ({ focusBack = true } = {}) => {
             if (done) return;
             done = true;
+            if (menu.__kbdDetach === detach) menu.__kbdDetach = null;
             document.removeEventListener('keydown', onKey, true);
             observer.disconnect();
             menu.querySelectorAll('.archive-kbd-sub').forEach((el) => el.classList.remove('archive-kbd-sub'));
             if (focusBack && restore && restore.isConnected) restore.focus({ preventScroll: true });
         };
+        const detach = () => finish({ focusBack: false });
+        menu.__kbdDetach = detach;
         const close = () => { menu.classList.remove('visible'); finish(); };
         const onKey = (e) => {
             if (!menu.classList.contains('visible')) { finish({ focusBack: false }); return; }
@@ -145,7 +151,8 @@
             plItem.classList.add('archive-kbd-sub');
             const list = topItems();
             focusAt(Math.min(list.indexOf(plItem) + 1, list.length - 1));
-        } else focusAt(0);
+        } else if (focus) focusAt(0);
+        // focus: false 是鼠标点开的菜单：先不高亮任何一项，按了方向键才从头（或从尾）开始
         return { close };
     };
 

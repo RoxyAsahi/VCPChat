@@ -42,3 +42,22 @@ test('dividers around a hidden group collapse to one', () => {
     const shown = [...menu.children].filter((el) => el.style.display !== 'none').map((el) => (el.classList.contains('context-menu-divider') ? '-' : el.dataset.action || 'trail'));
     assert.deepEqual(shown, ['play', 'add-to-queue', '-', 'remove-from-list', 'trail']);
 });
+
+test('a menu opened with the mouse gets the keyboard handler (without highlighting an item); one opened from the keyboard is left alone', async () => {
+    const w = setup(['play', 'add-to-queue', '-', 'remove-from-list']);
+    const menu = w.document.getElementById('track-context-menu');
+    const calls = [];
+    w.MusicArchiveList = { menuKeyboard: (app, opts) => { calls.push(opts); } };
+    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    await new Promise((r) => setTimeout(r, 0));
+    menu.classList.add('visible');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].focus, false);
+    menu.classList.remove('visible');
+    await new Promise((r) => setTimeout(r, 0));
+    menu.__kbdDetach = () => {};
+    menu.classList.add('visible');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1);
+});

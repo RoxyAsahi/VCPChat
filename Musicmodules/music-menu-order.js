@@ -66,13 +66,27 @@
         }
     }
 
+    // 鼠标右键点开的菜单也要接住方向键 / 回车 / Esc：不接的话按键会落到后面的目录上（换了选中的歌，甚至直接开始播放）。
+    // 键盘打开的那几处自己已经接好了（menu.__kbdDetach 有值），这里只补没接的。
+    function attachKeyboard(menu) {
+        if (typeof menu.__kbdDetach === 'function') return;
+        const active = document.activeElement;
+        global.MusicArchiveList?.menuKeyboard?.({ contextMenu: menu }, { restore: active && active !== document.body ? active : null, focus: false });
+    }
+
     function start() {
         const menu = document.getElementById('track-context-menu');
         if (!menu) return;
         arrange(menu);
         tidyDividers(menu);
         new MutationObserver(() => arrange(menu)).observe(menu, { childList: true });
-        new MutationObserver(() => { if (menu.classList.contains('visible')) tidyDividers(menu); }).observe(menu, { attributes: true, attributeFilter: ['class'] });
+        let wasVisible = menu.classList.contains('visible');
+        new MutationObserver(() => {
+            const visible = menu.classList.contains('visible');
+            if (visible) tidyDividers(menu);
+            if (visible && !wasVisible) attachKeyboard(menu);
+            wasVisible = visible;
+        }).observe(menu, { attributes: true, attributeFilter: ['class'] });
     }
 
     global.MusicMenuOrder = { arrange, tidyDividers, GROUPS };
