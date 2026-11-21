@@ -444,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupMusicLikes?.(app); // 「喜欢」：右键菜单那一项要包在上面的菜单入口外面
         window.setupMusicGoto?.(app); // 右键「转到歌手 / 转到专辑」
         window.setupMusicSleep?.(app); // 定时关闭（入口在底栏抽屉）
+        window.setupMusicStats?.(app); // 听歌记录（次数、上次播放、跳过），只存本机
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 
