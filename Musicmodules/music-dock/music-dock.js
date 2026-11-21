@@ -1334,6 +1334,12 @@
             const line = index >= 0 ? box.children[index] : null;
             if (!line) return;
             line.classList.add('md-on');
+            // 当前那一行背后有一滴玻璃，换行时像液体往下流过去（共用套件的 slide，竖着走）
+            if (global.MusicFluid?.slide) {
+                let drop = box.querySelector(':scope > .md-lyr-drop');
+                if (!drop) { drop = document.createElement('i'); drop.className = 'md-lyr-drop'; drop.setAttribute('aria-hidden', 'true'); box.appendChild(drop); }
+                global.MusicFluid.slide(drop, { top: line.offsetTop, height: line.offsetHeight }, { key: 'md-lyrics', axis: 'y', lead: 200, trail: 420 });
+            }
             const scroller = el.pnl;
             const target = line.offsetTop - scroller.clientHeight / 2 + line.offsetHeight / 2;
             if (typeof scroller.scrollTo === 'function') {
