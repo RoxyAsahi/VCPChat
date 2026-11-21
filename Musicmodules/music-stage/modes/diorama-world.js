@@ -2423,9 +2423,11 @@
          * printed card (9), luggage (10/11), dials (12/13), route diagram (14),
          * silhouette (15), heater (16), vent (17), trim (18), piping (19), stainless (20), cab paint (21).
          */
+        // The last value is when each gets off as the car empties (0 to 1): the
+        // two far down the car, one each side, stay longest.
         const SITTERS = [
-            [-1, -2.9, 'doze', 1.05], [-1, -0.7, 'bag', 0.94], [1, -1.9, 'read', 1.0],
-            [1, 0.9, 'bag', 0.92], [-1, 2.3, 'rest', 1.08], [1, 4.9, 'doze', 0.96]
+            [-1, -2.9, 'doze', 1.05, 0.875], [-1, -0.7, 'bag', 0.94, 0.21], [1, -1.9, 'read', 1.0, 0.71],
+            [1, 0.9, 'bag', 0.92, 0.375], [-1, 2.3, 'rest', 1.08, 0.04], [1, 4.9, 'doze', 0.96, 0.54]
         ];
         const saloonGeometry = geometry(sharedShape(T, 'saloon', () => {
             // Two lists: the shell and the cab, drawn at any distance through the
@@ -2826,6 +2828,20 @@
                 const float FLOOR=${CAR.floor.toFixed(2)},PITCH=${WINDOW_PITCH.toFixed(2)};
                 const vec2 SAT[${SITTERS.length}]=vec2[](${SITTERS.map(([side, z]) => `vec2(${side.toFixed(1)},${z.toFixed(2)})`).join(',')});
                 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+                // As the car empties the passengers get off one by one, each in its
+                // turn: a passenger is there or gone, never a ghost half-way.
+                const float LEAVE[${SITTERS.length}]=float[](${SITTERS.map(sitter => sitter[4].toFixed(3)).join(',')});
+                float seated(int i){return 1.0-clamp((empty-LEAVE[i])/0.08+0.5,0.0,1.0);}
+                // The passenger a point belongs to: the nearest seat on its side.
+                int sitterAt(vec3 p){
+                    int best=0;float near=1e4;
+                    for(int i=0;i<${SITTERS.length};i++){
+                        if(SAT[i].x*p.x<0.0)continue;
+                        float d=abs(p.z-SAT[i].y);
+                        if(d<near){near=d;best=i;}
+                    }
+                    return best;
+                }
                 float tubeLux(vec3 p,vec3 n,float side){
                     float z=tubeCentre(p.z), toward=clamp(p.z,z-TUBE_HALF,z+TUBE_HALF);
                     vec3 ray=vec3(side*RAIL,TUBE_Y,toward)-p;
@@ -3131,8 +3147,8 @@
                             vec2 who=SAT[i];
                             float along=vPos.z-who.y,across=abs(vPos.x)-${(CAR.half - 0.04 - 0.36).toFixed(3)};
                             if(who.x*vPos.x<0.0)continue;
-                            sat=max(sat,exp(-along*along/0.05-across*across/0.08));
-                            stood=max(stood,exp(-along*along/0.05-(across+0.46)*(across+0.46)/0.03));
+                            sat=max(sat,exp(-along*along/0.05-across*across/0.08)*seated(i));
+                            stood=max(stood,exp(-along*along/0.05-(across+0.46)*(across+0.46)/0.03)*seated(i));
                         }
                     }
                     if(cushion){
@@ -3158,10 +3174,11 @@
                     // At night the cab sits a shade darker than the saloon behind it.
                     if(vPos.z<${(TIP + 1.38).toFixed(2)}&&!(vPaint>4.5&&vPaint<5.5))colour*=mix(0.8,1.0,day);
                     if(figure){
-                        // People thin out as the car empties (the driver stays): a dither, so it stays one opaque pass.
+                        // People get off as the car empties (the driver stays). Only while one
+                        // is getting off is the figure dithered, so it stays one opaque pass.
                         const float B[16]=float[](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
                         ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.0));
-                        if((B[cell.x+cell.y*4]+0.5)/16.0<empty&&vPos.z>${(TIP + 1.35).toFixed(2)})discard;
+                        if((B[cell.x+cell.y*4]+0.5)/16.0>seated(sitterAt(vPos))&&vPos.z>${(TIP + 1.35).toFixed(2)})discard;
                         colour=mix(c*0.83,cream*light*0.1*(0.6+0.4*smoothstep(-0.3,0.8,n.y)),0.4*(1.0-day))+sunlight*0.03*sunset;
                     }
                     // On the light page the car keeps to quiet paper tones.
@@ -3366,8 +3383,12 @@
                         // Clamped: a GPU's pow() of a hair below zero is NaN, and one NaN in
                         // the sky spreads through the environment map onto everything lit.
                         float toward=clamp(0.5+0.5*dot(normalize(vec3(d.x,0.0,d.z)+vec3(0.0001)),sunDir),0.0,1.0);
-                        float low=exp(-max(d.y,0.0)*6.0);
+                        // As it fades the glow sinks into a thin band on the horizon.
+                        float low=exp(-max(d.y,0.0)*(6.0+12.0*(1.0-dusk)));
                         c=mix(c,duskHigh,dusk*0.55*(1.0-low));
+                        // Halfway down, the blue hour: the sky overhead a deep, clear
+                        // blue before it goes to night.
+                        c=mix(c,duskHigh*vec3(0.5,0.66,1.15),sin(3.14159*dusk)*0.45*(1.0-low));
                         c=mix(c,sunset,low*(0.2+0.8*pow(toward,3.0))*dusk*0.85);
                         float rose=(d.y-0.13)*8.0;
                         c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-rose*rose)*pow(toward,1.5)*dusk*0.3);
@@ -3597,6 +3618,9 @@
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
                 lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 },
+                // One texel of the mirror image, and whether to smooth its edges
+                // (when the mirror is drawn without multisampling).
+                mirrorTexel: { value: new T.Vector2(1 / 512, 1 / 320) }, mirrorSoft: { value: 1 },
                 // Where the train wades: its nose, three points down its length and its tail.
                 wake: { value: 0 }, wakePath: { value: Array.from({ length: 5 }, () => new T.Vector2()) },
                 // Rings a hit in the music drops on the water: x, z, song time, strength.
@@ -3604,7 +3628,7 @@
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake,mirrorSoft;uniform vec2 mirrorTexel;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;uniform vec2 wakePath[5];
                 uniform vec3 lampPos[4];uniform float lampPower[4];uniform vec4 pulses[4];
                 varying vec4 reflected;varying vec3 world;
@@ -3698,6 +3722,15 @@
                     vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03)+stir*0.07*damp;
                     float valid=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0)*step(0.0,reflected.w);
                     vec3 r=texture2D(reflection,clamp(uv,0.001,0.999)).rgb;
+                    // The mirror is drawn at a fraction of the picture's size; without
+                    // multisampling its edges would come back as a magnified staircase.
+                    // Four taps on a rotated grid round each edge off.
+                    if(mirrorSoft>0.0){
+                        vec2 a=mirrorTexel*vec2(0.62,0.24),b=mirrorTexel*vec2(-0.24,0.62);
+                        vec3 soft=texture2D(reflection,clamp(uv+a,0.001,0.999)).rgb+texture2D(reflection,clamp(uv-a,0.001,0.999)).rgb
+                            +texture2D(reflection,clamp(uv+b,0.001,0.999)).rgb+texture2D(reflection,clamp(uv-b,0.001,0.999)).rgb;
+                        r=mix(r,soft*0.25,mirrorSoft);
+                    }
                     // Out where the rings are too small to see, rain-pocked water
                     // smears what it mirrors into soft vertical streaks.
                     if(rain>0.0){
@@ -4595,7 +4628,8 @@
             starGeo.setDrawRange(0, townLights + (saving ? 1500 : quality === 'ultimate' ? 8000 : 4000));
             skyMat.uniforms.open.value = pose.state.openness;
             const auroraEnabled = tuning.aurora !== false;
-            skyMat.uniforms.auroraActive.value = auroraEnabled ? (1.0 - rainLevel * 0.95) * (1 - liveDusk) * (1 + liveDream * 0.4) : 0.0;
+            // The aurora only shows once the afterglow has nearly gone.
+            skyMat.uniforms.auroraActive.value = auroraEnabled ? (1.0 - rainLevel * 0.95) * (1 - liveDusk) ** 3 * (1 + liveDream * 0.4) : 0.0;
             if (auroraTrack !== track) {
                 const opening = global.MusicStageDioramaCamera.pose(timeline, track, 0, tuning);
                 skyMat.uniforms.auroraHeading.value = opening.yaw - 0.34;
@@ -5614,6 +5648,13 @@
                 quality === 'ultimate' ? 1440 : quality === 'energy-saving' ? 384 : 960));
             const height = Math.max(1, Math.round(width * size.y / Math.max(1, size.x)));
             if (target.width !== width || target.height !== height) target.setSize(width, height);
+            const samples = global.MusicStageModeUtils?.tier(quality).samples ?? 0;
+            if (target.samples !== samples) {
+                target.samples = samples;
+                target.dispose();
+            }
+            waterMat.uniforms.mirrorTexel.value.set(1 / width, 1 / height);
+            waterMat.uniforms.mirrorSoft.value = samples ? 0 : 1;
             const oldTarget = renderer.getRenderTarget(), oldAutoClear = renderer.autoClear;
             const oldXr = renderer.xr.enabled;
             water.visible = false;
