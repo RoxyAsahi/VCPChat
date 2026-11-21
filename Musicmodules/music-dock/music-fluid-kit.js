@@ -335,6 +335,8 @@
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
+        { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
+        { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
         // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
         { row: '.context-submenu', item: '.context-submenu .submenu-item', key: 'ctx-sub', axis: 'y', pad: 0 },
         { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },

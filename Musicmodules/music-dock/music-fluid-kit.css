@@ -743,3 +743,16 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
   outline: none;
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 55%, transparent);
 }
+
+/* ───────── 底栏右端的圆按钮（喜欢、更多）和上方那一团快捷按钮 ─────────
+ * 手底下的按钮背后是一颗圆的浅玻璃；换按钮时它被拉成胶囊流过去，到了再收回成圆。
+ * 底栏是有颜色的液体，所以这颗用条上的墨色调淡，不用弹层的浅玻璃。 */
+#music-dock-root :is(.md-quick-g, .md-slots) { position: relative; isolation: isolate; }
+#music-dock-root .md-quick-g { --mf-trail-h: 36px; }
+#music-dock-root .md-slots { --mf-trail-h: 34px; }
+#music-dock-root :is(.md-quick-g, .md-slots) > .mf-trail {
+  background: rgba(var(--md-fl-ink-rgb, 128, 128, 128), .1);
+  transform: scale(.5);
+}
+#music-dock-root :is(.md-quick-g, .md-slots) > .mf-trail.mf-on { transform: none; }
+#music-dock-root :is(.md-quick-g, .md-slots):has(> .mf-trail.mf-on) > .md-slot:hover { background: none; }
