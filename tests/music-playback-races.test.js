@@ -737,3 +737,42 @@ test('a gapless switch reported with a different path spelling still finds the s
     app.syncTrackIndexByPath('\\\\?\\D:/elsewhere/B.FLAC');
     assert.equal(app.currentTrackIndex, 1);
 });
+
+// 引擎进程退出（崩溃、被杀）：以前每次查询都失败也没人管，按钮一直是「在播」、进度照走，其实没声音。
+test('when the engine stops answering while playing, the player stops and says why', async t => {
+    let alive = true;
+    const app = setup({
+        getMusicState: async () => (alive ? readyState({ is_playing: true }) : { status: 'error', message: 'fetch failed' })
+    });
+    const notices = [];
+    app.showPlaybackNotice = (m) => notices.push(m);
+    t.after(() => app.stopStatePolling());
+    await app.playTrack();
+    await tick(20);
+    assert.equal(app.isPlaying, true);
+    alive = false;
+    for (let i = 0; i < 4; i++) await app.pollState();
+    assert.equal(app.isPlaying, false, 'the button no longer claims it is playing');
+    assert.equal(notices.length, 1, 'said once, not on every poll');
+    assert.match(notices[0], /连不上音频引擎/);
+    for (let i = 0; i < 4; i++) await app.pollState();
+    assert.equal(notices.length, 1);
+    // 主进程把引擎重新拉起来以后，按播放是重新加载这首，不是对着空引擎发「播放」
+    alive = true;
+    app.calls.length = 0;
+    await app.playTrack();
+    assert.deepEqual(app.calls.slice(0, 1), ['load:a']);
+});
+
+test('an engine that came back empty after a restart gets the track loaded again on play', async t => {
+    let reloaded = false;
+    const app = setup({
+        getMusicState: async () => (reloaded ? readyState() : { status: 'success', state: { file_path: null, is_loading: false, is_playing: false, current_time: 0, duration: 0 } }),
+        musicLoad: async (t) => { app.calls.push(`load:${t.title}`); reloaded = true; return { status: 'success', state: {} }; }
+    });
+    t.after(() => app.stopStatePolling());
+    await app.pollState();
+    app.calls.length = 0;
+    await app.playTrack();
+    assert.equal(app.calls[0], 'load:a', 'play reloads instead of sending play to an empty engine');
+});

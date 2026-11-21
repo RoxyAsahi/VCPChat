@@ -1359,6 +1359,9 @@ document.addEventListener('DOMContentLoaded', () => {
         app.syncOutputFallback?.(state);
         // 切歌加载期间引擎报的还是上一首（或已停止）的状态，写进界面会让进度条和按钮乱跳。
         if (app.isTrackLoading && !options.force) return;
+        // 引擎重启过（主进程会自动拉起）：里面已经没有歌了。记下来，再按播放就重新加载这首，
+        // 而不是对着空引擎发「播放」、一直报播放失败。
+        if ('file_path' in state && !state.file_path && !state.is_loading && app.engineTrackPath) app.engineTrackPath = null;
         app.lastKnownCurrentTime = state.current_time; app.lastKnownDuration = state.duration;
         app.lastStateUpdateTime = Date.now();
         app.syncMediaPosition?.();
