@@ -147,9 +147,9 @@ function setupSidebar(app) {
 
     app.renderModalSongList = () => {
         const pl = app.customPlaylists.find(p => p.id === app.editingPlaylistId); if (!pl) return;
-        const q = app.modalSearchQuery.toLowerCase();
+        const q = String(app.modalSearchQuery || '').trim();
         const selectedPaths = new Set(pl.tracks);
-        const filtered = q ? app.playlist.filter(t => (t.title||'').toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : app.playlist;
+        const filtered = q && app.searchTracks ? app.searchTracks(app.playlist, q) : app.playlist;
         const sortedFiltered = filtered
             .map((track, index) => ({ track, index }))
             .sort((a, b) => {

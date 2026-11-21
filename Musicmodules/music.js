@@ -1154,8 +1154,8 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(app.searchInputTimer);
             app.searchInputTimer = setTimeout(() => {
                 if (app.isSemanticSearchActive) return;
-                const query = app.searchInput.value.toLowerCase();
-                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
+                const query = app.searchInput.value.trim();
+                app.currentFilteredTracks = query ? app.searchTracks(app.playlist, query) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
                 app.renderPlaylist(app.currentFilteredTracks);
             }, 120);
         };
@@ -1174,8 +1174,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!app.isSemanticSearchActive) {
                 // 退出语义搜索时恢复普通搜索
-                const query = app.searchInput.value.toLowerCase();
-                app.currentFilteredTracks = query ? app.playlist.filter(t => (t.title || '').toLowerCase().includes(query) || (t.artist || '').toLowerCase().includes(query)) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
+                const query = app.searchInput.value.trim();
+                app.currentFilteredTracks = query ? app.searchTracks(app.playlist, query) : null; app.filteredPlaylistSource = null; // 搜索结果是整个曲库里搜的，不再算某个歌单
                 app.renderPlaylist(app.currentFilteredTracks);
             }
         };
