@@ -9,7 +9,7 @@
 
     const LETTER_H = 20;  // 首字母分组前的留白（字母本身在左侧外边距里）
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
-    const ROW_H = 58;     // 曲目行高
+    const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];

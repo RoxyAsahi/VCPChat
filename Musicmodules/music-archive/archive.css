@@ -796,7 +796,7 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
    改到页脚上面一行，并且不超过说明块右边 */
 .archive-hint { bottom: 62px; max-width: calc(100% - var(--ar-col) - 59px); overflow: hidden; text-overflow: ellipsis; }
 
-/* ═════════ 顶部收紧（Roxy 11-21：左上标题、右上导航都往上提，封面缩小） ═════════
+/* ═════════ 顶部收紧：左上标题、右上导航都往上提，封面缩小 ═════════
    整个顶部区域上移 36（设计像素）；靠这条顶线定位的目录、歌词、资料卡、窄档说明块跟着上移同样距离 */
 .archive-brand { top: 72px; }
 .archive-nav { top: 88px; }
@@ -838,3 +838,14 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 #music-archive-view.is-empty .archive-nav > [data-act="save"],
 #music-archive-view.is-empty .archive-nav > [data-act="lyrics"],
 #music-archive-view.is-empty .archive-nav > [data-act="now"] { display: none; }
+
+/* ═════════ 比例收紧（顶部收紧之后的整体构图） ═════════
+   目录行高 58 → 52：同样高度多放一行；左下「这一组里的位置」大数字 58 → 46，不再和标题抢重心；
+   说明块里标题到分隔线、摘要到「播放」的间距收紧，整块更像一张卡；封面底边对齐曲名底边 */
+.archive-list-row { height: 52px; }
+.archive-counter > div { font-size: 46px; gap: 16px; }
+.archive-counter i { font-size: 26px; }
+.archive-rule { margin-top: 28px; }
+.archive-callout-acts { margin-top: 32px; }
+.archive-cover { top: -70px; }
+.archive-hud.has-lyrics .archive-cover, .archive-hud.short .archive-cover, .archive-hud.narrow .archive-cover, .archive-hud.narrow.short .archive-cover { top: -40px; }
