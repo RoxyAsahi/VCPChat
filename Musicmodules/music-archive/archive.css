@@ -626,6 +626,8 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-hud.mid.has-lyrics .archive-callout { width: min(470px, calc(100% - 520px - 470px)); }
 .archive-hud.mid.has-lyrics .archive-summary { width: calc(100% - 58px); }
 .archive-hud.mid.has-lyrics .archive-cover { display: none; }
+/* 中等宽度时右下的分组切换在歌词栏正下方，歌词栏底边抬高让开 */
+.archive-hud.mid .archive-lyrics { bottom: calc(205px + var(--archive-dock-lift, 0px)); }
 .archive-hud.narrow .archive-detail-card { width: auto; left: 46%; right: 40px; }
 .archive-hud.narrow .archive-detail-actions { grid-template-columns: repeat(2, 1fr); }
 .archive-hud.narrow .archive-detail-more ol { columns: 1; }

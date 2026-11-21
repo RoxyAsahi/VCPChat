@@ -849,7 +849,7 @@ test('the heart on the bar follows the like API: click toggles, outside changes 
     try {
         const heart = doc.querySelector('[data-md="like"]');
         assert.equal(heart.hidden, false);
-        assert.deepEqual([...doc.querySelectorAll('.md-slots button')].map((b) => b.dataset.md), ['like', 'more']);
+        assert.deepEqual([...doc.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['like', 'more']);
         assert.equal(heart.getAttribute('aria-pressed'), 'false');
         heart.click();
         assert.ok(liked.has('C:/a.flac'));
@@ -866,6 +866,66 @@ test('the heart on the bar follows the like API: click toggles, outside changes 
         heart.click();
         assert.equal(heart.getAttribute('aria-pressed'), 'false');
         assert.ok(!heart.classList.contains('md-like-pop'));
+    } finally {
+        dock?.destroy?.();
+        window.close();
+    }
+});
+
+test('sleep timer entry: third tile on the control page, choices call the timer, the bar shows time left', () => {
+    let st = { mode: 'off', endsAt: 0, remaining: 0 };
+    const calls = [];
+    const { window, doc, dock } = setup((a, w) => {
+        const announce = () => w.document.dispatchEvent(new w.CustomEvent('music-sleep-change', { detail: st }));
+        a.sleepTimer = {
+            state: () => st,
+            set: (m) => { calls.push(['set', m]); st = { mode: 'time', endsAt: 1, remaining: m * 60 }; announce(); },
+            setTrackEnd: () => { calls.push('track'); st = { mode: 'track', endsAt: 0, remaining: 0 }; announce(); },
+            cancel: () => { calls.push('cancel'); st = { mode: 'off', endsAt: 0, remaining: 0 }; announce(); }
+        };
+    });
+    try {
+        const badge = doc.querySelector('[data-md="sleep"]');
+        assert.equal(badge.hidden, true, 'nothing on the bar while off');
+        dock.openPanel('控制');
+        const tile = doc.querySelector('[data-act="sleep-pick"]');
+        assert.ok(tile, 'third tile present when the timer exists');
+        assert.ok(!doc.querySelector('.md-tiles').classList.contains('md-tiles-2'));
+        tile.click();
+        const chips = [...doc.querySelectorAll('.md-slp [data-v]')].map((b) => b.dataset.v);
+        assert.deepEqual(chips, ['off', '15', '30', '45', '60', '90', 'track']);
+        doc.querySelector('.md-slp [data-v="30"]').click();
+        assert.deepEqual(calls.pop(), ['set', 30]);
+        assert.equal(doc.querySelector('.md-slp'), null, 'choices fold back after picking');
+        assert.equal(badge.hidden, false);
+        assert.equal(doc.querySelector('[data-md="sleep-t"]').textContent, '30:00');
+        assert.ok(doc.querySelector('[data-act="sleep-pick"]').classList.contains('md-lit'));
+        // 倒计时只改文字
+        st = { mode: 'time', endsAt: 1, remaining: 59 };
+        doc.dispatchEvent(new window.CustomEvent('music-sleep-change', { detail: st }));
+        assert.equal(doc.querySelector('[data-md="sleep-t"]').textContent, '0:59');
+        assert.equal(doc.querySelector('.md-slp-v').textContent, '0:59 后停');
+        doc.querySelector('[data-act="sleep-pick"]').click();
+        doc.querySelector('.md-slp [data-v="track"]').click();
+        assert.equal(calls.pop(), 'track');
+        assert.equal(doc.querySelector('[data-md="sleep-t"]').textContent, '本曲');
+        doc.querySelector('[data-act="sleep-pick"]').click();
+        doc.querySelector('.md-slp [data-v="off"]').click();
+        assert.equal(calls.pop(), 'cancel');
+        assert.equal(badge.hidden, true);
+    } finally {
+        dock?.destroy?.();
+        window.close();
+    }
+});
+
+test('without a sleep timer the control page keeps two tiles and the bar has no badge', () => {
+    const { window, doc, dock } = setup();
+    try {
+        dock.openPanel('控制');
+        assert.equal(doc.querySelector('[data-act="sleep-pick"]'), null);
+        assert.ok(doc.querySelector('.md-tiles').classList.contains('md-tiles-2'));
+        assert.equal(doc.querySelector('[data-md="sleep"]').hidden, true);
     } finally {
         dock?.destroy?.();
         window.close();
