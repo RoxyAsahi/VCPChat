@@ -88,6 +88,8 @@ pub struct AudioPlayer {
     fir_bands: [(f64, f64); 10],
     fir_phase_mode: FirPhaseMode,
     ir_loaded: bool,
+    /// Measured loudness of untagged tracks, so the next play starts at the right level.
+    loudness_cache: Option<Arc<crate::processor::LoudnessDatabase>>,
     ir_path: Option<String>,
 
     config: AppConfig,
@@ -220,6 +222,7 @@ impl AudioPlayer {
             fir_bands: STANDARD_BANDS,
             fir_phase_mode: FirPhaseMode::Linear,
             ir_loaded: false,
+            loudness_cache: None,
             ir_path: None,
             config,
             device_id: None,
@@ -265,6 +268,11 @@ impl AudioPlayer {
         Ok(())
     }
 
+    /// Remember EBU R128 measurements across plays (and restarts).
+    pub fn set_loudness_cache(&mut self, cache: Option<Arc<crate::processor::LoudnessDatabase>>) {
+        self.loudness_cache = cache;
+    }
+
     pub fn load(&mut self, path: &str) -> Result<(), String> {
         self.load_with_credentials(path, None)
     }
@@ -296,6 +304,7 @@ impl AudioPlayer {
         let config = self.config.clone();
         let device_id = self.device_id;
         let loudness_state = self.loudness_normalizer.lock().atomic_state();
+        let loudness_cache = self.loudness_cache.clone();
 
         // Decode on a background thread. The track is handed to the audio
         // thread as soon as about one second is decoded; decoding continues
@@ -312,6 +321,7 @@ impl AudioPlayer {
                     &cmd_tx,
                     &loudness_state,
                     load_generation,
+                    loudness_cache.as_deref(),
                 );
             })
             .map_err(|e| format!("Failed to start decode thread: {e}"))?;
@@ -383,6 +393,7 @@ impl AudioPlayer {
         cmd_tx: &Sender<AudioCommand>,
         loudness_state: &Arc<crate::processor::AtomicLoudnessState>,
         generation: u64,
+        loudness_cache: Option<&crate::processor::LoudnessDatabase>,
     ) {
         use crate::decoder::StreamingDecoder;
         use crate::processor::{LoudnessMeter, StreamingResampler};
@@ -429,6 +440,10 @@ impl AudioPlayer {
                 | crate::config::NormalizationMode::ReplayGainAlbum
         ) && info.metadata.rg_track_gain.is_none()
             && info.metadata.rg_album_gain.is_none();
+        // Measured on an earlier play: apply it from the first second instead of
+        // starting at preamp-only and jumping once the whole track is decoded.
+        let cached_lufs = if needs_r128 { cached_loudness(loudness_cache, path) } else { None };
+        let needs_r128 = needs_r128 && cached_lufs.is_none();
 
         let make_result = |buffer: Arc<TrackBuffer>, total_frames: u64| state::LoadResult {
             buffer,
@@ -461,10 +476,12 @@ impl AudioPlayer {
                             buffer.for_each_chunk(|chunk| {
                                 let _ = meter.process(chunk);
                             });
-                            meter.integrated_loudness()
+                            let lufs = meter.integrated_loudness();
+                            store_loudness(loudness_cache, path, lufs);
+                            lufs
                         })
                     } else {
-                        None
+                        cached_lufs
                     };
                     let _ = cmd_tx.send(AudioCommand::LoadComplete {
                         generation,
@@ -540,6 +557,9 @@ impl AudioPlayer {
                         generation,
                         result: make_result(Arc::clone(writer.buffer()), total_estimate),
                     });
+                    if let Some(integrated_lufs) = cached_lufs {
+                        let _ = cmd_tx.send(AudioCommand::LoudnessMeasured { generation, integrated_lufs });
+                    }
                 }
             },
         );
@@ -561,6 +581,9 @@ impl AudioPlayer {
         }
 
         let integrated_lufs = pump.integrated_loudness();
+        if let Some(lufs) = integrated_lufs {
+            store_loudness(loudness_cache, path, lufs);
+        }
         let total_frames = writer.finish();
         shared_state.load_progress.store(100, Ordering::Relaxed);
         log::info!(
@@ -582,7 +605,7 @@ impl AudioPlayer {
             });
         }
         if is_current() {
-            if let Some(integrated_lufs) = integrated_lufs {
+            if let Some(integrated_lufs) = integrated_lufs.or(if announced { None } else { cached_lufs }) {
                 let _ = cmd_tx.send(AudioCommand::LoudnessMeasured { generation, integrated_lufs });
             }
             shared_state.raise_events(EVENT_DECODE_COMPLETE);
@@ -1136,5 +1159,116 @@ impl Drop for AudioPlayer {
         if let Some(handle) = self.audio_thread.take() {
             let _ = handle.join();
         }
+    }
+}
+
+/// Integrated loudness from an earlier measurement of this unchanged local file.
+fn cached_loudness(cache: Option<&crate::processor::LoudnessDatabase>, path: &str) -> Option<f64> {
+    let db = cache?;
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return None;
+    }
+    match db.needs_scan(path) {
+        Ok(false) => db.get(path).ok().flatten().map(|t| t.integrated_lufs).filter(|l| l.is_finite()),
+        _ => None,
+    }
+}
+
+/// Keep a playback measurement for the next time this file is played.
+fn store_loudness(cache: Option<&crate::processor::LoudnessDatabase>, path: &str, integrated_lufs: f64) {
+    let Some(db) = cache else { return };
+    if !integrated_lufs.is_finite() || path.starts_with("http://") || path.starts_with("https://") {
+        return;
+    }
+    // True peak is not measured while streaming; 0 dBTP is the conservative "unknown".
+    let track = crate::processor::TrackLoudness::new(
+        path,
+        integrated_lufs,
+        0.0,
+        None,
+        crate::processor::DEFAULT_STREAMING_TARGET_LUFS,
+    );
+    if let Err(e) = db.upsert(&track) {
+        log::warn!("Could not remember loudness of {}: {}", path, e);
+    }
+}
+
+#[cfg(test)]
+mod loudness_cache_tests {
+    use super::*;
+    use crate::processor::LoudnessDatabase;
+
+    fn write_wav(path: &std::path::Path, seconds: f64) {
+        let sr = 44_100u32;
+        let frames = (sr as f64 * seconds) as u32;
+        let mut data = Vec::with_capacity(frames as usize * 4);
+        for i in 0..frames {
+            let v = ((i as f64 * 0.0627).sin() * 0.3 * 32767.0) as i16;
+            data.extend_from_slice(&v.to_le_bytes());
+            data.extend_from_slice(&v.to_le_bytes());
+        }
+        let mut f = Vec::new();
+        f.extend_from_slice(b"RIFF");
+        f.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+        f.extend_from_slice(b"WAVEfmt ");
+        f.extend_from_slice(&16u32.to_le_bytes());
+        f.extend_from_slice(&1u16.to_le_bytes());
+        f.extend_from_slice(&2u16.to_le_bytes());
+        f.extend_from_slice(&sr.to_le_bytes());
+        f.extend_from_slice(&(sr * 4).to_le_bytes());
+        f.extend_from_slice(&4u16.to_le_bytes());
+        f.extend_from_slice(&16u16.to_le_bytes());
+        f.extend_from_slice(b"data");
+        f.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        f.extend_from_slice(&data);
+        std::fs::write(path, f).unwrap();
+    }
+
+    /// Run one load and return the loudness the decode thread reported.
+    fn load_once(path: &str, db: &LoudnessDatabase) -> Option<f64> {
+        let shared = Arc::new(SharedState::new());
+        let generation = shared.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let (tx, rx) = unbounded::<AudioCommand>();
+        let loudness = Arc::new(crate::processor::AtomicLoudnessState::new(200.0, 44_100).unwrap());
+        loudness.set_normalization_mode(crate::config::NormalizationMode::ReplayGainTrack);
+        let config = AppConfig { target_samplerate: Some(44_100), ..AppConfig::default() };
+        AudioPlayer::stream_load(path, None, &config, None, &shared, &tx, &loudness, generation, Some(db));
+        drop(tx);
+        let mut seen_complete = false;
+        let mut measured = None;
+        for cmd in rx.iter() {
+            match cmd {
+                AudioCommand::LoadComplete { .. } => seen_complete = true,
+                AudioCommand::LoudnessMeasured { integrated_lufs, .. } => {
+                    assert!(seen_complete, "gain is applied after the load, never overwritten by it");
+                    measured = Some(integrated_lufs);
+                }
+                _ => {}
+            }
+        }
+        measured
+    }
+
+    #[test]
+    fn untagged_track_is_measured_once_then_starts_at_the_remembered_level() {
+        let dir = std::env::temp_dir().join(format!("vcp-loudness-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("untagged.wav");
+        write_wav(&wav, 2.5);
+        let path = wav.to_string_lossy().to_string();
+        let db = LoudnessDatabase::in_memory().unwrap();
+
+        let first = load_once(&path, &db).expect("measured while streaming");
+        let stored = cached_loudness(Some(&db), &path).expect("measurement remembered");
+        assert!((stored - first).abs() < 1e-9);
+
+        // A remembered value is used as is (no second measurement): plant a marker.
+        store_loudness(Some(&db), &path, -30.0);
+        assert_eq!(load_once(&path, &db), Some(-30.0));
+
+        // The file changes: the old value is not trusted any more.
+        write_wav(&wav, 1.5);
+        assert_eq!(cached_loudness(Some(&db), &path), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

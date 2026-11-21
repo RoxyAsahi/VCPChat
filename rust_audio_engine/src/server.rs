@@ -781,6 +781,14 @@ pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSe
 
     // Create player with config
     let mut player = AudioPlayer::new(config);
+    // A second connection to the same database for the decode thread: untagged tracks
+    // measured once start at the right level on every later play.
+    if loudness_db.is_some() {
+        match LoudnessDatabase::open(&loudness_db_path) {
+            Ok(db) => player.set_loudness_cache(Some(Arc::new(db))),
+            Err(e) => log::warn!("Loudness cache for playback disabled: {}", e),
+        }
+    }
 
     let analysis_parallelism = std::env::var("ANALYSIS_MAX_CONCURRENCY")
         .ok()
