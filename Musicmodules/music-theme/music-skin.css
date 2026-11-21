@@ -1338,7 +1338,7 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 
 .sidebar-playlist li[data-cols="1"] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) 52px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) 22px 52px;
     column-gap: 12px;
     align-items: center;
 }
@@ -1363,6 +1363,34 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
     font-variant-numeric: tabular-nums;
     color: var(--ar-muted);
     font-weight: 400;
+}
+
+.sidebar-playlist .cl-like {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 13px;
+    line-height: 22px;
+    color: var(--ar-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s, color .12s, transform .12s;
+}
+
+.sidebar-playlist li:hover .cl-like,
+.sidebar-playlist li.is-liked .cl-like {
+    opacity: 1;
+}
+
+.sidebar-playlist li.is-liked .cl-like {
+    color: var(--ar-accent);
+}
+
+.sidebar-playlist .cl-like:hover {
+    color: var(--ar-ink);
+    transform: scale(1.12);
 }
 
 .sidebar-playlist li.active .cl-artist,
