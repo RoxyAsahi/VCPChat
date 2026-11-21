@@ -520,9 +520,59 @@
         return '#' + hex;
     };
 
+    // A 3D stage's hold on the cover's colour: set() it whenever the song
+    // may have changed, settle() it once a drawn frame, and towardHue() any
+    // colour to lean it to the cover's hue by the eased weight, keeping
+    // that colour's own lightness. Weight and hue both ease over about two
+    // seconds of wall-clock time, so a song change glides, never cuts.
+    const createCoverTint = (THREE) => {
+        const state = { target: null, colour: new THREE.Color(), next: null, weight: 0, aim: 0, at: 0 };
+        const coverHsl = {}, toneHsl = {}, scratch = new THREE.Color();
+        const close = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 0.003;
+        return {
+            get weight() { return state.weight; },
+            get target() { return state.target; },
+            set(hex) {
+                const next = typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : null;
+                if (next === state.target) return;
+                state.target = next;
+                if (!next) return;
+                state.next = new THREE.Color(next);
+                // Coming from no colour: start from this one, just faded in.
+                if (state.weight < 0.01) state.colour.copy(state.next);
+            },
+            settle(amount, now) {
+                const dt = state.at ? Math.min(0.25, Math.max(0, (now - state.at) / 1000)) : 1;
+                state.at = now;
+                const k = 1 - Math.exp(-dt * 1.6);
+                state.aim = state.target ? clamp(Number(amount) || 0, 0, 1) : 0;
+                state.weight += (state.aim - state.weight) * k;
+                if (Math.abs(state.aim - state.weight) < 0.002) state.weight = state.aim;
+                if (state.target && state.next) {
+                    state.colour.lerp(state.next, k);
+                    if (close(state.colour, state.next)) state.colour.copy(state.next);
+                }
+                state.colour.getHSL(coverHsl);
+                return state.weight;
+            },
+            settling: () => Math.abs(state.aim - state.weight) > 0.002
+                || Boolean(state.target && state.next && !close(state.colour, state.next)),
+            // Mixed straight across, not round the colour wheel: a partial
+            // turn from teal toward red would land on green, a hue in
+            // neither. Weights near 1 are for what should wear the cover's
+            // hue; small ones only warm or cool a colour.
+            towardHue(colour, weight, satFloor = 0) {
+                if (!(weight > 0)) return colour;
+                colour.getHSL(toneHsl);
+                scratch.setHSL(coverHsl.h, Math.max(toneHsl.s, coverHsl.s * satFloor), toneHsl.l);
+                return colour.lerp(scratch, Math.min(1, weight));
+            }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         watchOverlay,
-        coverColour, dominantHue,
+        coverColour, dominantHue, createCoverTint,
         lyricFont,
         createRenderScale,
         createHandoverVeil,

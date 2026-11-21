@@ -4438,56 +4438,23 @@
             };
             applyCover();
         };
-        // The cover's colour, eased in over a couple of seconds whenever the
-        // song (so the cover) changes, the way a theme change glides rather
-        // than cuts. It only moves hues: how light or dark the sky is stays
-        // the theme's, and the lyrics' colours are never touched.
-        const cover = { target: null, colour: new T.Color(), weight: 0, aim: 0, amount: 0.5, at: 0 };
-        const coverHsl = {}, toneHsl = {};
-        const towardHue = (colour, weight, satFloor = 0) => {
-            if (weight <= 0) return colour;
-            colour.getHSL(toneHsl);
-            scratchCover.setHSL(coverHsl.h, Math.max(toneHsl.s, coverHsl.s * satFloor), toneHsl.l);
-            return colour.lerp(scratchCover, weight);
-        };
-        const scratchCover = new T.Color();
-        // Called with the cover's hex (or null for none / a grey cover).
-        const setCoverColour = (hex) => {
-            const next = typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : null;
-            if (next === cover.target) return;
-            cover.target = next;
-            if (next) {
-                const colour = new T.Color(next);
-                // Coming from no colour: start from this one, just faded in.
-                if (cover.weight < 0.01) cover.colour.copy(colour);
-                cover.next = colour;
-            }
-        };
-        const settleCover = (amount, now) => {
-            const dt = cover.at ? Math.min(0.25, Math.max(0, (now - cover.at) / 1000)) : 1;
-            cover.at = now;
-            cover.amount = clamp(amount);
-            const k = 1 - Math.exp(-dt * 1.6);
-            cover.aim = cover.target ? cover.amount : 0;
-            cover.weight += (cover.aim - cover.weight) * k;
-            if (Math.abs(cover.aim - cover.weight) < 0.002) cover.weight = cover.aim;
-            if (cover.target && cover.next) {
-                cover.colour.lerp(cover.next, k);
-                if (Math.abs(cover.colour.r - cover.next.r) + Math.abs(cover.colour.g - cover.next.g)
-                    + Math.abs(cover.colour.b - cover.next.b) < 0.003) cover.colour.copy(cover.next);
-            }
-            applyCover();
-        };
-        const coverSettling = () => Math.abs(cover.aim - cover.weight) > 0.002
-            || Boolean(cover.target && cover.next && !cover.colour.equals(cover.next));
+        // The cover's colour leans the sky's hues (see createCoverTint): how
+        // light or dark the sky is stays the theme's, and the lyrics' colours
+        // are never touched.
+        const cover = global.MusicStageModeUtils.createCoverTint(T);
+        const towardHue = cover.towardHue;
+        const setCoverColour = hex => cover.set(hex);
+        const coverSettling = () => cover.settling();
+        const settleCover = (amount, now) => { cover.settle(amount, now); applyCover(); };
         const applyCover = () => {
             if (!palBase) return;
             const w = cover.weight * (palBase.light ? 0.5 : 1);
-            cover.colour.getHSL(coverHsl);
             skyMat.uniforms.auroraGreen.value.copy(palBase.auroraGreen);
             skyMat.uniforms.auroraViolet.value.copy(palBase.auroraViolet);
-            towardHue(skyMat.uniforms.auroraGreen.value, w * 0.7, 0.8);
-            towardHue(skyMat.uniforms.auroraViolet.value, w * 0.35, 0.6);
+            // The main aurora band wears the cover's hue outright from the
+            // default amount up; the second band only leans to it.
+            towardHue(skyMat.uniforms.auroraGreen.value, w * 2, 0.8);
+            towardHue(skyMat.uniforms.auroraViolet.value, w * 0.5, 0.6);
         };
         // Warmth 0..1 → bias -1 (cold, open chorus) .. +1 (warm, tightening pre-chorus).
         // Everything is re-derived from the palette baseline, so no state accumulates.

@@ -3623,6 +3623,22 @@
         /* ------------------------------------------------------------------------
          * 主题调色板同步
          * ------------------------------------------------------------------------ */
+        // The cover's colour leans the nebula's hues; planets, lyrics and
+        // lightness stay the theme's.
+        const cover = U.createCoverTint(T);
+        let coverBase = null;
+        const applyCover = () => {
+            if (!coverBase) return;
+            const w = cover.weight * (coverBase.paper ? 0.5 : 1);
+            const lean = (target, base, amount, floor) => cover.towardHue(target.copy(base), w * amount, floor);
+            // The cool nebula wears the cover's hue outright from the default
+            // amount up; the warm side only leans to it.
+            lean(skyMat.uniforms.uColorA.value, coverBase.skyA, 2, 0.8);
+            lean(skyMat.uniforms.uColorB.value, coverBase.skyB, 0.3, 0.6);
+            lean(fieldMat.uniforms.uNebulaA.value, coverBase.nebulaA, 2, 0.8);
+            lean(fieldMat.uniforms.uNebulaB.value, coverBase.nebulaB, 0.3, 0.6);
+            lean(filamentMat.uniforms.uColorA.value, coverBase.filamentA, 1.4, 0.6);
+        };
         const setPalette = (palette) => {
             stagePalette = palette || {};
             const colors = parsePalette();
@@ -3661,6 +3677,13 @@
             filamentMat.uniforms.uColorA.value.copy(colors.secondary);
             filamentMat.uniforms.uColorB.value.copy(colors.accent);
             filamentMat.uniforms.uColorC.value.copy(colors.muted);
+            coverBase = {
+                paper,
+                skyA: sky.uColorA.value.clone(), skyB: sky.uColorB.value.clone(),
+                nebulaA: fieldMat.uniforms.uNebulaA.value.clone(), nebulaB: fieldMat.uniforms.uNebulaB.value.clone(),
+                filamentA: filamentMat.uniforms.uColorA.value.clone()
+            };
+            applyCover();
 
             streakMat.uniforms.uColorA.value.copy(colors.ink);
             streakMat.uniforms.uColorB.value.copy(colors.secondary);
@@ -3933,6 +3956,8 @@
             const showStarfield = settings.starfield !== false;
             fieldPoints.visible = showStarfield;
             skyDome.visible = showStarfield;
+            cover.settle(settingVal('coverTint', 0.5), performance.now());
+            applyCover();
             const sky = skyMat.uniforms;
             sky.uTime.value = settings.reducedMotion ? 0 : time;
             sky.uJourney.value = clamp(time / Math.max(1, timeline.duration));
@@ -4244,6 +4269,8 @@
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
+            setCoverColour: hex => cover.set(hex),
+            coverSettling: () => cover.settling(),
             prepare,
             update,
             resize(w, h, ratio) {
@@ -4433,8 +4460,10 @@
             const songChanged = source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration;
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
+            world?.setCoverColour?.(services?.app?.stageCoverColour);
+            // A paused stage still finishes easing into a new cover's colour.
             const still = !frame.isPlaying && lastTime !== null
-                && finiteNumber(frame.playbackTime, 0) === lastTime;
+                && finiteNumber(frame.playbackTime, 0) === lastTime && !world?.coverSettling?.();
             if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             applyQuality();

@@ -139,13 +139,14 @@ test('the sung-word hop and the lyric face are settings of the two 3D stages onl
     dom.window.close();
 });
 
-test('镜台 takes the cover\'s most vivid hue into its sky, and a grey cover gives none', () => {
+test('the 3D stages take the cover\'s most vivid hue into their sky, and a grey cover gives none', () => {
     const dom = createDom();
     const { MusicStageConfig: Config, MusicStageModeUtils: U } = loadStage(dom);
     assert.equal(Config.get().modes.diorama.coverTint, 0.5);
     Config.setModePatch('diorama', { coverTint: 3 });
     assert.equal(Config.get().modes.diorama.coverTint, 1);
-    assert.equal(Config.get().modes.tunnel.coverTint, undefined);
+    assert.equal(Config.get().modes.tunnel.coverTint, 0.5);
+    assert.equal(Config.get().modes.luminous.coverTint, undefined);
     const pixels = (list) => Uint8ClampedArray.from(list.flatMap(([r, g, b]) => [r, g, b, 255]));
     // A red square on black: black has no hue, so red is the colour.
     const red = pixels([...Array(30).fill([200, 40, 60]), ...Array(70).fill([0, 0, 0])]);

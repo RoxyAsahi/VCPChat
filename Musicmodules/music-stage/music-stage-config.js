@@ -154,7 +154,8 @@
                 glow: 1,
                 audioReactivity: 1,
                 lyricHop: 1,
-                lyricFont: 'sans'
+                lyricFont: 'sans',
+                coverTint: 0.5
             },
             kowloon: {
                 cameraMode: 'sandbox',
