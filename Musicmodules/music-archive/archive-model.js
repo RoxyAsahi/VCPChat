@@ -157,6 +157,21 @@
     };
 
     /*
+     * 这一下滚动是不是鼠标滚轮的一格（而不是触控板的连续小增量）。
+     * 按行/按页的滚动一定是一格；按像素的，一格在 Chromium 里是 100 像素再除以系统缩放，
+     * 缩放 125%、150% 时是 80、66.67 这种小数，乘回缩放比才是整数。只看整数会把这类一格当成触控板，
+     * 累计余量偶尔一下走两张，也没有连拨的惯性。
+     */
+    const isWheelNotch = (e, dpr = 1) => {
+        if (e.deltaMode !== 0) return true;
+        const y = Math.abs(e.deltaY);
+        if (Math.abs(e.deltaX) >= 1 || y < 50) return false;
+        if (Number.isInteger(y)) return true;
+        const scaled = y * (dpr || 1);
+        return Math.abs(scaled - Math.round(scaled)) < 0.02;
+    };
+
+    /*
      * 滚轮惯性：快速连续滚动松手后再滑一段，越快滑得越远，按指数衰减停下。
      * push(格数, 秒) 记下每次滚动走的格数；滚轮停了调 release(秒)；之后每帧 tick(秒) 返回这一帧该再走几格。
      * 触控板自带的惯性尾巴速度很低，不会再叠一段。
@@ -205,7 +220,7 @@
 
     const api = Object.freeze({
         wrap, normalizePath, pathIndex, stripExtension, buildColumns, search, searchColumn,
-        fileCode, cellTrack, locate, step, createWheel, createInertia, rowAtFraction, signature
+        fileCode, cellTrack, locate, step, createWheel, isWheelNotch, createInertia, rowAtFraction, signature
     });
 
     if (typeof module === 'object' && module.exports) module.exports = api;

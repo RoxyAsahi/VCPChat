@@ -32,9 +32,20 @@
         const tuning = () => mode.config.modes?.fume || {};
         const intensity = () => reduced?.matches ? 0 : value(mode.config.animationIntensity, 1);
 
+        // The size is known from the resize observer; reading it every frame
+        // makes the browser lay the page out again before each one.
+        let rootSize = null;
+        if (global.ResizeObserver) {
+            const observer = new global.ResizeObserver(() => { rootSize = null; });
+            observer.observe(mode.root);
+            mode.scope.add(() => observer.disconnect());
+        }
         const resize = () => {
-            const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
-            const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
+            if (!rootSize || !global.ResizeObserver) {
+                rootSize = { w: Math.max(1, mode.root.clientWidth || global.innerWidth || 1),
+                    h: Math.max(1, mode.root.clientHeight || global.innerHeight || 1) };
+            }
+            const { w, h } = rootSize;
             const budget = mode.config.quality === 'energy-saving' ? 1280 * 720 : 1920 * 1080 * 1.5;
             const dpr = Math.min(2, global.devicePixelRatio || 1, Math.sqrt(budget / (w * h)));
             if (w !== width || h !== height) dirty = true;
