@@ -859,7 +859,9 @@ body.music-stage-scene-3d .music-stage-empty-notice {
     display: block;
 }
 
+/* Romanization and translation come as two lines; keep them two lines. */
 .stage-translation {
+    white-space: pre-line;
     color: color-mix(in srgb, var(--stage-ink) 56%, transparent);
     font-size: clamp(13px, 1.25vw, 19px);
     font-weight: 440;
