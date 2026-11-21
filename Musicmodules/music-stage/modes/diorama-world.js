@@ -3618,6 +3618,9 @@
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
                 lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 },
+                // One texel of the mirror image, and whether to smooth its edges
+                // (when the mirror is drawn without multisampling).
+                mirrorTexel: { value: new T.Vector2(1 / 512, 1 / 320) }, mirrorSoft: { value: 1 },
                 // Where the train wades: its nose, three points down its length and its tail.
                 wake: { value: 0 }, wakePath: { value: Array.from({ length: 5 }, () => new T.Vector2()) },
                 // Rings a hit in the music drops on the water: x, z, song time, strength.
@@ -3625,7 +3628,7 @@
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake,mirrorSoft;uniform vec2 mirrorTexel;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;uniform vec2 wakePath[5];
                 uniform vec3 lampPos[4];uniform float lampPower[4];uniform vec4 pulses[4];
                 varying vec4 reflected;varying vec3 world;
@@ -3719,6 +3722,15 @@
                     vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03)+stir*0.07*damp;
                     float valid=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0)*step(0.0,reflected.w);
                     vec3 r=texture2D(reflection,clamp(uv,0.001,0.999)).rgb;
+                    // The mirror is drawn at a fraction of the picture's size; without
+                    // multisampling its edges would come back as a magnified staircase.
+                    // Four taps on a rotated grid round each edge off.
+                    if(mirrorSoft>0.0){
+                        vec2 a=mirrorTexel*vec2(0.62,0.24),b=mirrorTexel*vec2(-0.24,0.62);
+                        vec3 soft=texture2D(reflection,clamp(uv+a,0.001,0.999)).rgb+texture2D(reflection,clamp(uv-a,0.001,0.999)).rgb
+                            +texture2D(reflection,clamp(uv+b,0.001,0.999)).rgb+texture2D(reflection,clamp(uv-b,0.001,0.999)).rgb;
+                        r=mix(r,soft*0.25,mirrorSoft);
+                    }
                     // Out where the rings are too small to see, rain-pocked water
                     // smears what it mirrors into soft vertical streaks.
                     if(rain>0.0){
@@ -5636,6 +5648,13 @@
                 quality === 'ultimate' ? 1440 : quality === 'energy-saving' ? 384 : 960));
             const height = Math.max(1, Math.round(width * size.y / Math.max(1, size.x)));
             if (target.width !== width || target.height !== height) target.setSize(width, height);
+            const samples = global.MusicStageModeUtils?.tier(quality).samples ?? 0;
+            if (target.samples !== samples) {
+                target.samples = samples;
+                target.dispose();
+            }
+            waterMat.uniforms.mirrorTexel.value.set(1 / width, 1 / height);
+            waterMat.uniforms.mirrorSoft.value = samples ? 0 : 1;
             const oldTarget = renderer.getRenderTarget(), oldAutoClear = renderer.autoClear;
             const oldXr = renderer.xr.enabled;
             water.visible = false;
