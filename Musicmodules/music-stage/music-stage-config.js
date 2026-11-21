@@ -82,6 +82,7 @@
                 cameraSpeed: 1,
                 motionAmount: 1,
                 audioReactivity: 1,
+                lyricHop: 1,
                 showParticles: true,
                 geometryMode: 'clouds',
                 cabinFrame: true,
@@ -149,7 +150,8 @@
                 textHoldRatio: 0.32,
                 fontScale: 1,
                 glow: 1,
-                audioReactivity: 1
+                audioReactivity: 1,
+                lyricHop: 1
             },
             kowloon: {
                 cameraMode: 'sandbox',
@@ -232,6 +234,7 @@
             waterStrength: clamp(source.waterStrength, 0, 2, fallback.waterStrength),
             motionAmount: clamp(source.motionAmount, 0, 2, fallback.motionAmount),
             audioReactivity: clamp(source.audioReactivity, 0, 2, fallback.audioReactivity),
+            lyricHop: fallback.lyricHop === undefined ? source.lyricHop : clamp(source.lyricHop, 0, 2, fallback.lyricHop),
             showParticles: bool(source.showParticles, fallback.showParticles),
             geometryMode: enumValue(source.geometryMode, ['clouds', 'corridor'], fallback.geometryMode),
             cabinFrame: bool(source.cabinFrame, fallback.cabinFrame),
