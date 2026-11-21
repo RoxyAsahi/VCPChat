@@ -259,12 +259,18 @@
                 uniform vec3 accent,ink,cold;uniform float ranges[64],starts[64],ends[64];
                 varying vec2 vUv;
                 void main(){float start=1e8,end=1e8;float selected=0.0;
-                    for(int i=0;i<64;i++){if(selected<0.5 && vUv.x<=ranges[i]){
-                        start=starts[i];end=ends[i];selected=1.0;}}
+                    float left=0.0,right=1.0;
+                    for(int i=0;i<64;i++){if(selected<0.5){if(vUv.x<=ranges[i]){
+                        start=starts[i];end=ends[i];right=ranges[i];selected=1.0;}else left=ranges[i];}}
                     float age=time-start;float singing=step(start,time)*(1.0-step(end,time));
                     float passed=step(end,time);float attack=smoothstep(0.0,0.08,age);
                     float peak=singing*attack*exp(-max(age-0.08,0.0)*8.0);
-                    vec3 color=mix(ink,accent,step(start,time));
+                    // The colour runs across each glyph over its own sung time, with
+                    // a soft leading edge, instead of the whole glyph flipping at once.
+                    float across=clamp((vUv.x-left)/max(right-left,1e-4),0.0,1.0);
+                    float sungPart=clamp(age/max(end-start,0.04),0.0,1.0)*1.3;
+                    float wipe=smoothstep(0.0,0.3,sungPart-across);
+                    vec3 color=mix(ink,accent,wipe);
                     color=mix(color,mix(accent,cold,0.55),passed*smoothstep(0.0,0.6,time-end));
                     float wave=sin(vUv.x*9.0+time*0.7)*0.012;
                     vec2 sampleUv=vUv+vec2(0.0,wave*constellation*(1.0-entrance));
@@ -290,7 +296,7 @@
                     float brightness=1.0+peak*glow*0.7;
                     brightness+=singing*step(0.8,end-start)*vocal*0.15*glow;
                     vec3 lit=mix(color,mix(cold,ink,0.55),constellation*0.38);
-                    gl_FragColor=vec4(lit*brightness,alpha*fade*mix(rest,0.95,step(start,time)));
+                    gl_FragColor=vec4(lit*brightness,alpha*fade*mix(rest,0.95,max(wipe,step(start,time)*0.35)));
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }`
