@@ -85,14 +85,22 @@
         }
         // On the way up to the roof and down again the camera passes the train
         // on the side of the screen being read then: the pantograph is then off
-        // to the other side of the picture and never comes between them.
-        const screenSide = t => {
-            const reading = plan.encounters.filter(item => item.start - 5 <= t && item.end + 2 >= t);
-            const nearest = reading.sort((a, b) => Math.abs(a.start - t) - Math.abs(b.start - t))[0];
-            return nearest ? nearest.side : 1;
+        // to the other side of the picture and never comes between them. The
+        // pantograph only stands in the way over the second half of the climb,
+        // when the camera is near roof height, so the screen read over that
+        // stretch decides; one read just before it, on the other side, has
+        // already been passed by then.
+        const screenSide = (from, to) => {
+            let best = null, most = 0;
+            for (const item of plan.encounters) {
+                const overlap = Math.min(to, item.end + 1) - Math.max(from, item.start - 1);
+                if (overlap > most) { most = overlap; best = item; }
+            }
+            return best ? best.side : 1;
         };
         const rideSides = rideSpans(timeline).map(span => ({
-            entry: screenSide(span.start + ROOF.blend / 2), exit: screenSide(span.end - ROOF.blend / 2) }));
+            entry: screenSide(span.start + ROOF.blend * 0.4, span.start + ROOF.blend),
+            exit: screenSide(span.end - ROOF.blend, span.end - ROOF.blend * 0.4) }));
         return { at, encounters: plan.encounters, pageEncounter: plan.pageEncounter, turns, initialYaw,
             scenes, rideSides, path, addressAt: path.addressAt, timeAt: path.timeAt, trainAt: path.trainAt };
     };
