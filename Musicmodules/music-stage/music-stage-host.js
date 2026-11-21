@@ -1562,17 +1562,26 @@
             app.api?.seekMusic?.(target);
         });
         scope.listen(global, 'keydown', onKeyDown);
+        // Dragging a window edge fires resize many times a frame, and each
+        // resize redraws the whole 3D picture: do it once per frame.
+        let resizeFrame = 0;
+        scope.add(() => global.cancelAnimationFrame?.(resizeFrame));
         scope.listen(global, 'resize', () => {
             rootSize = null;
             edgeCanvasState.width = 0;
             edgeCanvasState.height = 0;
-            const viewport = {
-                width: global.innerWidth,
-                height: global.innerHeight,
-                dpr: Math.min(2, global.devicePixelRatio || 1)
-            };
-            state.modeInstance?.resize?.(viewport);
-            state.leaving?.instance.resize?.(viewport);
+            if (resizeFrame) return;
+            resizeFrame = global.requestAnimationFrame(() => {
+                resizeFrame = 0;
+                if (state.destroyed) return;
+                const viewport = {
+                    width: global.innerWidth,
+                    height: global.innerHeight,
+                    dpr: Math.min(2, global.devicePixelRatio || 1)
+                };
+                state.modeInstance?.resize?.(viewport);
+                state.leaving?.instance.resize?.(viewport);
+            });
         });
         scope.listen(document, 'visibilitychange', () => {
             // A hidden window would leave the old mode half faded out; finish the switch.
