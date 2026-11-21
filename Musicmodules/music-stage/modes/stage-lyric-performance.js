@@ -185,6 +185,15 @@
         const interlude = createInterludeVisualizer({ className: `stage-interlude-${id}` });
         subtitle.append(translation, upcoming);
         mode.root.append(viewport, subtitle, empty, interlude.root);
+        // The size is known from the resize observer; reading it each frame
+        // makes the browser lay the page out again before every frame.
+        let viewportSize = null;
+        if (global.ResizeObserver) {
+            const observer = new global.ResizeObserver(() => { viewportSize = null; });
+            observer.observe(viewport);
+            mode.scope.add(() => observer.disconnect());
+        }
+        let accentValue = '';
         mode.scope.add(() => interlude.destroy());
         const decor = ['luminous', 'partita', 'cadenza'].includes(id)
             ? global.MusicStageLyricDecor?.create(mode.root, id) : null;
@@ -250,8 +259,10 @@
         mode.updateFrame = frame => {
             if (mode.destroyed || mode.suspended) return;
             latest = frame;
-            const width = Math.max(1, viewport.clientWidth);
-            const height = Math.max(1, viewport.clientHeight);
+            if (!viewportSize || !global.ResizeObserver) {
+                viewportSize = { width: Math.max(1, viewport.clientWidth), height: Math.max(1, viewport.clientHeight) };
+            }
+            const { width, height } = viewportSize;
             const tuning = getTuning();
             const motion = reduced?.matches ? 0 : number(mode.config.animationIntensity, 1);
             const nextTrack = frame.track?.path || frame.track?.title || '';
@@ -278,9 +289,14 @@
                 layoutKey = key;
                 invalidate();
             }
-            mode.root.style.setProperty('--performance-accent', accent
+            const nextAccent = accent
                 ? `rgb(${clamp(accent.r, 0, 255)},${clamp(accent.g, 0, 255)},${clamp(accent.b, 0, 255)})`
-                : 'var(--stage-accent)');
+                : 'var(--stage-accent)';
+            // A custom property changed on the root restyles everything under it.
+            if (nextAccent !== accentValue) {
+                accentValue = nextAccent;
+                mode.root.style.setProperty('--performance-accent', nextAccent);
+            }
             decor?.update(frame, tuning, motion);
             const env = { width, height, tuning, motion, family, measure, pretext, trackKey };
             if (force || changedSource || jumped) {

@@ -8,6 +8,13 @@
     class SonnetPixiDirector {
         constructor(container) {
             this.container = container;
+            // The size is known from the resize observer; reading it every
+            // frame makes the browser lay the page out again before each one.
+            this.sizeKnown = false;
+            if (globalThis.ResizeObserver) {
+                this.sizeObserver = new globalThis.ResizeObserver(() => { this.sizeKnown = false; });
+                this.sizeObserver.observe(container);
+            }
             this.app = null;
             this.sceneContainer = null;
             this.frameDecorContainer = null;
@@ -94,6 +101,8 @@
 
         resize() {
             if (!this.initialized || !this.app) return;
+            if (this.sizeKnown && this.sizeObserver) return;
+            this.sizeKnown = true;
             const width = Math.max(1, this.container.clientWidth);
             const height = Math.max(1, this.container.clientHeight);
             if (width === this.width && height === this.height) return;
@@ -390,6 +399,8 @@
         }
 
         destroy() {
+            this.sizeObserver?.disconnect();
+            this.sizeObserver = null;
             if (this.destroyed && !this.app) return;
             this.destroyed = true;
             this.pendingShot = null;
