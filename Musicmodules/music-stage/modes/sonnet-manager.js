@@ -15,7 +15,7 @@
         stageContainer.style.overflow = 'hidden';
         mode.root.append(stageContainer);
 
-        const eyebrow = createElement('div', 'sonnet-eyebrow', 'SONNET / PIXI MOTION GRAPHICS');
+        const eyebrow = createElement('div', 'sonnet-eyebrow', '商籁');
         const translation = createElement('div', 'stage-translation sonnet-translation');
         const hud = createElement('div', 'sonnet-hud');
         mode.root.append(eyebrow, translation, hud);
@@ -69,8 +69,8 @@
             const tuning = getTuning();
             director?.update(currentFrame, tuning);
 
-            const power = Number(currentFrame.audio?.power) || 0;
-            hud.textContent = `FRAME ${String(Math.max(0, currentFrame.currentLineIndex + 1)).padStart(2, '0')}  /  AUDIO ${Math.round(power * 100)}%`;
+            const caption = Utils.lineCounter(currentFrame);
+            if (hud.textContent !== caption) hud.textContent = caption;
         };
 
         const updateConfig = mode.updateConfig;

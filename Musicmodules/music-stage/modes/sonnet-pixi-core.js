@@ -255,7 +255,7 @@
                 this.giantText.destroy();
                 this.giantText = null;
             }
-            const giantStr = line?.fullText ? global.MusicStageRuntime.splitGraphemes(line.fullText).slice(0, 8).join('') : 'SONNET';
+            const giantStr = line?.fullText ? global.MusicStageRuntime.splitGraphemes(line.fullText).slice(0, 8).join('') : '商籁';
             this.giantText = new PIXI.Text({
                 text: giantStr,
                 style: {

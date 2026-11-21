@@ -603,7 +603,19 @@
         global.setTimeout(go, 50);
     });
 
+    // Where the song is, for a stage's small running caption: "03 / 32",
+    // or what the stage is waiting through when no line is up yet.
+    const lineCounter = (frame, digits = 2) => {
+        const count = frame?.lines?.length || 0;
+        const index = Number(frame?.currentLineIndex);
+        if (!count) return '暂无歌词';
+        if (!(index >= 0)) return '前奏';
+        const pad = value => String(value).padStart(digits, '0');
+        return `${pad(Math.min(count, index + 1))} / ${pad(count)}`;
+    };
+
     global.MusicStageModeUtils = Object.freeze({
+        lineCounter,
         watchOverlay, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,
         lyricFont,

@@ -112,7 +112,7 @@
 
         const mountBlock = (block, measuring = false) => {
             const element = createElement('article', `fume-article-block${block.hero ? ' is-hero' : ''}`);
-            const number = createElement('div', 'fume-article-number', `${String(block.index + 1).padStart(3, '0')} / ${block.hero ? 'VERSE' : 'TEXT'}`);
+            const number = createElement('div', 'fume-article-number', String(block.index + 1).padStart(3, '0'));
             const text = createElement('div', 'fume-article-text');
             element.style.width = `${block.width}px`;
             text.style.fontSize = `${block.fontSize}px`;
@@ -385,10 +385,10 @@
                     });
                 });
                 translation.textContent = resolveSupplementalText(frame.activeLine);
-                heading.textContent = `FUME / ${String(index + 1).padStart(3, '0')} — ${String(blocks.length).padStart(3, '0')}`;
+                heading.textContent = `浮名 · ${U.lineCounter(frame, 3)}`;
             } else {
                 translation.textContent = '';
-                heading.textContent = 'FUME / INSTRUMENTAL';
+                heading.textContent = `浮名 · ${blocks.length && frame.currentLineIndex >= 0 ? '间奏' : U.lineCounter(frame, 3)}`;
                 cameraX = cameraY = 0;
             }
             canvas.style.opacity = String(value(t.backgroundOpacity, 0.5, 0, 1));
