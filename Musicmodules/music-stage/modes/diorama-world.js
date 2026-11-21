@@ -3698,6 +3698,18 @@
                     vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03)+stir*0.07*damp;
                     float valid=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0)*step(0.0,reflected.w);
                     vec3 r=texture2D(reflection,clamp(uv,0.001,0.999)).rgb;
+                    // Out where the rings are too small to see, rain-pocked water
+                    // smears what it mirrors into soft vertical streaks.
+                    if(rain>0.0){
+                        float smear=0.006*rain*smoothstep(10.0,40.0,dist);
+                        float broken=0.6+0.8*n21(vec2(world.x*1.3,time*4.0));
+                        vec2 step=vec2(0.0,smear*broken);
+                        vec3 s=texture2D(reflection,clamp(uv-step*1.5,0.001,0.999)).rgb
+                            +texture2D(reflection,clamp(uv-step*0.5,0.001,0.999)).rgb
+                            +texture2D(reflection,clamp(uv+step*0.5,0.001,0.999)).rgb
+                            +texture2D(reflection,clamp(uv+step*1.5,0.001,0.999)).rgb;
+                        r=mix(r,s*0.25,smoothstep(10.0,40.0,dist));
+                    }
                     // Schlick Fresnel for water (F0 ~ 0.02), lifted so the mirror reads at night.
                     float cosT=clamp(dot(n,v),0.0,1.0);
                     float f=0.1+0.9*(0.02+0.98*pow(1.0-cosT,5.0));
@@ -3728,6 +3740,8 @@
                     // Broken water along the hull catches what light there is.
                     float lace=smoothstep(0.35,0.75,n21(world.xz*vec2(5.0,6.3)+vec2(time*1.3,-time*0.9)));
                     c=mix(c,c*1.35+fogTint*0.12+moonTint*0.03,churn*lace*0.4*strength);
+                    // Far off, countless splashes add up to a dull grey sheen over the mirror.
+                    c=mix(c,fogTint*0.85+tint*0.25,rain*0.16*smoothstep(6.0,60.0,dist));
                     // Match scene FogExp2 so the far plane melts into the horizon.
                     float fog=1.0-exp(-fogDensity*fogDensity*dist*dist);
                     c=mix(c,fogTint,clamp(fog,0.0,1.0));
