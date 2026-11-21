@@ -879,3 +879,14 @@ body.music-reduce-motion :is(.archive-lyrics-track > p, #music-dock-root .md-lyr
 }
 body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: none; }
 body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: none; }
+
+/* ───────── 档案页的几个单独的文字按钮 ─────────
+ * 「播放这一组 →」「← 返回曲库」和曲名（点开详情）：指针移上去，按钮背后凝出一汪浅玻璃，移开就淡掉。
+ * 按钮自己的字、箭头和悬停变色都不变。 */
+:is(.archive-brand, .archive-detail, .archive-callout) { isolation: isolate; }
+:is(.archive-brand, .archive-detail, .archive-callout) > .mf-trail { top: 0; margin-top: 0; height: 0; border-radius: 14px; }
+.archive-callout > .mf-trail { border-radius: 18px; }
+:is(.archive-brand, .archive-detail, .archive-callout):has(> :is(.archive-brand-play, .archive-detail-back, .archive-file-title):focus-visible) > .mf-trail.mf-on {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
+}
+#music-archive-view :is(.archive-brand, .archive-detail, .archive-callout):has(> .mf-trail.mf-on) > :is(.archive-brand-play, .archive-detail-back, .archive-file-title):focus-visible:not(#messageInput) { outline: none; }

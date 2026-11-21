@@ -348,6 +348,10 @@
         { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
         { row: '.archive-batch-menu', item: '.archive-batch-menu > button', key: 'ar-batch', axis: 'y', pad: 0 },
         { row: '.archive-list-sort-menu', item: '.archive-list-sort-menu > button', key: 'ar-sort', axis: 'y', pad: 0 },
+        // 单独一个按钮（solo）：那一排是一大块，指针离开按钮就淡掉，不等离开整块
+        { row: '.archive-brand', item: '.archive-brand > .archive-brand-play', key: 'ar-brand', axis: 'xy', pad: 10, solo: true },
+        { row: '.archive-detail', item: '.archive-detail > .archive-detail-back', key: 'ar-back', axis: 'xy', pad: 10, solo: true },
+        { row: '.archive-callout', item: '.archive-callout > .archive-file-title', key: 'ar-ftitle', axis: 'xy', pad: 8, solo: true },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -431,7 +435,8 @@
                 const row = target.closest(t.row);
                 if (!row) continue;
                 const next = event.relatedTarget;
-                if (next instanceof global.Node && row.contains(next)) return;
+                const keep = t.solo ? target.closest(t.item) : row;
+                if (keep && next instanceof global.Node && keep.contains(next)) return;
                 row.querySelector(':scope > .mf-trail')?.classList.remove('mf-on');
                 return;
             }
