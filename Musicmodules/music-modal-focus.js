@@ -18,7 +18,8 @@
     const FOCUSABLE = 'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
     const openers = new WeakMap();
 
-    const isOpen = (o) => o.classList.contains('visible');
+    // 多数弹窗用 visible 开关，WebDAV 两个弹窗用的是 active：两种都算开着，不然开着的弹窗会被设成 inert，点什么都没反应
+    const isOpen = (o) => o.classList.contains('visible') || o.classList.contains('active');
     const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
     const focusables = (o) => [...o.querySelectorAll(FOCUSABLE)].filter((el) => !el.closest('[inert]') && shown(el));
     const topOverlay = () => {
@@ -71,6 +72,17 @@
                 : (at < 0 || at === list.length - 1 ? list[0] : null);
             if (next) { e.preventDefault(); next.focus({ preventScroll: true }); }
         }, true);
+        // Esc 关最上面那个弹窗（按它自己的关闭／取消钮，走原来的关闭逻辑）。
+        // WebDAV 两个弹窗和编辑歌单以前按 Esc 没反应；已经自己处理过 Esc 的弹窗，到这里时已经关了。
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+            const o = topOverlay();
+            if (!o) return;
+            const close = o.querySelector('.music-modal-close-btn, [id$="-cancel"]');
+            if (!close || close.disabled) return;
+            e.preventDefault();
+            close.click();
+        });
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch, { once: true });
