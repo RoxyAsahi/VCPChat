@@ -333,6 +333,7 @@
     const TRAILS = [
         { row: '.archive-nav', item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
         { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+        { row: '.archive-empty', item: '.archive-empty > button', key: 'archive-empty', axis: 'xy', pad: 12 },
         { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
         { row: '#modal-song-list', item: '#modal-song-list > .music-modal-song-item', key: 'pl-songs', axis: 'xy', pad: 0 },

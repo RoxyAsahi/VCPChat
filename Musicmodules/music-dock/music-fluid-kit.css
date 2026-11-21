@@ -686,6 +686,10 @@ body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before 
 .mf-trail.mf-on { opacity: 1; transform: none; }
 .archive-nav { isolation: isolate; }
 .archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
+/* 曲库空着时的「添加音乐文件夹 / 从云端导入」：和提示卡的按钮一样，手底下一汪浅玻璃。
+ * 整块里还有标题和说明，所以竖直位置也按按钮量（axis: 'xy'），不用整块的中线。 */
+.archive-empty { isolation: isolate; }
+.archive-empty > .mf-trail { top: 0; margin-top: 0; height: 0; }
 body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }
 /* 左侧目录的曲目行：竖着流，横向和行对齐（行从 --gutter 开始） */
 .archive-list-spacer { isolation: isolate; }
@@ -787,10 +791,10 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 .webdav-file-list:has(> .mf-trail.mf-on) > .webdav-file-item:hover,
 .webdav-server-list:has(> .mf-trail.mf-on) > .webdav-server-item:not(.active):hover { background: none; }
 /* 键盘焦点：那一汪跟着焦点走时，焦点提示画在它身上（一圈强调色细光），不再在按钮外面另套一个方框 */
-:is(.archive-nav, .archive-callout-acts):has(> button:focus-visible) > .mf-trail.mf-on {
+:is(.archive-nav, .archive-callout-acts, .archive-empty):has(> button:focus-visible) > .mf-trail.mf-on {
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
 }
-#music-archive-view :is(.archive-nav, .archive-callout-acts):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
+#music-archive-view :is(.archive-nav, .archive-callout-acts, .archive-empty):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
 
 /* ───────── 弹窗里的滚动条 ─────────
  * 全局滚动条是 6px、强调色的滑块（themes.css，带 !important），在玻璃弹窗里太跳。
