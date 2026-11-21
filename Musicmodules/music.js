@@ -1235,7 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.api.onMusicScanStart(() => { app.loadingIndicator.style.display = 'flex'; app.scanProgressContainer.style.display = 'none'; });
         app.api.onMusicScanProgress((data) => {
             app.scanProgressContainer.style.display = 'block';
-            const percent = (data.current / data.total) * 100;
+            const percent = data.total > 0 ? Math.min(100, (data.current / data.total) * 100) : 0;
             app.scanProgressBar.style.width = `${percent}%`;
             app.scanProgressLabel.textContent = `正在扫描: ${data.current} / ${data.total}`;
         });
