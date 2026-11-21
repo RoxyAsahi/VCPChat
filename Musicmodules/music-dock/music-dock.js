@@ -1894,10 +1894,14 @@
             && app.archiveView?.mode === 'archive';
         let helpEl = null;
         const helpOpen = () => Boolean(helpEl && !helpEl.hidden);
+        let helpFrom = null;
         const closeHelp = () => {
             if (!helpOpen()) return;
+            // 合上时流回最后按下的地方（点了关闭就流回那颗按钮），键盘关就流回打开时那一点
+            const snap = global.MusicFluid?.snapshot(helpEl.querySelector('.md-keys-box'));
             helpEl.classList.remove('md-open');
             helpEl.hidden = true;
+            if (snap) global.MusicFluid.melt(snap, global.MusicFluid.recentPress() || helpFrom, { duration: 300 });
         };
         const openHelp = () => {
             if (!helpEl) {
@@ -1921,6 +1925,7 @@
                 void box.offsetWidth;
                 box.style.transition = '';
                 const from = global.MusicFluid.recentPress() || { x: global.innerWidth / 2, y: global.innerHeight - 60 };
+                helpFrom = from;
                 global.MusicFluid.bud(box, from, { duration: 480 });
             } else {
                 requestAnimationFrame(() => helpEl.classList.add('md-open'));

@@ -104,6 +104,17 @@ test('a dialog opened anywhere grows out of the last press, without the opening 
     await new Promise((r) => setTimeout(r, 0));
     frames.splice(0).forEach((fn) => fn());
     assert.equal(doc.querySelector('svg.mf-goo'), null, 'no regrowth while it stays open');
+    // 关掉：面板此时已经量不到大小，靠打开时记下的样子缩回一滴，流回刚按下的「取消」
+    await Promise.resolve();
+    panel.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 });
+    doc.body.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, clientX: 700, clientY: 360 }));
+    doc.querySelector('.dialog-overlay').classList.remove('visible');
+    await new Promise((r) => setTimeout(r, 0));
+    const back = doc.querySelector('svg.mf-goo');
+    assert.ok(back, 'liquid drawn for the closing dialog');
+    assert.equal(back.querySelector('rect').getAttribute('width'), '340.0', 'starts from the open size');
+    for (let i = 0; i < 20; i++) { now += 50; frames.splice(0).forEach((fn) => fn()); }
+    assert.equal(doc.querySelector('svg.mf-goo'), null, 'layer removed after melting');
 });
 
 test('slide also runs vertically (top/height), leading edge first, and lands exactly', () => {
