@@ -570,6 +570,16 @@
             const turn = Math.min(Math.abs(off), Math.max(needed, Math.abs(off) * 0.6 * (1 - Math.max(ride.lead, ride.out))));
             return { yaw: frame.yaw + Math.sign(off) * turn, pitch };
         };
+        // A screen wider than the picture (a narrow or upright window) is read
+        // with the lens opened just far enough to hold all of it, margins included.
+        let readFov = fov;
+        const fitFov = (item, weight) => {
+            if (!item?.width || weight <= 0) return;
+            const reach = Math.max(1, Math.hypot(item.position.x - position.x, item.position.z - position.z));
+            const half = Math.atan(item.width * 0.56 / reach);
+            const need = 2 * Math.atan(Math.tan(half) / Math.max(0.35, options.aspect || 1.6)) * 180 / Math.PI;
+            if (need > fov) readFov = Math.max(readFov, fov + (Math.min(78, need) - fov) * weight);
+        };
         let encounterId = null;
         const directHandoff = encounter && upcoming && t >= encounter.end
             && upcoming.start - encounter.end > 0 && upcoming.start - encounter.end <= 7;
@@ -578,6 +588,7 @@
             const weight = smooth((t - encounter.end) / (upcoming.start - encounter.end));
             yaw = blendAngle(a.yaw, b.yaw, weight);
             pitch = mix(a.pitch, b.pitch, weight);
+            fitFov(encounter, 1 - weight); fitFov(upcoming, weight);
             encounterId = weight < 0.5 ? encounter.id : upcoming.id;
             rig = 'WINDOW';
         }
@@ -589,6 +600,7 @@
                 const target = aim(encounter);
                 yaw = blendAngle(yaw, target.yaw, weight);
                 pitch = mix(pitch, target.pitch, weight);
+                fitFov(encounter, weight);
                 encounterId = encounter.id;
                 rig = 'WINDOW';
             }
@@ -600,9 +612,11 @@
                 const target = aim(upcoming);
                 yaw = blendAngle(yaw, target.yaw, weight);
                 pitch = mix(pitch, target.pitch, weight);
+                fitFov(upcoming, weight);
                 encounterId = upcoming.id;
             }
         }
+        fov = readFov;
         let eventFocus = null;
         const events = track.events || [];
         const event = events[upperBound(events, t, 'start') - 1];

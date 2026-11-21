@@ -396,17 +396,46 @@
             pickRow(k);
         };
 
+        const fullName = (t) => {
+            if (!t) return '';
+            const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
+            const meta = [t.artist, t.album].filter(Boolean).join(' · ');
+            return meta ? `${title}\n${meta}` : title;
+        };
+        /* 哪些分组标题下有正在放的歌：按「正在放的那首 + 这一版目录」缓存，滚动时不重复扫 */
+        let liveCache = { playing: null, rows: null, heads: new Set() };
+        const playingHeads = () => {
+            if (liveCache.playing === state.playing && liveCache.rows === state.rows) return liveCache.heads;
+            const heads = new Set();
+            if (state.playing >= 0) {
+                let h = -1;
+                for (let j = 0; j < state.rows.length; j++) {
+                    const row = state.rows[j];
+                    if (row.type === 'head') { if (!isLetter(row)) h = j; continue; }
+                    if (row.i === state.playing && h >= 0) heads.add(h);
+                }
+            }
+            liveCache = { playing: state.playing, rows: state.rows, heads };
+            return heads;
+        };
         const paintRow = (node, row, k) => {
             const on = k === state.selectedRow;
             node.classList.toggle('on', on);
             const current = row.type === 'track' && row.i === state.playing;
             node.classList.toggle('current', current);
             node.classList.toggle('playing', current && Boolean(app.isPlaying));
-            if (row.type === 'head') node.classList.toggle('stuck', k === state.stuck);
+            if (row.type === 'head') {
+                node.classList.toggle('stuck', k === state.stuck);
+                // 正在放的歌在这一组里：组标题前亮一个小点（和 Spotify 侧栏里正在放的歌单一样）
+                const live = !isLetter(row) && playingHeads().has(k);
+                node.classList.toggle('has-playing', live);
+                node.classList.toggle('live-on', live && Boolean(app.isPlaying));
+            }
             if (row.type === 'track') {
                 const failed = app.failedTracks instanceof Map ? app.failedTracks.get(tracks()[row.i]) : null;
                 node.classList.toggle('bad', Boolean(failed));
-                if (failed) node.title = `上次没能播放：${failed}`; else node.removeAttribute('title');
+                // 悬停看完整的歌名、歌手、专辑（窄目录里常被省略号截掉）
+                if (failed) node.title = `上次没能播放：${failed}`; else node.title = fullName(tracks()[row.i]);
                 const picked = multi.size > 0 && multi.has(keyOf(row));
                 node.classList.toggle('picked', picked);
                 node.setAttribute('aria-selected', String(on || picked));
@@ -417,6 +446,8 @@
             state.raf = 0;
             if (!el.isConnected || el.hidden) return;
             const top = r.viewport.scrollTop;
+            // 滚在最上面时顶上没有东西可淡出，第一行不该被遮淡
+            r.viewport.classList.toggle('at-top', top <= 1);
             const h = r.viewport.clientHeight || 600;
             syncThumb(top, h);
             if (!state.rows.length) { r.sticky.textContent = ''; return; }
