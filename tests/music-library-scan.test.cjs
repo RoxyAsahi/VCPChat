@@ -143,3 +143,26 @@ test('stops when aborted and an empty folder completes at once', async () => {
     assert.equal(result.stats.aborted, true);
     assert.ok(result.tracks.length < 200);
 });
+
+test('a known track that fails to read this time keeps its last result; an unreadable folder keeps its tracks', async () => {
+    const lib = library(['1.mp3', '2.mp3']);
+    const first = await scanFolder({ folderPath: lib.music, coverCachePath: lib.cache, workerFile: lib.workerFile });
+    // 第二首这次读失败（换成会报错的文件名代替「被占用」）：上次的结果留着
+    const broken = path.join(lib.music, '2-broken.mp3');
+    fs.renameSync(first.tracks[1].path, broken);
+    const known = [first.tracks[0], { ...first.tracks[1], path: broken, size: -1 }];
+    const second = await scanFolder({ folderPath: lib.music, coverCachePath: lib.cache, workerFile: lib.workerFile, knownTracks: known });
+    assert.deepEqual(second.tracks.map((t) => path.basename(t.path)), ['1.mp3', '2-broken.mp3']);
+    assert.equal(second.stats.failed, 1);
+    assert.equal(second.stats.kept, 1);
+
+    // 整个文件夹读不到（移动硬盘拔了）：上次扫到的全留着，别的文件夹的不混进来
+    const gone = path.join(lib.root, 'unplugged');
+    const elsewhere = { path: path.join(lib.root, 'unplugged2', 'x.mp3'), title: 'x' };
+    const third = await scanFolder({
+        folderPath: gone, coverCachePath: lib.cache, workerFile: lib.workerFile,
+        knownTracks: [{ path: path.join(gone, 'a', 'y.mp3'), title: 'y' }, elsewhere]
+    });
+    assert.deepEqual(third.tracks.map((t) => t.title), ['y']);
+    assert.equal(third.stats.unreadable, 1);
+});

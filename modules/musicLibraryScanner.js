@@ -28,7 +28,7 @@ function defaultWorkerCount() {
     return Math.max(1, Math.min(4, cores - 1));
 }
 
-async function collectAudioFiles(rootDir, { signal } = {}) {
+async function collectAudioFiles(rootDir, { signal, unreadable } = {}) {
     const found = [];
     const pending = [rootDir];
     while (pending.length) {
@@ -39,6 +39,7 @@ async function collectAudioFiles(rootDir, { signal } = {}) {
             entries = await fsp.readdir(dir, { withFileTypes: true });
         } catch (error) {
             console.error(`[MusicScan] Cannot read ${dir}: ${error.message}`);
+            if (unreadable) unreadable.push(dir);
             continue;
         }
         // 同一目录内按名字排，目录按深度优先接在后面：结果顺序只取决于磁盘内容，不取决于谁先解析完。
@@ -97,16 +98,33 @@ async function scanFolder(options) {
     const tune = { ...DEFAULTS, ...options.tuning };
     const startedAt = Date.now();
 
-    const files = await collectAudioFiles(folderPath, { signal });
+    // 读不了的目录（拔掉的移动硬盘、没权限、正被别的程序占着）：里面上次扫到的曲目原样留着，
+    // 不当成「文件已删除」。解析失败的曲目同理沿用上次的结果。
+    const unreadable = [];
+    const files = await collectAudioFiles(folderPath, { signal, unreadable });
     const total = files.length;
     onStart?.({ total, folderPath });
-    const stats = { total, parsed: 0, reused: 0, failed: 0, elapsedMs: 0, aborted: false };
-    if (!total) return { tracks: [], folderPath, stats };
-
-    await fsp.mkdir(coverCachePath, { recursive: true });
+    const stats = { total, parsed: 0, reused: 0, failed: 0, kept: 0, unreadable: unreadable.length, elapsedMs: 0, aborted: false };
 
     const known = new Map();
     if (knownTracks) for (const track of knownTracks) if (track && track.path) known.set(track.path, track);
+    const under = (dir, file) => {
+        const base = dir.replace(/[\\/]+$/, '');
+        return file.length > base.length && file.startsWith(base) && (file[base.length] === '\\' || file[base.length] === '/');
+    };
+    const keptFromUnreadable = () => {
+        if (!unreadable.length) return [];
+        const listed = new Set(files);
+        const kept = [];
+        for (const track of known.values()) {
+            if (!listed.has(track.path) && unreadable.some((dir) => under(dir, track.path))) kept.push(track);
+        }
+        stats.kept += kept.length;
+        return kept;
+    };
+    if (!total) return { tracks: keptFromUnreadable(), folderPath, stats };
+
+    await fsp.mkdir(coverCachePath, { recursive: true });
 
     const slots = new Array(total).fill(null);
     let done = 0;
@@ -187,6 +205,9 @@ async function scanFolder(options) {
                     pushBatch(track);
                 } else {
                     stats.failed++;
+                    // 这次读失败了（文件被占用、解析超时），上次读到过就先用上次的，不让它从曲库里消失。
+                    const prior = known.get(job.filePath);
+                    if (prior) { slots[job.index] = prior; stats.kept++; }
                 }
                 done++;
                 reportProgress(false);
@@ -230,7 +251,7 @@ async function scanFolder(options) {
     stats.aborted = Boolean(signal?.aborted);
     reportProgress(true);
     stats.elapsedMs = Date.now() - startedAt;
-    return { tracks: slots.filter(Boolean), folderPath, stats };
+    return { tracks: slots.filter(Boolean).concat(keptFromUnreadable()), folderPath, stats };
 }
 
 module.exports = { scanFolder, collectAudioFiles, SUPPORTED_FORMATS };
