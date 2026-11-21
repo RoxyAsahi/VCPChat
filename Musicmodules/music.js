@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
             app.playlist.push(track);
             trackIndex = app.playlist.length - 1;
             app.renderPlaylist(app.currentFilteredTracks);
-            await app.api?.saveMusicPlaylist?.(app.playlist);
+            await app.saveLibrary();
         }
 
         await app.loadTrack(trackIndex, true);
@@ -1128,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (next >= 0) app.loadTrack(next, wasPlaying);
                 else { app.pauseTrack?.(); app.currentTrackIndex = Math.min(index, app.playlist.length - 1); }
             }
-            app.api?.saveMusicPlaylist?.(app.playlist);
+            app.saveLibrary();
             app.archiveView?.refresh?.();
             if (!wasCurrent) app.refreshPreload?.();
             notify(`已从曲库列表移除「${name}」`, { label: '撤销', run: () => {
@@ -1142,7 +1142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     app.currentFilteredTracks = list;
                 }
                 if (app.currentFilteredTracks && view) app.renderPlaylist(app.currentFilteredTracks); else app.renderPlaylist();
-                app.api?.saveMusicPlaylist?.(app.playlist);
+                app.saveLibrary();
                 app.archiveView?.refresh?.();
                 app.refreshPreload?.();
             } });
@@ -1322,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (at !== -1) app.currentTrackIndex = at;
             }
             app.renderPlaylist(); app.renderSidebarContent(app.currentSidebarView);
-            app.api.saveMusicPlaylist(app.playlist);
+            app.saveLibrary();
         });
         if (app.api?.onThemeUpdated) {
             app.api.onThemeUpdated((theme) => app.applyTheme(theme));

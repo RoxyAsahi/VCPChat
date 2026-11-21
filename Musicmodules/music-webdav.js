@@ -219,7 +219,7 @@ function setupWebDav(app) {
             app.playlist.push(...newTracks);
             app.currentFilteredTracks = null;
             app.renderPlaylist(null);
-            app.api?.saveMusicPlaylist?.(app.playlist);
+            app.saveLibrary();
             app.closeWebDavModal();
         });
     };

@@ -10,10 +10,29 @@ function setupSidebar(app) {
         }
     };
 
+    // 存盘失败（磁盘满、文件被占用、没有权限）以前没人看结果：界面上改好了，重开就没了。
+    // 现在弹一条提示，同一类失败只留一条。
+    const reportSaveFailure = (what, error) => {
+        const reason = (globalThis.MusicErrorText || ((m, f) => f))(error, '原因不明');
+        const message = `${what}没能存盘（${reason.replace(/^原因不明：/, '')}），这次的改动重开播放器后会丢失。`;
+        console.error(`[Music] Saving ${what} failed:`, error);
+        try { globalThis.MusicToast?.show?.({ id: `save-${what}`, kind: 'error', message }); } catch (e) { /* 没有提示层就只记日志 */ }
+    };
+    const checkedSave = (what, send) => Promise.resolve()
+        .then(send)
+        .then((result) => {
+            if (result && result.success === false) reportSaveFailure(what, result.error);
+            return result;
+        })
+        .catch((error) => { reportSaveFailure(what, error); return { success: false, error: error?.message || String(error) }; });
+
     app.saveCustomPlaylists = () => {
-        if (app.api?.saveCustomPlaylists) {
-            app.api.saveCustomPlaylists(app.customPlaylists);
-        }
+        if (!app.api?.saveCustomPlaylists) return Promise.resolve(null);
+        return checkedSave('歌单', () => app.api.saveCustomPlaylists(app.customPlaylists));
+    };
+    app.saveLibrary = () => {
+        if (!app.api?.saveMusicPlaylist) return Promise.resolve(null);
+        return checkedSave('曲库', () => app.api.saveMusicPlaylist(app.playlist));
     };
 
     app.getAlbumGroups = () => {
