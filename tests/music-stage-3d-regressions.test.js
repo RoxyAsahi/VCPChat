@@ -139,6 +139,26 @@ test('the sung-word hop and the lyric face are settings of the two 3D stages onl
     dom.window.close();
 });
 
+test('镜台 takes the cover\'s most vivid hue into its sky, and a grey cover gives none', () => {
+    const dom = createDom();
+    const { MusicStageConfig: Config, MusicStageModeUtils: U } = loadStage(dom);
+    assert.equal(Config.get().modes.diorama.coverTint, 0.5);
+    Config.setModePatch('diorama', { coverTint: 3 });
+    assert.equal(Config.get().modes.diorama.coverTint, 1);
+    assert.equal(Config.get().modes.tunnel.coverTint, undefined);
+    const pixels = (list) => Uint8ClampedArray.from(list.flatMap(([r, g, b]) => [r, g, b, 255]));
+    // A red square on black: black has no hue, so red is the colour.
+    const red = pixels([...Array(30).fill([200, 40, 60]), ...Array(70).fill([0, 0, 0])]);
+    assert.equal(U.dominantHue(red), '#c8283c');
+    // Mostly sky blue with a sand strip: the larger vivid area wins.
+    const sky = pixels([...Array(60).fill([90, 160, 230]), ...Array(40).fill([232, 216, 176])]);
+    assert.equal(U.dominantHue(sky), '#5aa0e6');
+    // Greys, black and white only.
+    const grey = pixels(Array.from({ length: 100 }, (_, i) => [i * 2.5, i * 2.5, i * 2.5]));
+    assert.equal(U.dominantHue(grey), null);
+    dom.window.close();
+});
+
 test('diorama rain is off unless chosen, and only takes its three settings', () => {
     const dom = createDom();
     const { MusicStageConfig: Config } = loadStage(dom);

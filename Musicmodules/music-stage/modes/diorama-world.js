@@ -4432,8 +4432,62 @@
                 horizon: skyMat.uniforms.horizon.value.clone(),
                 night: skyMat.uniforms.night.value.clone(),
                 hemi: hemisphere.color.clone(), hemiIntensity: hemisphere.intensity,
-                lamp: lamp.clone(), warm: lamp.clone(), cold: tertiary.clone()
+                lamp: lamp.clone(), warm: lamp.clone(), cold: tertiary.clone(),
+                auroraGreen: skyMat.uniforms.auroraGreen.value.clone(),
+                auroraViolet: skyMat.uniforms.auroraViolet.value.clone()
             };
+            applyCover();
+        };
+        // The cover's colour, eased in over a couple of seconds whenever the
+        // song (so the cover) changes, the way a theme change glides rather
+        // than cuts. It only moves hues: how light or dark the sky is stays
+        // the theme's, and the lyrics' colours are never touched.
+        const cover = { target: null, colour: new T.Color(), weight: 0, aim: 0, amount: 0.5, at: 0 };
+        const coverHsl = {}, toneHsl = {};
+        const towardHue = (colour, weight, satFloor = 0) => {
+            if (weight <= 0) return colour;
+            colour.getHSL(toneHsl);
+            scratchCover.setHSL(coverHsl.h, Math.max(toneHsl.s, coverHsl.s * satFloor), toneHsl.l);
+            return colour.lerp(scratchCover, weight);
+        };
+        const scratchCover = new T.Color();
+        // Called with the cover's hex (or null for none / a grey cover).
+        const setCoverColour = (hex) => {
+            const next = typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : null;
+            if (next === cover.target) return;
+            cover.target = next;
+            if (next) {
+                const colour = new T.Color(next);
+                // Coming from no colour: start from this one, just faded in.
+                if (cover.weight < 0.01) cover.colour.copy(colour);
+                cover.next = colour;
+            }
+        };
+        const settleCover = (amount, now) => {
+            const dt = cover.at ? Math.min(0.25, Math.max(0, (now - cover.at) / 1000)) : 1;
+            cover.at = now;
+            cover.amount = clamp(amount);
+            const k = 1 - Math.exp(-dt * 1.6);
+            cover.aim = cover.target ? cover.amount : 0;
+            cover.weight += (cover.aim - cover.weight) * k;
+            if (Math.abs(cover.aim - cover.weight) < 0.002) cover.weight = cover.aim;
+            if (cover.target && cover.next) {
+                cover.colour.lerp(cover.next, k);
+                if (Math.abs(cover.colour.r - cover.next.r) + Math.abs(cover.colour.g - cover.next.g)
+                    + Math.abs(cover.colour.b - cover.next.b) < 0.003) cover.colour.copy(cover.next);
+            }
+            applyCover();
+        };
+        const coverSettling = () => Math.abs(cover.aim - cover.weight) > 0.002
+            || Boolean(cover.target && cover.next && !cover.colour.equals(cover.next));
+        const applyCover = () => {
+            if (!palBase) return;
+            const w = cover.weight * (palBase.light ? 0.5 : 1);
+            cover.colour.getHSL(coverHsl);
+            skyMat.uniforms.auroraGreen.value.copy(palBase.auroraGreen);
+            skyMat.uniforms.auroraViolet.value.copy(palBase.auroraViolet);
+            towardHue(skyMat.uniforms.auroraGreen.value, w * 0.7, 0.8);
+            towardHue(skyMat.uniforms.auroraViolet.value, w * 0.35, 0.6);
         };
         // Warmth 0..1 → bias -1 (cold, open chorus) .. +1 (warm, tightening pre-chorus).
         // Everything is re-derived from the palette baseline, so no state accumulates.
@@ -4446,6 +4500,7 @@
             const k = palBase.light ? 0.5 : 1;
             scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5)
                 .lerp(skyMat.uniforms.sunset.value, liveDusk * 0.3);
+            towardHue(scratch, cover.weight * (palBase.light ? 0.15 : 0.4), 0.35);
             skyMat.uniforms.horizon.value.copy(scratch);
             waterMat.uniforms.fogTint.value.copy(scratch);
             if (scene.fog) {
@@ -4458,6 +4513,7 @@
             }
             skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k)
                 .lerp(palBase.overcast, rainLevel * 0.3);
+            towardHue(skyMat.uniforms.night.value, cover.weight * (palBase.light ? 0.1 : 0.45), 0.3);
             hemisphere.color.copy(palBase.hemi).lerp(toward, amount * 0.16 * k);
             hemisphere.intensity = palBase.hemiIntensity * (1 + Math.max(0, -bias) * 0.12) * (1 - rainLevel * 0.2);
             // The moon goes behind the rain clouds, and its path on the water with it.
@@ -4554,6 +4610,7 @@
             liveAccent = accent;
             skyMat.uniforms.accent.value = accent;
             starMat.uniforms.accent.value = accent;
+            settleCover(tuning.coverTint ?? 0.5, performance.now());
             applyWarmth(pose.state.warmth ?? 0.5, pose.state.openness, audio.energy);
             // Lamps spread wider in the wet air.
             haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3)
@@ -5564,6 +5621,7 @@
         setPalette();
         return {
             update, setPalette, renderReflection, updateCabin, prepareEnvironment,
+            setCoverColour, coverSettling,
             // How hard it is raining (0..1), for any shader that shows it.
             rain: rainAmount,
             setPixelRatio(ratio) {
@@ -5573,7 +5631,7 @@
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
             snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
                 wading, splashTriangles: splash.visible ? splashGeometry.drawRange.count / 3 : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
-                warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
+                warmth: liveWarmth, accent: liveAccent, coverWeight: cover.weight, coverTarget: cover.target, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
                 cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible, cabReal: cabReal.value,

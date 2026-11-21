@@ -125,8 +125,10 @@
             }
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
+            world.setCoverColour?.(services?.app?.stageCoverColour);
+            // A paused stage still finishes easing into a new cover's colour.
             const still = !frame.isPlaying && lastTime !== null
-                && R.finiteNumber(frame.playbackTime) === lastTime;
+                && R.finiteNumber(frame.playbackTime) === lastTime && !world.coverSettling?.();
             if (!force && !dirty && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             const nextIdentity = frame.track?.path || frame.track?.title || 'last-train';

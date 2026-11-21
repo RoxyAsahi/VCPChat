@@ -471,8 +471,58 @@
     });
     const lyricFont = key => LYRIC_FONTS[key] || LYRIC_FONTS.sans;
 
+    // The colour a cover is "about": the hue with the most vivid area,
+    // averaged over the pixels of that hue. A grey, black or white cover has
+    // no such colour and gives null, so the stage keeps its theme's sky.
+    const coverColour = (image) => {
+        if (!image) return null;
+        const size = 32;
+        let data;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.drawImage(image, 0, 0, size, size);
+            data = context.getImageData(0, 0, size, size).data;
+        } catch (_) { return null; }
+        return dominantHue(data);
+    };
+    const dominantHue = (data) => {
+        const BINS = 18;
+        const bins = Array.from({ length: BINS }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+        let total = 0, count = 0;
+        for (let i = 0; i + 2 < data.length; i += 4) {
+            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const l = (max + min) / 2, d = max - min;
+            count++;
+            if (d < 0.08) continue;
+            const s = d / (1 - Math.abs(2 * l - 1) || 1);
+            let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            h = (h * 60 + 360) % 360;
+            // Vivid and mid-tone counts; near-black and near-white hardly do.
+            const w = s * s * Math.max(0, 1 - Math.abs(l - 0.5) * 1.6);
+            const bin = bins[Math.floor(h / (360 / BINS)) % BINS];
+            bin.w += w; bin.r += r * w; bin.g += g * w; bin.b += b * w;
+            total += w;
+        }
+        // Spread each bin over its neighbours so a hue on a bin edge is not split.
+        let best = -1, bestW = 0;
+        bins.forEach((bin, i) => {
+            const w = bin.w + 0.5 * (bins[(i + 1) % BINS].w + bins[(i + BINS - 1) % BINS].w);
+            if (w > bestW) { bestW = w; best = i; }
+        });
+        if (best < 0 || !count || total / count < 0.03) return null;
+        const bin = bins[best];
+        if (!bin.w) return null;
+        const hex = [bin.r, bin.g, bin.b]
+            .map(v => Math.round(Math.min(1, v / bin.w) * 255).toString(16).padStart(2, '0')).join('');
+        return '#' + hex;
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         watchOverlay,
+        coverColour, dominantHue,
         lyricFont,
         createRenderScale,
         createHandoverVeil,

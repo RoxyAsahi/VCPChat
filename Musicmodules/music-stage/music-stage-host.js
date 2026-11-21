@@ -208,6 +208,7 @@
                 { key: 'audioReactivity', label: '空间音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricHop', label: '字随拍跳（正在唱的字随鼓点轻跳，0 关闭）', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'lyricFont', label: '歌词字体', type: 'select', options: [['sans', '黑体'], ['serif', '宋体（明朝）'], ['kai', '楷体']] },
+                { key: 'coverTint', label: '天色随封面（封面的主色染进天空与极光，0 关闭）', type: 'range', min: 0, max: 1, step: 0.05, unit: 'x' },
                 { key: 'showParticles', label: '天球星空', type: 'toggle' },
                 { key: 'geometryMode', label: '取景方式', type: 'select', options: [['clouds', '电影取景'], ['corridor', '全幅取景']] },
                 { key: 'cabinFrame', label: '车窗前景（侧望窗外时淡入）', type: 'toggle' },
@@ -746,6 +747,8 @@
             }
 
             const show = (image) => {
+                // The 3D stages may take the cover's colour into their sky.
+                app.stageCoverColour = image ? global.MusicStageModeUtils?.coverColour?.(image) ?? null : null;
                 if (softNext && softCurrent) paintSoft(softNext, image, 46, 1.45);
                 // A layer with no picture is still a blurred layer to the compositor.
                 elements.backdropNext.classList.toggle('is-empty', !nextUrl);
@@ -759,7 +762,14 @@
                     state.backgroundTimer = null;
                 }, 850);
             };
-            if (!nextUrl || !softNext || !softCurrent) { show(null); return; }
+            if (!nextUrl) { show(null); return; }
+            if (!softNext || !softCurrent) {
+                show(null);
+                loadImage(nextUrl).then((image) => {
+                    if (!state.destroyed && state.coverUrl === nextUrl) app.stageCoverColour = global.MusicStageModeUtils?.coverColour?.(image) ?? null;
+                });
+                return;
+            }
             loadImage(nextUrl).then((image) => {
                 if (!state.destroyed && state.coverUrl === nextUrl) show(image);
             });
