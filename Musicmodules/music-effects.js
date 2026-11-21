@@ -150,11 +150,11 @@ function setupEffects(app) {
                 app.irSwitch.checked = true;
                 app.updateIrStatus('加载成功', 'loaded');
             } else {
-                app.updateIrStatus(`错误: ${result.message}`, 'error');
+                app.updateIrStatus((window.MusicErrorText || ((m, f) => f))(result.message, '加载失败'), 'error');
                 app.irEnabled = false; app.irSwitch.checked = false;
             }
         } catch (e) {
-            app.updateIrStatus(`错误: ${e.message}`, 'error');
+            app.updateIrStatus((window.MusicErrorText || ((m, f) => f))(e, '加载失败'), 'error');
             app.irEnabled = false; app.irSwitch.checked = false;
         }
     };
