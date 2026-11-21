@@ -159,7 +159,9 @@ impl AudioPlayer {
 
         {
             lockfree_noise_shaper_params.set_enabled(true);
-            lockfree_noise_shaper_params.set_bits(24);
+            let bits = config.output_bits.unwrap_or(24).max(16);
+            lockfree_noise_shaper_params.set_bits(bits);
+            shared_state.output_bits.store(bits, Ordering::Relaxed);
             lockfree_noise_shaper_params.set_curve(NoiseShaperCurve::Lipshitz5);
         }
 

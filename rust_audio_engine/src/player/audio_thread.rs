@@ -63,11 +63,9 @@ pub fn audio_thread_main(
     let mut stream_key: Option<(i64, u32, u16)> = None;
     let stream_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
-    // Keep a default output bit-depth hint for downstream components.
-    shared_state
-        .output_bits
-        .store(noise_shaper_bits.max(16), Ordering::Relaxed);
-    noise_shaper_params.set_bits(noise_shaper_bits.max(16));
+    // The starting bit depth is set in AudioPlayer::new before this thread exists:
+    // storing it here raced the saved settings applied right after startup and could
+    // put the noise shaper back to the config default.
 
     let initial_channels = shared_state.channels.load(Ordering::Relaxed).max(1) as usize;
     let initial_sample_rate = shared_state.sample_rate.load(Ordering::Relaxed).max(1) as f64;
@@ -434,9 +432,11 @@ pub fn audio_thread_main(
                             Err(_) => noise_shaper_bits.max(16),
                         };
 
-                        shared_state.output_bits.store(detected_bits, Ordering::Relaxed);
+                        // Only logged: output_bits is the depth the user picked for the noise
+                        // shaper, which /state reports and the settings save; overwriting it
+                        // with the device's format made the page show 24-bit after any choice.
                         log::info!(
-                            "Stream started successfully at {} Hz, {}-bit output",
+                            "Stream started successfully at {} Hz, device format ~{}-bit",
                             actual_sample_rate,
                             detected_bits
                         );
@@ -600,10 +600,9 @@ pub fn audio_thread_main(
                                         },
                                         Err(_) => noise_shaper_bits.max(16),
                                     };
-                                    shared_state.output_bits.store(detected_bits, Ordering::Relaxed);
 
                                     log::info!(
-                                        "Stream started with device default config, {}-bit output",
+                                        "Stream started with device default config, device format ~{}-bit",
                                         detected_bits
                                     );
                                 }

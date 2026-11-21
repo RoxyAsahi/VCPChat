@@ -447,6 +447,20 @@ mod settings_eq_tests {
     use super::*;
 
     #[test]
+    fn the_chosen_output_bits_are_what_the_shaper_uses_and_what_is_reported() {
+        let config = crate::config::AppConfig { output_bits: Some(16), ..Default::default() };
+        let mut player = AudioPlayer::new(config);
+        assert_eq!(player.lockfree_noise_shaper_params.read().bits, 16);
+        assert_eq!(player.get_output_bits(), 16);
+        let settings = PersistentSettings { output_bits: 20, ..PersistentSettings::default() };
+        apply_settings_to_player(&mut player, &settings);
+        // The audio thread starting up must not put the config default back.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert_eq!(player.lockfree_noise_shaper_params.read().bits, 20);
+        assert_eq!(player.get_output_bits(), 20);
+    }
+
+    #[test]
     fn applying_saved_dither_updates_the_actual_dsp_snapshot() {
         let mut player = AudioPlayer::new(crate::config::AppConfig::default());
         for enabled in [false, true, false] {
