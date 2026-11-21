@@ -1208,7 +1208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.semanticSearchBtn.onclick = () => {
             app.isSemanticSearchActive = !app.isSemanticSearchActive;
             app.semanticSearchBtn.classList.toggle('active', app.isSemanticSearchActive);
-            app.searchInput.placeholder = app.isSemanticSearchActive ? "输入描述进行语义搜索..." : "搜索歌曲...";
+            app.searchInput.placeholder = app.isSemanticSearchActive ? "描述想听的歌，按语义搜索" : "搜索歌曲";
             
             if (!app.isSemanticSearchActive) {
                 // 退出语义搜索时恢复普通搜索
