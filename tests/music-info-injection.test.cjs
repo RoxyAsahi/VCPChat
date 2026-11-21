@@ -23,6 +23,7 @@ function loadMusic(manager) {
             };
             if (name === '../services/audioEngineEndpoint') return require('../modules/services/audioEngineEndpoint');
             if (name.startsWith('../')) return {};
+            if (name.startsWith('./')) return require(path.join(__dirname, '../modules/ipc', name));
             return require(name);
         }
     });

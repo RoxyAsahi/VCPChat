@@ -14,6 +14,7 @@ const audioEngineEndpoint = require('../services/audioEngineEndpoint');
 const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
+const { createDesktopLyrics } = require('./musicDesktopLyrics');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -53,6 +54,7 @@ let stopAudioEngine; // To hold the function from main.js
 let musicWindowPromise = null; // To handle concurrent window creation requests
 let pendingPlaybackForNewWindow = null; // 用于在新窗口创建时传递待播放曲目及可选演出模式
 let ipcHandlersRegistered = false;
+let desktopLyrics = null; // 桌面歌词条（musicDesktopLyrics.js），注册 IPC 时创建
 const MUSIC_CRASH_LIMIT = 3;
 const MUSIC_CRASH_WINDOW_MS = 60 * 1000;
 
@@ -175,6 +177,7 @@ function createOrFocusMusicWindow() {
         readyHandler = (event) => {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
+                desktopLyrics?.musicReady();
                 // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
@@ -215,6 +218,7 @@ function createOrFocusMusicWindow() {
             // We just stop the playback.
             audioEngineApi('/stop').catch(err => console.error("[Music] Failed to send stop command on close:", err));
 
+            desktopLyrics?.musicClosed();
             openChildWindows = openChildWindows.filter(win => win !== musicWindow);
             musicWindow = null;
             currentSongInfo = null; // 清理歌曲信息
@@ -606,6 +610,12 @@ function initialize(options) {
 
     const registerIpcHandlers = () => {
         console.log('[Music] registerIpcHandlers called');
+        desktopLyrics = createDesktopLyrics({
+            ipcMain,
+            getMusicWindow: () => musicWindow,
+            stateFile: path.join(APP_DATA_ROOT_IN_PROJECT, 'music-desktop-lyrics.json'),
+            projectRoot: path.join(__dirname, '..', '..')
+        });
         ipcMain.on('open-music-window', async () => {
             try {
                 await createOrFocusMusicWindow();
@@ -622,8 +632,12 @@ function initialize(options) {
             const result = await settingsManager.updateSettings(current => ({ ...current, musicLegacyUI: legacy }));
             if (!result.success) throw new Error(result.error || '保存界面设置失败。');
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
+                // 原版界面不送歌词，桌面歌词条先收起（开关不变），回到新版时再打开
+                if (legacy) desktopLyrics?.musicClosed();
                 setImmediate(() => {
-                    if (musicWindow && !musicWindow.isDestroyed()) musicWindow.loadFile(legacy ? MUSIC_PAGES.legacy : MUSIC_PAGES.current);
+                    if (!musicWindow || musicWindow.isDestroyed()) return;
+                    musicWindow.loadFile(legacy ? MUSIC_PAGES.legacy : MUSIC_PAGES.current);
+                    if (!legacy) musicWindow.webContents.once('did-finish-load', () => desktopLyrics?.musicReady());
                 });
             }
             return legacy;
