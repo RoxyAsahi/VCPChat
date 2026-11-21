@@ -442,8 +442,8 @@
                                             <span id="dynamic-loudness-strength-value">100%</span>
                                         </div>
                                     </div>
-                                    <div id="dynamic-loudness-info" class="dynamic-loudness-info" style="font-size: 10px; margin-top: 4px;">
-                                        补偿: <span id="dynamic-loudness-factor">--</span>
+                                    <div id="dynamic-loudness-info" class="dynamic-loudness-info" style="font-size: 10px; margin-top: 4px;" hidden>
+                                        补偿：<span id="dynamic-loudness-factor">--</span>
                                     </div>
                                 </div>
                             </div>
@@ -807,7 +807,7 @@
                     <div id="lyrics-fetch-track" class="lyrics-fetch-track"></div>
                 </div>
                 <button class="music-modal-close-btn" id="lyrics-fetch-close" type="button"
-                    aria-label="关闭歌词获取窗口">✕</button>
+                    aria-label="关闭歌词获取窗口"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             </div>
             <div class="lyrics-fetch-search">
                 <label>
@@ -827,7 +827,7 @@
             </div>
             <div id="lyrics-fetch-status" class="lyrics-fetch-status" aria-live="polite"></div>
             <div id="lyrics-fetch-results" class="lyrics-fetch-results">
-                <div class="music-modal-empty">点击“搜索多个源”查找可用歌词版本</div>
+                <div class="music-modal-empty">点「搜索多个源」查找可用的歌词版本</div>
             </div>
             <div class="music-modal-footer lyrics-fetch-footer">
                 <span id="lyrics-fetch-selection" class="modal-count">尚未选择歌词版本</span>
@@ -840,8 +840,8 @@
     <div id="webdav-modal" class="music-modal-overlay">
         <div class="music-modal webdav-modal">
             <div class="music-modal-header">
-                <h3>从云端导入 (WebDAV)</h3>
-                <button class="music-modal-close-btn" id="webdav-modal-close">✕</button>
+                <h3>从云端导入（WebDAV）</h3>
+                <button class="music-modal-close-btn" id="webdav-modal-close" aria-label="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             </div>
             <div class="webdav-modal-body">
                 <!-- 左侧：服务器列表 -->
@@ -897,7 +897,7 @@
         <div class="music-modal">
             <div class="music-modal-header">
                 <h3 id="modal-playlist-title">编辑歌单</h3>
-                <button class="music-modal-close-btn" id="modal-close-btn">✕</button>
+                <button class="music-modal-close-btn" id="modal-close-btn" aria-label="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             </div>
             <div class="music-modal-search">
                 <input type="text" id="modal-search-input" placeholder="搜索歌曲">
@@ -992,6 +992,7 @@
     <div id="music-dock-root"></div>
     <script src="music-dock/music-dock-icons.js"></script>
     <script src="music-dock/music-toast.js"></script>
+    <script src="music-dock/music-dialog.js"></script>
     <script src="music-dock/music-dock-palette.js"></script>
     <script src="music-dock/music-dock-fluid.js"></script>
     <script src="music-dock/music-dock.js"></script>

@@ -187,7 +187,7 @@ test('an engine load error ends the wait at once and is shown', async () => {
     assert.equal(app.isTrackLoading, false);
     assert.equal(app.isPlaying, false);
     assert.equal(app.calls.includes('play'), false);
-    assert.match(app.trackBitrate.textContent, /unsupported codec/);
+    assert.match(app.trackBitrate.textContent, /加载失败：不支持这种音频格式/);
     app.cancelFailureSkip();
 });
 
