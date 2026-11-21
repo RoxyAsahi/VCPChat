@@ -96,16 +96,33 @@ where
 /// - Local paths are validated to prevent directory traversal
 /// - Local paths MUST exist and be accessible (canonicalize must succeed)
 /// - Returns Ok(validated_path) or Err(error_message)
-fn validate_path(path: &str) -> Result<String, String> {
+/// Host of the configured WebDAV server, the one private address the engine may fetch from.
+fn webdav_host(data: &AppState) -> Option<String> {
+    let cfg = data.webdav_config.lock();
+    if cfg.base_url.is_empty() { None } else { extract_host(&cfg.base_url) }
+}
+
+/// Check a path or URL before the engine opens it, for a request that may play from the configured WebDAV server: a NAS
+/// at home is on a private address (192.168.x.x, 10.x, localhost), and every song on it
+/// used to fail with "private/internal address" although browsing it worked.
+fn validate_path_for(path: &str, trusted_host: Option<&str>) -> Result<String, String> {
     // Allow HTTP(S) URLs - they have their own security (TLS, authentication)
     if path.starts_with("http://") || path.starts_with("https://") {
-        // Basic URL validation - check for obvious injection attempts
-        if path.contains("..") || path.contains('\\') {
+        // Basic URL validation: a `..` path segment (also percent-encoded) or a backslash.
+        // Two dots inside a file name ("Ver..mp3") are not traversal.
+        let route = path.split(['?', '#']).next().unwrap_or(path);
+        let traversal = route.split('/').any(|seg| {
+            let seg = seg.to_ascii_lowercase().replace("%2e", ".");
+            seg == ".."
+        });
+        if traversal || path.contains('\\') || route.to_ascii_lowercase().contains("%5c") {
             return Err("Invalid URL: path traversal characters not allowed".into());
         }
-        // SSRF protection: reject private/link-local IP ranges
+        // SSRF protection: reject private/link-local IP ranges, except the WebDAV server
+        // the user configured.
         if let Some(host) = extract_host(path) {
-            if is_private_host(&host) {
+            let trusted = trusted_host.map_or(false, |t| t.eq_ignore_ascii_case(&host));
+            if is_private_host(&host) && !trusted {
                 return Err(format!("URL host '{}' is not allowed (private/internal address)", host));
             }
         }
@@ -168,9 +185,15 @@ fn validate_path(path: &str) -> Result<String, String> {
 fn extract_host(url: &str) -> Option<String> {
     // Skip "http://" or "https://"
     let after_scheme = url.split("//").nth(1)?;
-    let host_port = after_scheme.split('/').next()?;
-    // Remove port if present
-    Some(host_port.split(':').next()?.to_string())
+    let authority = after_scheme.split(['/', '?', '#']).next()?;
+    let host_port = authority.rsplit('@').next()?;
+    // Remove port if present (an IPv6 literal keeps its brackets)
+    let host = if host_port.starts_with('[') {
+        host_port.split(']').next()?.trim_start_matches('[')
+    } else {
+        host_port.split(':').next()?
+    };
+    Some(host.to_ascii_lowercase())
 }
 
 /// Check if a host is a private/internal address (SSRF protection)
@@ -441,6 +464,37 @@ impl ApiResponse {
 }
 
 // ============ Helper Functions ============
+
+#[cfg(test)]
+mod path_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_configured_webdav_server_may_be_on_the_home_network() {
+        let song = "http://192.168.1.20:5005/dav/music/a.flac";
+        assert!(validate_path_for(song, None).is_err(), "an arbitrary LAN address stays blocked");
+        assert_eq!(validate_path_for(song, Some("192.168.1.20")).unwrap(), song);
+        // Only that host: another private address is still refused.
+        assert!(validate_path_for("http://10.0.0.1/x.flac", Some("192.168.1.20")).is_err());
+        // Credentials in the URL do not hide the real host.
+        assert!(validate_path_for("http://nas@10.0.0.1/x.flac", Some("nas")).is_err());
+        assert_eq!(extract_host("http://u:p@NAS.local:8080/a").as_deref(), Some("nas.local"));
+    }
+
+    #[test]
+    fn two_dots_in_a_remote_file_name_are_not_traversal() {
+        let song = "https://dav.example.com/music/02.%20One%20More%20Wish%20Ver..mp3";
+        assert!(validate_path_for(song, None).is_ok());
+        for bad in [
+            "https://dav.example.com/music/../secret.mp3",
+            "https://dav.example.com/music/%2e%2e/secret.mp3",
+            "https://dav.example.com/music/%2E%2E/secret.mp3",
+            "https://dav.example.com/music/a%5c..%5csecret.mp3",
+        ] {
+            assert!(validate_path_for(bad, None).is_err(), "{bad}");
+        }
+    }
+}
 
 #[cfg(test)]
 mod settings_eq_tests {

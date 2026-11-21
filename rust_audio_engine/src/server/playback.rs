@@ -195,7 +195,7 @@ async fn load(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -484,7 +484,7 @@ async fn scan_track_loudness(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -527,7 +527,7 @@ async fn scan_loudness_background(
     data: web::Data<Arc<AppState>>,
     body: web::Json<ScanBackgroundRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -673,7 +673,7 @@ async fn queue_next(
     data: web::Data<Arc<AppState>>,
     body: web::Json<QueueNextRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
@@ -704,7 +704,7 @@ async fn load_ir(
     data: web::Data<Arc<AppState>>,
     body: web::Json<LoadIrRequest>,
 ) -> HttpResponse {
-    let path = match validate_path(&body.path) {
+    let path = match validate_path_for(&body.path, webdav_host(&data).as_deref()) {
         Ok(p) => p,
         Err(e) => return HttpResponse::BadRequest().json(ApiResponse::error(&e)),
     };
