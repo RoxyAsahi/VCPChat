@@ -120,6 +120,7 @@ body.mi-stage-hold-enter .music-stage {
 body.mi-stage-hold-enter:not(.music-archive-on) .music-player-container {
     opacity: 1 !important;
     visibility: visible !important;
+    content-visibility: visible !important;
     transform: none !important;
     transition: none !important;
 }

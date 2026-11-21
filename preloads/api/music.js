@@ -18,6 +18,17 @@ module.exports = {
         publishMusicCapsuleState: send('music-capsule-publish', 'state'),
         publishMusicGroove: send('music-groove-publish', 'payload'),
         getMusicPendingTrack: invoke('music-get-pending-track'),
+        // 新版 / 旧版（上游原版）音乐界面
+        getMusicLegacyUI: invoke('music-get-legacy-ui'),
+        setMusicLegacyUI: invoke('music-set-legacy-ui', 'enabled'),
+        // 桌面歌词：音乐窗口开关、送歌词；歌词条收歌词、发遥控指令（modules/ipc/musicDesktopLyrics.js）
+        getDesktopLyrics: invoke('music-desktop-lyrics-get'),
+        toggleDesktopLyrics: invoke('music-desktop-lyrics-toggle', 'on'),
+        publishDesktopLyrics: send('music-desktop-lyrics-publish', 'payload'),
+        onDesktopLyricsChanged: on('music-desktop-lyrics-changed'),
+        onDesktopLyricsState: on('music-desktop-lyrics-state'),
+        onDesktopLyricsPrefs: on('music-desktop-lyrics-prefs'),
+        sendDesktopLyricsCommand: send('music-desktop-lyrics-command', 'command', 'value'),
 
         // 播放列表
         getMusicPlaylist: invoke('get-music-playlist'),

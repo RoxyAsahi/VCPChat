@@ -372,6 +372,9 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-row.picked b { color: var(--ar-ink); }
 .archive-list-foot em { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; align-self: center; font-style: normal; font-size: 11px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; }
 .archive-list-foot em[hidden] { display: none; }
+.archive-list-smart { margin-left: auto; align-self: center; font-size: 11px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; transition: color .2s; }
+.archive-list-smart:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-list-smart[hidden] { display: none; }
 .archive-batch-menu { position: fixed; z-index: 900; min-width: 232px; max-width: 320px; max-height: min(520px, calc(100vh - 20px)); overflow-y: auto; padding: 6px 0; display: grid; background: rgba(var(--ar-paper-rgb), .97); border-top: 2px solid var(--ar-ink); box-shadow: 0 10px 30px rgba(0, 0, 0, .28); font-family: var(--mt-font-archive, inherit); scrollbar-width: none; }
 .archive-batch-menu header { padding: 8px 14px 9px; font-size: 12px; font-weight: 600; letter-spacing: .4px; color: var(--ar-ink); }
 .archive-batch-menu header i, .archive-batch-menu button i { font-style: normal; font-weight: 400; font-size: 10px; letter-spacing: 1.2px; color: var(--ar-muted); }
@@ -468,7 +471,7 @@ body.music-reduce-motion .archive-list-group.live-on > span:first-child::before 
 .archive-list-foot span { font-size: 18px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
 /* 窄窗口：目录盖在阵列上，柔光更实一些 */
-.archive-hud.narrow .archive-list { --gutter: 52px; top: 250px; width: min(calc(var(--gutter) + 400px), 100%); z-index: 3; }
+.archive-hud.narrow .archive-list { --gutter: 59px; /* 和左上标题同一条竖线 */ top: 250px; width: min(calc(var(--gutter) + 400px), 100%); z-index: 3; }
 .archive-hud.narrow .archive-list::before { width: 100%; top: -12px; /* 不往上盖住「播放这一组」 */ background: linear-gradient(to right, rgba(var(--ar-paper-rgb), .94) 0, rgba(var(--ar-paper-rgb), .9) 70%, rgba(var(--ar-paper-rgb), 0) 100%); }
 .archive-hud.narrow .archive-list-foot em { white-space: normal; text-align: right; line-height: 1.5; }
 .archive-hud.narrow.list-open .archive-lanes,
@@ -512,6 +515,10 @@ body.music-reduce-motion .archive-lyrics { animation: none; }
 .archive-lyrics-head { display: flex; align-items: baseline; gap: 10px; margin-right: 59px; padding: 0 0 9px 20px; border-bottom: 1px solid var(--ar-rule); font-size: 12px; letter-spacing: 1.3px; color: var(--ar-muted); white-space: nowrap; }
 .archive-lyrics-head i { font-style: normal; opacity: .7; }
 .archive-lyrics-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; letter-spacing: .4px; }
+.archive-lyrics-head .archive-lyrics-desk { margin-left: auto; flex: none; padding: 2px 8px; border: 1px solid var(--ar-rule); border-radius: 999px; background: transparent; color: var(--ar-muted); font: inherit; font-size: 11px; letter-spacing: .6px; cursor: pointer; transition: color .15s ease, border-color .15s ease, background-color .15s ease; }
+.archive-lyrics-head .archive-lyrics-desk:hover { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-head .archive-lyrics-desk[aria-pressed="true"] { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 10%, transparent); }
+.archive-lyrics-head .archive-lyrics-desk:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }
 .archive-lyrics-viewport {
     position: relative; flex: 1; min-height: 0; overflow: hidden; margin-top: 10px;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
@@ -717,3 +724,9 @@ body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-deta
 #music-archive-view.is-detail .archive-brand-resume, #music-archive-view.is-empty .archive-brand-resume, #music-archive-view.is-loading .archive-brand-resume { visibility: hidden; }
 /* 空曲库：没有可搜的东西，目录的搜索框和分类标签也收起来，只留空状态说明 */
 #music-archive-view.is-empty .archive-list-search, #music-archive-view.is-empty .archive-list-kinds, #music-archive-view.is-empty .archive-list-viewport { visibility: hidden; }
+/* 目录在 DOM 里挪到了标题后面（Tab 顺序），靠层级继续盖在底部那些层上面；检索框得到焦点时下划线换成强调色 */
+.archive-list { z-index: 2; }
+.archive-list-search:focus-within { border-bottom-color: var(--ar-accent); }
+/* 悬停统一：首页上带箭头的文字按钮（播放这一组、播放、详情、接着听）悬停都换成强调色，箭头往前挪 */
+.archive-access, .archive-brand-play, .archive-more, .archive-brand-resume, .archive-nav > button { transition: color .2s; }
+.archive-access:hover { color: var(--ar-accent-text, var(--ar-accent)); }

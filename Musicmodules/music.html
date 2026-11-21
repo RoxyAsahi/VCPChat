@@ -283,6 +283,24 @@
                             <span class="slider round"></span>
                         </label>
                     </div>
+
+                    <!-- 桌面歌词：音乐窗口之外的置顶歌词条（music-desktop-lyrics.js） -->
+                    <div class="setting-item toggle-item" id="desktop-lyrics-item" hidden>
+                        <label for="desktop-lyrics-switch" title="在桌面上显示一条置顶的歌词，切到别的程序也能看到；悬停在歌词上可以锁定、调字号">桌面歌词</label>
+                        <label class="switch compact">
+                            <input type="checkbox" id="desktop-lyrics-switch">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+
+                    <!-- 换回上游原版音乐界面（Musicmodules-legacy/，原样保留） -->
+                    <div class="setting-item toggle-item">
+                        <label for="legacy-ui-switch" title="换成上游原版的音乐界面；在原版里关掉这个开关就回到新版">旧版界面（原版）</label>
+                        <label class="switch compact">
+                            <input type="checkbox" id="legacy-ui-switch">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- 设置面板 -->
@@ -973,6 +991,9 @@
     <script src="music-sleep.js"></script>
     <script src="music-stats.js"></script>
     <script src="music-radio.js"></script>
+    <script src="music-smart.js"></script>
+    <script src="music-legacy-switch.js"></script>
+    <script src="music-desktop-lyrics.js"></script>
     <script src="music-ui.js"></script>
     <script src="music-theme/music-skin.js"></script>
     <script src="music-theme/music-classic-list.js"></script>

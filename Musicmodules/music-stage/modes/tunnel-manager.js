@@ -4565,7 +4565,12 @@
 
                 renderer.info.autoReset = false;
                 optics = global.MusicStageDioramaOptics?.create(T) || null;
+                // Built a step a frame, so the way in keeps moving meanwhile.
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 world = createTunnelWorld(T, scene, services?.app);
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 world.prepare(renderer);
                 applyQuality();
                 resize();
@@ -4573,6 +4578,8 @@
                 await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: !canvasSmoothing });
                 if (mode.destroyed || !renderer) return;
                 if (!canvasSmoothing) await optics?.precompile?.(renderer);
+                if (mode.destroyed || !renderer) return;
+                await U.breathe();
                 if (mode.destroyed || !renderer) return;
                 initialized = true;
                 dirty = true;

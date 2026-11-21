@@ -890,3 +890,21 @@ body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) 
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
 }
 #music-archive-view :is(.archive-brand, .archive-detail, .archive-callout):has(> .mf-trail.mf-on) > :is(.archive-brand-play, .archive-detail-back, .archive-file-title):focus-visible:not(#messageInput) { outline: none; }
+
+/* ───────── 节能档的底栏 ─────────
+ * 节能档关掉流体层后播放条是一块实色胶囊，播过的部分是一块浅色。原来浅色块靠 scaleX 拉长，右端的圆角被压扁成一个歪的弧。
+ * 这里改成按进度裁出来（clip-path 的 inset 带圆角），右端始终是一个正圆的头，像一截液体在条里往前长；
+ * 条底下再垫一层静止的强调色柔光，接上流体档的暖光。都是静态样式，不跑动画、不做模糊。 */
+#music-dock-root.md-fl-low .md-fill {
+  transform: none !important;
+  clip-path: inset(0 calc((1 - var(--md-edge, 0)) * 100%) 0 0 round calc(var(--md-bar-h, 64px) / 2));
+}
+#music-dock-root.md-fl-low .md-cap {
+  box-shadow:
+    0 0 0 1px var(--md-fl-low-edge),
+    0 12px 30px -14px rgba(0, 0, 0, .35),
+    0 18px 44px -20px color-mix(in srgb, var(--md-fl-tint, var(--mf-tint)) 70%, transparent);
+}
+
+/* 曲目详情卡进出时先不做背后的模糊，停稳以后（mf-detail-still，JS 加）再加上，见 watchDetail */
+#music-archive-view:not(.mf-detail-still) .archive-detail-card { -webkit-backdrop-filter: none; backdrop-filter: none; }

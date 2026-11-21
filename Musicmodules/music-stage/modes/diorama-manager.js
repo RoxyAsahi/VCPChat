@@ -328,7 +328,12 @@
                     if (renderer?.domElement !== canvas) return;
                     recoverContext();
                 });
+                // Built a step a frame, so the way in keeps moving meanwhile.
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 world = global.MusicStageDioramaWorld.create(T, scene);
+                await U.breathe();
+                if (mode.destroyed || !renderer) return;
                 lyrics = global.MusicStageDioramaLyrics.create(T, scene);
                 events = global.MusicStageDioramaEvents.create(T, scene);
                 optics = global.MusicStageDioramaOptics?.create(T);
@@ -337,9 +342,16 @@
                 // standard material recompiles the first time it appears.
                 world.prepareEnvironment?.(renderer);
                 // The lens draws the scene offscreen; without it only the water pass does.
-                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
+                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true, report: false });
+                if (mode.destroyed || !renderer) return;
+                await U.breathe();
                 if (mode.destroyed || !renderer) return;
                 if (!canvasSmoothing) await optics?.precompile?.(renderer);
+                if (mode.destroyed || !renderer) return;
+                // Lens programs included, so the first frame has nothing left to link.
+                await U.settlePrograms(renderer, () => !mode.destroyed && !!renderer);
+                if (mode.destroyed || !renderer) return;
+                await U.breathe();
                 if (mode.destroyed || !renderer) return;
                 initialized = true;
                 dirty = true;
