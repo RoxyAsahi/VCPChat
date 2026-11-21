@@ -312,7 +312,7 @@
                                 <h4>均衡器</h4>
                             </div>
                             <label class="switch compact scale-80">
-                                <input type="checkbox" id="eq-switch">
+                                <input type="checkbox" id="eq-switch" aria-label="均衡器">
                                 <span class="slider round"></span>
                             </label>
                         </div>
@@ -347,7 +347,7 @@
                                     <h4>脉冲响应 <span class="help-icon" id="ir-help-icon" title="获取帮助">?</span></h4>
                                 </div>
                                 <label class="switch compact scale-80">
-                                    <input type="checkbox" id="ir-switch">
+                                    <input type="checkbox" id="ir-switch" aria-label="脉冲响应">
                                     <span class="slider round"></span>
                                 </label>
                             </div>
@@ -358,7 +358,7 @@
                                         <!-- 动态加载 IRPreset 文件夹内容 -->
                                         <option value="custom">自定义混响文件…</option>
                                     </select>
-                                    <button id="ir-load-btn" class="ir-load-btn" style="display: none;">
+                                    <button id="ir-load-btn" aria-label="选择混响文件" class="ir-load-btn" style="display: none;">
                                         <svg viewBox="0 0 24 24" width="14" height="14">
                                             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
                                         </svg>
@@ -387,7 +387,7 @@
                                     <h4>响度归一化</h4>
                                 </div>
                                 <label class="switch compact scale-80">
-                                    <input type="checkbox" id="loudness-switch" checked>
+                                    <input type="checkbox" id="loudness-switch" aria-label="响度归一化" checked>
                                     <span class="slider round"></span>
                                 </label>
                             </div>
@@ -404,14 +404,14 @@
                                     <div class="setting-item">
                                         <label>目标</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="loudness-lufs-slider" min="-23" max="-9" step="0.5" value="-12">
+                                            <input type="range" id="loudness-lufs-slider" aria-label="响度目标" min="-23" max="-9" step="0.5" value="-12">
                                             <span id="loudness-lufs-value">-12 LUFS</span>
                                         </div>
                                     </div>
                                     <div class="setting-item">
                                         <label>增益</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="loudness-preamp-slider" min="-12" max="12" step="0.5" value="0">
+                                            <input type="range" id="loudness-preamp-slider" aria-label="响度增益" min="-12" max="12" step="0.5" value="0">
                                             <span id="loudness-preamp-value">0 dB</span>
                                         </div>
                                     </div>
@@ -429,7 +429,7 @@
                                     <h4>动态等响度</h4>
                                 </div>
                                 <label class="switch compact scale-80">
-                                    <input type="checkbox" id="dynamic-loudness-switch">
+                                    <input type="checkbox" id="dynamic-loudness-switch" aria-label="动态等响度">
                                     <span class="slider round"></span>
                                 </label>
                             </div>
@@ -438,7 +438,7 @@
                                     <div class="setting-item">
                                         <label>强度</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="dynamic-loudness-strength-slider" min="0" max="100" step="1" value="100">
+                                            <input type="range" id="dynamic-loudness-strength-slider" aria-label="动态等响度强度" min="0" max="100" step="1" value="100">
                                             <span id="dynamic-loudness-strength-value">100%</span>
                                         </div>
                                     </div>
@@ -478,7 +478,7 @@
                                     <h4>饱和效果</h4>
                                 </div>
                                 <label class="switch compact scale-80">
-                                    <input type="checkbox" id="saturation-switch">
+                                    <input type="checkbox" id="saturation-switch" aria-label="饱和效果">
                                     <span class="slider round"></span>
                                 </label>
                             </div>
@@ -494,14 +494,14 @@
                                     <div class="setting-item">
                                         <label>驱动</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="saturation-drive-slider" min="0" max="100" step="1" value="25">
+                                            <input type="range" id="saturation-drive-slider" aria-label="饱和驱动" min="0" max="100" step="1" value="25">
                                             <span id="saturation-drive-value">25%</span>
                                         </div>
                                     </div>
                                     <div class="setting-item">
                                         <label>混合</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="saturation-mix-slider" min="0" max="100" step="1" value="20">
+                                            <input type="range" id="saturation-mix-slider" aria-label="饱和混合" min="0" max="100" step="1" value="20">
                                             <span id="saturation-mix-value">20%</span>
                                         </div>
                                     </div>
@@ -516,7 +516,7 @@
                                     <h4>交叉馈送</h4>
                                 </div>
                                 <label class="switch compact scale-80">
-                                    <input type="checkbox" id="crossfeed-switch">
+                                    <input type="checkbox" id="crossfeed-switch" aria-label="交叉馈送">
                                     <span class="slider round"></span>
                                 </label>
                             </div>
@@ -525,7 +525,7 @@
                                     <div class="setting-item">
                                         <label>混合</label>
                                         <div class="slider-with-value">
-                                            <input type="range" id="crossfeed-mix-slider" min="0" max="100" step="1" value="30">
+                                            <input type="range" id="crossfeed-mix-slider" aria-label="交叉馈送混合" min="0" max="100" step="1" value="30">
                                             <span id="crossfeed-mix-value">30%</span>
                                         </div>
                                     </div>
@@ -585,14 +585,14 @@
                                     <div class="setting-item">
                                         <label>缓存</label>
                                         <label class="switch compact">
-                                            <input type="checkbox" id="resample-cache-switch">
+                                            <input type="checkbox" id="resample-cache-switch" aria-label="重采样缓存">
                                             <span class="slider round"></span>
                                         </label>
                                     </div>
                                     <div class="setting-item">
                                         <label>预采样</label>
                                         <label class="switch compact">
-                                            <input type="checkbox" id="preemptive-resample-switch" checked>
+                                            <input type="checkbox" id="preemptive-resample-switch" aria-label="预先重采样" checked>
                                             <span class="slider round"></span>
                                         </label>
                                     </div>
