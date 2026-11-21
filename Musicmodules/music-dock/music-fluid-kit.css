@@ -860,3 +860,22 @@ body.music-reduce-motion #music-dock-root :is(.md-arw, .md-nxb, .md-qx, .md-qclr
 }
 :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: scale(.97); transition-duration: .1s; }
 body.music-reduce-motion :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: none; }
+
+/* ───────── 档案页底部的 ↑ ↓ ← → ─────────
+ * 按下时朝箭头的方向轻推一下再弹回；用方向键选歌、换组时，对应的按钮也被推一下（mf-nudge，JS 加），
+ * 键盘操作在屏幕上有个落点。按钮的方块样子不变。 */
+#music-archive-view :is(.archive-rows, .archive-lanes) button { --mf-nx: 0px; --mf-ny: 0px; transition: background .3s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
+#music-archive-view .archive-bottom button[data-act="up"] { --mf-ny: -5px; }
+#music-archive-view .archive-bottom button[data-act="down"] { --mf-ny: 5px; }
+#music-archive-view .archive-bottom button[data-act="left"] { --mf-nx: -5px; }
+#music-archive-view .archive-bottom button[data-act="right"] { --mf-nx: 5px; }
+#music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); transition-duration: .1s; }
+#music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: mf-nudge .42s cubic-bezier(.3, .7, .4, 1); }
+@keyframes mf-nudge {
+  0% { transform: none; background-color: transparent; }
+  22% { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); background-color: var(--mf-hover); }
+  60% { transform: translate(calc(var(--mf-nx) * -.25), calc(var(--mf-ny) * -.25)); }
+  100% { transform: none; background-color: transparent; }
+}
+body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: none; }
+body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: none; }

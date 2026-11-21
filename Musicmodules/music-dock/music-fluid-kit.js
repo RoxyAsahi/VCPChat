@@ -468,7 +468,30 @@
         new global.MutationObserver(scan).observe(doc.body, { childList: true });
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); };
+    /* 档案页用方向键选歌、换组时，底部对应的 ↑ ↓ ← → 按钮跟着被「按」一下：朝那个方向轻推再弹回，
+     * 让键盘操作在屏幕上也有手感。只在档案页真的处理了这个键（preventDefault）之后才推。 */
+    const watchArrows = () => {
+        const doc = global.document;
+        const ACTS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+        doc.addEventListener('keydown', (e) => {
+            const act = ACTS[e.key];
+            if (!act || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !enabled()) return;
+            global.setTimeout(() => {
+                if (!e.defaultPrevented) return;
+                const view = doc.getElementById('music-archive-view');
+                if (!view || view.hidden || doc.body.classList.contains('music-stage-active')) return;
+                if (e.target?.closest?.('.archive-list, .context-menu, .archive-batch-menu, .archive-list-sort-menu')) return;
+                const btn = view.querySelector(`.archive-bottom button[data-act="${act}"]`);
+                if (!btn) return;
+                btn.classList.remove('mf-nudge');
+                void btn.offsetWidth;
+                btn.classList.add('mf-nudge');
+            }, 0);
+        });
+        doc.addEventListener('animationend', (e) => { if (e.animationName === 'mf-nudge') e.target.classList.remove('mf-nudge'); });
+    };
+
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 
