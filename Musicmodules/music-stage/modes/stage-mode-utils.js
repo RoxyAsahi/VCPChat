@@ -570,8 +570,18 @@
         };
     };
 
+    // Hand the main thread back for a frame between the steps of building a
+    // 3D stage, so the curtain's animation keeps moving while it is built.
+    // A hidden window has no frames; the timer stands in for one.
+    const breathe = () => new Promise((resolve) => {
+        let done = false;
+        const go = () => { if (!done) { done = true; resolve(); } };
+        global.requestAnimationFrame?.(() => global.setTimeout(go, 0));
+        global.setTimeout(go, 50);
+    });
+
     global.MusicStageModeUtils = Object.freeze({
-        watchOverlay,
+        watchOverlay, breathe,
         coverColour, dominantHue, createCoverTint,
         lyricFont,
         createRenderScale,

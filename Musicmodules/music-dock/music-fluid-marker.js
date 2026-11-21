@@ -54,24 +54,39 @@
         const reduced = () => doc.body?.classList.contains('music-reduce-motion')
             || win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+        // 只量容器的横截面（clientWidth/Height），不量整块内容，也不触发 getBoundingClientRect 的整页布局
         const cross = () => {
-            const box = container.getBoundingClientRect();
-            const size = axis === 'x' ? box.height : box.width;
+            const size = axis === 'x' ? container.clientHeight : container.clientWidth;
             if (align === 'start') return inset + thickness / 2;
             if (align === 'center') return size / 2;
             return size - inset - thickness / 2;
         };
+        let origin = 0; // SVG 沿轴方向的起点（容器内容坐标），形状坐标都减去它
         const pill = (node, a, b, c, t) => {
-            const lo = Math.min(a, b);
+            const lo = Math.min(a, b) - origin;
             const len = Math.max(t, Math.abs(b - a));
             if (axis === 'x') { node.setAttribute('x', lo.toFixed(1)); node.setAttribute('y', (c - t / 2).toFixed(1)); node.setAttribute('width', len.toFixed(1)); node.setAttribute('height', t.toFixed(1)); }
             else { node.setAttribute('y', lo.toFixed(1)); node.setAttribute('x', (c - t / 2).toFixed(1)); node.setAttribute('height', len.toFixed(1)); node.setAttribute('width', t.toFixed(1)); }
             node.setAttribute('rx', (t / 2).toFixed(1));
         };
+        // SVG 只盖住小滴所在的那一段（加上模糊的余量），不再撑成整块内容那么大：
+        // 目录有一万首时内容有几十万像素高，整张 SVG 会变成一张同样高的合成层，每次重画都很贵。
+        const PAD = Math.ceil(thickness * 3 + 8);
+        let lastBox = '';
         const draw = () => {
-            svg.setAttribute('width', String(Math.max(1, container.scrollWidth)));
-            svg.setAttribute('height', String(Math.max(1, container.scrollHeight)));
+            // 先读后写：读完尺寸再改属性，一帧里只排一次布局
             const c = cross();
+            const cs = Math.max(1, axis === 'x' ? container.clientHeight : container.clientWidth);
+            // 末端不超出原有内容，免得在会滚动的容器（目录、页签）里多出一截滚动距离
+            const extent = axis === 'x' ? container.scrollWidth : container.scrollHeight;
+            origin = Math.max(0, Math.floor(Math.min(s.hs, s.ts) - PAD));
+            const len = Math.max(1, Math.min(extent - origin, Math.ceil(Math.max(s.he, s.te) + PAD - origin)));
+            const box = `${origin}|${len}|${cs}`;
+            if (box !== lastBox) {
+                lastBox = box;
+                if (axis === 'x') { svg.style.left = `${origin}px`; svg.setAttribute('width', String(len)); svg.setAttribute('height', String(cs)); }
+                else { svg.style.top = `${origin}px`; svg.setAttribute('height', String(len)); svg.setAttribute('width', String(cs)); }
+            }
             pill(head, s.hs, s.he, c, thickness);
             pill(tail, s.ts, s.te, c, thickness * 0.9);
             // 细颈：头尾中心之间一根细条，拉得越开越细，goo 滤镜把三段融成一滴
