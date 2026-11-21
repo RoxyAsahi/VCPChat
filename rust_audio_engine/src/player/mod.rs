@@ -176,7 +176,6 @@ impl AudioPlayer {
         let lf_dl_telemetry = Arc::clone(&dynamic_loudness_telemetry);
         let lf_loudness_state = Arc::clone(&loudness_state);
         let phase_response = config.phase_response;
-        let target_lufs = config.loudness.target_lufs;
 
         let audio_thread = thread::spawn(move || {
             audio_thread_main(
@@ -194,7 +193,6 @@ impl AudioPlayer {
                 config.output_bits.unwrap_or(24),  // M-1 fix: read from config instead of hardcoded 24
                 spectrum_tap,
                 phase_response,
-                target_lufs,
             );
         });
 
@@ -432,14 +430,11 @@ impl AudioPlayer {
             (target_sr, need_resample)
         };
 
-        // ReplayGain modes fall back to an EBU R128 measurement when the
-        // file carries no gain tags; measure while streaming in that case.
-        let needs_r128 = matches!(
-            loudness_state.get_mode(),
-            crate::config::NormalizationMode::ReplayGainTrack
-                | crate::config::NormalizationMode::ReplayGainAlbum
-        ) && info.metadata.rg_track_gain.is_none()
-            && info.metadata.rg_album_gain.is_none();
+        // Unless the mode takes this file's gain from a ReplayGain tag, its gain comes
+        // from its EBU R128 loudness: measure while streaming (track mode included,
+        // which used to leave a picked song at the previous song's gain).
+        let needs_r128 = loudness_state.enabled()
+            && !crate::processor::LoudnessNormalizer::has_tag_gain(loudness_state.get_mode(), &info.metadata);
         // Measured on an earlier play: apply it from the first second instead of
         // starting at preamp-only and jumping once the whole track is decoded.
         let cached_lufs = if needs_r128 { cached_loudness(loudness_cache, path) } else { None };
@@ -1004,6 +999,7 @@ impl AudioPlayer {
             credentials,
             self.loudness_enabled,
             mode,
+            self.loudness_cache.clone(),
         )
     }
 
@@ -1226,11 +1222,15 @@ mod loudness_cache_tests {
 
     /// Run one load and return the loudness the decode thread reported.
     fn load_once(path: &str, db: &LoudnessDatabase) -> Option<f64> {
+        load_in_mode(path, db, crate::config::NormalizationMode::ReplayGainTrack)
+    }
+
+    fn load_in_mode(path: &str, db: &LoudnessDatabase, mode: crate::config::NormalizationMode) -> Option<f64> {
         let shared = Arc::new(SharedState::new());
         let generation = shared.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
         let (tx, rx) = unbounded::<AudioCommand>();
         let loudness = Arc::new(crate::processor::AtomicLoudnessState::new(200.0, 44_100).unwrap());
-        loudness.set_normalization_mode(crate::config::NormalizationMode::ReplayGainTrack);
+        loudness.set_normalization_mode(mode);
         let config = AppConfig { target_samplerate: Some(44_100), ..AppConfig::default() };
         AudioPlayer::stream_load(path, None, &config, None, &shared, &tx, &loudness, generation, Some(db));
         drop(tx);
@@ -1269,6 +1269,20 @@ mod loudness_cache_tests {
         // The file changes: the old value is not trusted any more.
         write_wav(&wav, 1.5);
         assert_eq!(cached_loudness(Some(&db), &path), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn track_mode_measures_a_picked_song_too() {
+        let dir = std::env::temp_dir().join(format!("vcp-loudness-track-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("picked.wav");
+        write_wav(&wav, 2.0);
+        let path = wav.to_string_lossy().to_string();
+        let db = LoudnessDatabase::in_memory().unwrap();
+        for mode in [crate::config::NormalizationMode::Track, crate::config::NormalizationMode::Album] {
+            assert!(load_in_mode(&path, &db, mode).is_some(), "{mode:?} left the gain unset");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

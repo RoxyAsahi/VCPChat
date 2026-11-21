@@ -32,6 +32,7 @@ impl GaplessManager {
         credentials: Option<crate::decoder::HttpCredentials>,
         loudness_enabled: bool,
         normalization_mode: NormalizationMode,
+        loudness_cache: Option<Arc<crate::processor::LoudnessDatabase>>,
     ) -> Result<(), String> {
         // Ignore if pending buffer is already ready
         if shared.pending_ready.load(Ordering::Relaxed) {
@@ -78,6 +79,7 @@ impl GaplessManager {
                 &config_clone,
                 loudness_enabled,
                 mode_for_thread,
+                loudness_cache.as_deref(),
             );
             if let Err(e) = result {
                 // Don't restore needs_preload if we were cancelled
@@ -126,6 +128,7 @@ fn stream_preload(
     config: &AppConfig,
     loudness_enabled: bool,
     mode: NormalizationMode,
+    loudness_cache: Option<&crate::processor::LoudnessDatabase>,
 ) -> Result<(), String> {
     let cancelled = || shared.cancel_preload_signal.load(Ordering::Acquire);
 
@@ -154,22 +157,28 @@ fn stream_preload(
         None
     };
 
-    // Gain known without measuring?
-    let tag_gain = loudness_enabled
-        && crate::processor::LoudnessNormalizer::has_tag_gain(mode, &metadata);
-    let needs_measurement = loudness_enabled && !tag_gain;
+    // Same gain rules as a track that is picked by hand (`planned_gain_db`), so a song
+    // is equally loud whether it was clicked or joined gaplessly. Known up front from a
+    // tag or an earlier measurement; otherwise measured while decoding.
+    let loudness_state = loudness_normalizer.lock().atomic_state();
+    let plan = |measured: Option<f64>| {
+        crate::processor::LoudnessNormalizer::planned_gain_db(
+            mode,
+            &metadata,
+            measured,
+            loudness_state.target_lufs(),
+            loudness_state.reference_lufs(),
+            loudness_state.preamp_gain_db(),
+        )
+    };
     let upfront_gain_db = if !loudness_enabled {
         Some(0.0)
-    } else if tag_gain {
-        Some(
-            loudness_normalizer
-                .lock()
-                .calculate_gain_with_mode(&[], mode, &metadata)
-                .unwrap_or(0.0),
-        )
+    } else if crate::processor::LoudnessNormalizer::has_tag_gain(mode, &metadata) {
+        plan(None)
     } else {
-        None
+        super::cached_loudness(loudness_cache, path).and_then(|l| plan(Some(l)))
     };
+    let needs_measurement = upfront_gain_db.is_none();
 
     if decoded_channels != target_channels {
         log::info!("Gapless: Channel normalize {} -> {}", decoded_channels, target_channels);
@@ -232,8 +241,10 @@ fn stream_preload(
             return Err("Preloaded track is empty".to_string());
         }
         let gain_db = upfront_gain_db.unwrap_or_else(|| {
-            lufs.map(|l| loudness_normalizer.lock().gain_for_integrated_loudness(l))
-                .unwrap_or(0.0)
+            if let Some(l) = lufs {
+                super::store_loudness(loudness_cache, path, l);
+            }
+            lufs.and_then(|l| plan(Some(l))).unwrap_or(0.0)
         });
         publish(&buffer, total_frames, gain_db);
     }

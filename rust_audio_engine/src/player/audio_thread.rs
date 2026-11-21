@@ -54,7 +54,6 @@ pub fn audio_thread_main(
     noise_shaper_bits: u32,
     spectrum_tap: SpectrumTap,
     phase_response: PhaseResponse,
-    target_lufs: f64,
 ) {
     log::info!("Audio thread started, initializing cpal host...");
     let mut stream: Option<Stream> = None;
@@ -138,7 +137,6 @@ pub fn audio_thread_main(
                         &dsp_ctx,
                         &loudness_state,
                         &spectrum_tap,
-                        target_lufs,
                     ) {
                         continue;
                     }
@@ -729,78 +727,13 @@ pub fn audio_thread_main(
 
                 loudness_state.set_smoothing(200.0, sr_u32);
 
-                let _mode = loudness_state.get_mode();
-                let preamp = loudness_state.preamp_gain_db();
-
-                let calc_safe_gain = |rg_gain_db: f64, peak: Option<f64>, preamp_db: f64| -> f64 {
-                    let requested_gain = rg_gain_db + preamp_db;
-
-                    if requested_gain <= 0.0 {
-                        return requested_gain;
-                    }
-
-                    if let Some(peak_val) = peak {
-                        if peak_val > 0.0 {
-                            const HEADROOM: f64 = 0.99;
-                            let max_linear = HEADROOM / peak_val;
-                            let max_gain_db = 20.0 * max_linear.log10();
-
-                            if requested_gain > max_gain_db {
-                                log::info!(
-                                    "Peak protection: peak={:.4}, requested={:.2} dB, limited to {:.2} dB",
-                                    peak_val,
-                                    requested_gain,
-                                    max_gain_db
-                                );
-                                return max_gain_db;
-                            }
-                        }
-                    }
-
-                    requested_gain
-                };
-
-                match loudness_state.get_mode() {
-                    crate::config::NormalizationMode::ReplayGainTrack => {
-                        if let Some(rg_gain) = metadata.rg_track_gain {
-                            let peak = metadata.rg_track_peak;
-                            let effective_gain = calc_safe_gain(rg_gain, peak, preamp);
-                            loudness_state.set_target_gain(effective_gain);
-                            log::info!(
-                                "ReplayGain Track: {:.2} dB + preamp {:.2} dB -> {:.2} dB (peak: {:?})",
-                                rg_gain,
-                                preamp,
-                                effective_gain,
-                                peak
-                            );
-                        } else {
-                            // The decode thread measures the track while
-                            // streaming and sends LoudnessMeasured; preamp
-                            // only until then.
-                            log::info!("No ReplayGain track gain; EBU R128 fallback pending");
-                            loudness_state.set_target_gain(preamp);
-                        }
-                    }
-                    crate::config::NormalizationMode::ReplayGainAlbum => {
-                        let rg_gain = metadata.rg_album_gain.or(metadata.rg_track_gain);
-                        let peak = metadata.rg_album_peak.or(metadata.rg_track_peak);
-                        if let Some(gain) = rg_gain {
-                            let effective_gain = calc_safe_gain(gain, peak, preamp);
-                            loudness_state.set_target_gain(effective_gain);
-                            log::info!(
-                                "ReplayGain Album: {:.2} dB + preamp {:.2} dB -> {:.2} dB (peak: {:?})",
-                                gain,
-                                preamp,
-                                effective_gain,
-                                peak
-                            );
-                        } else {
-                            log::info!("No ReplayGain gain; EBU R128 fallback pending");
-                            loudness_state.set_target_gain(preamp);
-                        }
-                    }
-                    _ => {}
-                }
+                // Every track sets its own gain here. Without a tag the mode can use, it
+                // starts at 0 dB and the decode thread's measurement (or the remembered one)
+                // follows as LoudnessMeasured; keeping the previous track's gain instead
+                // made a picked song as loud or quiet as whatever played before it.
+                let gain = gain_at_load(&loudness_state, &metadata);
+                loudness_state.set_target_gain(gain);
+                log::info!("Loudness gain at load: {:.2} dB ({:?})", gain, loudness_state.get_mode());
 
                 log::debug!("DSP context updated for {} Hz sample rate", sr_u32);
 
@@ -829,7 +762,7 @@ pub fn audio_thread_main(
                 shared_state.raise_events(EVENT_LOAD_ERROR);
             }
             Ok(AudioCommand::LoudnessMeasured { generation, integrated_lufs }) => {
-                apply_measured_loudness(&shared_state, &loudness_state, target_lufs, generation, integrated_lufs);
+                apply_measured_loudness(&shared_state, &loudness_state, generation, integrated_lufs);
             }
             Ok(AudioCommand::Applied(seq)) => publish_applied(&shared_state, seq),
             Ok(AudioCommand::Shutdown) | Err(_) => break,
@@ -843,37 +776,53 @@ fn publish_applied(shared_state: &SharedState, seq: u64) {
     shared_state.raise_events(EVENT_COMMAND_APPLIED);
 }
 
-/// Apply the EBU R128 fallback gain measured by the decode thread, if the
-/// track is still current and still in a ReplayGain mode without tags.
+/// Gain for a track that has just loaded: from its ReplayGain tag when the mode reads one,
+/// otherwise 0 dB until its loudness is measured.
+fn gain_at_load(loudness_state: &AtomicLoudnessState, metadata: &crate::decoder::TrackMetadata) -> f64 {
+    crate::processor::LoudnessNormalizer::planned_gain_db(
+        loudness_state.get_mode(),
+        metadata,
+        None,
+        loudness_state.target_lufs(),
+        loudness_state.reference_lufs(),
+        loudness_state.preamp_gain_db(),
+    )
+    .unwrap_or(0.0)
+}
+
+/// Apply the loudness the decode thread measured (or remembered) for the current track,
+/// unless the mode takes this track's gain from a tag.
 fn apply_measured_loudness(
     shared_state: &SharedState,
     loudness_state: &AtomicLoudnessState,
-    target_lufs: f64,
     generation: u64,
     integrated_lufs: f64,
 ) {
     if shared_state.load_generation.load(Ordering::Acquire) != generation {
         return;
     }
-    if !matches!(
-        loudness_state.get_mode(),
-        crate::config::NormalizationMode::ReplayGainTrack
-            | crate::config::NormalizationMode::ReplayGainAlbum
-    ) {
+    let mode = loudness_state.get_mode();
+    if crate::processor::LoudnessNormalizer::has_tag_gain(mode, &shared_state.track_metadata.read()) {
         return;
     }
-    let preamp = loudness_state.preamp_gain_db();
-    if integrated_lufs.is_finite() {
-        let gain = target_lufs - integrated_lufs + preamp;
-        loudness_state.set_target_gain(gain);
-        log::info!(
-            "EBU R128 fallback: {:.2} LUFS -> gain {:.2} dB (target: {:.2} LUFS)",
-            integrated_lufs,
-            gain,
-            target_lufs
-        );
-    } else {
-        log::warn!("EBU R128 analysis failed, keeping preamp only: {:.2} dB", preamp);
+    match crate::processor::LoudnessNormalizer::planned_gain_db(
+        mode,
+        &crate::decoder::TrackMetadata::default(),
+        Some(integrated_lufs),
+        loudness_state.target_lufs(),
+        loudness_state.reference_lufs(),
+        loudness_state.preamp_gain_db(),
+    ) {
+        Some(gain) => {
+            loudness_state.set_target_gain(gain);
+            log::info!(
+                "Measured loudness {:.2} LUFS -> gain {:.2} dB (target {:.2} LUFS)",
+                integrated_lufs,
+                gain,
+                loudness_state.target_lufs()
+            );
+        }
+        None => log::warn!("Loudness measurement unusable ({:.2}), keeping 0 dB", integrated_lufs),
     }
 }
 
@@ -885,7 +834,6 @@ fn handle_wasapi_exclusive(
     dsp_ctx: &Arc<LockfreeDspContext>,
     loudness_state: &Arc<AtomicLoudnessState>,
     spectrum_tap: &SpectrumTap,
-    target_lufs: f64,
 ) -> bool {
     log::info!("Starting TRUE WASAPI exclusive mode playback...");
 
@@ -1080,7 +1028,6 @@ fn handle_wasapi_exclusive(
                             apply_measured_loudness(
                                 shared_state,
                                 loudness_state,
-                                target_lufs,
                                 generation,
                                 integrated_lufs,
                             );
@@ -1104,5 +1051,58 @@ fn handle_wasapi_exclusive(
             log::error!("Failed to create WASAPI player: {}. Falling back to cpal.", e);
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod loudness_at_load_tests {
+    use super::*;
+    use crate::config::NormalizationMode;
+    use crate::decoder::TrackMetadata;
+
+    fn state(mode: NormalizationMode) -> AtomicLoudnessState {
+        let s = AtomicLoudnessState::new(0.0, 44_100).unwrap();
+        s.set_target_lufs(-12.0);
+        s.set_reference_lufs(-18.0);
+        s.set_preamp_gain(-1.0);
+        s.set_normalization_mode(mode);
+        s
+    }
+
+    #[test]
+    fn a_picked_track_does_not_keep_the_previous_tracks_gain() {
+        let s = state(NormalizationMode::Track);
+        s.set_target_gain(-9.0); // whatever the song before ended on
+        assert_eq!(gain_at_load(&s, &TrackMetadata::default()), 0.0);
+    }
+
+    #[test]
+    fn tag_gain_at_load_matches_the_gapless_path_and_counts_preamp_once() {
+        let s = state(NormalizationMode::ReplayGainTrack);
+        let md = TrackMetadata { rg_track_gain: Some(-5.0), ..Default::default() };
+        // -5 dB written against -18 LUFS, target -12: +1 dB. The -1 dB preamp is added
+        // by process_gain, not here as well.
+        assert_eq!(gain_at_load(&s, &md), 1.0);
+    }
+
+    #[test]
+    fn measured_loudness_applies_in_track_mode_with_the_current_target() {
+        let shared = SharedState::new();
+        let generation = shared.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let s = state(NormalizationMode::Track);
+        s.set_target_lufs(-14.0);
+        apply_measured_loudness(&shared, &s, generation, -8.0);
+        assert_eq!(s.target_gain_db(), -6.0);
+
+        // A stale measurement (another track loaded since) is ignored.
+        apply_measured_loudness(&shared, &s, generation + 1, -30.0);
+        assert_eq!(s.target_gain_db(), -6.0);
+
+        // A tag the mode reads wins over the measurement.
+        let rg = state(NormalizationMode::ReplayGainTrack);
+        rg.set_target_gain(2.5);
+        *shared.track_metadata.write() = TrackMetadata { rg_track_gain: Some(-3.5), ..Default::default() };
+        apply_measured_loudness(&shared, &rg, generation, -30.0);
+        assert_eq!(rg.target_gain_db(), 2.5);
     }
 }
