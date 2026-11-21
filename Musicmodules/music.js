@@ -447,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupMusicStats?.(app); // 听歌记录（次数、上次播放、跳过），只存本机
         window.setupMusicRadio?.(app); // 电台与自动续播：一组放完接着放相似的歌，右键「从这首开电台」
         window.setupMusicSmart?.(app); // 智能歌单：检索框里的条件词（喜欢、没听过、次数>N……），存下来自己更新
+        window.setupMusicDesktopLyrics?.(app); // 桌面歌词：开着时把当前行送给桌面上的歌词条
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 

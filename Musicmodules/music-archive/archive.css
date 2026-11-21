@@ -515,6 +515,10 @@ body.music-reduce-motion .archive-lyrics { animation: none; }
 .archive-lyrics-head { display: flex; align-items: baseline; gap: 10px; margin-right: 59px; padding: 0 0 9px 20px; border-bottom: 1px solid var(--ar-rule); font-size: 12px; letter-spacing: 1.3px; color: var(--ar-muted); white-space: nowrap; }
 .archive-lyrics-head i { font-style: normal; opacity: .7; }
 .archive-lyrics-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; letter-spacing: .4px; }
+.archive-lyrics-head .archive-lyrics-desk { margin-left: auto; flex: none; padding: 2px 8px; border: 1px solid var(--ar-rule); border-radius: 999px; background: transparent; color: var(--ar-muted); font: inherit; font-size: 11px; letter-spacing: .6px; cursor: pointer; transition: color .15s ease, border-color .15s ease, background-color .15s ease; }
+.archive-lyrics-head .archive-lyrics-desk:hover { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-head .archive-lyrics-desk[aria-pressed="true"] { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 10%, transparent); }
+.archive-lyrics-head .archive-lyrics-desk:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }
 .archive-lyrics-viewport {
     position: relative; flex: 1; min-height: 0; overflow: hidden; margin-top: 10px;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
