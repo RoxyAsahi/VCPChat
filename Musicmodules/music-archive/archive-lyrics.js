@@ -40,7 +40,7 @@
     };
 
     const TEMPLATE = `
-        <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b></div>
+        <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
         <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
@@ -138,6 +138,15 @@
                 setNone(true);
             }, NONE_AFTER);
         };
+        // 桌面歌词开关（music-desktop-lyrics.js 提供；没有就不显示）
+        const syncDesk = () => {
+            const d = app.desktopLyrics;
+            r.desk.hidden = !(d && d.available);
+            r.desk.setAttribute('aria-pressed', String(Boolean(d && d.on)));
+        };
+        r.desk.addEventListener('click', () => { app.desktopLyrics?.toggle?.(); });
+        document.addEventListener('music-desktop-lyrics-change', syncDesk);
+        setTimeout(syncDesk, 0);
         r.fetch.addEventListener('click', () => {
             if (typeof app.openLyricsFetchModal === 'function') app.openLyricsFetchModal(app.currentTrackIndex);
         });

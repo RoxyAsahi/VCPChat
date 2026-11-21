@@ -342,9 +342,14 @@
                 // standard material recompiles the first time it appears.
                 world.prepareEnvironment?.(renderer);
                 // The lens draws the scene offscreen; without it only the water pass does.
-                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
+                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true, report: false });
+                if (mode.destroyed || !renderer) return;
+                await U.breathe();
                 if (mode.destroyed || !renderer) return;
                 if (!canvasSmoothing) await optics?.precompile?.(renderer);
+                if (mode.destroyed || !renderer) return;
+                // Lens programs included, so the first frame has nothing left to link.
+                await U.settlePrograms(renderer, () => !mode.destroyed && !!renderer);
                 if (mode.destroyed || !renderer) return;
                 await U.breathe();
                 if (mode.destroyed || !renderer) return;
