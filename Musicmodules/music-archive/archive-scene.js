@@ -42,7 +42,7 @@
      */
     const LIGHTING = Object.freeze({
         light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(40,38,34,.7)', tagRing: 'rgba(60,55,48,.55)' },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.149, 0.192, 0.212], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)' }
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)' }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -56,8 +56,8 @@
     const radianceOf = (c) => c.map((v) => rrtInverse(toLinear(v)) * 0.6 / 1.02);
     const FACE_CENTERS = (() => {
         const side = [0.9275, 0.9075, 0.8675], top = [0.965, 0.95, 0.925], wide = [0.78, 0.695, 0.58];
-        const nEnd = [0.14, 0.17, 0.18], nWide = [0.075, 0.102, 0.114];
-        return [side, top, wide, side, side, wide, nEnd, nEnd, nWide, nEnd, nWide, nWide].map(radianceOf);
+        const nSide = [0.285, 0.295, 0.295], nTop = [0.36, 0.37, 0.37], nWide = [0.2, 0.211, 0.214];
+        return [side, top, wide, side, side, wide, nSide, nTop, nWide, nSide, nSide, nWide].map(radianceOf);
     })();
 
     /*
@@ -148,7 +148,11 @@ vec4 faceSample(int face, vec2 uv, float dark) {
     if (face == 2 || face == 5) day = mix(vec3(0.70, 0.60, 0.46) + uv.y * vec3(0.16, 0.19, 0.24), vec3(0.94, 0.91, 0.85), border * 0.65);
     else if (face == 1) day = vec3(0.965, 0.95, 0.925);
     else day = vec3(0.90, 0.875, 0.825) + uv.y * vec3(0.055, 0.065, 0.085);
-    vec3 night = (face == 0 || face == 1 || face == 3 ? vec3(0.14, 0.17, 0.18) : vec3(0.075, 0.102, 0.114)) + border * 0.035;
+    // 深色不照搬参考的青灰：中性石墨灰，宽面下深上浅，端面和顶面亮一档，四边一圈细亮边
+    vec3 night;
+    if (face == 2 || face == 5) night = mix(vec3(0.165, 0.175, 0.178) + uv.y * vec3(0.07, 0.072, 0.072), vec3(0.33, 0.34, 0.34), border * 0.6);
+    else if (face == 1) night = vec3(0.36, 0.37, 0.37);
+    else night = vec3(0.27, 0.28, 0.28) + uv.y * vec3(0.03, 0.03, 0.03);
     float band = smoothstep(0.08, 0.5, y) * (1.0 - smoothstep(3.25, 3.67, y));
     float glow = (0.55 * exp(-abs(x + 2.22) / 0.48) + 0.05) * band;
     vec3 c = dark <= 0.0 ? radiance(day) : dark >= 1.0 ? radiance(night) : mix(radiance(day), radiance(night), dark);
@@ -192,19 +196,24 @@ void main() {
     vec3 n = normalize(vObjN);
     int face = faceOf(n);
     vec4 baked = faceSample(face, surfaceUv(face, vLocal), dark);
+    // 取出端详时卡身回到干净的象牙白（深色是石墨灰）：参考里宽面的暖棕放大到整张卡会显得发脏
+    float hero = selected * uHero;
+    if (hero > 0.0 && (face == 2 || face == 5)) baked.rgb = mix(baked.rgb, faceSample(1, vec2(0.5), dark).rgb * mix(0.97, 0.8, dark), hero);
+    // 暖光：深色里只留三分之一，取出端详时自己这张几乎不发光
+    float glowGain = mix(1.0, 0.32, dark) * (1.0 - 0.85 * hero);
     // 托盘正面只在面板的圆孔、缺口里露出来：按顶面的亮色画，孔看上去是一个浅色小圆点
     if (face == 2 && vLocal.z < 0.2) baked.rgb = faceSample(1, vec2(0.5), dark).rgb;
     vec4 nr = normalResponse(n, dark);
     vec3 color = baked.rgb * nr.rgb + nr.a;
     // 取出端详时镜头贴得很近，光点在自己卡面上会显出一颗颗的，放得更散一些
     float soft = selected * uHero * 0.45;
-    color += field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn;
-    color += WARM * baked.a * selected * uLightOn;
+    color += field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn * glowGain;
+    color += WARM * baked.a * selected * uLightOn * glowGain;
     if (selected > 0.5 && face == 2 && vLocal.z > 0.15) {
         // 选中卡的面板半透：透出后面那块贴着光源的内衬板，左侧那条暖光就是从这里来的
         vec3 back = vec3(vLocal.xy, -0.038);
         vec4 inner = faceSample(2, surfaceUv(2, back), dark);
-        vec3 innerColor = inner.rgb + (field(vec3(vEmit.xy, -0.038), vec3(0.0, 0.0, 1.0), soft) + WARM * inner.a) * uLightOn;
+        vec3 innerColor = inner.rgb + (field(vec3(vEmit.xy, -0.038), vec3(0.0, 0.0, 1.0), soft) + WARM * inner.a) * uLightOn * glowGain;
         color = mix(color, innerColor, uSeeThrough);
     }
     if (selected > 0.5 && uHero > 0.0) {
@@ -1025,7 +1034,7 @@ vec3 archiveUntone(vec3 y) {
             glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
             glowUniforms.uHero.value = detailK;
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
-            glowUniforms.uSeeThrough.value = 0.38 - 0.26 * detailK;
+            glowUniforms.uSeeThrough.value = 0.38 * (1 - detailK);
             if (post.on) {
                 post.mat.uniforms.uShade.value = detailK;
                 renderer.setRenderTarget(post.rt);
