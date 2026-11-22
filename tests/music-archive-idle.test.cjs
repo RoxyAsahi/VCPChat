@@ -16,6 +16,8 @@ function setup({ playing = false, lyrics = false, fluid = false } = {}) {
     w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
     w.console.warn = () => {};
     w.innerWidth = 1600; w.innerHeight = 900;
+    // jsdom 没有 ResizeObserver（本机版歌词栏用它跟随尺寸），给个空实现
+    w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
     // 虚拟时钟
     const clock = { now: 1000, queue: [], timers: [], id: 0, raf: 0, bySource: {} };
     w.performance.now = () => clock.now;
