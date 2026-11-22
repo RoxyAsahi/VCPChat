@@ -946,6 +946,7 @@ vec3 archiveUntone(vec3 y) {
         const glowMat4 = new THREE.Matrix4();
         const cardAim = new THREE.Vector3();
         let snapCardAim = true;
+        let pulseGain = 1;
         const camDir = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), detailAim = new THREE.Vector3(), camAim = new THREE.Vector3();
         const WORLD_UP = new THREE.Vector3(0, 1, 0);
         const lerp = (a, b, k) => a + (b - a) * k;
@@ -1119,6 +1120,9 @@ vec3 archiveUntone(vec3 y) {
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
+            // 取出端详时换曲目不再在背景里荡波纹（参考播放器 m_pulseGain：取出时按 8 收到 0）
+            pulseGain += ((detailOn ? 0 : 1) - pulseGain) * (reduced ? 1 : 1 - Math.exp(-dt * 8));
+            if (pulseGain < 0.001) { pulseGain = 0; pulses.length = 0; }   // 看不见的波纹不再让画面一直画
             // 整片档案的起伏高度：肩部隆起 × 列聚焦 + 待机起伏 + 换选中的波纹（参考播放器 ArchiveField::sample）
             const fieldAt = (row, lane) => {
                 let h = settlingWave(row - shoulder.v) * columnStrength(lane, focus.v);
@@ -1126,7 +1130,7 @@ vec3 archiveUntone(vec3 y) {
                 if (pulses.length) {
                     let rip = 0;
                     for (const p of pulses) rip += selectionWave(Math.hypot(row - p.row, (lane - p.lane) * 2.2), T - p.t);
-                    h += Math.max(-0.6, Math.min(0.6, rip));
+                    h += Math.max(-0.6, Math.min(0.6, rip)) * pulseGain;
                 }
                 return h;
             };
