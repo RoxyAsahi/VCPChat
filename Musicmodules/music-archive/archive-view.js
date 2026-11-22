@@ -81,6 +81,7 @@
             mode: 'archive',
             scene: null,
             raf: 0,
+            wait: 0,                 // 低帧率时两帧之间用定时器等，不每个显示帧都醒一次
             lastDraw: 0,
             activity: { animated: true, idle: false },
             destroyed: false,
@@ -1083,9 +1084,16 @@
                 state.lastDraw = now;
                 state.activity = state.scene.step(now);
             }
-            if (state.activity.animated || state.scene.dirty) state.raf = requestAnimationFrame(frame);
+            if (!state.activity.animated && !state.scene.dirty) return;
+            // 12 帧待机（或 30 帧档）时，下一帧还早就先睡到快到点再要显示帧，
+            // 免得 60/144Hz 屏上每个显示帧都把页面叫醒一次只为了判断「还没到」。
+            const wait = aim ? aim - (now - state.lastDraw) : 0;
+            if (!state.scene.dirty && wait > 20) state.wait = setTimeout(wake, wait - 8);
+            else state.raf = requestAnimationFrame(frame);
         };
+        const wake = () => { state.wait = 0; kick(); };
         const kick = () => {
+            if (state.wait) { clearTimeout(state.wait); state.wait = 0; }
             if (!state.raf && shouldRender()) state.raf = requestAnimationFrame(frame);
         };
 
@@ -1540,6 +1548,8 @@
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
+            clearTimeout(state.wait);
+            state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
@@ -1642,7 +1652,7 @@
             get mode() { return state.mode; },
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null,
+                selected: selectedIndex(), rendering: Boolean(state.raf || state.wait), allowed: renderAllowed(), scene: state.scene?.debug() || null,
                 lyrics: lyrics ? lyrics.debug() : null, lyricsOn: Boolean(state.lyricsOn)
             })
         };
