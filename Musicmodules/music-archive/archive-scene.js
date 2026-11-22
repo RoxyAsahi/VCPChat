@@ -1014,8 +1014,9 @@ vec3 archiveUntone(vec3 y) {
             const rate = reduced ? 9 : 3.7;
             damp(camLane, target.lane, rate, dt);
             damp(camRow, target.row, rate, dt);
-            damp(shoulder, target.row, rate, dt);
-            damp(focus, target.lane, rate, dt);
+            // 参考播放器 NativeSceneUpdate.cpp：肩部隆起 5、列聚焦 4，都比镜头（3.7）先到位一点
+            damp(shoulder, target.row, reduced ? rate : 5, dt);
+            damp(focus, target.lane, reduced ? rate : 4, dt);
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
             damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
@@ -1026,7 +1027,7 @@ vec3 archiveUntone(vec3 y) {
                 // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
                 const fromLift = detailOn ? smooth((lift.v - 0.8) / 2.4) : smooth((lift.v - 0.7) / (DETAIL_LIFT - 0.7));
                 const goal = detailOn ? Math.max(fromLift, Math.min(detailK, 1)) : fromLift;
-                detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 5));
+                detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 2.8));   // 镜头推近的跟随速度，参考播放器 blend 2.8
                 if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
                 if (!detailOn && detailK < 0.001) detailK = 0;
                 damp(inspect, inspect.goal, reduced ? 40 : 7, dt);
@@ -1036,7 +1037,7 @@ vec3 archiveUntone(vec3 y) {
             const tmpC = tinting ? (stepTheme.c || (stepTheme.c = new THREE.Color())) : null;
             // 静止后的缓慢起伏只在播放时才有：暂停时没有东西在动，画面停住，外面的帧循环也就不再排下一帧
             const idleTarget = !reduced && isPlaying && now - lastInput > 2500 ? 1 : 0;
-            idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 1.2 : 3));
+            idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 0.8 : 4));   // 参考播放器：起伏 0.8 慢慢起、4 快速收
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
@@ -1084,8 +1085,8 @@ vec3 archiveUntone(vec3 y) {
                 }
             }
             for (const [k, v] of hoverLifts) {
-                const goal = hovered === k ? 0.24 : 0;   // 悬停的卡稍微探出来一点，能看出鼠标指着哪张
-                const nv = v + (goal - v) * Math.min(1, dt * 10);
+                const goal = hovered === k ? 0.28 : 0;   // 悬停的卡探出 0.28，按 14 的指数趋近（参考播放器同值）
+                const nv = v + (goal - v) * (reduced ? 1 : 1 - Math.exp(-dt * 14));
                 if (Math.abs(nv) < 0.001 && goal === 0) hoverLifts.delete(k); else hoverLifts.set(k, nv);
             }
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
