@@ -488,6 +488,7 @@ void main() {
                     draws++;
                 }
                 L.mesh.position.set(w.x, w.y, w.z);
+                L.mesh.rotation.x = w.tilt || 0;   // 跟卡一起顺着坡度微倾
                 if (underMask(w)) { L.mesh.visible = false; continue; }
                 // 当前列的标题实一些，左右邻列淡一些（邻列离相机更近，不压低会比当前列还显眼）
                 L.mat.opacity = w.li === 0 ? 1 : 0.5;
@@ -1001,7 +1002,7 @@ vec3 archiveUntone(vec3 y) {
         const turn = (delta, release = false) => {
             if (!detailOn) return;
             if (release) inspect.goal = 0;
-            else { inspect.goal = Math.max(-1.2, Math.min(1.2, inspect.goal + delta)); inspect.v = inspect.goal; inspect.vel = 0; }
+            else inspect.goal = Math.max(-0.8, Math.min(0.8, inspect.goal + delta));   // 参考播放器：±0.8 弧度
             invalidate();
         };
         /* 取出的卡在画面上的范围（画布像素），给 HUD 判断点没点在卡上 */
@@ -1048,8 +1049,9 @@ vec3 archiveUntone(vec3 y) {
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
             damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
-                damp(r, 0, reduced ? 40 : 4.2, dt);
-                if (Math.abs(r.v) < 0.002 && Math.abs(r.vel) < 0.01) returning.delete(k);
+                // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
+                r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
+                if (Math.abs(r.v) < 0.002) returning.delete(k);
             }
             {
                 // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
@@ -1058,7 +1060,10 @@ vec3 archiveUntone(vec3 y) {
                 detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 2.8));   // 镜头推近的跟随速度，参考播放器 blend 2.8
                 if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
                 if (!detailOn && detailK < 0.001) detailK = 0;
-                damp(inspect, inspect.goal, reduced ? 40 : 7, dt);
+                // 转卡：按住时朝目标角按 2.8 跟过去，松手后按 7 指数回正（参考播放器 m_rotation / returnAngleStep）
+                if (inspect.goal !== 0) inspect.v += (inspect.goal - inspect.v) * (1 - Math.exp(-dt * (reduced ? 35 : 2.8)));
+                else { inspect.v *= Math.exp(-dt * (reduced ? 35 : 7)); if (Math.abs(inspect.v) <= 0.001) inspect.v = 0; }
+                inspect.vel = 0;
             }
             stepTheme(T);
             const tinting = waves.length > 0;
@@ -1069,6 +1074,17 @@ vec3 archiveUntone(vec3 y) {
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
+            // 整片档案的起伏高度：肩部隆起 × 列聚焦 + 待机起伏 + 换选中的波纹（参考播放器 ArchiveField::sample）
+            const fieldAt = (row, lane) => {
+                let h = settlingWave(row - shoulder.v) * columnStrength(lane, focus.v);
+                if (idleGain > 0.001) h += idleWave(row, lane, T) * idleGain;
+                if (pulses.length) {
+                    let rip = 0;
+                    for (const p of pulses) rip += selectionWave(Math.hypot(row - p.row, (lane - p.lane) * 2.2), T - p.t);
+                    h += Math.max(-0.6, Math.min(0.6, rip));
+                }
+                return h;
+            };
             const baseLane = Math.round(camLane.v);
             const baseRow = Math.round(camRow.v);
             labelWanted.clear();
@@ -1077,13 +1093,9 @@ vec3 archiveUntone(vec3 y) {
                 for (let ri = ROWS_AFTER - 1; ri >= -ROWS_BEFORE; ri--) {   // 近处的行先画：深度测试挡掉后面被遮住的像素，复杂的卡盒着色只算看得见的
                     const lane = baseLane + li;
                     const row = baseRow + ri;
-                    let f = settlingWave(row - shoulder.v) * columnStrength(lane, focus.v);
-                    if (idleGain > 0.001) f += idleWave(row, lane, T) * idleGain;
-                    if (pulses.length) {
-                        let rip = 0;
-                        for (const p of pulses) rip += selectionWave(Math.hypot(row - p.row, (lane - p.lane) * 2.2), T - p.t);
-                        f += Math.max(-0.6, Math.min(0.6, rip));
-                    }
+                    let f = fieldAt(row, lane);
+                    // 卡顺着起伏的坡度前后微倾（参考播放器 NativeSceneUpdate.cpp：slope × 0.024 × (1 − 取出进度)）
+                    const tilt = (fieldAt(row + 0.5, lane) - fieldAt(row - 0.5, lane)) * 0.024 * (1 - detailK);
                     if (isPlaying && playing && !reduced && lane === playing.lane) {
                         const dd = Math.abs(row - playing.row);
                         if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8);
@@ -1094,13 +1106,15 @@ vec3 archiveUntone(vec3 y) {
                     if (isTarget) y += lift.v;
                     else if (returning.size) { const r = returning.get(lane + ':' + row); if (r) y += r.v; }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
+                    // 选中卡抬起后不再跟着坡度倾斜（× (1 − smoother(lift / 0.4))），取出时可以转着看
+                    dummy.rotation.x = isTarget ? tilt * (1 - smoother(lift.v / 0.4)) : tilt;
                     dummy.rotation.y = isTarget ? inspect.v : 0;
                     if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
                     const dl = lane - target.lane, dr = row - target.row;
                     if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
                         const info = labelFor(lane, row);
-                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z });
+                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z, tilt: dummy.rotation.x });
                     }
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);

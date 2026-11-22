@@ -1205,7 +1205,7 @@
                     const dx = e.clientX - turning.x;
                     turning.x = e.clientX;
                     if (Math.abs(e.clientX - turning.x0) > 4) turned = true;
-                    state.scene?.turn(dx * 0.006);
+                    state.scene?.turn(dx * 0.004);   // 参考播放器每像素 0.004 弧度
                     kick();
                     return;
                 }

@@ -62,3 +62,18 @@
 
 - **原版的贴图资源：** 烘焙图集、光场、法线响应的二进制文件，我们都改用解析公式在着色器里计算。数值一样，省去了贴图。
 - **原版美术：** Case_Marks 印刷贴图、圆盘印刷、各种 logo 和字体，一律不搬。
+
+## 7. 动效与交互（夜间轮次）
+
+| 我们 | 原版出处 | 状态 |
+|---|---|---|
+| 肩部隆起速率 5、列聚焦速率 4、镜头 3.7 | `NativeSceneUpdate.cpp`：`m_shoulder.damp(…, 5)`、`m_laneFocus.damp(…, 4)`、`m_columnCamera/m_rail.damp(…, 3.7)` | 照搬 |
+| 悬停卡探出 0.28，按 `1-exp(-14·dt)` 趋近 | 同文件 `m_hoverLifts`：目标 0.28，速率 14 | 照搬（原来 0.24、线性 10） |
+| 待机起伏两组正弦，2.5 秒不操作后按 0.8 渐起、按 4 收回 | `ArchiveField::sample` 的 breathing；`m_idleGain` 的 0.8 / 4 | 照搬；只在播放时起伏（我们的省电选择） |
+| 取出时镜头跟随 `blend 2.8`，进度由抬起高度 `smooth((lift-0.8)/2.4)` 算 | 同文件 `m_detail = lerp(m_detail, cameraTarget, blend)` | 照搬（原来 5） |
+| 卡顺着起伏坡度前后倾 `slope×0.024×(1-detail)`，选中卡再乘 `(1-smooth(lift/0.4))` | 同文件 `actor.rotation.x`、普通卡的 `Matrix::compose(position, {slope*0.024*(1-m_detail),0,0})` | 照搬，标题贴片一起倾 |
+| 换下来的卡按 `exp(-4.5·dt)` 落回 | `SceneLifetimePolicy.h` `returningLiftStep` | 照搬（原来临界阻尼弹簧 4.2） |
+| 端详时拖动转卡：每像素 0.004 弧度、±0.8，按 2.8 跟随，松手按 7 指数回正 | `NativeSceneInput.cpp` pointermove 的 `m_targetRotation`；`returnAngleStep` | 照搬（原来 0.006、±1.2、立即跟手） |
+| 按住空白拖动整片档案、松手惯性滑行并吸附 | `SceneDrag.cpp` `ArchiveDrag` / `ArchiveMomentum`（10 像素起拖、120 毫秒采样、摩擦 2.4、吸附弹簧 10、起滑阈值 0.75） | 照搬；只在卡已放回时可拖，和原版 `canBrowse()` 一致 |
+| 镜头快速移动、卡飞出前半段按 0.67 倍分辨率画 | `render/RenderModePolicy.h` 渲染比例 50–200% 加放大 | 思路照搬；原版是固定比例，我们只在运动时降，停稳全清晰 |
+| 实例从近到远画 | `NativeSceneUpdate.cpp` 按相机距离前到后重排 | 照搬（按行倒序） |
