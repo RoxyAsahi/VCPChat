@@ -425,14 +425,33 @@
             if (probe) probeDir(dir);
             return '';
         };
+        const COVER_MAX = 512;
+        const shrinkCover = (entry) => {
+            const img = entry.img;
+            const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+            if (Math.max(w, h) <= COVER_MAX || typeof global.createImageBitmap !== 'function') return Promise.resolve();
+            const k = COVER_MAX / Math.max(w, h);
+            const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+            return global.createImageBitmap(img, { resizeWidth: cw, resizeHeight: ch, resizeQuality: 'high' }).then((bmp) => {
+                const c = document.createElement('canvas');
+                c.width = cw; c.height = ch;
+                c.getContext('2d').drawImage(bmp, 0, 0);
+                bmp.close?.();
+                entry.small = c;
+            }).catch(() => { /* 缩不了就用原图 */ });
+        };
         const preload = (url) => {
             if (!url || state.coverCache.has(url)) return;
             const img = new Image();
             img.decoding = 'async';
             const entry = { img, ok: null };
             img.onload = () => {
-                entry.ok = true;
-                if (coverOf(selectedTrack()) === url) syncCard();
+                // 大封面先在后台缩成最长边 512（卡面贴图就是 512）再交给场景：原图画进贴图后，解码出来的整张图
+                // 会跟着缓存里的图片对象一直留着。缩好之前和以前加载中一样显示曲名卡面。
+                shrinkCover(entry).then(() => {
+                    entry.ok = true;
+                    if (!state.destroyed && coverOf(selectedTrack()) === url) syncCard();
+                });
             };
             img.onerror = () => { entry.ok = false; };
             img.src = url;
@@ -456,7 +475,7 @@
             const format = specs?.format(t) || '';
             const bitrate = specs?.bitrate(t) || '';
             const key = JSON.stringify([t.path, title, artist, format, bitrate, entry?.ok ? url : '', document.body.classList.contains('light-theme')]);
-            state.scene.setCover(key, entry?.ok ? entry.img : null, { title, artist, format, bitrate });
+            state.scene.setCover(key, entry?.ok ? (entry.small || entry.img) : null, { title, artist, format, bitrate });
         };
         const setCardExpanded = (on) => {
             cardExpanded = on;
