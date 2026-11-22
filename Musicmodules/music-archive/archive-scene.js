@@ -107,6 +107,7 @@ void main() {
 #define HERO_IVORY
 uniform float uLightOn;
 uniform float uHero;
+uniform float uQuality;   // 选中卡的装配件显现进度 smooth(lift / 0.4)
 uniform float uSeeThrough;
 uniform vec3 uCenter[12];
 varying vec3 vLocal;
@@ -207,7 +208,19 @@ void main() {
     // 托盘正面只在面板的圆孔、缺口里露出来：浏览时按顶面亮色画（孔看着是浅色小圆点），
     // 端详时换成固定螺丝的钛灰（参考 RhiScene.cpp musicDraws：Titanium_Fasteners 固定成暗色）
     bool socket = face == 2 && vLocal.z < 0.2;
-    if (socket) baked.rgb = mix(mix(uCenter[1], uCenter[7], dark), radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
+    if (socket) {
+        // 选中卡（参考播放器的焦点卡）多画两样装配件，随抬起 smooth(lift/0.4) 显现：
+        // 左上缺口里的索引片 Index_Inlay（浅色基色 0.67/0.53/0.40，深色 #c6a36b），圆孔里的螺钉 Titanium_Fasteners。
+        // 颜色按参考截图里这两处的实际亮度取（索引片灰褐、螺钉略暗于卡面），不搬原版贴图。
+        float q = selected * uQuality;
+        bool notch = vLocal.x < -2.0 && vLocal.y > 3.4;
+        vec3 browse = mix(uCenter[1], uCenter[7], dark);
+        vec3 part = notch ? radiance(mix(vec3(0.78, 0.73, 0.66), vec3(0.62, 0.52, 0.36), dark))
+                          : radiance(mix(vec3(0.70, 0.67, 0.63), vec3(0.58, 0.61, 0.62), dark));
+        baked.rgb = mix(browse, part, q);
+        // 端详：螺钉换成钛灰（象牙白卡面上暗色螺钉像个黑洞），索引片保留
+        if (!notch) baked.rgb = mix(baked.rgb, radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
+    }
     vec4 nr = normalResponse(n, dark);
     // 深色里暖光只留三分之一（不照搬参考：参考深色下光场和浅色同强度，大片琥珀色压在暗底上显脏）
     float glowGain = mix(1.0, 0.32, dark);
@@ -384,6 +397,7 @@ void main() {
             uGlowInv: { value: new THREE.Matrix4() },
             uLightOn: { value: 0 },
             uHero: { value: 0 },
+            uQuality: { value: 0 },
             uSeeThrough: { value: 0.38 },
             uCenter: { value: FACE_CENTERS.map((c) => new THREE.Vector3(c[0], c[1], c[2])) }
         };
@@ -1167,6 +1181,7 @@ vec3 archiveUntone(vec3 y) {
             }
             glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
             glowUniforms.uHero.value = detailK;
+            glowUniforms.uQuality.value = smoother(lift.v / 0.4);
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
             glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
