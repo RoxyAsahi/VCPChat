@@ -17,12 +17,14 @@
         });
         const defs = make('defs');
         // Central quiet area: decorations cannot cross the main reading region.
+        // A clip, not a luminance mask: a mask makes the whole window-sized
+        // drawing go through an offscreen layer every frame. The hole is the
+        // same rounded rectangle (120,145 760×310, r 65), cut out by even-odd.
         const maskId = `lyric-decor-mask-${++serial}`;
-        const mask = make('mask', { id: maskId, maskUnits: 'userSpaceOnUse', x: 0, y: 0, width: 1000, height: 600 });
-        mask.append(make('rect', { width: 1000, height: 600, fill: 'white' }));
-        mask.append(make('rect', { x: 120, y: 145, width: 760, height: 310, rx: 65, fill: 'black' }));
+        const mask = make('clipPath', { id: maskId, clipPathUnits: 'userSpaceOnUse' });
+        mask.append(make('path', { 'clip-rule': 'evenodd', d: 'M0 0H1000V600H0Z M185 145H815A65 65 0 0 1 880 210V390A65 65 0 0 1 815 455H185A65 65 0 0 1 120 390V210A65 65 0 0 1 185 145Z' }));
         defs.append(mask);
-        const field = make('g', { mask: `url(#${maskId})`, fill: 'none', stroke: 'currentColor', 'stroke-width': 1 });
+        const field = make('g', { 'clip-path': `url(#${maskId})`, fill: 'none', stroke: 'currentColor', 'stroke-width': 1 });
         svg.append(defs, field);
         container.prepend(svg);
         let parts = [];
