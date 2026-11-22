@@ -41,8 +41,8 @@
      * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(40,38,34,.7)', tagRing: 'rgba(60,55,48,.55)' },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)' }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', mat: ['#ffffff', 0.5] },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', mat: ['#c9cfcf', 0.18] }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -193,37 +193,67 @@ vec3 field(vec3 p, vec3 n, float soft) {
 void main() {
     float dark = vState.x;
     float selected = step(0.5, vState.y);
+    float hero = selected * uHero;          // 取出端详的进度，只在选中卡上非零
     vec3 n = normalize(vObjN);
     int face = faceOf(n);
     vec4 baked = faceSample(face, surfaceUv(face, vLocal), dark);
-    // 取出端详时卡身回到干净的象牙白（深色是石墨灰）：参考里宽面的暖棕放大到整张卡会显得发脏
-    float hero = selected * uHero;
-    if (hero > 0.0 && (face == 2 || face == 5)) baked.rgb = mix(baked.rgb, faceSample(1, vec2(0.5), dark).rgb * mix(0.97, 0.8, dark), hero);
-    // 暖光：深色里只留三分之一，取出端详时自己这张几乎不发光
-    float glowGain = mix(1.0, 0.32, dark) * (1.0 - 0.85 * hero);
-    // 托盘正面只在面板的圆孔、缺口里露出来：按顶面的亮色画，孔看上去是一个浅色小圆点
-    if (face == 2 && vLocal.z < 0.2) baked.rgb = faceSample(1, vec2(0.5), dark).rgb;
+    // 托盘正面只在面板的圆孔、缺口里露出来：浏览时按顶面亮色画（孔看着是浅色小圆点），
+    // 端详时换成固定螺丝的钛灰（参考 RhiScene.cpp musicDraws：Titanium_Fasteners 固定成暗色）
+    bool socket = face == 2 && vLocal.z < 0.2;
+    if (socket) baked.rgb = mix(faceSample(1, vec2(0.5), dark).rgb, radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
     vec4 nr = normalResponse(n, dark);
-    vec3 color = baked.rgb * nr.rgb + nr.a;
-    // 取出端详时镜头贴得很近，光点在自己卡面上会显出一颗颗的，放得更散一些
-    float soft = selected * uHero * 0.45;
-    color += field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn * glowGain;
-    color += WARM * baked.a * selected * uLightOn * glowGain;
-    if (selected > 0.5 && face == 2 && vLocal.z > 0.15) {
-        // 选中卡的面板半透：透出后面那块贴着光源的内衬板，左侧那条暖光就是从这里来的
-        vec3 back = vec3(vLocal.xy, -0.038);
-        vec4 inner = faceSample(2, surfaceUv(2, back), dark);
+    // 深色里暖光只留三分之一（不照搬参考：参考深色下光场和浅色同强度，大片琥珀色压在暗底上显脏）
+    float glowGain = mix(1.0, 0.32, dark);
+    // 端详时镜头贴得很近：光场放散，免得卡面上一颗颗光斑（参考是低分辨率三维光场三线性采样，本身就是糊的）
+    float soft = hero * 0.45;
+    vec3 fieldHere = field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn * glowGain;
+    // opticalSurface.frag 壳体分支：baked * normalResponse + highlight + 光场 + 选中自发光
+    vec3 shell = baked.rgb * nr.rgb + nr.a + fieldHere + WARM * baked.a * selected * uLightOn * glowGain;
+    vec3 color = shell;
+    bool plateFront = face == 2 && vLocal.z > 0.15;
+    if (selected > 0.5 && plateFront) {
+        // 选中卡的面板半透，透出后面贴着光源的内衬板（Optical_Diffuser，z = -0.038）。
+        // 浏览：面板不透明度 0.62（RhiScene.cpp musicDraws opacity），透 38%；
+        vec4 inner = faceSample(2, surfaceUv(2, vec3(vLocal.xy, -0.038)), dark);
         vec3 innerColor = inner.rgb + (field(vec3(vEmit.xy, -0.038), vec3(0.0, 0.0, 1.0), soft) + WARM * inner.a) * uLightOn * glowGain;
-        color = mix(color, innerColor, uSeeThrough);
+        color = mix(shell, innerColor, uSeeThrough);
+#ifdef HERO_IVORY
+        // 端详（方案 B）：内衬换成干净的象牙白，光场只留一成五
+        vec3 ivory = faceSample(1, vec2(0.5), dark).rgb * mix(0.97, 0.8, dark);
+        vec3 heroFront = ivory + (innerColor - inner.rgb) * 0.15;
+#else
+        // 端详（方案 A，照参考）：面板走玻璃分支（opticalSurface.frag flags 3 + hero），
+        // 几乎全透，看到的是内衬板；玻璃只加掠射角反光、轮廓亮边和一条主光高光
+        vec3 heroFront = innerColor;
+#endif
+        color = mix(color, heroFront, hero);
+    } else if (selected > 0.5 && !socket) {
+        // 端详时托盘（Ivory_Edges，flags 4 + hero）：材料色 + 光场，不用烘焙图集
+        vec3 edgeColor = mix(vec3(0.941, 0.906, 0.875), vec3(0.408, 0.447, 0.467) * 0.75, dark) + fieldHere;
+        color = mix(color, edgeColor, hero);
     }
-    if (selected > 0.5 && uHero > 0.0) {
-        // 取出来端详时补一束正上方略偏前的主光，卡面才有方向感
+    if (hero > 0.0) {
+        // keyLight()：正上方略偏前一束主光，漫反射 0.55 + 0.45·N·L，高光指数 mix(20, 90, gloss)
         vec3 wn = normalize(vWorldN);
-        vec3 l = vec3(0.0, 0.5477, 0.8367);
+        const vec3 KEY = vec3(0.0, 0.5477, 0.8367);
         vec3 v = normalize(cameraPosition - vWorld);
-        float ndl = max(dot(wn, l), 0.0);
-        float spec = pow(max(dot(wn, normalize(l + v)), 0.0), 62.0) * 0.582;
-        color = mix(color, color * (0.55 + 0.45 * ndl) + spec, uHero);
+        float ndl = max(dot(wn, KEY), 0.0);
+        float gloss = plateFront ? 0.6 : 0.35;
+        float spec = pow(max(dot(wn, normalize(KEY + v)), 0.0), mix(20.0, 90.0, gloss)) * mix(0.18, 0.85, gloss);
+        vec3 lit = color * (0.55 + 0.45 * ndl) + spec;
+        if (plateFront) {
+            // 玻璃层：clearGlass = tint·0.06 + 雾色·(0.04 + 0.95·fresnel) + 高光 + sheen·0.85 + 亮边·0.55，
+            // 不透明度 0.06 + rim·1.3 + fresnel·0.35
+            float ndv = clamp(dot(wn, v), 0.0, 1.0);
+            float fresnel = pow(1.0 - ndv, 5.0);
+            float rim = pow(1.0 - ndv, 2.2);
+            vec3 tint = mix(vec3(1.0, 0.992, 0.98), vec3(0.384, 0.42, 0.439), dark);
+            float gspec = pow(max(dot(wn, normalize(KEY + v)), 0.0), 90.0) * 1.2;
+            vec3 glass = tint * 0.06 + fogColor * (0.04 + 0.95 * fresnel) + gspec + mix(tint, vec3(1.0), 0.3) * (0.10 + 1.15 * rim) * 0.85
+                + smoothstep(0.55, 0.98, rim) * 0.55;
+            lit = mix(lit, glass, clamp(0.06 + rim * 1.3 + fresnel * 0.35, 0.0, 0.92));
+        }
+        color = mix(color, lit, hero);
     }
     gl_FragColor = vec4(color, 1.0);
 #include <fog_fragment>
@@ -608,6 +638,8 @@ vec3 archiveUntone(vec3 y) {
             labelInk.ink = colors.labelInk || (dark ? 'rgba(224,227,220,.62)' : 'rgba(8,10,8,.58)');
             labelInk.muted = colors.labelMuted || (dark ? 'rgba(166,176,177,.55)' : 'rgba(98,95,88,.6)');
             labelEpoch++;
+            drawEtch();
+            frameMat.color.set(lighting.mat[0]);
             const to = lookOf(lighting);
             accentIdx = -1;
             const parts = { card: new THREE.Color(lighting.theme, 0, 0) };
@@ -642,10 +674,10 @@ vec3 archiveUntone(vec3 y) {
         const COVER_SIZE = 2.9;
         const coverGeo = new THREE.PlaneGeometry(COVER_SIZE, COVER_SIZE);
         coverGeo.translate(0.78, 1.86, FRONT + 0.008);
-        const frameGeo = new THREE.PlaneGeometry(COVER_SIZE + 0.16, COVER_SIZE + 0.16);
+        const frameGeo = new THREE.PlaneGeometry(COVER_SIZE + 0.12, COVER_SIZE + 0.12);
         frameGeo.translate(0.78, 1.86, FRONT + 0.005);
         const coverMat = (extra) => keepColors(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra }));
-        const frameMat = coverMat({ color: '#000000' });
+        const frameMat = coverMat({ color: '#ffffff' });
         const artMat = coverMat({});
         const captionGeo = new THREE.PlaneGeometry(1.54, 2.32);
         captionGeo.translate(-1.54, 1.36, FRONT + 0.009);
@@ -660,7 +692,49 @@ vec3 archiveUntone(vec3 y) {
         const frameMesh = new THREE.Mesh(frameGeo, frameMat);
         const artMesh = new THREE.Mesh(coverGeo, artMat);
         artMesh.renderOrder = 2;
-        coverGroup.add(frameMesh, artMesh, captionMesh);
+        /*
+         * 取出时卡面上的细线：沿四边一圈带折角的走线、角上的十字定位标、右下一个小地球和短横、
+         * 底边一行小字。颜色很淡，只在卡片升起后和封面一起淡入；换主题时重画。
+         */
+        const etchGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+        etchGeo.translate(0, CARD_H / 2, FRONT + 0.003);
+        const etchCanvas = document.createElement('canvas');
+        etchCanvas.width = 1280;
+        etchCanvas.height = 948;
+        const etchMap = new THREE.CanvasTexture(etchCanvas);
+        etchMap.colorSpace = THREE.SRGBColorSpace;
+        etchMap.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        const etchMat = coverMat({ map: etchMap });
+        const etchMesh = new THREE.Mesh(etchGeo, etchMat);
+        const drawEtch = () => {
+            const g = etchCanvas.getContext('2d');
+            const S = 256;
+            const X = (u) => (u + CARD_W / 2) * S, Y = (v) => (CARD_H - v) * S;
+            g.clearRect(0, 0, etchCanvas.width, etchCanvas.height);
+            g.strokeStyle = lighting.etch;
+            g.fillStyle = lighting.etch;
+            g.lineWidth = 2.6;
+            g.lineJoin = 'round';
+            const path = (pts) => { g.beginPath(); pts.forEach(([u, v], i) => (i ? g.lineTo(X(u), Y(v)) : g.moveTo(X(u), Y(v)))); g.stroke(); };
+            // 外圈：四角斜切，上边和左边各有一处台阶
+            path([[-2.2, 3.5], [-0.4, 3.5], [-0.3, 3.4], [0.5, 3.4], [0.6, 3.5], [2.2, 3.5], [2.32, 3.38], [2.32, 0.32], [2.2, 0.2], [-2.2, 0.2], [-2.32, 0.32], [-2.32, 1.2], [-2.24, 1.28], [-2.24, 2.6], [-2.32, 2.68], [-2.32, 3.38], [-2.2, 3.5]]);
+            // 内圈的半截走线：从左上沿左边下来，转到底边
+            path([[-1.98, 3.26], [-2.1, 3.14], [-2.1, 0.55], [-1.95, 0.4], [-1.2, 0.4]]);
+            path([[1.6, 3.26], [2.1, 3.26], [2.1, 2.7]]);
+            const cross = (u, v) => { path([[u - 0.07, v], [u + 0.07, v]]); path([[u, v - 0.07], [u, v + 0.07]]); };
+            cross(2.05, 3.05); cross(-1.95, 3.05); cross(2.05, 0.42); cross(-1.75, 0.6);
+            // 右下的小地球和短横
+            const cx = X(1.98), cy = Y(0.92), r = 0.15 * S;
+            g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+            g.beginPath(); g.ellipse(cx, cy, r * 0.45, r, 0, 0, Math.PI * 2); g.stroke();
+            path([[1.83, 0.92], [2.13, 0.92]]);
+            g.fillRect(X(1.9), Y(0.62), 0.16 * S, 4);
+            g.font = `400 26px ${fontStack}`;
+            g.textBaseline = 'alphabetic';
+            g.fillText('MUSIC ARCHIVE', X(-1.15), Y(0.27));
+            etchMap.needsUpdate = true;
+        };
+        coverGroup.add(frameMesh, artMesh, captionMesh, etchMesh);
         coverGroup.visible = false;
         scene.add(coverGroup);
         let coverKey = '';
@@ -868,9 +942,10 @@ vec3 archiveUntone(vec3 y) {
             if (!show) return;
             coverGroup.position.copy(targetPos);
             coverGroup.rotation.set(0, inspect.v, 0);
-            frameMat.opacity = 0.16 * appear;
+            frameMat.opacity = lighting.mat[1] * appear;
             artMat.opacity = appear;
             captionMat.opacity = appear;
+            etchMat.opacity = appear;
         };
         const setDetailRoom = (bounds) => {
             if (targetRoom && Object.keys(bounds).every((edge) => Math.abs(bounds[edge] - targetRoom[edge]) < 0.5)) return;
@@ -1034,7 +1109,7 @@ vec3 archiveUntone(vec3 y) {
             glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
             glowUniforms.uHero.value = detailK;
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
-            glowUniforms.uSeeThrough.value = 0.38 * (1 - detailK);
+            glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
                 post.mat.uniforms.uShade.value = detailK;
                 renderer.setRenderTarget(post.rt);
@@ -1111,9 +1186,9 @@ vec3 archiveUntone(vec3 y) {
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [cassetteMat, frameMat, artMat, captionMat]) m.dispose();
+            for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat]) m.dispose();
             if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); host.classList.remove('archive-post-atmos'); }
-            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose();
+            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             renderer.dispose();
