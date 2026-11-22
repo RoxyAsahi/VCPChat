@@ -679,6 +679,7 @@ vec3 archiveUntone(vec3 y) {
                 Object.assign(tint, waves[waves.length - 1].to);
                 waves = [];
                 paintUniform();
+                accentIdx = -1;   // 整片重刷会把选中卡的记号也刷掉，下一帧重新打上
             }
         };
 
