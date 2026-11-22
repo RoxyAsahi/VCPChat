@@ -895,12 +895,14 @@ vec3 archiveUntone(vec3 y) {
         const select = (lane, row, { pulse = true } = {}) => {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
-            // 旧卡抬得明显时（取出中、展开中）从当时的高度落回去，不瞬间掉下
-            if (lift.v > 0.5 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: lift.vel, rot: inspect.v });
+            // 旧卡从当时的高度落回去，不瞬间掉下（参考播放器 NativeScene::select：抬起高于 0.0001 就进归位队列）
+            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v });
+            // 选回一张还在落的卡：从它当时的高度和角度接着走，不先掉到底再升起
+            const back = returning.get(lane + ':' + row);
             returning.delete(lane + ':' + row);
             target.lane = lane; target.row = row;
-            lift.v = 0; lift.vel = 0;
-            inspect.v = inspect.vel = inspect.goal = 0;
+            lift.v = back ? back.v : 0; lift.vel = 0;
+            inspect.v = back ? back.rot || 0 : 0; inspect.vel = inspect.goal = 0;
             lastInput = performance.now();
             idleGain = 0;
             invalidate();
