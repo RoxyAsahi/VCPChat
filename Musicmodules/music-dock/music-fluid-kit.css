@@ -2,7 +2,8 @@
  * 结构（档案、列表、细线、黑字）不动；只有弹出来给手用的东西换成这层材质：
  * 奶白（深色下烟灰）的厚玻璃，颜色是从里面透出来的一团光，四周发柔光而不投硬影，没有描边。
  * 长出来的动作在 music-fluid-kit.js（MusicFluid.bud）。 */
-:root {
+:root,
+#music-dock-root:not(.md-light) {
   --mf-fill: rgba(44, 44, 49, .93);
   --mf-ink: #f1f0ee;
   --mf-ink2: rgba(241, 240, 238, .58);
@@ -12,7 +13,8 @@
   --mf-glow: inset 0 0 0 .5px rgba(255, 255, 255, .07), 0 24px 52px -20px rgba(0, 0, 0, .6), 0 0 30px -8px rgba(0, 0, 0, .4);
   --mf-radius: 18px;
 }
-body.light-theme {
+body.light-theme,
+#music-dock-root.md-light {
   --mf-fill: rgba(252, 252, 253, .95);
   --mf-ink: #1c1b19;
   --mf-ink2: rgba(28, 27, 25, .66); /* 弹窗白底上 .5 只有 3.3:1，小字要到 4.5:1 */
@@ -202,7 +204,7 @@ body.light-theme .dialog-btn.confirm:disabled { background: var(--mf-hover); col
   transition: transform .46s cubic-bezier(.34, 1.4, .5, 1), opacity .16s ease, filter .2s ease;
 }
 .sidebar-actions .search-wrapper::after { top: -2px; bottom: -2px; left: -8px; right: -8px; }
-.archive-list-search:focus-within { border-bottom-color: transparent; }
+.archive-list-toolbar:has(.archive-list-search:focus-within) { border-bottom-color: transparent; }
 /* 玻璃本身就是聚焦提示，里面的输入框不再另画一圈焦点框 */
 /* 要压过全局 :focus-visible:not(#messageInput)… 那条，所以同样带上 :not(#messageInput) */
 .archive-list-search:focus-within input:is(:focus, :focus-visible):not(#messageInput) { outline: none; box-shadow: none; }
@@ -210,7 +212,7 @@ body .sidebar-actions .search-wrapper:focus-within #search-input,
 #left-sidebar .sidebar-actions .search-wrapper:focus-within #search-input:is(:focus, :focus-visible) { border-bottom-color: transparent; }
 .archive-list-search:focus-within input,
 .sidebar-actions .search-wrapper:focus-within #search-input { color: var(--mf-ink); }
-.archive-list-search,
+.archive-list-toolbar,
 .sidebar-actions #search-input { transition: border-color .2s ease; }
 body.music-reduce-motion :is(.archive-list-search, .sidebar-actions .search-wrapper)::after { transition: opacity .12s linear; transform: none; filter: none; }
 
@@ -339,7 +341,7 @@ body.music-reduce-motion #music-dock-root .md-like.md-like-pop::after { animatio
   box-shadow: var(--mf-glow);
 }
 /* 深色下抽屉底比玻璃本色还亮，打开的那块要更亮一层才像浮起来，不然看着像按下去了 */
-body:not(.light-theme) #music-dock-root :is(.md-tile, .md-chip).md-lit {
+#music-dock-root:not(.md-light) :is(.md-tile, .md-chip).md-lit {
   background:
     radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 30%, transparent), transparent 66%),
     rgba(255, 255, 255, .14);
@@ -372,7 +374,7 @@ body.music-reduce-motion #music-dock-root :is(.md-tile, .md-chip):active { trans
   color: var(--mf-ink);
   box-shadow: var(--mf-glow);
 }
-body:not(.light-theme) #music-dock-root .md-scn-b.md-on {
+#music-dock-root:not(.md-light) .md-scn-b.md-on {
   background:
     radial-gradient(110% 120% at 50% 130%, color-mix(in srgb, var(--mf-tint) 38%, transparent), transparent 70%),
     rgba(255, 255, 255, .16);
@@ -412,7 +414,7 @@ body.music-reduce-motion .switch .slider::before { transition: background-color 
 #music-dock-root .md-slp .md-chip:last-child { grid-column: span 2; }
 #music-dock-root .md-slp .md-chip { height: 30px; background: linear-gradient(var(--mf-hover), var(--mf-hover)), var(--md-fill); }
 #music-dock-root .md-slp .md-chip.md-lit { background: radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 26%, transparent), transparent 66%), var(--mf-fill); }
-body:not(.light-theme) #music-dock-root .md-slp .md-chip.md-lit { background: radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 30%, transparent), transparent 66%), rgba(255, 255, 255, .14); }
+#music-dock-root:not(.md-light) .md-slp .md-chip.md-lit { background: radial-gradient(110% 90% at 30% 120%, color-mix(in srgb, var(--mf-tint) 30%, transparent), transparent 66%), rgba(255, 255, 255, .14); }
 #music-dock-root .md-sleep {
   display: inline-flex;
   align-items: center;
@@ -473,7 +475,7 @@ body.music-fl-low #music-dock-root .md-keys-box { -webkit-backdrop-filter: none;
 }
 #music-dock-root .md-lyrl p { border-radius: 14px; }
 /* 浅色玻璃上 .42 的墨色只有约 2.7:1，没唱到的行也要读得清；当前行靠粗细和纯墨色区分 */
-body.light-theme #music-dock-root .md-lyrl p:not(.md-on) { color: var(--md-t2); }
+#music-dock-root.md-light .md-lyrl p:not(.md-on) { color: var(--md-t2); }
 #music-dock-root .md-lyrl p:hover { background: var(--mf-hover); }
 #music-dock-root .md-lyrl p.md-on:hover { background: none; }
 
@@ -509,18 +511,6 @@ body.light-theme .dialog-btn { transition: background-color .15s, transform .34s
 .mtst .mtst-act { transition: background-color .15s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
 .mtst .mtst-act:active { transform: scale(.92, .88); transition-duration: .1s; }
 body.music-reduce-motion :is(#music-dock-root .md-ib, .dialog-btn, .mtst .mtst-act):active { transform: none; }
-
-/* ───────── 档案「取出」卡片：外形不动，只换按下和点亮的动作 ─────────
- * 方框按钮是档案的结构，保持原样；按下时压扁、松手回弹，和别处同一条曲线。
- * 卡片上的心形点亮时，和底栏的心一样先压扁再鼓起来（mf-like-pop）。 */
-.archive-detail-actions > button,
-.archive-detail-like { transition: background .2s, color .2s, border-color .2s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
-.archive-detail-actions > button:active:not(:disabled) { transform: scale(.96, .92); transition-duration: .1s; }
-.archive-detail-like:active { transform: scale(.88); transition-duration: .1s; }
-.archive-detail-like > span { display: inline-block; }
-.archive-detail-like[aria-pressed="true"] > span { animation: mf-like-pop .52s cubic-bezier(.34, 1.4, .5, 1); }
-body.music-reduce-motion :is(.archive-detail-actions > button, .archive-detail-like):active { transform: none; }
-body.music-reduce-motion .archive-detail-like[aria-pressed="true"] > span { animation: none; }
 
 /* ───────── 歌单编辑弹窗里的歌曲列表 ─────────
  * 列表区不再另铺一层底色，和弹窗是同一块玻璃；每一行是圆角的一汪，已在歌单里的那几行从左边透出强调色光，
@@ -708,30 +698,11 @@ body:is(.music-reduce-motion, .music-fl-low) .audio-engine-notice-title::before 
 }
 .mf-trail.mf-on { opacity: 1; transform: none; }
 .archive-nav { isolation: isolate; }
-.archive-callout-acts { position: relative; isolation: isolate; --mf-trail-h: 46px; }
 /* 曲库空着时的「添加音乐文件夹 / 从云端导入」：和提示卡的按钮一样，手底下一汪浅玻璃。
  * 整块里还有标题和说明，所以竖直位置也按按钮量（axis: 'xy'），不用整块的中线。 */
 .archive-empty { isolation: isolate; }
 .archive-empty > .mf-trail { top: 0; margin-top: 0; height: 0; }
 body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; }
-/* 左侧目录的曲目行：竖着流，横向和行对齐（行从 --gutter 开始） */
-.archive-list-spacer { isolation: isolate; }
-.archive-list-spacer > .mf-trail {
-  top: 0;
-  margin-top: 0;
-  left: var(--gutter, 0px);
-  right: 0;
-  width: auto;
-  height: 0;
-  border-radius: 16px;
-  transform: scale(.96, .7);
-  background:
-    radial-gradient(70% 160% at 0% 50%, color-mix(in srgb, var(--mf-tint) 12%, transparent), transparent 70%),
-    var(--mf-hover);
-}
-.archive-list-spacer > .mf-trail.mf-on { transform: none; }
-.archive-list.grabbing .archive-list-spacer > .mf-trail,
-.archive-list.has-multi .archive-list-spacer > .mf-trail { opacity: 0; }
 /* 底栏抽屉的播放队列：同样竖着流；有这一汪时行本身不再换底色，拖动排序时藏起来 */
 #music-dock-root .md-ql { isolation: isolate; }
 #music-dock-root .md-ql > .mf-trail {
@@ -784,21 +755,6 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 #music-dock-root :is(.md-quick-g, .md-slots) > .mf-trail.mf-on { transform: none; }
 #music-dock-root :is(.md-quick-g, .md-slots):has(> .mf-trail.mf-on) > .md-slot:hover { background: none; }
 
-/* ───────── 曲目详情卡下面「同专辑 / 这位歌手」的两列小列表 ─────────
- * 手底下那一行背后一汪浅玻璃；两列之间斜着移动时，横竖各自流过去。行本身的细线和样子不变。 */
-.archive-detail-more { position: relative; isolation: isolate; }
-.archive-detail-more > .mf-trail {
-  top: 0;
-  margin-top: 0;
-  height: 0;
-  border-radius: 12px;
-  margin-left: -10px;
-  padding: 0 10px;
-  box-sizing: content-box;
-  transform: scale(.94, .7);
-}
-.archive-detail-more > .mf-trail.mf-on { transform: none; }
-
 /* ───────── 弹窗里的列表（歌单编辑的歌曲、云端导入的服务器和文件）：手底下那一汪竖着流 ─────────
  * 有它时行本身不再换悬停底色；已在歌单里、已选中的行保留自己的强调色光。 */
 :is(#modal-song-list, .webdav-file-list, .webdav-server-list) { position: relative; isolation: isolate; }
@@ -814,10 +770,10 @@ body.music-reduce-motion .mf-trail { transition: opacity .12s; transform: none; 
 .webdav-file-list:has(> .mf-trail.mf-on) > .webdav-file-item:hover,
 .webdav-server-list:has(> .mf-trail.mf-on) > .webdav-server-item:not(.active):hover { background: none; }
 /* 键盘焦点：那一汪跟着焦点走时，焦点提示画在它身上（一圈强调色细光），不再在按钮外面另套一个方框 */
-:is(.archive-nav, .archive-callout-acts, .archive-empty):has(> button:focus-visible) > .mf-trail.mf-on {
+:is(.archive-nav, .archive-empty):has(> button:focus-visible) > .mf-trail.mf-on {
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
 }
-#music-archive-view :is(.archive-nav, .archive-callout-acts, .archive-empty):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
+#music-archive-view :is(.archive-nav, .archive-empty):has(> .mf-trail.mf-on) > button:focus-visible:not(#messageInput) { outline: none; }
 
 /* ───────── 弹窗里的滚动条 ─────────
  * 全局滚动条是 6px、强调色的滑块（themes.css，带 !important），在玻璃弹窗里太跳。
@@ -884,35 +840,6 @@ body.music-reduce-motion #music-dock-root :is(.md-arw, .md-nxb, .md-qx, .md-qclr
 :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: scale(.97); transition-duration: .1s; }
 body.music-reduce-motion :is(.archive-lyrics-track > p, #music-dock-root .md-lyrl p):active { transform: none; }
 
-/* ───────── 档案页底部的 ↑ ↓ ← → ─────────
- * 按下时朝箭头的方向轻推一下再弹回；用方向键选歌、换组时，对应的按钮也被推一下（mf-nudge，JS 加），
- * 键盘操作在屏幕上有个落点。按钮的方块样子不变。 */
-#music-archive-view :is(.archive-rows, .archive-lanes) button { --mf-nx: 0px; --mf-ny: 0px; transition: background .3s, transform .34s cubic-bezier(.34, 1.56, .5, 1); }
-#music-archive-view .archive-bottom button[data-act="up"] { --mf-ny: -5px; }
-#music-archive-view .archive-bottom button[data-act="down"] { --mf-ny: 5px; }
-#music-archive-view .archive-bottom button[data-act="left"] { --mf-nx: -5px; }
-#music-archive-view .archive-bottom button[data-act="right"] { --mf-nx: 5px; }
-#music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); transition-duration: .1s; }
-#music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: mf-nudge .42s cubic-bezier(.3, .7, .4, 1); }
-@keyframes mf-nudge {
-  0% { transform: none; background-color: transparent; }
-  22% { transform: translate(var(--mf-nx), var(--mf-ny)) scale(.9); background-color: var(--mf-hover); }
-  60% { transform: translate(calc(var(--mf-nx) * -.25), calc(var(--mf-ny) * -.25)); }
-  100% { transform: none; background-color: transparent; }
-}
-body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button:active { transform: none; }
-body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) button.mf-nudge { animation: none; }
-
-/* ───────── 档案页的几个单独的文字按钮 ─────────
- * 「播放这一组 →」「← 返回曲库」和曲名（点开详情）：指针移上去，按钮背后凝出一汪浅玻璃，移开就淡掉。
- * 按钮自己的字、箭头和悬停变色都不变。 */
-:is(.archive-brand, .archive-detail, .archive-callout) { isolation: isolate; }
-:is(.archive-brand, .archive-detail, .archive-callout) > .mf-trail { top: 0; margin-top: 0; height: 0; border-radius: 14px; }
-.archive-callout > .mf-trail { border-radius: 18px; }
-:is(.archive-brand, .archive-detail, .archive-callout):has(> :is(.archive-brand-play, .archive-detail-back, .archive-file-title):focus-visible) > .mf-trail.mf-on {
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mf-tint) 60%, transparent);
-}
-#music-archive-view :is(.archive-brand, .archive-detail, .archive-callout):has(> .mf-trail.mf-on) > :is(.archive-brand-play, .archive-detail-back, .archive-file-title):focus-visible:not(#messageInput) { outline: none; }
 
 /* ───────── 节能档的底栏 ─────────
  * 节能档关掉流体层后播放条是一块实色胶囊，播过的部分是一块浅色。原来浅色块靠 scaleX 拉长，右端的圆角被压扁成一个歪的弧。
@@ -928,9 +855,6 @@ body.music-reduce-motion #music-archive-view :is(.archive-rows, .archive-lanes) 
     0 12px 30px -14px rgba(0, 0, 0, .35),
     0 18px 44px -20px color-mix(in srgb, var(--md-fl-tint, var(--mf-tint)) 70%, transparent);
 }
-
-/* 曲目详情卡进出时先不做背后的模糊，停稳以后（mf-detail-still，JS 加）再加上，见 watchDetail */
-#music-archive-view:not(.mf-detail-still) .archive-detail-card { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* ───────── 下拉选项（music-fluid-select.js）─────────
  * 和主程序设置页同一种：圆角框里显示当前值、右边一个小箭头；点开是一张选项卡片，当前项打勾。

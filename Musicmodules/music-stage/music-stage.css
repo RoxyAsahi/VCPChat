@@ -26,31 +26,6 @@ body {
     --stage-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.stage-toggle-btn {
-    position: relative;
-}
-
-.stage-toggle-orbit {
-    width: 13px;
-    height: 13px;
-    border: 1.4px solid currentColor;
-    border-radius: 50%;
-    transition: background-color 0.28s ease, box-shadow 0.28s ease, transform 0.28s var(--stage-ease);
-}
-
-.stage-toggle-btn:hover .stage-toggle-orbit {
-    transform: scale(1.12);
-}
-
-.stage-toggle-btn.is-active {
-    color: var(--music-highlight);
-}
-
-.stage-toggle-btn.is-active .stage-toggle-orbit {
-    background: currentColor;
-    box-shadow: 0 0 7px currentColor, 0 0 18px color-mix(in srgb, currentColor 55%, transparent);
-}
-
 body.music-stage-active .music-player-container {
     opacity: 0;
     transform: scale(1.025);
@@ -64,7 +39,7 @@ body.music-stage-active .music-player-container {
     transition-behavior: allow-discrete;
 }
 
-/* 标题栏始终是舞台唯一模式出口；进入舞台后只保留圆形切换键与窗口控制。 */
+/* 舞台期间让标题栏贴合当前场景。 */
 body.music-stage-active #custom-title-bar {
     background: linear-gradient(180deg, color-mix(in srgb, var(--stage-bg) 7.5%, transparent), color-mix(in srgb, var(--stage-bg) 1.2%, transparent)) !important;
     border-bottom-color: color-mix(in srgb, var(--stage-ink) 1.8%, transparent) !important;
@@ -73,23 +48,18 @@ body.music-stage-active #custom-title-bar {
     -webkit-backdrop-filter: blur(2px) saturate(105%);
 }
 
-body.music-stage-active #custom-title-bar .title,
-body.music-stage-active #sidebar-toggle-btn {
+body.music-stage-active #custom-title-bar .title {
     opacity: 0;
     pointer-events: none;
 }
 
 body.music-stage-active #custom-title-bar .window-control-btn {
-    color: color-mix(in srgb, var(--stage-ink) 62%, transparent);
+    color: color-mix(in srgb, var(--ms-ink, var(--stage-ink)) 62%, transparent);
 }
 
 body.music-stage-active #custom-title-bar .window-control-btn:hover {
-    color: var(--stage-ink);
-    background-color: color-mix(in srgb, var(--stage-ink) 8%, transparent);
-}
-
-body.music-stage-active #custom-title-bar #stage-toggle-btn {
-    color: var(--stage-accent);
+    color: var(--ms-ink, var(--stage-ink));
+    background-color: color-mix(in srgb, var(--ms-ink, var(--stage-ink)) 8%, transparent);
 }
 
 .music-player-container {

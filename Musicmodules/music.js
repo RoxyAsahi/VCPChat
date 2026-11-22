@@ -84,7 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
         minimizeBtn: document.getElementById('minimize-music-btn'),
         maximizeBtn: document.getElementById('maximize-music-btn'),
         closeBtn: document.getElementById('close-music-btn'),
-        sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
         leftSidebar: document.getElementById('left-sidebar'),
         sidebarTabs: document.querySelectorAll('.sidebar-tab'),
         sidebarFooter: document.getElementById('sidebar-footer'),
@@ -300,20 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', app.destroy, { once: true });
 
 
-    app.updateSidebarToggleState = (isSidebarCollapsed) => {
-        document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
-        app.sidebarToggleBtn?.classList.toggle('is-collapsed', isSidebarCollapsed);
-        app.sidebarToggleBtn?.setAttribute('title', isSidebarCollapsed ? '展开左侧列表' : '收纳左侧列表');
-        app.sidebarToggleBtn?.setAttribute('aria-label', isSidebarCollapsed ? '展开左侧列表' : '收纳左侧列表');
-        app.sidebarToggleBtn?.setAttribute('aria-pressed', String(isSidebarCollapsed));
-        localStorage.setItem('musicSidebarCollapsed', String(isSidebarCollapsed));
-    };
-
-    app.toggleSidebarPanel = () => {
-        app.updateSidebarToggleState(!document.body.classList.contains('sidebar-collapsed'));
-    };
-
-
     const normalizePlaybackRequest = (payload) => {
         if (payload?.track && typeof payload.track === 'object') {
             return {
@@ -466,7 +451,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await initializeTheme();
         window.MusicIntroLib?.init(app);
 
-        app.updateSidebarToggleState(localStorage.getItem('musicSidebarCollapsed') === 'true');
         if (typeof initMusicDock === 'function') initMusicDock(app);
 
         app.phantomAudio.src = app.createSilentAudio();
@@ -1231,7 +1215,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        app.sidebarToggleBtn.onclick = () => app.toggleSidebarPanel();
         app.minimizeBtn.onclick = () => { app.api?.minimizeWindow?.(); };
         app.maximizeBtn.onclick = () => { app.api?.maximizeWindow?.(); };
         app.closeBtn.onclick = () => { app.api?.closeWindow?.(); };

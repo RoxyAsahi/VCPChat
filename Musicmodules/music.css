@@ -1580,13 +1580,10 @@ body.light-theme option {
     color: var(--music-text);
 }
 
-.sidebar-toggle-btn svg {
-    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-    transform-origin: center;
-}
-
-.sidebar-toggle-btn.is-collapsed svg {
-    transform: rotate(180deg);
+#music-legacy-btn[hidden],
+body:not(.light-theme) #music-theme-toggle-btn .music-theme-moon,
+body.light-theme #music-theme-toggle-btn .music-theme-sun {
+    display: none;
 }
 
 #close-music-btn:hover {
@@ -1614,21 +1611,6 @@ body.light-theme option {
                 border-width 0.22s ease,
                 opacity 0.22s ease,
                 transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-body.sidebar-collapsed .left-sidebar {
-    width: 0;
-    margin-right: -20px; /* 抵消 .music-player-container 的 flex gap，避免左侧出现双倍空白 */
-    padding-left: 0;
-    padding-right: 0;
-    border-width: 0;
-    opacity: 0;
-    transform: translateX(-16px) scaleX(0.98);
-    pointer-events: none;
-}
-
-body.sidebar-collapsed .left-sidebar > * {
-    visibility: hidden;
 }
 
 /* 顶部操作区 */

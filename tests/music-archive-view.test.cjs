@@ -13,6 +13,7 @@ function fixture({ n = 30, playlists, tracks: given, setup } = {}) {
     const dom = new JSDOM('<!doctype html><body><div id="music-archive-view" hidden></div><button id="music-archive-return"></button></body>',
         { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const w = dom.window;
+    w.ResizeObserver = w.ResizeObserver || class { observe() {} unobserve() {} disconnect() {} }; // jsdom 没有
     w.matchMedia = () => ({ matches: false, addEventListener() {} });
     w.console.warn = () => {};
     for (const s of SCRIPTS) w.eval(s);

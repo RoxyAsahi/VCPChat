@@ -1,5 +1,5 @@
 // 音乐窗口过场动画：开场（首次/手动重放是完整版，平时是短版）和进出舞台的过场。
-// 全部画在一层临时 SVG 上，放完就把节点整个移除；任意键或点击跳过；减少动态时只做一次淡出。
+// 圆环和文字画在临时 SVG 上，过场结束时移除整层；开场可以按键或点击跳过。
 // 时间轴按秒写，离散的「剪辑点」按 25 帧对齐，和参考分镜的节奏一致。
 (function (global) {
     'use strict';
@@ -319,7 +319,8 @@
         const loading = ctx.waiting && ctx.loadingLabel !== false ? '正在载入舞台' + '.'.repeat(1 + (Math.floor((ctx.wait || 0) * 3) % 3)) : '';
         let r, sweep, start;
         if (kind === 'enter') {
-            n.veil.setAttribute('opacity', String(0.38 * smooth(progress(t, 0, 0.15))));
+            const backdropOpacity = t < releaseAt ? smooth(progress(t, 0, 0.14)) : 0;
+            n.svg.parentElement.style.setProperty('--mi-enter-backdrop', String(backdropOpacity));
             r = keys([[0, 640], [0.2, 300], [0.45, 168], [0.7, 160]], t);
             sweep = keys([[0, 30], [0.25, 220], [0.5, 360]], t) * DEG;
             start = keys([[0, 200], [0.5, -90]], t) * DEG + spin;
@@ -330,7 +331,7 @@
             // 白场 90% 以上只维持约 110ms：0.45 起快速升到不透明，放开舞台后立刻开始退。
             n.flash.style.opacity = String(smooth(progress(t, 0.45, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.01, TRANSIT.enter - 0.1))));
             // 白场盖严之后，遮罩和圆环一起撤掉，白场退去时只剩舞台。
-            if (t >= releaseAt) { n.veil.setAttribute('opacity', '0'); n.scan.style.opacity = '0'; }
+            if (t >= releaseAt) n.scan.style.opacity = '0';
         } else if (kind === 'exit') {
             // 0.28 秒内纸色底盖严、圆环收拢；闸门（0.3）之后白场 0.1 秒升起，纸色底在白场后面撤掉，白场退去露出档案页。
             const gate = TRANSIT.exitGate;
@@ -698,13 +699,7 @@
             lastMode = host.modeId || lastMode;
             return true;
         };
-        // 标题栏的舞台按钮和 Esc 是宿主自己绑的，不经过上面的接口，在它前面拦一道。
-        const onToggleClick = (event) => {
-            if (!event.target.closest?.('#stage-toggle-btn') || !adoptHost()) return;
-            event.stopPropagation();
-            requestToggle();
-        };
-        document.addEventListener('click', onToggleClick, true);
+        // Esc 由舞台宿主自行处理，在它前面拦截以保留过渡动画。
         const onEscape = (event) => {
             if (event.key !== 'Escape' || event.defaultPrevented || !adoptHost() || !app.stageHost.active) return;
             if (document.querySelector('.music-stage-settings.is-open')) return; // 先关设置，交给宿主

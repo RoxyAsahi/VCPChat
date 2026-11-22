@@ -95,6 +95,7 @@ body {
   --md-knob: #ececee;
   --md-menu: #2b2b30;
   --md-glass: rgba(28, 28, 31, .8);
+  --md-dr-glass: rgba(40, 40, 45, .88);
   --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .09);
   --md-like: #f2607a;
   --md-edge: rgba(255, 255, 255, .09);
@@ -177,6 +178,7 @@ body.light-theme {
   --md-knob: #ffffff;
   --md-menu: #ffffff;
   --md-glass: rgba(244, 244, 245, .8);
+  --md-dr-glass: rgba(252, 252, 253, .92);
   --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .24), 0 0 0 1px rgba(0, 0, 0, .06);
   --md-like: #e0354f;
   --md-edge: rgba(0, 0, 0, .06);
@@ -230,6 +232,7 @@ body.music-stage-active.music-stage-dark > :is(#music-stage, #music-dock-root, #
   --md-knob: #ececee;
   --md-menu: #2b2b30;
   --md-glass: rgba(28, 28, 31, .8);
+  --md-dr-glass: rgba(40, 40, 45, .88);
   --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .09);
   --md-like: #f2607a;
   --md-edge: rgba(255, 255, 255, .09);
@@ -258,6 +261,7 @@ body.music-stage-active.music-stage-light > :is(#music-stage, #music-dock-root, 
   --md-knob: #ffffff;
   --md-menu: #ffffff;
   --md-glass: rgba(244, 244, 245, .8);
+  --md-dr-glass: rgba(252, 252, 253, .92);
   --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .24), 0 0 0 1px rgba(0, 0, 0, .06);
   --md-like: #e0354f;
   --md-edge: rgba(0, 0, 0, .06);

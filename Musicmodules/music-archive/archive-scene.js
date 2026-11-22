@@ -316,7 +316,7 @@
             let draws = 0;
             for (const L of labels) {
                 const w = L.cell ? labelWanted.get(L.cell) : null;
-                if (!w) { L.mesh.visible = false; continue; }
+                if (!w || (detailOn && artMat.map && L.cell === target.lane + ':' + target.row)) { L.mesh.visible = false; continue; }
                 if (L.drawn !== w.info.key + '#' + labelEpoch) {
                     if (draws >= LABEL_DRAWS_PER_FRAME) { L.mesh.visible = false; labelsPending = true; continue; }
                     drawLabel(L, w.info);
@@ -329,7 +329,7 @@
                 L.mesh.visible = true;
             }
         };
-        // HUD 文字（说明块）投在画面上的区域：落在里面的卡不贴标题，免得和浮字叠在一起
+        // 目录和歌词投在画面上的区域：落在里面的卡不贴标题，免得和浮字叠在一起
         let labelMasks = [];
         const projA = new THREE.Vector3(), projB = new THREE.Vector3();
         const underMask = (w) => {
@@ -461,7 +461,7 @@
             }
         };
 
-        // ---- 取出卡的卡面：封面嵌在卡正面，先是一层模糊的（像隔着磨砂），推近到位后再清晰 ----
+        // ---- 取出卡的卡面：封面与标题随卡片升起淡入 ----
         const COVER_SIZE = 2.9;
         const coverGeo = new THREE.PlaneGeometry(COVER_SIZE, COVER_SIZE);
         coverGeo.translate(0.78, 1.86, CARD_D / 2 + 0.024);
@@ -469,34 +469,67 @@
         frameGeo.translate(0.78, 1.86, CARD_D / 2 + 0.021);
         const coverMat = (extra) => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra });
         const frameMat = coverMat({ color: '#000000' });
-        const blurMat = coverMat({});
-        const sharpMat = coverMat({});
+        const artMat = coverMat({});
+        const captionGeo = new THREE.PlaneGeometry(1.54, 2.32);
+        captionGeo.translate(-1.54, 1.36, CARD_D / 2 + 0.025);
+        const captionCanvas = document.createElement('canvas');
+        captionCanvas.width = 256;
+        captionCanvas.height = 386;
+        const captionMap = new THREE.CanvasTexture(captionCanvas);
+        captionMap.colorSpace = THREE.SRGBColorSpace;
+        const captionMat = coverMat({ map: captionMap });
+        const captionMesh = new THREE.Mesh(captionGeo, captionMat);
         const coverGroup = new THREE.Group();
         const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-        const blurMesh = new THREE.Mesh(coverGeo, blurMat);
-        const sharpMesh = new THREE.Mesh(coverGeo, sharpMat);
-        sharpMesh.renderOrder = 2; blurMesh.renderOrder = 1;
-        coverGroup.add(frameMesh, blurMesh, sharpMesh);
+        const artMesh = new THREE.Mesh(coverGeo, artMat);
+        artMesh.renderOrder = 2;
+        coverGroup.add(frameMesh, artMesh, captionMesh);
         coverGroup.visible = false;
         scene.add(coverGroup);
-        const cover = { key: '', sharp: null, blur: null, clarity: 0, ready: false };
-        const blurCanvas = document.createElement('canvas');
-        blurCanvas.width = blurCanvas.height = 20;
+        let coverKey = '';
         const freeCoverTex = () => {
-            cover.sharp?.dispose(); cover.blur?.dispose();
-            cover.sharp = cover.blur = null;
-            sharpMat.map = blurMat.map = null;
-            sharpMat.needsUpdate = blurMat.needsUpdate = true;
+            artMat.map?.dispose();
+            artMat.map = null;
         };
-        /*
-         * 换卡面图。source 是加载好的 <img>，或 null（没有封面时画一张素色卡面，写上曲名和歌手）。
-         * key 不变就不重做；换了图清晰度从零开始，重新「解密」。
-         */
+        const drawCaption = ({ title = '', artist = '', format = '', bitrate = '' }, showTitle) => {
+            const ctx = captionCanvas.getContext('2d');
+            ctx.clearRect(0, 0, captionCanvas.width, captionCanvas.height);
+            ctx.fillStyle = lighting.tagInk;
+            const fields = [['格式', format], ['码率', bitrate]].filter(([, value]) => value);
+            fields.forEach(([label, value], i) => {
+                const x = 6 + i * 126;
+                ctx.font = `400 20px ${fontStack}`;
+                ctx.globalAlpha = 0.78;
+                ctx.fillText(label, x, 46);
+                ctx.globalAlpha = 1;
+                ctx.font = `600 23px ${fontStack}`;
+                ctx.fillText(value, x, 79, fields.length === 1 ? 244 : 116);
+            });
+            if (showTitle) {
+                ctx.font = `700 33px ${fontStack}`;
+                const letters = Array.from(title.trim());
+                for (let y = 166; y <= 250 && letters.length; y += 42) {
+                    let end = 1;
+                    while (end < letters.length && ctx.measureText(letters.slice(0, end + 1).join('')).width <= 236) end++;
+                    if (end < letters.length && y < 250) {
+                        const space = letters.slice(0, end).lastIndexOf(' ');
+                        if (space > 0) end = space + 1;
+                    }
+                    const line = letters.splice(0, end).join('').trim();
+                    ctx.fillText(line + (y === 250 && letters.length ? '…' : ''), 6, y, 244);
+                }
+                ctx.font = `500 22px ${fontStack}`;
+                ctx.fillText(artist, 6, 306, 244);
+            }
+            captionMap.needsUpdate = true;
+        };
+        // 还没有可用的封面时，用写有曲名和歌手的卡面。
         const setCover = (key, source, info = {}) => {
-            key = String(key || '');
-            if (key === cover.key && cover.ready) return;
-            cover.key = key;
+            if (key === coverKey && artMat.map) return;
+            coverKey = key;
             freeCoverTex();
+            captionMesh.visible = Boolean(source || info.format || info.bitrate);
+            if (captionMesh.visible) drawCaption(info, Boolean(source));
             let img = source;
             if (!img) {
                 const c = document.createElement('canvas');
@@ -521,22 +554,12 @@
                 g.beginPath(); g.arc(436, 82, 14, 0, Math.PI * 2); g.stroke();
                 img = c;
             }
-            const sharp = img instanceof HTMLCanvasElement ? new THREE.CanvasTexture(img) : new THREE.Texture(img);
-            sharp.colorSpace = THREE.SRGBColorSpace;
-            sharp.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-            sharp.needsUpdate = true;
-            // 磨砂那一层：缩成 20 像素再放大，线性过滤自然就糊了
-            const bg = blurCanvas.getContext('2d');
-            bg.clearRect(0, 0, 20, 20);
-            try { bg.drawImage(img, 0, 0, 20, 20); } catch (e) { /* 跨域图画不进去就只用清晰那层 */ }
-            const blur = new THREE.CanvasTexture(blurCanvas);
-            blur.colorSpace = THREE.SRGBColorSpace;
-            blur.needsUpdate = true;
-            cover.sharp = sharp; cover.blur = blur;
-            sharpMat.map = sharp; blurMat.map = blur;
-            sharpMat.needsUpdate = blurMat.needsUpdate = true;
-            cover.clarity = 0;
-            cover.ready = true;
+            const texture = img instanceof HTMLCanvasElement ? new THREE.CanvasTexture(img) : new THREE.Texture(img);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            texture.needsUpdate = true;
+            artMat.map = texture;
+            artMat.needsUpdate = true;
             invalidate();
         };
 
@@ -545,7 +568,7 @@
         const camLane = { v: 0, vel: 0 }, camRow = { v: 0, vel: 0 }, shoulder = { v: 0, vel: 0 }, focus = { v: 0, vel: 0 }, lift = { v: 0.4, vel: 0 };
         let liftGoal = 0.4;   // 选中卡抬起的高度；进播放页前会再抬高一些
         /*
-         * 取出：选中卡从列里抬到 DETAIL_LIFT，镜头推近到它正面、把它放在画面左侧，卡面上显出封面。
+         * 取出：选中卡从列里抬到 DETAIL_LIFT，镜头推近到它正面、把它放进目录与歌词之间，卡面上显出封面。
          * 镜头推近的进度直接由抬起高度算（卡升到哪，镜头推到哪），这样中途收回也不会两边脱节。
          */
         const DETAIL_LIFT = 4.05;
@@ -593,7 +616,6 @@
             target.lane = lane; target.row = row;
             lift.v = 0; lift.vel = 0;
             inspect.v = inspect.vel = inspect.goal = 0;
-            cover.clarity = 0;
             lastInput = performance.now();
             idleGain = 0;
             invalidate();
@@ -606,34 +628,38 @@
             lift.v = detailOn ? DETAIL_LIFT : liftGoal; lift.vel = 0;
             pulses.length = 0;
             returning.clear();
+            snapCardAim = true;
             invalidate();
         };
 
         const targetPos = new THREE.Vector3();
+        const cardAim = new THREE.Vector3();
+        let snapCardAim = true;
         const camDir = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), detailAim = new THREE.Vector3(), camAim = new THREE.Vector3();
         const WORLD_UP = new THREE.Vector3(0, 1, 0);
         const lerp = (a, b, k) => a + (b - a) * k;
-        /* 镜头：浏览时是原来的长焦斜俯视；取出时转向卡的正面、拉近，把卡放到画面左侧（右侧留给资料卡） */
+        /* 把卡片放进 HUD 留出的矩形，以宽高较紧的一边决定取景。 */
+        let detailRoom = null;
+        let targetRoom = null;
         const placeCamera = (reduced) => {
             const k = detailK;
             const aspect = W / H;
-            const baseSpan = lerp(7.33, 6.8, k);
-            let viewSpan = Math.max(baseSpan, baseSpan * (16 / 9) / aspect);
-            /* 取出时卡要整张落在资料卡左边那块空地里：空地窄（笔记本、窄窗口）就把镜头放远一点 */
-            const room = detailRoom > 0 ? Math.min(detailRoom, W) : W * (1161 / 1920);
-            if (k > 0) {
-                const fit = CARD_W * 1.22 * H / Math.max(room * 0.92, 1);
-                viewSpan = lerp(viewSpan, Math.max(viewSpan, fit), k);
-            }
+            const room = detailRoom || { left: 0, right: W, top: 0, bottom: H };
+            const roomWidth = Math.max(1, room.right - room.left);
+            const roomHeight = Math.max(1, room.bottom - room.top);
+            const browseSpan = Math.max(7.33, 7.33 * (16 / 9) / aspect);
+            const detailSpan = Math.max(6.8, CARD_W * 1.14 * H / roomWidth, CARD_H * 1.24 * H / roomHeight);
+            const viewSpan = lerp(browseSpan, detailSpan, k);
             const distance = lerp(DIST, 72, k);
             camDir.copy(view).lerp(DETAIL_DIR, k).normalize();
             camAim.copy(aim);
             if (k > 0) {
                 camRight.crossVectors(WORLD_UP, camDir).normalize();
                 camUp.crossVectors(camDir, camRight).normalize();
-                const anchorX = Math.min(540 / 1920, room / 2 / W), anchorY = W < 1100 ? 0.5 : 600 / 1080;
+                const anchorX = (room.left + room.right) / (2 * W);
+                const anchorY = (room.top + room.bottom) / (2 * H);
                 const pixelScale = H / viewSpan;
-                detailAim.copy(targetPos);
+                detailAim.copy(cardAim);
                 detailAim.y += CARD_H / 2;
                 detailAim.addScaledVector(camRight, (0.5 - anchorX) * W / pixelScale);
                 detailAim.addScaledVector(camUp, (anchorY - 0.5) * H / pixelScale);
@@ -651,23 +677,21 @@
             scene.fog.near = distance + lerp(fogBase.near, -1, k);
             scene.fog.far = distance + lerp(fogBase.far, 12, k);
         };
-        const placeCover = () => {
-            const appear = cover.ready ? smooth((lift.v - 1.2) / 1.6) * (detailOn || cover.clarity > 0 ? 1 : 0) : 0;
+        const placeCover = (targetVisible) => {
+            const appear = targetVisible && artMat.map ? smooth((lift.v - 1.2) / 1.6) : 0;
             const show = appear > 0.001;
             coverGroup.visible = show;
             if (!show) return;
             coverGroup.position.copy(targetPos);
             coverGroup.rotation.set(0, inspect.v, 0);
             frameMat.opacity = 0.16 * appear;
-            blurMat.opacity = appear * (1 - cover.clarity * 0.999);
-            sharpMat.opacity = appear * smooth(cover.clarity);
+            artMat.opacity = appear;
+            captionMat.opacity = appear;
         };
-        let detailRoom = 0;
-        /* HUD 告诉场景：资料卡左边还剩多宽（画布像素），取出的卡只放在这里面 */
-        const setDetailRoom = (px) => {
-            px = Math.max(0, Number(px) || 0);
-            if (Math.abs(px - detailRoom) < 0.5) return;
-            detailRoom = px;
+        const setDetailRoom = (bounds) => {
+            if (targetRoom && Object.keys(bounds).every((edge) => Math.abs(bounds[edge] - targetRoom[edge]) < 0.5)) return;
+            targetRoom = bounds;
+            detailRoom ??= { ...bounds };
             invalidate();
         };
         const setDetail = (on) => {
@@ -704,6 +728,18 @@
             lastStep = now;
             const T = now / 1000;
             const reduced = reducedMotion();
+            let roomMoving = false;
+            if (targetRoom) {
+                const mix = reduced ? 1 : 1 - Math.exp(-dt * 10);
+                for (const edge of Object.keys(targetRoom)) {
+                    const to = targetRoom[edge];
+                    if (Math.abs(detailRoom[edge] - to) < 0.5) detailRoom[edge] = to;
+                    else {
+                        detailRoom[edge] = lerp(detailRoom[edge], to, mix);
+                        roomMoving = !reduced;
+                    }
+                }
+            }
             const rate = reduced ? 9 : 3.7;
             damp(camLane, target.lane, rate, dt);
             damp(camRow, target.row, rate, dt);
@@ -723,9 +759,6 @@
                 if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
                 if (!detailOn && detailK < 0.001) detailK = 0;
                 damp(inspect, inspect.goal, reduced ? 40 : 7, dt);
-                // 封面：抬过一半显出磨砂层，推近到位后约 0.9 秒变清晰
-                if (detailOn && cover.ready && detailK > 0.78 && lift.v > 3.3) cover.clarity = reduced ? 1 : Math.min(1, cover.clarity + dt / 0.9);
-                else if (!detailOn) cover.clarity = Math.max(0, cover.clarity - dt / 0.35);
             }
             stepTheme(T);
             const tinting = waves.length > 0;
@@ -801,17 +834,25 @@
                 cards.instanceColor.needsUpdate = rings.instanceColor.needsUpdate = true;
             }
 
+            // 选中格可以一帧跳过好几张卡，镜头的瞄准点随画面平滑移动。
+            const targetVisible = targetIdx >= 0;
+            if (targetVisible) {
+                if (snapCardAim || reduced || detailK < 0.001) cardAim.copy(targetPos);
+                else cardAim.lerp(targetPos, 1 - Math.exp(-dt * 10));
+                snapCardAim = false;
+            }
             placeCamera(reduced);
-            placeCover();
+            placeCover(targetVisible);
             placeLabels();
             renderer.render(scene, camera);
             dirty = false;
             frames++;
 
-            const settled = Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
+            const aimMoving = detailK > 0.001 && targetVisible && cardAim.distanceToSquared(targetPos) > 0.000004;
+            const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
                 && Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) < 0.001 && !returning.size
                 && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
-                && (!detailOn || !cover.ready || cover.clarity >= 1) && (detailOn || cover.clarity <= 0) && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
+                && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
             return {
                 moving: !settled,
@@ -869,8 +910,8 @@
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat, frameMat, blurMat, sharpMat]) m.dispose();
-            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose();
+            for (const m of [polymer, floorMat, tagMat, ringMat, grooveMat, frameMat, artMat, captionMat]) m.dispose();
+            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             floor.geometry.dispose();
@@ -890,7 +931,7 @@
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, detail: Math.round(detailK * 1000) / 1000, clarity: Math.round(cover.clarity * 100) / 100, returning: returning.size, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, detail: Math.round(detailK * 1000) / 1000, returning: returning.size, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 

@@ -35,7 +35,6 @@
         const view = archiveReady(app);
         const track = app.playlist?.[index];
         if (!view || !track || !fieldOf(track, kind)) return false;
-        try { view.closeDetail?.(); } catch (e) { /* 详情没开 */ }
         try { view.setListOpen?.(true, { persist: false }); } catch (e) { /* 旧档案页 */ }
         return Boolean(view.list.goToGroup?.(index, kind));
     }

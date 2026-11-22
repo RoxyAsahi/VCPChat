@@ -76,7 +76,7 @@
   <div class="md-quick" id="music-dock-quick"><div class="md-quick-in"><div class="md-quick-g" role="toolbar" aria-label="快捷操作">
     <button class="md-slot md-qb" type="button" data-md="mode"></button>
     <button class="md-slot md-qb" type="button" data-q="queue" aria-label="播放列表" title="播放列表">${icon('list-music', 17)}</button>
-    <button class="md-slot md-qb" type="button" data-md="stage" aria-label="歌词舞台">${icon('captions', 17)}</button>
+    <button class="md-slot md-qb md-like" type="button" data-md="like" aria-label="喜欢" aria-pressed="false" title="喜欢（L）" hidden>${icon('heart', 17)}</button>
     <button class="md-slot md-qb" type="button" data-q="fx" aria-label="音效设置" title="音效设置">${icon('sliders-horizontal', 17)}</button>
     <button class="md-slot md-qb md-vslot" type="button" data-md="vol" aria-label="静音"></button>
   </div></div></div>
@@ -92,8 +92,8 @@
     <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
     <div class="md-slots">
       <button class="md-slot md-sleep" type="button" data-md="sleep" hidden>${icon('moon', 14)}<span data-md="sleep-t"></span></button>
-      <button class="md-slot md-like" type="button" data-md="like" aria-label="喜欢" aria-pressed="false" title="喜欢（L）" hidden>${icon('heart', 18)}</button>
-      <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、歌词舞台、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
+      <button class="md-slot md-stage-slot" type="button" data-md="stage" aria-label="歌词舞台" aria-pressed="false" title="进入歌词舞台">${icon('captions', 18)}</button>
+      <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、喜欢、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
     </div>
   </div>
   <div class="md-vrail" role="slider" tabindex="-1" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-hidden="true"><i class="md-vfill"></i></div>
@@ -109,7 +109,7 @@
   </div>
   <div class="md-body"><div class="md-hr"></div><div class="md-tab" data-md="body" id="music-dock-panel-body" role="tabpanel"></div>
     <div class="md-ext" data-md="ext" hidden>
-      <section class="md-grp" data-md="tune-sec" aria-labelledby="music-dock-tune-title">
+      <section class="md-grp md-stage-only" data-md="tune-sec" aria-labelledby="music-dock-tune-title">
         <div class="md-grp-h"><b id="music-dock-tune-title" data-md="tune-title"></b><span data-md="tune-hint"></span></div>
         <div class="md-stage-in md-tune" data-md="tune-slot"></div>
         <button class="md-fold" type="button" data-md="tune-more" aria-expanded="false" hidden></button>
@@ -120,12 +120,12 @@
       </section>
       <div class="md-tab md-tab2" data-md="body2"></div>
       <div class="md-fx-sc md-moved" data-md="disp-slot"></div>
-      <div class="md-stage-in" data-md="common-slot"></div>
+      <div class="md-stage-in md-stage-only" data-md="common-slot"></div>
       <section class="md-grp md-adv">
         <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
         <div class="md-adv-in" id="music-dock-adv" data-md="adv-body" hidden>
-          <div class="md-grp-k">出现在快速切换里的舞台</div>
-          <div class="md-stage-in" data-md="array-slot"></div>
+          <div class="md-grp-k md-stage-only">出现在快速切换里的舞台</div>
+          <div class="md-stage-in md-stage-only" data-md="array-slot"></div>
           <div class="md-adv-acts" data-md="adv-acts"></div>
         </div>
       </section>
@@ -331,8 +331,15 @@
             }
             return readRgb(getComputedStyle(document.documentElement).getPropertyValue('--highlight-text'));
         };
-        const currentGlow = () => {
-            const light = document.body.classList.contains('light-theme');
+        const dockLight = () => {
+            const classes = document.body.classList;
+            if (stageActive()) {
+                if (classes.contains('music-stage-light')) return true;
+                if (classes.contains('music-stage-dark')) return false;
+            }
+            return classes.contains('light-theme');
+        };
+        const currentGlow = (light = dockLight()) => {
             const mode = stageActive() ? app.stageHost?.modeId : null;
             const custom = stageActive() && document.getElementById('music-stage')?.classList.contains('stage-theme-custom');
             return (!custom && SCENE_GLOW[light ? 'light' : 'dark'][mode]) || glowFromAccent(themeAccent(), light);
@@ -372,9 +379,10 @@
         // 节能档没有流体层：把同一套颜色混进实心播放条的进度底色和快捷胶囊的描边里。
         let lastGlowKey = '';
         const syncGlow = () => {
-            const colors = currentGlow();
+            const light = dockLight();
+            host.classList.toggle('md-light', light);
+            const colors = currentGlow(light);
             const key = colors.join();
-            const light = document.body.classList.contains('light-theme');
             const a = readRgb(colors[0]) || FALLBACK_ACCENT;
             host.style.setProperty('--md-fl-low-fill', hex(mix(a, light ? [247, 242, 238] : [43, 41, 39], light ? 0.62 : 0.55)));
             host.style.setProperty('--md-fl-tint', colors[0]);
@@ -939,9 +947,11 @@
 
         const renderStage = () => {
             const inStage = stageActive();
+            host.classList.toggle('md-in-stage', inStage);
+            if (!inStage) state.scenesOpen = false;
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
-            el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
+            el.stageSlot.title = inStage ? '离开歌词舞台' : '进入歌词舞台';
             el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
             syncGlow();
             renderQuick();
@@ -1109,18 +1119,19 @@
                 const v = readVolume();
                 const mode = playMode();
                 const inStage = stageActive();
-                const scene = currentStageMode();
-                const light = document.body.classList.contains('light-theme');
+                const scene = inStage ? currentStageMode() : null;
                 html += `<div class="md-vol"><button class="md-ib md-m" type="button" data-act="mute" data-icon="${volumeIcon(v)}" aria-label="静音">${icon(volumeIcon(v), 17)}</button>`
                     + `<div class="md-sld" role="slider" tabindex="0" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v * 100)}"><span class="md-sld-tr"><i class="md-sld-fill" style="transform:scaleX(${v})"></i></span><span class="md-sld-kn" style="left:calc(${v} * (100% - 16px))"></span></div>`
                     + `<span class="md-pct">${Math.round(v * 100)}%</span></div>`;
                 const sleepOn = sleepAvailable();
-                html += `<div class="md-tiles${sleepOn ? '' : ' md-tiles-2'}">`
+                const tileCount = 1 + Number(inStage) + Number(sleepOn);
+                html += `<div class="md-tiles md-tiles-${tileCount}">`
                     + `<button class="md-tile${mode !== 'repeat' ? ' md-lit' : ''}" type="button" data-act="mode"><span class="md-ti">${icon(MODE_ICONS[mode] || 'repeat', 18)}</span><span>${MODE_LABELS[mode] || '播放模式'}</span></button>`
-                    + `<button class="md-tile${inStage ? ' md-lit' : ''}" type="button" data-act="stage" aria-pressed="${inStage}"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>`
+                    + (inStage ? `<button class="md-tile md-lit" type="button" data-act="stage" aria-pressed="true"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>` : '')
                     + (sleepOn ? sleepTileHtml() : '')
-                    + '</div>' + (sleepOn && state.sleepOpen ? sleepChipsHtml() : '') + '<div class="md-sep"></div>';
+                    + '</div>' + (sleepOn && state.sleepOpen ? sleepChipsHtml() : '');
                 if (scene) {
+                    html += '<div class="md-sep"></div>';
                     // 舞台一行：左右箭头直接换；点中间在原地展开全部舞台（不再进子页）。
                     const open = state.scenesOpen;
                     html += `<div class="md-mode"><div class="md-rw"><button class="md-st" type="button" data-act="scene-step" data-d="-1" aria-label="上一个舞台">${icon('chevron-left', 14)}</button>`
@@ -1600,29 +1611,30 @@
             setVolume(readVolume() + delta);
         });
 
-        // 播放条放在左右两边都空着的那一段里：右边是抽屉（打开时），左边是首页的目录列表（打开时）。
-        // 只有抽屉：右缘停在抽屉内容左边 24px，放得下就不动。目录开着：播放条缩短、挪到目录右边那段的正中，
-        // 目录就能一直拉到窗口底（body.music-dock-beside-list）。窄窗口抽屉铺满、目录收起，不让位。
+        // 目录和歌词同时打开时，播放条与中间卡片共用一条中线。只有目录或抽屉时，仍按它的边界让位。
         const DRAWER_W = 400;
         const LIST_BAR_MAX = 600;   // 目录开着时播放条最长到这里，比平时短一截
         const LIST_GAP = 24;        // 和目录右缘之间留的空
-        const listEdge = (vw) => {
-            if (vw < COMPACT_BELOW || stageActive() || app.archiveView?.mode !== 'archive') return 0;
+        const DRAWER_LYRICS_GAP = 12;   // 抽屉顶开歌词时，文字左侧本身还有内边距。
+        const archiveEdges = (vw) => {
+            if (vw < COMPACT_BELOW || stageActive() || app.archiveView?.mode !== 'archive') return null;
             const view = document.getElementById('music-archive-view');
-            if (!view || view.classList.contains('is-detail')) return 0;
+            if (!view) return null;
             const hud = view.querySelector('.archive-hud');
+            if (!hud || !hud.offsetWidth) return null;
             hookHud(hud);
-            const list = hud?.classList.contains('list-open') ? hud.querySelector('.archive-list') : null;
-            if (!list || list.hidden || !list.offsetWidth) return 0;
-            // 用排版位置量，不用 getBoundingClientRect：目录开合时有 transform 补间，量到的是半路上的位置。
-            // 首页整层按窗口高度缩放过（transform: scale），换算回窗口像素。
-            const hr = hud.getBoundingClientRect();
-            const sc = hud.offsetWidth ? hr.width / hud.offsetWidth : 1;
-            const right = hr.left + (list.offsetLeft + list.offsetWidth) * sc;
-            // 目录占了半屏以上（窄窗里另有摆法）就不让位
-            return right > 0 && right < vw * 0.5 ? right : 0;
+            const list = hud.classList.contains('list-open') ? hud.querySelector('.archive-list:not([hidden])') : null;
+            const lyrics = hud.classList.contains('lyrics-open') && !hud.classList.contains('tiny')
+                ? hud.querySelector('.archive-lyrics') : null;
+            // 用布局位置避开目录和歌词的入场动画，再按 HUD 的缩放换算到窗口坐标。
+            const rect = hud.getBoundingClientRect();
+            const scale = rect.width / hud.offsetWidth;
+            return {
+                listRight: list ? rect.left + (list.offsetLeft + list.offsetWidth) * scale : 0,
+                lyricsLeft: lyrics ? rect.left + lyrics.offsetLeft * scale : 0
+            };
         };
-        // 目录开合、取出资料卡、进出舞台、首页和经典视图来回切：都要重新排播放条。合到下一帧一起算。
+        // 目录开合、进出舞台、首页和经典视图来回切：都要重新排播放条。合到下一帧一起算。
         let shiftFrame = 0;
         const queueShift = () => {
             if (shiftFrame || state.destroyed) return;
@@ -1635,9 +1647,9 @@
             hookedHud = hud;
             hudObserver?.disconnect();
             hudObserver = new MutationObserver(queueShift);
-            hudObserver.observe(hud, { attributes: true, attributeFilter: ['class'] });
+            hudObserver.observe(hud, { attributes: true, attributeFilter: ['class', 'style'] });
         }
-        cleanups.push(() => { cancelAnimationFrame(shiftFrame); hudObserver?.disconnect(); hudObserver = null; document.body.classList.remove('music-dock-beside-list', 'music-drawer-open'); });
+        cleanups.push(() => { cancelAnimationFrame(shiftFrame); hudObserver?.disconnect(); hudObserver = null; document.body.classList.remove('music-dock-beside-list', 'music-dock-beside-lyrics', 'music-drawer-open'); });
         let roomRight = 0;
         let widthTimer = 0;
         const followWidth = () => {
@@ -1656,25 +1668,30 @@
             const vw = global.innerWidth || 0;
             const natural = Math.min(640, Math.max(0, vw - 32)); // 和 CSS 的 --md-bar-w 同一个算式
             const open = state.panelOpen && vw >= COMPACT_BELOW;
-            const edge = listEdge(vw);
-            const lo = edge ? edge + LIST_GAP : 12;               // 播放条左缘最远能到这里
-            let room = open ? vw - DRAWER_W - 24 : vw - (edge ? 24 : 12); // 播放条右缘最远能到这里
-            // 抽屉左边剩下的地方连最短的播放条（280）都放不下（窗口不宽、目录又开着）：抽屉底边抬到播放条上面，
-            // 播放条从抽屉下面过，只给右下角的关闭小环让出位置。不这样的话歌名会压在抽屉底部的页签上。
-            const raise = open && room - lo < 280;
+            const { listRight = 0, lyricsLeft = 0 } = archiveEdges(vw) || {};
+            const edge = listRight > 0 && listRight < vw * 0.5 ? listRight : 0;
+            const betweenPanes = listRight > 0 && lyricsLeft > listRight;
+            const lo = edge ? edge + LIST_GAP : 12;
+            const lyricsClearance = open ? DRAWER_LYRICS_GAP : LIST_GAP;
+            const drawerEdge = open ? vw - DRAWER_W - LIST_GAP : vw - (edge ? LIST_GAP : 12);
+            // 分栏较紧时，让播放条稍往左，避免整条歌词栏为它让出底部空间。
+            let room = open && lyricsLeft ? Math.min(drawerEdge, lyricsLeft - lyricsClearance) : drawerEdge;
+            // 目录和抽屉都开着、中间连最短的播放条（280）都放不下（如 960 宽）：抽屉底边抬到播放条上面，
+            // 播放条从抽屉下面过，只给右下角的关闭小环让出位置。不这样的话歌名和按钮会压在抽屉底部的页签上。
+            const raise = open && !betweenPanes && room - lo < 280;
             if (raise) room = vw - 72;
             host.classList.toggle('md-raise', raise);
             const span = room - lo;
             let barW = natural;
             let left = vw / 2 - natural / 2;
-            if (edge) {
-                // 目录开着：缩短，放在剩下那段的正中
+            if (betweenPanes) {
+                const center = (listRight + lyricsLeft) / 2;
+                barW = Math.max(280, Math.min(natural, LIST_BAR_MAX, lyricsLeft - listRight - 2 * LIST_GAP));
+                left = Math.max(12, Math.min(center - barW / 2, room - barW));
+            } else if (edge) {
+                // 只打开目录时，放在剩下那段的正中。
                 barW = Math.max(280, Math.min(natural, LIST_BAR_MAX, span));
                 left = span >= barW ? lo + (span - barW) / 2 : lo;
-            } else if (raise) {
-                // 抽屉抬起来了：只避开右下角的小环
-                barW = Math.max(280, Math.min(natural, room - 12));
-                left = Math.max(12, Math.min(vw / 2 - barW / 2, room - barW));
             } else if (open) {
                 // 只有抽屉：窗口不够宽、让位以后会被挤出左边，就把播放条收窄（最窄 280）
                 if (natural > room - 12) barW = Math.max(280, room - 12);
@@ -1690,8 +1707,11 @@
                 if (resized) host.style.setProperty('--md-bar-w', now); else host.style.removeProperty('--md-bar-w');
                 followWidth();
             }
-            document.body.classList.toggle('music-dock-beside-list', Boolean(edge));
-            const mistPad = edge ? `${Math.round(Math.max(0, left - edge))}px` : '';
+            document.body.classList.toggle('music-dock-beside-list', betweenPanes ? left >= listRight : Boolean(edge));
+            const lyricsGap = lyricsLeft - left - barW;
+            document.body.classList.toggle('music-dock-beside-lyrics', lyricsGap >= lyricsClearance - 0.5);
+            const mistRoom = betweenPanes ? Math.min(left - listRight, lyricsGap) : left - edge;
+            const mistPad = betweenPanes || edge ? `${Math.round(Math.max(0, mistRoom))}px` : '';
             if (host.style.getPropertyValue('--md-mist-pad') !== mistPad) {
                 if (mistPad) host.style.setProperty('--md-mist-pad', mistPad); else host.style.removeProperty('--md-mist-pad');
                 fluid?.layout();
@@ -1926,13 +1946,13 @@
             el.advToggle.classList.toggle('md-open', open);
         });
 
-        // 控制页下半段：舞台专属设置、「显示」一组（外观、降低动态，后面紧跟搬来的全局输出）和「更多」。
+        // 「显示」和开场回放在曲库、舞台都可用；当前舞台和共用舞台选项只在演出时可见。
         function renderExt(show) {
             el.ext.hidden = !show;
             if (!show) return;
             dressTuning();
             const light = document.body.classList.contains('light-theme');
-            let html = '<div class="md-grp-h"><b>显示</b><span>所有舞台共用</span></div>'
+            let html = '<div class="md-grp-h"><b>显示</b></div>'
                 + `<div class="md-nrow"><span class="md-lb">外观</span><span class="md-r">`
                 + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
                 + '</span></div>';
@@ -1946,6 +1966,7 @@
             }
             el.body2.innerHTML = html;
             const hasIntro = typeof global.MusicIntro?.replay === 'function';
+            el.advToggle.closest('.md-adv').hidden = !hasIntro && !stageActive();
             let introBtn = el.advActs.querySelector('[data-act="intro"]');
             if (hasIntro && !introBtn) {
                 el.advActs.insertAdjacentHTML('afterbegin', `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`);
@@ -1954,6 +1975,7 @@
         // 以前这里是「舞台调制」子页；现在只是打开控制页并滚到舞台那一段。
         function openStageSettings() {
             openPanel('控制');
+            if (!stageActive()) return;
             // offsetTop counts from the panel, not from the scrolling body below its header,
             // so it overshot by the header height and hid the section title and first label.
             const scroller = el.ext.parentElement;
@@ -2051,7 +2073,7 @@
             observer.observe(target, options);
             observers.push(observer);
         };
-        // 播放条的长短和位置跟着布局走（见 syncShift）：进出舞台、首页/经典视图切换在 body 上，取出资料卡在首页根上。
+        // 进出舞台、切换首页或经典视图时，重新计算播放条的位置。
         observe(document.body, { attributes: true, attributeFilter: ['class'] }, queueShift);
         observe(document.getElementById('music-archive-view'), { attributes: true, attributeFilter: ['class'] }, queueShift);
         queueShift();
@@ -2068,34 +2090,35 @@
         listen(document, 'load', (event) => { if (event.target?.tagName === 'LINK') queueGlow(); }, true);
         const stageRootEl = document.getElementById('music-stage');
         if (stageRootEl) observe(stageRootEl, { attributes: true, attributeFilter: ['class'] }, queueGlow);
-        // 舞台页签：选中项下面一滴实心玻璃，切换时拉长流过去；离选中越远的页签越淡、越糊（悬停、焦点时清楚）。
+        // 离选中项越远的舞台页签越淡，切换舞台时也更新播放条配色。
         const switcher = stageRootEl?.querySelector('.music-stage-mode-switcher');
-        let tabMarker = null;
-        const syncTabMarker = () => {
-            if (!switcher || typeof global.createMusicFluidMarker !== 'function') return;
-            if (!tabMarker) {
-                tabMarker = global.createMusicFluidMarker(switcher, { axis: 'x', thickness: 5, inset: 2, align: 'end' });
-                document.body.classList.add('music-dock-fluid-tabs');
-            }
-            const buttons = switcher.querySelectorAll('[data-stage-mode]');
-            const active = switcher.querySelector('[data-stage-mode].is-active, [data-stage-mode][aria-pressed="true"]');
-            tabMarker?.setDistances(buttons, active);
-            if (stageActive()) tabMarker?.moveTo(active);
-        };
         if (switcher) {
-            observe(switcher, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] }, () => requestAnimationFrame(syncTabMarker));
-            cleanups.push(() => { tabMarker?.destroy(); tabMarker = null; document.body.classList.remove('music-dock-fluid-tabs'); });
-            requestAnimationFrame(syncTabMarker);
+            const syncStageTabDistances = () => {
+                const buttons = Array.from(switcher.querySelectorAll('[data-stage-mode]'));
+                const activeIndex = buttons.findIndex((button) => button.getAttribute('aria-pressed') === 'true');
+                buttons.forEach((button, index) => {
+                    const distance = activeIndex < 0 ? 4 : Math.min(4, Math.abs(index - activeIndex));
+                    button.dataset.mdDist = String(distance);
+                });
+            };
+            observe(switcher, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed'] }, () => {
+                syncStageTabDistances();
+                queueGlow();
+            });
+            syncStageTabDistances();
         }
-        // 舞台顶部的模式切换（不经过底栏）也要换色：跟着选中按钮的 aria-pressed 走。
-        observe(stageRootEl?.querySelector('.music-stage-mode-switcher'), { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] }, queueGlow);
         observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => {
             const playing = app.isPlaying === true;
             if (playing !== lastPlaying) { lastPlaying = playing; renderPlay(); kickProgress(); }
             const inStage = stageActive();
-            if (inStage !== lastStage) { lastStage = inStage; renderStage(); if (inStage) later(syncTabMarker, 420); }
+            if (inStage !== lastStage) { lastStage = inStage; renderStage(); }
             const light = document.body.classList.contains('light-theme');
-            if (light !== lastTheme) { lastTheme = light; syncGlow(); if (state.panelOpen && state.tab === '控制') renderBody(); }
+            const themeChanged = light !== lastTheme;
+            if (themeChanged || dockLight() !== host.classList.contains('md-light')) syncGlow();
+            if (themeChanged) {
+                lastTheme = light;
+                if (state.panelOpen && state.tab === '控制') renderBody();
+            }
         });
         // 标题、歌手、封面都由播放器写到旧卡片上；跟着它们变。
         observe(app.trackTitle, { childList: true, characterData: true, subtree: true }, renderTrack);
@@ -2375,7 +2398,7 @@
             openPalette: (text) => palette?.open(text),
             openShortcuts: () => openHelp(),
             openStageSettings,
-            get stageSettingsOpen() { return state.panelOpen && state.tab === '控制'; },
+            get stageSettingsOpen() { return stageActive() && state.panelOpen && state.tab === '控制'; },
             get soundSettingsOpen() { return state.panelOpen && state.tab === '声音'; },
             get tab() { return state.tab; },
             /** 右边抽屉占掉的窗口宽度（px），关着是 0；首页据此重排 */
