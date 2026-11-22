@@ -80,7 +80,8 @@
             if (kicker.textContent !== caption) kicker.textContent = caption;
             const tuning = getTuning();
             director?.update(frame, tuning);
-            mode.root.style.setProperty('--stage-vocal', Number(frame.audio?.vocal || 0).toFixed(4));
+            // No --stage-vocal here: the words are drawn by Pixi, nothing under
+            // this root reads it, and setting it restyled the root every frame.
         };
 
         const updateConfig = mode.updateConfig;

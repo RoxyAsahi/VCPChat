@@ -335,9 +335,6 @@
             lastProgressAriaValue: '',
             lastProgressAriaText: '',
             lastPlaybackState: null,
-            lastAudioPower: '',
-            lastAudioBass: '',
-            lastAudioVocal: '',
             lastNonZeroVolume: Math.max(0.35, Number(app.volumeSlider?.value) || 1),
             themeCatalog: [],
             appliedThemeVariables: new Set(),
@@ -1201,6 +1198,50 @@
             note.hidden = !text;
         };
 
+        /*
+         * The audio levels change every frame. Set on the stage root they would
+         * be inherited by, and restyle, every element of the stage each frame,
+         * although only a handful of parts read them. They go to those parts
+         * only: the backdrop, the edge spectrum (its corners and flow inherit),
+         * the cover, and the two mode roots whose own decoration reads them.
+         */
+        const audioWritten = new WeakMap();
+        const audioSinks = [];
+        const collectAudioSinks = () => {
+            audioSinks.length = 0;
+            root.querySelectorAll(':scope .music-stage-backdrop-layer').forEach(node => audioSinks.push(node));
+            if (elements.edgeSpectrum) audioSinks.push(elements.edgeSpectrum);
+            if (elements.cover) audioSinks.push(elements.cover);
+            for (const child of elements.modeRoot?.children || []) {
+                if (child.classList.contains('music-stage-mode-tunnel')) audioSinks.push(child);
+                else if (child.classList.contains('music-stage-mode-starborn')) {
+                    child.querySelectorAll(':scope > .starborn-star, :scope > .starborn-transition-burst')
+                        .forEach(node => audioSinks.push(node));
+                }
+            }
+        };
+        let audioSinkChildren = null;
+        const writeAudioLevels = (audio) => {
+            const power = audio.power.toFixed(4);
+            const bass = audio.bass.toFixed(4);
+            const vocal = audio.vocal.toFixed(4);
+            const key = `${power}|${bass}|${vocal}`;
+            // Mode roots come and go with switches; the list follows them.
+            const children = elements.modeRoot?.children;
+            const signature = children ? Array.prototype.map.call(children, child => child.className).join('\n') : '';
+            if (signature !== audioSinkChildren) {
+                audioSinkChildren = signature;
+                collectAudioSinks();
+            }
+            for (const node of audioSinks) {
+                if (audioWritten.get(node) === key) continue;
+                audioWritten.set(node, key);
+                node.style.setProperty('--stage-audio-power', power);
+                node.style.setProperty('--stage-audio-bass', bass);
+                node.style.setProperty('--stage-audio-vocal', vocal);
+            }
+        };
+
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
             applySeekHold();
@@ -1212,21 +1253,7 @@
             updateProgress(frame);
             updatePlaybackState(frame.isPlaying);
             updateTransportControls();
-            const audioPower = frame.audio.power.toFixed(4);
-            if (audioPower !== state.lastAudioPower) {
-                state.lastAudioPower = audioPower;
-                root.style.setProperty('--stage-audio-power', audioPower);
-            }
-            const audioBass = frame.audio.bass.toFixed(4);
-            if (audioBass !== state.lastAudioBass) {
-                state.lastAudioBass = audioBass;
-                root.style.setProperty('--stage-audio-bass', audioBass);
-            }
-            const audioVocal = frame.audio.vocal.toFixed(4);
-            if (audioVocal !== state.lastAudioVocal) {
-                state.lastAudioVocal = audioVocal;
-                root.style.setProperty('--stage-audio-vocal', audioVocal);
-            }
+            writeAudioLevels(frame.audio);
             drawEdgeSpectrum(frame);
             if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
             updateDegradeNote(timestamp);

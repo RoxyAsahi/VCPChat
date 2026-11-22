@@ -9,6 +9,10 @@
     const { buildGlyphTimeline, resolveSupplementalText, createInterludeVisualizer } = R;
     const value = (v, fallback, min = 0, max = 2) => clamp(Number.isFinite(Number(v)) ? Number(v) : fallback, min, max);
     const ease = v => { const t = clamp(v); return t * t * t * (t * (t * 6 - 15) + 10); };
+    // Assigning text replaces the text node and lays it out again, even when
+    // the text is the same; each frame only writes what changed.
+    const setText = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+    const setHidden = (node, hidden) => { if (node.hidden !== hidden) node.hidden = hidden; };
 
     const createManager = (container, services) => {
         const mode = makeModeBase('fume', '浮名', container, services);
@@ -86,8 +90,22 @@
                     order: R.hashString(`${trackKey}:${index}:${line.fullText}`)
                 };
             });
-            // Measure one block at a time using the same DOM and styles as the resident view.
+            // Measure with the same DOM and styles as the resident view. A block's
+            // height and glyph offsets do not depend on where it sits, so every
+            // block is measured in one layout instead of one layout per block.
             // Only numeric geometry survives compilation; detached glyph nodes are not cached.
+            const measured = blocks.map(block => mountBlock(block, true));
+            blocks.forEach((block, index) => {
+                const entry = measured[index];
+                block.height = Math.max(1, entry.element.offsetHeight);
+                // offset coordinates are independent of any ancestor camera transform.
+                block.glyphLayout = entry.glyphs.map(glyph => ({
+                    start: glyph.start, end: glyph.end, char: glyph.char,
+                    x: entry.text.offsetLeft + glyph.span.offsetLeft + glyph.span.offsetWidth * 0.5,
+                    y: entry.text.offsetTop + glyph.span.offsetTop + glyph.span.offsetHeight * 0.5
+                }));
+            });
+            measured.forEach(entry => entry.element.remove());
             const order = [...blocks].sort((a, b) => a.order - b.order || a.index - b.index);
             order.forEach(block => {
                 let column = 0, top = Infinity;
@@ -97,15 +115,6 @@
                 }
                 block.x = column * (columnWidth + gap);
                 block.y = top;
-                const entry = mountBlock(block, true);
-                block.height = Math.max(1, entry.element.offsetHeight);
-                // offset coordinates are independent of any ancestor camera transform.
-                block.glyphLayout = entry.glyphs.map(glyph => ({
-                    start: glyph.start, end: glyph.end, char: glyph.char,
-                    x: entry.text.offsetLeft + glyph.span.offsetLeft + glyph.span.offsetWidth * 0.5,
-                    y: entry.text.offsetTop + glyph.span.offsetTop + glyph.span.offsetHeight * 0.5
-                }));
-                entry.element.remove();
                 for (let c = column; c < column + block.span; c++) skyline[c] = top + block.height + gap;
             });
             paperHeight = Math.max(1, ...skyline);
@@ -354,8 +363,8 @@
             const previous = blocks[Math.max(0, index - 1)];
             const showInstrumental = Boolean(frame.track && !block);
             interlude.update(frame, { visible: showInstrumental, intensity: intensity(), label: '纯音乐播放中' });
-            empty.hidden = Boolean(block || showInstrumental);
-            empty.textContent = '等待音乐';
+            setHidden(empty, Boolean(block || showInstrumental));
+            setText(empty, '等待音乐');
             if (block) {
                 const pose = resolveCamera(index, time);
                 cameraX = pose.x; cameraY = pose.y; cameraScale = pose.scale;
@@ -387,11 +396,11 @@
                         glyph.span.classList.toggle('is-printed', printed);
                     });
                 });
-                translation.textContent = resolveSupplementalText(frame.activeLine);
-                heading.textContent = `浮名 · ${U.lineCounter(frame, 3)}`;
+                setText(translation, resolveSupplementalText(frame.activeLine));
+                setText(heading, `浮名 · ${U.lineCounter(frame, 3)}`);
             } else {
-                translation.textContent = '';
-                heading.textContent = `浮名 · ${blocks.length && frame.currentLineIndex >= 0 ? '间奏' : U.lineCounter(frame, 3)}`;
+                setText(translation, '');
+                setText(heading, `浮名 · ${blocks.length && frame.currentLineIndex >= 0 ? '间奏' : U.lineCounter(frame, 3)}`);
                 cameraX = cameraY = 0;
             }
             canvas.style.opacity = String(value(t.backgroundOpacity, 0.5, 0, 1));

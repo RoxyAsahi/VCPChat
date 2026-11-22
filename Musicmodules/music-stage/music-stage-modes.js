@@ -76,9 +76,13 @@
         const mode = makeModeBase('starborn', '星诞', container, services);
         const cue = createElement('div', 'starborn-director-cue');
         const burst = createElement('div', 'starborn-transition-burst');
+        // The small star cluster reads the vocal level; as an element of its own
+        // it takes that level without restyling the performances beside it.
+        const star = createElement('div', 'starborn-star');
         cue.setAttribute('aria-hidden', 'true');
         burst.setAttribute('aria-hidden', 'true');
-        mode.root.append(cue, burst);
+        star.setAttribute('aria-hidden', 'true');
+        mode.root.append(cue, burst, star);
         const children = new Set();
         const reduced = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         let current = null;
@@ -186,7 +190,10 @@
                 if (retired && elapsed >= duration) { release(child); return; }
                 const progress = Math.max(0, Math.min(1, elapsed / duration));
                 child.layer.style.opacity = String(retired ? 1 - progress : progress);
-                child.layer.style.filter = `blur(${(retired ? progress : 1 - progress) * 12}px)`;
+                // A settled layer needs no filter: blur(0) is drawn the same,
+                // but still costs a whole-stage offscreen pass every frame.
+                const blur = (retired ? progress : 1 - progress) * 12;
+                child.layer.style.filter = blur > 0 ? `blur(${blur}px)` : 'none';
                 child.mode.updateFrame(frame);
             });
         };

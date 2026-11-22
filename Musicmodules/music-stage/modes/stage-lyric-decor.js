@@ -31,8 +31,15 @@
         const add = (tag, attrs, motion) => {
             const node = make(tag, attrs);
             field.append(node);
-            parts.push({ node, ...motion });
+            parts.push({ node, ...motion, written: {} });
             return node;
+        };
+        // Writing an attribute repaints the drawing even when the value is the
+        // same; ticks and brackets hold still for most of a line.
+        const put = (part, name, value) => {
+            if (part.written[name] === value) return;
+            part.written[name] = value;
+            part.node.setAttribute(name, value);
         };
         const build = track => {
             seed = track;
@@ -132,7 +139,8 @@
             if (destroyed) return;
             const opacity = clamp(finite(tuning.decorOpacity, 0.55));
             const enabled = tuning.vectorDecor !== false && opacity > 0;
-            svg.style.display = enabled ? 'block' : 'none';
+            const display = enabled ? 'block' : 'none';
+            if (svg.style.display !== display) svg.style.display = display;
             if (!enabled) return;
             const track = frame.track?.path || frame.track?.title || 'idle';
             if (track !== seed) build(track);
@@ -145,22 +153,22 @@
                 let alpha = part.alpha;
                 if (part.type === 'orbit') {
                     const angle = part.phase + time * part.speed;
-                    part.node.setAttribute('transform', `rotate(${angle.toFixed(3)} ${part.cx} ${part.cy})`);
+                    put(part, 'transform', `rotate(${angle.toFixed(3)} ${part.cx} ${part.cy})`);
                     alpha *= 0.75 + energy * 0.8;
                 } else if (part.type === 'ribbon') {
-                    part.node.setAttribute('stroke-dashoffset', String(-(time * part.speed + part.phase) % 100));
+                    put(part, 'stroke-dashoffset', String(-(time * part.speed + part.phase) % 100));
                     alpha *= 0.7 + energy * 0.8;
                 } else if (part.type === 'spark') {
                     const pulse = 0.5 + 0.5 * Math.sin(time * part.speed + part.phase);
                     const dy = Math.sin(time * 0.22 + part.phase) * 8 * Math.min(1, motion);
-                    part.node.setAttribute('transform', `translate(${part.x} ${part.y + dy}) scale(${0.7 + pulse * 0.45 + energy * 0.3})`);
+                    put(part, 'transform', `translate(${part.x} ${part.y + dy}) scale(${0.7 + pulse * 0.45 + energy * 0.3})`);
                     alpha *= 0.35 + pulse * 0.65;
                 } else if (part.type === 'bracket') {
-                    part.node.setAttribute('stroke-dashoffset', String(100 * (1 - clamp(progress * 5 - part.phase))));
+                    put(part, 'stroke-dashoffset', String(100 * (1 - clamp(progress * 5 - part.phase))));
                 } else if (part.type === 'tick') {
                     alpha *= 0.35 + Math.max(0, 1 - Math.abs(progress - part.phase) * 8) * 1.4;
                 }
-                part.node.setAttribute('opacity', String(clamp(alpha)));
+                put(part, 'opacity', String(clamp(alpha)));
             });
         };
         return {
