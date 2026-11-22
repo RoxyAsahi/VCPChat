@@ -464,8 +464,13 @@ void main() {
             let title = String(info.title || '');
             const room = 768 - 16 - codeW - 36;
             if (g.measureText(title).width > room) {
-                while (title.length > 1 && g.measureText(title + '…').width > room) title = title.slice(0, -1);
-                title += '…';
+                // 二分找能放下的最长前缀（原来逐字删，长标题一张要量上百次，翻列时一帧画 8 张会卡一下）
+                let lo = 1, hi = title.length - 1;
+                while (lo < hi) {
+                    const mid = (lo + hi + 1) >> 1;
+                    if (g.measureText(title.slice(0, mid) + '…').width > room) hi = mid - 1; else lo = mid;
+                }
+                title = title.slice(0, lo) + '…';
             }
             g.fillText(title, 8, 31);
             L.tex.needsUpdate = true;
