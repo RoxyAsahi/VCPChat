@@ -35,98 +35,190 @@
     const tierOf = (quality) => TIERS[quality] || TIERS.standard;
 
     /*
-     * 场景灯光两套（浅色、深色）；底色、卡片、地面等颜色从设计令牌读。
-     * 环境反射压到 0.3 左右：环境光太强会把暗面填平，整片卡发灰、看不出体积。
-     * warm：卡面底部往暖棕走的程度（1 = 浅色的暖棕渐变，0 = 深色的灰阶压暗）；
-     * glow：选中卡内部暖光照到周围几排卡的强度。
+     * 两套主题的整体外观，数值照参考播放器：底色、远处淡进去的雾色、色调映射的曝光、雾的起止（相对镜头距离）。
+     * 雾色按原样当作线性值用（参考实现就是这么混的）；底色是纸色（#eae5e1 / #11181b）按各自曝光反算回
+     * 色调映射前的值，取出卡片、镜头抬高露出背景时，背景正好是页面的纸色。
+     * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { hemiSky: '#fffaf5', hemiGround: '#b49b80', hemi: 0.5, key: 1.7, fill: 0.3, env: 0.31, exposure: 1.0, sheen: 0, clearcoat: 0.3, sheenColor: '#f6d9b8', warm: 1, glow: 0.85, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(40,38,34,.7)', tagRing: 'rgba(60,55,48,.55)' },
-        dark: { hemiSky: '#9aa8ad', hemiGround: '#0e1416', hemi: 0.33, key: 1.1, fill: 0.2, env: 0.2, exposure: 0.98, sheen: 0, clearcoat: 0.12, sheenColor: '#6f7a7e', warm: 0, glow: 0.22, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)' }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(40,38,34,.7)', tagRing: 'rgba(60,55,48,.55)' },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.149, 0.192, 0.212], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)' }
     });
 
-    /*
-     * ACES 色调映射的反函数（和 three 的 ACESFilmicToneMapping 同一组系数）。
-     * 底色、雾色要在映射后正好等于设计令牌的纸色，就先把纸色反算回映射前的线性值。
-     */
-    const ACES_IN = [0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777];
-    const ACES_OUT = [1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602];
-    const inv3 = (m) => {
-        const [a, b, c, d, e, f, g, h, i] = m;   // 列优先
-        const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
-        const det = a * A + b * B + c * C;
-        return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det,
-            B / det, (a * i - c * g) / det, -(a * f - c * d) / det,
-            C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
-    };
-    const mul3 = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
-    const ACES_IN_INV = inv3(ACES_IN), ACES_OUT_INV = inv3(ACES_OUT);
+    /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
     const rrtInverse = (y) => {
         y = Math.min(0.995, Math.max(0, y));
         const qa = 1 - 0.983729 * y, qb = 0.0245786 - 0.4329510 * y, qc = -(0.000090537 + 0.238081 * y);
         return (-qb + Math.sqrt(qb * qb - 4 * qa * qc)) / (2 * qa);
     };
-    /* color：THREE.Color（线性），就地改成映射前的值 */
-    const untoneMap = (color, exposure) => {
-        const v = mul3(ACES_IN_INV, mul3(ACES_OUT_INV, [color.r, color.g, color.b]).map(rrtInverse));
-        const k = 0.6 / Math.max(exposure, 0.01);
-        color.setRGB(Math.max(0, v[0] * k), Math.max(0, v[1] * k), Math.max(0, v[2] * k));
-        return color;
-    };
+    /* 六个朝向（+x +y +z -x -y -z）各自正中的底色亮度，浅色六个在前、深色六个在后；着色器里给倒角混色用 */
+    const toLinear = (v) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    const radianceOf = (c) => c.map((v) => rrtInverse(toLinear(v)) * 0.6 / 1.02);
+    const FACE_CENTERS = (() => {
+        const side = [0.9275, 0.9075, 0.8675], top = [0.965, 0.95, 0.925], wide = [0.78, 0.695, 0.58];
+        const nEnd = [0.14, 0.17, 0.18], nWide = [0.075, 0.102, 0.114];
+        return [side, top, wide, side, side, wide, nEnd, nEnd, nWide, nEnd, nWide, nWide].map(radianceOf);
+    })();
 
     /*
-     * 选中卡体内的暖光：五个点光源（左侧竖排三个强、中间两个弱），照亮自己和周围几排卡；
-     * 每隔一张卡衰减约 22%，卡朝背光一侧也透一些（磨砂散射）。全在着色器里算，不加灯。
-     * p 是片元在选中卡局部坐标里的位置（原点在卡底边中点），n 是局部法线。
+     * 卡盒着色不用实时灯光。参考播放器把卡盒的明暗离线烘成贴图：端面乳白、宽面从下往上由暖棕过渡到
+     * 象牙白、四边一圈提亮，再加选中卡里五个暖光点照到自己和周围几排卡的光。这里按同一组公式
+     * 直接在着色器里算，省掉贴图。颜色先给「最终显示出来的 sRGB 值」，再反算回色调映射前的亮度，
+     * 所以屏幕上看到的就是这里写的颜色（浅色主题的曝光 0.76 再统一压一点）。
+     * 局部坐标：原点在卡底边中点，宽 5、高 3.7，面板正面 z = 0.206。
      */
-    const GLOW_GLSL = `
+    const CARD_VERT = `
+#include <common>
+#include <fog_pars_vertex>
 uniform mat4 uGlowInv;
-uniform float uGlowOn;
-uniform float uWarm;
-uniform float uSelFlat;
-uniform vec3 uLowWarm;
-uniform vec3 uLowCool;
-uniform vec2 uRange;
-varying vec3 vCardLocal;
-varying vec3 vGlowWorld;
-vec3 archiveGlow(vec3 nWorld) {
-    if (uGlowOn <= 0.0) return vec3(0.0);
-    vec3 p = (uGlowInv * vec4(vGlowWorld, 1.0)).xyz;
-    float mask = (1.0 - smoothstep(7.0, 9.0, abs(p.x))) * (1.0 - smoothstep(5.0, 7.0, abs(p.z)))
-        * smoothstep(-1.6, -0.4, p.y) * (1.0 - smoothstep(4.6, 5.6, p.y));
-    if (mask <= 0.0) return vec3(0.0);
-    vec3 n = normalize(mat3(uGlowInv) * nWorld);
-    const vec3 E0 = vec3(-2.22, 0.60, 0.08);
-    const vec3 E1 = vec3(-2.22, 1.65, 0.08);
-    const vec3 E2 = vec3(-2.22, 2.75, 0.08);
-    const vec3 E3 = vec3(-0.90, 1.80, 0.08);
-    const vec3 E4 = vec3(1.10, 1.80, 0.08);
+varying vec3 vLocal;
+varying vec3 vObjN;
+varying vec3 vEmit;
+varying vec3 vEmitN;
+varying vec3 vWorld;
+varying vec3 vWorldN;
+varying vec2 vState;
+void main() {
+    mat4 m = modelMatrix;
+#ifdef USE_INSTANCING
+    m = m * instanceMatrix;
+#endif
+    vec4 world = m * vec4(position, 1.0);
+    vec3 wn = normalize(mat3(m) * normal);
+    vLocal = position;
+    vObjN = normal;
+    vEmit = (uGlowInv * world).xyz;
+    vEmitN = mat3(uGlowInv) * wn;
+    vWorld = world.xyz;
+    vWorldN = wn;
+#ifdef USE_INSTANCING_COLOR
+    vState = instanceColor.rg;
+#else
+    vState = vec2(0.0);
+#endif
+    vec4 mvPosition = viewMatrix * world;
+    gl_Position = projectionMatrix * mvPosition;
+#include <fog_vertex>
+}`;
+    const CARD_FRAG = `
+#include <common>
+#include <fog_pars_fragment>
+uniform float uLightOn;
+uniform float uHero;
+uniform float uSeeThrough;
+uniform vec3 uCenter[12];
+varying vec3 vLocal;
+varying vec3 vObjN;
+varying vec3 vEmit;
+varying vec3 vEmitN;
+varying vec3 vWorld;
+varying vec3 vWorldN;
+varying vec2 vState;
+const vec3 WARM = vec3(1.0, 0.72, 0.38);
+float toLinear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
+// 目标显示值 → 色调映射前的亮度（只反算 ACES 的曲线部分，和参考实现的烘焙一致，按曝光 1.02 算）
+vec3 radiance(vec3 c) {
+    vec3 y = min(vec3(toLinear(c.r), toLinear(c.g), toLinear(c.b)), 0.995);
+    vec3 qa = 1.0 - 0.983729 * y, qb = 0.0245786 - 0.4329510 * y, qc = -(0.000090537 + 0.238081 * y);
+    return (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa) * (0.6 / 1.02);
+}
+// 0 +x、1 +y、2 +z、3 -x、4 -y、5 -z
+int faceOf(vec3 d) {
+    vec3 a = abs(d);
+    if (a.x > a.z) return a.x > a.y ? (d.x > 0.0 ? 0 : 3) : (d.y > 0.0 ? 1 : 4);
+    return a.z > a.y ? (d.z > 0.0 ? 2 : 5) : (d.y > 0.0 ? 1 : 4);
+}
+vec3 faceAxis(int f) {
+    return f == 0 ? vec3(1.0, 0.0, 0.0) : f == 1 ? vec3(0.0, 1.0, 0.0) : f == 2 ? vec3(0.0, 0.0, 1.0)
+        : f == 3 ? vec3(-1.0, 0.0, 0.0) : f == 4 ? vec3(0.0, -1.0, 0.0) : vec3(0.0, 0.0, -1.0);
+}
+vec2 surfaceUv(int face, vec3 p) {
+    vec2 uv = vec2((p.x + 2.5) / 5.0, p.y / 3.7);
+    if (face == 0 || face == 3) uv.x = (p.z + 0.25) / 0.5;
+    else if (face == 1 || face == 4) uv.y = (p.z + 0.25) / 0.5;
+    return clamp(uv, 0.0, 1.0);
+}
+// rgb：这一面的底色（亮度）；a：选中时左侧那条柔光的强度
+vec4 faceSample(int face, vec2 uv, float dark) {
+    float x = uv.x * 5.0 - 2.5, y = uv.y * 3.7;
+    if (face == 0 || face == 3) x = face == 0 ? 2.5 : -2.5;
+    else if (face == 1 || face == 4) y = face == 1 ? 3.7 : 0.0;
+    float border = exp(-min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)) / 0.025);
+    vec3 day;
+    if (face == 2 || face == 5) day = mix(vec3(0.70, 0.60, 0.46) + uv.y * vec3(0.16, 0.19, 0.24), vec3(0.94, 0.91, 0.85), border * 0.65);
+    else if (face == 1) day = vec3(0.965, 0.95, 0.925);
+    else day = vec3(0.90, 0.875, 0.825) + uv.y * vec3(0.055, 0.065, 0.085);
+    vec3 night = (face == 0 || face == 1 || face == 3 ? vec3(0.14, 0.17, 0.18) : vec3(0.075, 0.102, 0.114)) + border * 0.035;
+    float band = smoothstep(0.08, 0.5, y) * (1.0 - smoothstep(3.25, 3.67, y));
+    float glow = (0.55 * exp(-abs(x + 2.22) / 0.48) + 0.05) * band;
+    vec3 c = dark <= 0.0 ? radiance(day) : dark >= 1.0 ? radiance(night) : mix(radiance(day), radiance(night), dark);
+    return vec4(c, glow);
+}
+// 倒角的朝向：按法线在三个面之间混色，再加一处很窄的柔和高光（左上前方）
+vec4 normalResponse(vec3 n, float dark) {
+    vec3 a = abs(n);
+    int fx = n.x >= 0.0 ? 0 : 3, fy = n.y >= 0.0 ? 1 : 4, fz = n.z >= 0.0 ? 2 : 5;
+    int primary = a.x >= a.y && a.x >= a.z ? fx : a.y >= a.z ? fy : fz;
+    vec3 w = n * n;
+    w /= w.x + w.y + w.z;
+    vec3 blended = w.x * mix(uCenter[fx], uCenter[fx + 6], dark) + w.y * mix(uCenter[fy], uCenter[fy + 6], dark)
+        + w.z * mix(uCenter[fz], uCenter[fz + 6], dark);
+    vec3 response = min(vec3(4.0), blended / max(mix(uCenter[primary], uCenter[primary + 6], dark), vec3(0.0001)));
+    float highlight = 0.18 * pow(max(0.0, dot(n, vec3(-0.48, 0.80, 0.36))), 24.0) * mix(1.0, 0.25, dark);
+    return vec4(response, highlight);
+}
+// 选中卡里的五个暖光点（左侧竖排三个强、中间两个弱）照到 p 点（选中卡局部坐标）的光，
+// 每隔一张卡衰减 22%，朝背光一侧也透一些（磨砂散射）。参考实现里这是一张低分辨率的三维光场贴图。
+vec3 field(vec3 p, vec3 n, float soft) {
+    if (abs(p.x) > 9.0 || abs(p.z) > 7.0) return vec3(0.0);
+    p.y = clamp(p.y, -0.4, 4.8);
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 5; i++) {
-        vec3 e = i == 0 ? E0 : i == 1 ? E1 : i == 2 ? E2 : i == 3 ? E3 : E4;
+        vec3 e = i == 0 ? vec3(-2.22, 0.60, 0.08) : i == 1 ? vec3(-2.22, 1.65, 0.08) : i == 2 ? vec3(-2.22, 2.75, 0.08)
+            : i == 3 ? vec3(-0.9, 1.8, 0.08) : vec3(1.1, 1.8, 0.08);
         vec3 o = e - p;
         float d2 = dot(o, o);
         float c = dot(n, o * inversesqrt(max(d2, 0.04)));
         float scatter = 0.82 * (0.26 + 0.74 * pow(max(-c, 0.0), 0.65));
         float power = i < 3 ? 0.85 : 0.28;
-        // 分母多加一点：烘焙光场本来就是低频的，直接按点光源算会在卡面上出现光斑
-        float I = power * (max(c, 0.0) * 0.28 + scatter) / (0.55 + d2);
-        sum += I * vec3(1.0, 0.72, 0.38) * exp(-vec3(0.32, 0.90, 2.5) * 0.12 / max(abs(c), 0.22));
+        float I = power * (max(c, 0.0) * 0.28 + scatter) / (0.30 + soft + d2);
+        sum += I * WARM * exp(-vec3(0.32, 0.90, 2.5) * 0.12 / max(abs(c), 0.22));
     }
-    float shells = max(abs(p.z - 0.02) / 0.62 - 0.35, 0.0);
-    sum *= pow(0.78, min(shells, 12.0));
-    // 选中卡自己：左侧那条透出来的柔光
-    float inside = step(abs(p.x), 2.56) * step(-0.05, p.y) * step(p.y, 3.75) * step(abs(p.z - 0.02), 0.26);
-    float band = smoothstep(0.08, 0.5, p.y) * (1.0 - smoothstep(3.25, 3.67, p.y));
-    sum *= 1.0 - inside * mix(0.55, 0.85, uSelFlat);
-    sum += inside * band * (0.55 * exp(-abs(p.x + 2.22) / 0.48) + 0.05) * vec3(1.0, 0.72, 0.38) * mix(0.45, 0.12, uSelFlat);
-    return sum * mask * uGlowOn;
+    return min(sum * pow(0.78, min(max(abs(p.z) / 0.62 - 0.35, 0.0), 12.0)), vec3(4.0));
 }
-float archiveSelected() {
-    vec3 p = (uGlowInv * vec4(vGlowWorld, 1.0)).xyz;
-    return step(0.001, uGlowOn) * step(abs(p.x), 2.56) * step(-0.05, p.y) * step(p.y, 3.75) * step(abs(p.z - 0.02), 0.26);
-}
-`;
+void main() {
+    float dark = vState.x;
+    float selected = step(0.5, vState.y);
+    vec3 n = normalize(vObjN);
+    int face = faceOf(n);
+    vec4 baked = faceSample(face, surfaceUv(face, vLocal), dark);
+    // 托盘正面只在面板的圆孔、缺口里露出来：按顶面的亮色画，孔看上去是一个浅色小圆点
+    if (face == 2 && vLocal.z < 0.2) baked.rgb = faceSample(1, vec2(0.5), dark).rgb;
+    vec4 nr = normalResponse(n, dark);
+    vec3 color = baked.rgb * nr.rgb + nr.a;
+    // 取出端详时镜头贴得很近，光点在自己卡面上会显出一颗颗的，放得更散一些
+    float soft = selected * uHero * 0.45;
+    color += field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn;
+    color += WARM * baked.a * selected * uLightOn;
+    if (selected > 0.5 && face == 2 && vLocal.z > 0.15) {
+        // 选中卡的面板半透：透出后面那块贴着光源的内衬板，左侧那条暖光就是从这里来的
+        vec3 back = vec3(vLocal.xy, -0.038);
+        vec4 inner = faceSample(2, surfaceUv(2, back), dark);
+        vec3 innerColor = inner.rgb + (field(vec3(vEmit.xy, -0.038), vec3(0.0, 0.0, 1.0), soft) + WARM * inner.a) * uLightOn;
+        color = mix(color, innerColor, uSeeThrough);
+    }
+    if (selected > 0.5 && uHero > 0.0) {
+        // 取出来端详时补一束正上方略偏前的主光，卡面才有方向感
+        vec3 wn = normalize(vWorldN);
+        vec3 l = vec3(0.0, 0.5477, 0.8367);
+        vec3 v = normalize(cameraPosition - vWorld);
+        float ndl = max(dot(wn, l), 0.0);
+        float spec = pow(max(dot(wn, normalize(l + v)), 0.0), 62.0) * 0.582;
+        color = mix(color, color * (0.55 + 0.45 * ndl) + spec, uHero);
+    }
+    gl_FragColor = vec4(color, 1.0);
+#include <fog_fragment>
+}`;
 
     const smoother = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * t * (10 + t * (-15 + 6 * t)); };
     const bell = (x, w) => Math.exp(-0.5 * (x / w) * (x / w));
@@ -182,44 +274,41 @@ float archiveSelected() {
         return box;
     };
 
-    /* 室内环境光照：白色房间、一盏顶灯和几块发光板，只在创建时烘一次。 */
-    const bakeEnvironment = (THREE, renderer) => {
-        const room = new THREE.Scene();
-        const unit = new THREE.BoxGeometry();
-        unit.deleteAttribute('uv');
-        const roomMat = new THREE.MeshStandardMaterial({ side: THREE.BackSide });
-        const boxMat = new THREE.MeshStandardMaterial();
-        const lamp = new THREE.PointLight(0xffffff, 900, 28, 2);
-        lamp.position.set(0.418, 16.199, 0.3);
-        room.add(lamp);
-        const place = (mat, p, s, r = 0) => {
-            const m = new THREE.Mesh(unit, mat);
-            m.position.set(p[0], p[1], p[2]);
-            m.scale.set(s[0], s[1], s[2]);
-            m.rotation.y = r;
-            room.add(m);
-        };
-        place(roomMat, [-0.757, 13.219, 0.717], [31.713, 28.305, 28.591]);
-        place(boxMat, [-10.906, 2.009, 1.846], [2.328, 7.905, 4.651], -1.977);
-        place(boxMat, [-5.607, -0.754, -0.758], [1.97, 1.534, 3.955], -0.448);
-        place(boxMat, [6.167, 0.857, 7.803], [3.927, 6.285, 3.687], -0.193);
-        place(boxMat, [-2.017, 0.018, 6.124], [2.393, 1.522, 2.4]);
-        place(boxMat, [2.291, -0.756, -2.621], [1.5, 1.5, 1.5], -0.4);
-        place(boxMat, [-2.193, -0.369, -5.547], [1.5, 1.5, 1.5]);
-        const glow = (k) => new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k) });
-        const glows = [glow(50), glow(43), glow(5), glow(20), glow(100)];
-        place(glows[0], [-16.116, 14.37, 8.208], [0.1, 2.428, 2.739]);
-        place(glows[1], [-16.109, 18.021, -8.207], [0.1, 2.425, 2.751]);
-        place(glows[2], [14.904, 12.198, -1.832], [0.15, 4.265, 6.331]);
-        place(glows[3], [-0.462, 8.89, 14.52], [4.38, 5.441, 0.088]);
-        place(glows[0], [3.235, 11.486, -12.541], [2.5, 2.0, 0.1]);
-        place(glows[4], [0.0, 20.0, 0.0], [1.0, 0.1, 1.0]);
-        const pmrem = new THREE.PMREMGenerator(renderer);
-        const target = pmrem.fromScene(room, 0.04);
-        pmrem.dispose();
-        unit.dispose();
-        for (const m of [roomMat, boxMat, ...glows]) m.dispose();
-        return target;
+    /*
+     * 卡盒模型，尺寸照参考播放器的卡盒量的：后面一个象牙色托盘，正面压一块 0.032 厚的面板，
+     * 面板四边一道小倒角，左上角缺一个口（插索引卡的槽），右上和左下各开一个小圆孔（固定扣的位置）。
+     * 两块合成一个几何体，只有位置和法线。
+     */
+    const cassetteGeometry = (THREE) => {
+        const tray = roundedBox(THREE, 4.986, 3.68, 0.32, 2, 0.03);
+        tray.translate(0, 1.85, 0.03);            // z -0.13 … 0.19
+        const B = 0.012;                          // 面板倒角
+        const shape = new THREE.Shape();
+        const x0 = -2.5 + B, x1 = 2.5 - B, y0 = B, y1 = 3.7 - B;
+        const n0 = -2.284 - B, n1 = -2.034 + B, ny = 3.475 - B;
+        shape.moveTo(x0, y0); shape.lineTo(x1, y0); shape.lineTo(x1, y1); shape.lineTo(n1, y1);
+        shape.lineTo(n1, ny); shape.lineTo(n0, ny); shape.lineTo(n0, y1); shape.lineTo(x0, y1); shape.closePath();
+        for (const [cx, cy] of [[2.389, 3.526], [-2.335, 0.14]]) {
+            const hole = new THREE.Path();
+            hole.absarc(cx, cy, 0.082 + B, 0, Math.PI * 2, true);
+            shape.holes.push(hole);
+        }
+        const plate = new THREE.ExtrudeGeometry(shape, { depth: 0.032 - 2 * B, bevelEnabled: true, bevelThickness: B, bevelSize: B, bevelSegments: 2, curveSegments: 14 });
+        plate.translate(0, 0, 0.174 + B);         // z 0.174 … 0.206
+        const parts = [tray, plate.index ? plate.toNonIndexed() : plate];
+        const count = parts.reduce((n, g) => n + g.attributes.position.count, 0);
+        const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3);
+        let o = 0;
+        for (const g of parts) {
+            pos.set(g.attributes.position.array, o);
+            nor.set(g.attributes.normal.array, o);
+            o += g.attributes.position.count * 3;
+        }
+        tray.dispose(); plate.dispose(); parts[1].dispose();
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+        return geo;
     };
 
     const create = (options) => {
@@ -236,136 +325,36 @@ float archiveSelected() {
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier.antialias, powerPreference: 'high-performance', alpha: false });
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.shadowMap.enabled = tier.shadows;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
         const scene = new THREE.Scene();
-        const envTarget = bakeEnvironment(THREE, renderer);
-        scene.environment = envTarget.texture;
-
-        const hemi = new THREE.HemisphereLight('#fffaf5', '#b4a18c', 0.42);
-        const key = new THREE.DirectionalLight('#fff7ed', 1.9);
-        key.position.set(-8, 14, 4);   // 主光在前上方偏左，卡的顶棱和正面都能吃到光
-        key.castShadow = tier.shadows;
-        if (tier.shadows) {
-            Object.assign(key.shadow.camera, { left: -16, right: 16, top: 15, bottom: -15, near: 0.1, far: 45 });
-            key.shadow.mapSize.set(tier.shadowSize, tier.shadowSize);
-            key.shadow.normalBias = 0.035;
-            key.shadow.bias = -0.0003;
-            key.shadow.radius = 4;
-        }
-        const fill = new THREE.DirectionalLight('#ffffff', 0.45);
-        fill.position.set(7, 8, -10);
-        scene.add(hemi, key, fill);
-
-        const floorMat = new THREE.MeshStandardMaterial({ color: '#d8c9b9', roughness: 0.95 });
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.y = -4.63;
-        floor.receiveShadow = tier.shadows;
-        scene.add(floor);
 
         const camera = new THREE.PerspectiveCamera(3, 16 / 9, 5, 300);
 
         /*
-         * 卡盒两层：象牙色的外框（倒角大一些，顶边能看出一道亮棱），正面再压一块略微凸出的磨砂面板，
-         * 面板四周留出一圈框边，顶上就有一道唇边。两层的颜色都由着色器按高度渐变：
-         * 浅色下面板从底部暖棕一路过渡到顶部暖白（像透出盒子里面的棕色底板），外框只轻轻压暗；
-         * 深色沿用原来的灰阶压暗。原点在底边中点。
+         * 卡盒：一个实例化网格画完全部卡。每张卡的实例颜色只当参数用：r = 主题（0 浅 1 深，翻主题时逐张过渡），
+         * g = 是否选中（选中卡里的暖光、半透面板只在这张上算）。
          */
         const glowUniforms = {
             uGlowInv: { value: new THREE.Matrix4() },
-            uGlowOn: { value: 0 },
-            uWarm: { value: 0 },
-            uSelFlat: { value: 0 }
+            uLightOn: { value: 0 },
+            uHero: { value: 0 },
+            uSeeThrough: { value: 0.38 },
+            uCenter: { value: FACE_CENTERS.map((c) => new THREE.Vector3(c[0], c[1], c[2])) }
         };
-        const patchCard = (mat, lowWarm, lowCool, range, key) => {
-            mat.onBeforeCompile = (sh) => {
-                Object.assign(sh.uniforms, glowUniforms, {
-                    uLowWarm: { value: new THREE.Vector3(...lowWarm) },
-                    uLowCool: { value: new THREE.Vector3(...lowCool) },
-                    uRange: { value: new THREE.Vector2(...range) }
-                });
-                sh.vertexShader = 'varying vec3 vCardLocal;\nvarying vec3 vGlowWorld;\n' + sh.vertexShader
-                    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCardLocal = position;')
-                    .replace('#include <project_vertex>', `#include <project_vertex>
-{
-    vec4 gw = vec4(transformed, 1.0);
-#ifdef USE_INSTANCING
-    gw = instanceMatrix * gw;
-#endif
-    vGlowWorld = (modelMatrix * gw).xyz;
-}`);
-                sh.fragmentShader = GLOW_GLSL + sh.fragmentShader
-                    .replace('#include <color_fragment>', `#include <color_fragment>
-{
-    // 抬起来整张露出的选中卡不做底部压暗（压暗是给挤在列里、下半截被前一张挡住的卡用的）
-    float hh = max(smoothstep(uRange.x, uRange.y, vCardLocal.y / ${CARD_H.toFixed(2)}), archiveSelected() * uSelFlat);
-    diffuseColor.rgb *= mix(mix(uLowCool, uLowWarm, uWarm), mix(vec3(1.0), vec3(1.0, 0.98, 0.94), uWarm), hh);
-}`)
-                    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-totalEmissiveRadiance += archiveGlow(normalize((vec4(normal, 0.0) * viewMatrix).xyz)) * diffuseColor.a;`);
-            };
-            mat.customProgramCacheKey = () => 'archive-card-' + key;
-        };
-        const FRONT = 0.205;           // 面板正面的 z（外框正面在 0.19）
-        const bodyGeo = roundedBox(THREE, CARD_W, CARD_H, CARD_D, 3, 0.075);
-        bodyGeo.translate(0, CARD_H / 2, 0.02);
-        const polymer = new THREE.MeshPhysicalMaterial({ roughness: 0.38, metalness: 0.02, clearcoat: 0, sheen: 0, sheenRoughness: 0.8 });
-        patchCard(polymer, [0.70, 0.62, 0.54], [0.62, 0.611, 0.592], [0.05, 0.95], 'frame');
-        const cards = new THREE.InstancedMesh(bodyGeo, polymer, POOL);
-        cards.castShadow = tier.shadows;
-        cards.receiveShadow = tier.shadows;
+        const FRONT = 0.206;           // 面板正面的 z
+        const cassetteMat = new THREE.ShaderMaterial({
+            uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog]),
+            vertexShader: CARD_VERT,
+            fragmentShader: CARD_FRAG,
+            fog: true
+        });
+        Object.assign(cassetteMat.uniforms, glowUniforms);
+        const cards = new THREE.InstancedMesh(cassetteGeometry(THREE), cassetteMat, POOL);
         cards.frustumCulled = false;
         scene.add(cards);
-        const PANEL_INSET = 0.11;
-        const panelGeo = roundedBox(THREE, CARD_W - PANEL_INSET * 2, CARD_H - PANEL_INSET * 2, 0.04, 1, 0.014);
-        panelGeo.translate(0, CARD_H / 2, FRONT - 0.02);
-        const panelMat = new THREE.MeshPhysicalMaterial({ roughness: 0.28, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.25, sheen: 0 });
-        patchCard(panelMat, [0.40, 0.30, 0.20], [0.62, 0.611, 0.592], [0.18, 1.08], 'panel');
-        const panels = new THREE.InstancedMesh(panelGeo, panelMat, POOL);
-        panels.receiveShadow = tier.shadows;
-        panels.frustumCulled = false;
-        scene.add(panels);
-
-        // 卡面左上角的自绘小标签
-        const tagGeo = new THREE.PlaneGeometry(0.95, 0.34);
-        tagGeo.translate(-1.35, 3.06, FRONT + 0.003);
-        const tagCanvas = document.createElement('canvas');
-        tagCanvas.width = 256; tagCanvas.height = 92;
-        const tagTex = new THREE.CanvasTexture(tagCanvas);
-        tagTex.colorSpace = THREE.SRGBColorSpace;
-        tagTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-        const tagMat = new THREE.MeshStandardMaterial({ map: tagTex, roughness: 0.6, transparent: true });
-        const tags = new THREE.InstancedMesh(tagGeo, tagMat, POOL);
-        tags.receiveShadow = tier.shadows;
-        tags.frustumCulled = false;
-        // 顶边的素色小圆点
-        const ringGeo = new THREE.CircleGeometry(0.06, 24);
-        ringGeo.translate(2.2, 3.5, FRONT + 0.003);
-        const ringMat = new THREE.MeshStandardMaterial({ color: '#8e8981', roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 });
-        const rings = new THREE.InstancedMesh(ringGeo, ringMat, POOL);
-        rings.frustumCulled = false;
-        // 靠近端头的浅槽：顶面一道 + 正面一小段
-        const grooveTop = new THREE.PlaneGeometry(0.035, 0.34);
-        grooveTop.rotateX(-Math.PI / 2);
-        grooveTop.translate(-1.72, 3.702, 0.02);
-        // 正面顶上的索引卡扣：一块凸出的小片，从顶边往下压在面板上
-        const grooveFront = new THREE.BoxGeometry(0.17, 0.28, 0.018);
-        grooveFront.deleteAttribute('uv');
-        grooveFront.translate(-1.72, CARD_H - 0.13, FRONT + 0.006);
-        const grooveMat = new THREE.MeshStandardMaterial({ color: '#b9ab9a', roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 });
-        const grooves = new THREE.InstancedMesh(grooveTop, grooveMat, POOL);
-        // 卡扣和面板同一种象牙色，只是更亮一点，靠体积和阴影看出来
-        const tabMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.42, metalness: 0.04 });
-        const grooves2 = new THREE.InstancedMesh(grooveFront, tabMat, POOL);
-        grooves.frustumCulled = false; grooves2.frustumCulled = false;
-        scene.add(tags, rings, grooves, grooves2);
-        const layers = [cards, panels, tags, rings, grooves, grooves2];
-        // 卡身、圆点、浅槽的颜色放在每个实例上（材质本身取白），换主题时可以一张张翻过去
-        polymer.color.set('#ffffff'); panelMat.color.set('#ffffff'); ringMat.color.set('#ffffff'); grooveMat.color.set('#ffffff');
-        const TINTED = [[cards, 'card'], [panels, 'card'], [rings, 'badge'], [grooves, 'groove'], [grooves2, 'card']];
-        const tint = { card: new THREE.Color('#3b4448'), badge: new THREE.Color('#5d676b'), groove: new THREE.Color('#4a5559') };
+        const layers = [cards];
+        const TINTED = [[cards, 'card']];
+        const tint = { card: new THREE.Color(1, 0, 0) };
         const paintUniform = () => {
             for (const [mesh, part] of TINTED) {
                 for (let i = 0; i < POOL; i++) mesh.setColorAt(i, tint[part]);
@@ -373,10 +362,8 @@ totalEmissiveRadiance += archiveGlow(normalize((vec4(normal, 0.0) * viewMatrix).
             }
         };
         paintUniform();
-        /* 选中卡卡身往强调色偏一点、圆点换成强调色：浏览时一眼能看出选的是哪张（实例下标随镜头变，每帧对一次） */
-        const accent = new THREE.Color('#c8a15a');
         let accentIdx = -1;
-        let ACCENT_MIX = 0.1, accentMix = -1; const accentTmp = new THREE.Color();
+        const accentTmp = new THREE.Color();
 
         // ---- 卡面标题：只给相机附近几列看得见的卡贴，贴片池循环复用 ----
         // 每张贴片一块小画布，换卡时只重画这一块；一帧最多重画几块，避免滚动时卡顿。
@@ -395,10 +382,9 @@ totalEmissiveRadiance += archiveGlow(normalize((vec4(normal, 0.0) * viewMatrix).
             const tex = new THREE.CanvasTexture(c);
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-            const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
             const mesh = new THREE.Mesh(labelGeo, mat);
             mesh.visible = false;
-            mesh.receiveShadow = tier.shadows;
             scene.add(mesh);
             return { mesh, canvas: c, tex, mat, cell: null, drawn: null };
         });
@@ -480,24 +466,6 @@ totalEmissiveRadiance += archiveGlow(normalize((vec4(normal, 0.0) * viewMatrix).
 
         let lighting = LIGHTING.dark;
         let fontStack = 'sans-serif';
-        const paintTag = () => {
-            const g = tagCanvas.getContext('2d');
-            g.clearRect(0, 0, 256, 92);
-            g.fillStyle = lighting.tag;
-            g.beginPath();
-            if (g.roundRect) g.roundRect(2, 2, 252, 88, 10); else g.rect(2, 2, 252, 88);
-            g.fill();
-            g.strokeStyle = lighting.tagRing;
-            g.lineWidth = 3;
-            g.beginPath();
-            g.arc(40, 46, 18, 0, Math.PI * 2);
-            g.stroke();
-            // 空白标签：两道细线代替文字（卡上的曲名另有贴片，这里不再印无意义的字）
-            g.fillStyle = lighting.tagRing;
-            g.fillRect(72, 36, 140, 3);
-            g.fillRect(72, 56, 96, 3);
-            tagTex.needsUpdate = true;
-        };
 
         /*
          * 主题翻色。整体（背景、雾、地面、灯光）用 0.85 秒缓动过去；卡片按到原点的距离依次翻，
@@ -506,38 +474,38 @@ totalEmissiveRadiance += archiveGlow(normalize((vec4(normal, 0.0) * viewMatrix).
         const GLOBAL_DUR = 0.85, CARD_DUR = 0.58, MAX_DELAY = 0.6, WAVE_TOTAL = 1.18;
         const smooth = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
         const nowS = () => performance.now() / 1000;
-        const lookOf = (colors, l) => ({
-            bg: new THREE.Color(colors.paper), floor: new THREE.Color(colors.floor),
-            hemiSky: new THREE.Color(l.hemiSky), hemiGround: new THREE.Color(l.hemiGround), sheenColor: new THREE.Color(l.sheenColor),
-            hemi: l.hemi, key: l.key, fill: l.fill, exposure: l.exposure, sheen: l.sheen, clearcoat: l.clearcoat, warm: l.warm, glow: l.glow, fogNear: l.fogNear, fogFar: l.fogFar
-        });
-        const COLOR_KEYS = ['bg', 'floor', 'hemiSky', 'hemiGround', 'sheenColor'];
-        const NUM_KEYS = ['hemi', 'key', 'fill', 'exposure', 'sheen', 'clearcoat', 'warm', 'glow', 'fogNear', 'fogFar'];
+        const rawColor = (c) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
+        const lookOf = (l) => ({ bg: rawColor(l.bg), fog: rawColor(l.fog), exposure: l.exposure, theme: l.theme, fogNear: l.fogNear, fogFar: l.fogFar });
+        const COLOR_KEYS = ['bg', 'fog'];
+        const NUM_KEYS = ['exposure', 'theme', 'fogNear', 'fogFar'];
         /*
-         * 后期：场景先画进一张半浮点的离屏图，再用一个全屏三角形做「离焦柔化」和色调映射。
-         * 柔化是 3×3 二项核（中心 4、上下左右 2、对角 1），采样半径随离焦点那条水平带的距离从
-         * 不到 1 像素加到 7 像素（按 1080 高折算），越往画面上下越虚，取出详情时收回成只剩最轻的一层。
+         * 后期，照参考播放器的最后一步：场景先画进一张半浮点的离屏图，再用一个全屏三角形做
+         * 「离焦柔化 → 色调映射 → 纸色压边」。柔化是 3×3 二项核（中心 4、上下左右 2、对角 1），
+         * 采样半径随离画面 52% 高度那条带的距离从 1 像素加到 7 像素，越往上下越虚；
+         * 之后上半截、下沿、四角往纸色压（浅色、深色各一套比例）。取出详情时柔化和压边都收掉。
          * 省电档不走这一步，直接画到屏幕。
          */
-        const post = { on: tier.antialias && typeof renderer.setRenderTarget === 'function', rt: null, scene: null, camera: null, mat: null, focus: 0.5, paper: new THREE.Color(), exposure: { value: 1 } };
+        const post = { on: tier.antialias && typeof renderer.setRenderTarget === 'function', rt: null, scene: null, camera: null, mat: null, exposure: { value: 1 } };
         if (post.on) {
             post.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, depthBuffer: true });
             post.mat = new THREE.ShaderMaterial({
                 uniforms: {
                     tColor: { value: post.rt.texture },
                     uTexel: { value: new THREE.Vector2(1, 1) },
-                    uFocus: { value: 0.5 },
-                    uSoft: { value: 1 }
+                    uTheme: { value: 1 },
+                    uShade: { value: 0 }
                 },
                 vertexShader: 'varying vec2 vUv;\nvoid main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
                 fragmentShader: `uniform sampler2D tColor;
 uniform vec2 uTexel;
-uniform float uFocus;
-uniform float uSoft;
+uniform float uTheme;
+uniform float uShade;
 varying vec2 vUv;
 void main() {
-    float away = smoothstep(0.05, 0.48, abs(vUv.y - uFocus));
-    vec2 t = uTexel * (0.7 + 6.0 * away * uSoft);
+    float down = 1.0 - vUv.y;   // 从画面顶边往下量
+    float keep = 1.0 - uShade;
+    float away = smoothstep(0.05, 0.48, abs(down - 0.52));
+    vec2 t = uTexel * (1.0 + 6.0 * away * keep);
     vec3 c = texture2D(tColor, vUv).rgb * 4.0;
     c += 2.0 * (texture2D(tColor, vUv + vec2(t.x, 0.0)).rgb + texture2D(tColor, vUv - vec2(t.x, 0.0)).rgb
         + texture2D(tColor, vUv + vec2(0.0, t.y)).rgb + texture2D(tColor, vUv - vec2(0.0, t.y)).rgb);
@@ -546,6 +514,16 @@ void main() {
     gl_FragColor = vec4(c / 16.0, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
+    vec3 paper = mix(vec3(222.0, 219.0, 215.0), vec3(17.0, 24.0, 27.0), uTheme) / 255.0;
+    float top = mix(0.72 * (1.0 - clamp(down / 0.5, 0.0, 1.0)), 0.82 * (1.0 - clamp(down / 0.36, 0.0, 1.0)), uTheme);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(vec3(224.0, 221.0, 216.0) / 255.0, paper, uTheme), top * keep);
+    float bottom = mix(0.72, 0.84, uTheme) * (1.0 - clamp((1.0 - down) / 0.35, 0.0, 1.0));
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, paper, bottom * keep);
+    vec2 p = vec2(vUv.x, down);
+    float radius = length((p - vec2(0.42, 0.47)) / vec2(0.58, 0.53)) * 0.70711;
+    float darkRadius = length((p - vec2(0.48, 0.48)) / vec2(0.58, 0.53)) * 0.70711;
+    float edge = mix(0.19 * clamp((radius - 0.32) / 0.53, 0.0, 1.0), 0.48 * clamp((darkRadius - 0.42) / 0.48, 0.0, 1.0), uTheme);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, paper, edge * keep);
 }`,
                 depthTest: false,
                 depthWrite: false
@@ -558,6 +536,7 @@ void main() {
             post.scene = new THREE.Scene();
             post.scene.add(quad);
             post.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            host.classList.add('archive-post-atmos');   // 压边在着色器里做了，页面上那层 CSS 渐变就不用再盖
         }
         /* 封面贴片不该被色调映射改色：走后期时先把颜色反算回去，映射之后正好是原图 */
         const keepColors = (mat) => {
@@ -578,26 +557,19 @@ vec3 archiveUntone(vec3 y) {
             mat.customProgramCacheKey = () => 'archive-keep-colors';
             return mat;
         };
-        const look = lookOf({ paper: '#11181b', floor: '#192125' }, LIGHTING.dark);
+        for (const L of labels) keepColors(L.mat);
+        const look = lookOf(LIGHTING.dark);
         let lookFade = null;   // { from, to, t0 }
         const fogBase = { near: look.fogNear, far: look.fogFar };
         scene.background = look.bg.clone();
-        scene.fog = new THREE.Fog(look.bg.clone(), DIST + look.fogNear, DIST + look.fogFar);
-        let glowLevel = 0;
+        scene.fog = new THREE.Fog(look.fog.clone(), DIST + look.fogNear, DIST + look.fogFar);
         const applyLook = (L) => {
             scene.background.copy(L.bg);
-            // 雾在色调映射之前混进去：反算一下，远处的卡才会正好淡进纸色，不留一道色差
-            untoneMap(scene.fog.color.copy(L.bg), L.exposure);
-            post.paper.copy(scene.fog.color);
-            glowUniforms.uWarm.value = L.warm;
-            glowLevel = L.glow;
+            scene.fog.color.copy(L.fog);
             fogBase.near = L.fogNear; fogBase.far = L.fogFar;
             scene.fog.near = DIST + L.fogNear; scene.fog.far = DIST + L.fogFar;
-            floorMat.color.copy(L.floor);
-            panelMat.sheen = L.sheen; panelMat.sheenColor.copy(L.sheenColor); panelMat.clearcoat = L.clearcoat;
             post.exposure.value = L.exposure;
-            hemi.color.copy(L.hemiSky); hemi.groundColor.copy(L.hemiGround); hemi.intensity = L.hemi;
-            key.intensity = L.key; fill.intensity = L.fill;
+            if (post.on) post.mat.uniforms.uTheme.value = L.theme;
             renderer.toneMappingExposure = L.exposure;
         };
         const lookAt = (fade, T) => {
@@ -608,8 +580,7 @@ vec3 archiveUntone(vec3 y) {
             return out;
         };
 
-        let waves = [];        // { to: {card,badge,groove}, lane, row, t0 }
-        let tagPending = 0;    // 卡面小标签在波纹过半时换
+        let waves = [];        // { to: { card }, lane, row, t0 }
         const waveK = (w, lane, row, T) => smooth((T - w.t0 - Math.min(MAX_DELAY, Math.abs(row - w.row) * 0.034 + Math.abs(lane - w.lane) * 0.11)) / CARD_DUR);
         const colorAt = (part, lane, row, T, k, out) => {
             if (k < 0) return out.copy(tint[part]);
@@ -621,34 +592,28 @@ vec3 archiveUntone(vec3 y) {
         };
         const themeBusy = () => Boolean(lookFade || waves.length);
 
-        /* colors: { paper, card, floor, badge, groove, font }，dark: 是否深色，wave: { lane, row } 翻色原点 */
+        /* colors: { font, labelInk, labelMuted }（卡盒和底色按参考播放器固定，不读颜色令牌），dark: 是否深色，wave: { lane, row } 翻色原点 */
         const setTheme = (colors, dark, { wave = null } = {}) => {
             lighting = dark ? LIGHTING.dark : LIGHTING.light;
             fontStack = colors.font || fontStack;
             labelInk.ink = colors.labelInk || (dark ? 'rgba(224,227,220,.62)' : 'rgba(8,10,8,.58)');
             labelInk.muted = colors.labelMuted || (dark ? 'rgba(166,176,177,.55)' : 'rgba(98,95,88,.6)');
             labelEpoch++;
-            for (const m of [polymer, panelMat, tabMat, floorMat, tagMat, ringMat, grooveMat]) m.envMapIntensity = lighting.env;
-            const to = lookOf(colors, lighting);
-            if (colors.accent) accent.set(colors.accent);
-            ACCENT_MIX = dark ? 0.1 : 0.42;
+            const to = lookOf(lighting);
             accentIdx = -1;
-            const parts = { card: new THREE.Color(colors.card), badge: new THREE.Color(colors.badge), groove: new THREE.Color(colors.groove) };
+            const parts = { card: new THREE.Color(lighting.theme, 0, 0) };
             const T = nowS();
             if (!wave || reducedMotion()) {
-                lookFade = null; waves = []; tagPending = 0;
+                lookFade = null; waves = [];
                 Object.assign(look, to);
                 applyLook(look);
                 Object.assign(tint, parts);
                 paintUniform();
-                accentIdx = -1;
-                paintTag();
             } else {
                 const from = lookFade ? lookAt(lookFade, T) : { ...look };
                 lookFade = { from, to, t0: T };
                 if (waves.length >= 3) { Object.assign(tint, waves[0].to); waves.shift(); }
                 waves.push({ to: parts, lane: wave.lane, row: wave.row, t0: T });
-                tagPending = T + 0.3;
             }
             invalidate();
         };
@@ -657,7 +622,6 @@ vec3 archiveUntone(vec3 y) {
                 if (T - lookFade.t0 >= GLOBAL_DUR) { Object.assign(look, lookFade.to); lookFade = null; applyLook(look); }
                 else applyLook(lookAt(lookFade, T));
             }
-            if (tagPending && T >= tagPending) { tagPending = 0; paintTag(); }
             if (waves.length && T - waves[waves.length - 1].t0 >= WAVE_TOTAL) {
                 Object.assign(tint, waves[waves.length - 1].to);
                 waves = [];
@@ -807,9 +771,7 @@ vec3 archiveUntone(vec3 y) {
                 const dpr = renderer.getPixelRatio();
                 const px = { x: Math.max(1, Math.floor(W * dpr)), y: Math.max(1, Math.floor(H * dpr)) };
                 post.rt.setSize(px.x, px.y);
-                // 柔化半径按 1080 高折算，窗口大小、缩放不同时虚的程度一样
-                const k = px.y / 1080;
-                post.mat.uniforms.uTexel.value.set(k / px.x, k / px.y);
+                post.mat.uniforms.uTexel.value.set(1 / px.x, 1 / px.y);
             }
             camera.aspect = W / H;
             // 高度方向固定看到 7.33 个单位；窗口比 16:9 窄时改为保宽度
@@ -1033,19 +995,16 @@ vec3 archiveUntone(vec3 y) {
             if (hovered && !hoverLifts.has(hovered)) hoverLifts.set(hovered, 0.0001);
             for (const layer of layers) layer.instanceMatrix.needsUpdate = true;
             if (tinting) for (const [mesh] of TINTED) mesh.instanceColor.needsUpdate = true;
-            // 取出详情时卡身回到原色（封面卡不染色），跟着取出进度淡掉
-            const mix = ACCENT_MIX * (1 - detailK);
-            if (tinting || targetIdx !== accentIdx || Math.abs(mix - accentMix) > 0.002) {
-                if (accentIdx >= 0 && accentIdx !== targetIdx && !tinting) { cards.setColorAt(accentIdx, tint.card); panels.setColorAt(accentIdx, tint.card); rings.setColorAt(accentIdx, tint.badge); }
+            // 选中卡在实例参数里打个记号（g = 1），着色器只在这张卡上算内部暖光和半透面板
+            if (tinting || targetIdx !== accentIdx) {
+                if (accentIdx >= 0 && accentIdx !== targetIdx && !tinting) cards.setColorAt(accentIdx, tint.card);
                 if (targetIdx >= 0) {
                     if (tinting) cards.getColorAt(targetIdx, accentTmp); else accentTmp.copy(tint.card);
-                    cards.setColorAt(targetIdx, accentTmp.lerp(accent, mix));
-                    panels.setColorAt(targetIdx, accentTmp);
-                    rings.setColorAt(targetIdx, accent);
+                    accentTmp.g = 1;
+                    cards.setColorAt(targetIdx, accentTmp);
                 }
                 accentIdx = targetIdx;
-                accentMix = mix;
-                cards.instanceColor.needsUpdate = panels.instanceColor.needsUpdate = rings.instanceColor.needsUpdate = true;
+                cards.instanceColor.needsUpdate = true;
             }
 
             // 选中格可以一帧跳过好几张卡，镜头的瞄准点随画面平滑移动。
@@ -1063,21 +1022,15 @@ vec3 archiveUntone(vec3 y) {
                 glowMat4.makeRotationY(inspect.v).setPosition(targetPos);
                 glowUniforms.uGlowInv.value.copy(glowMat4).invert();
             }
-            glowUniforms.uGlowOn.value = targetVisible ? glowLevel : 0;
-            glowUniforms.uSelFlat.value = smooth((lift.v - 0.6) / 1.4);
+            glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
+            glowUniforms.uHero.value = detailK;
+            // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
+            glowUniforms.uSeeThrough.value = 0.38 - 0.26 * detailK;
             if (post.on) {
-                // 焦点放在选中卡露出来的上半截；取出详情时只留最轻的一层柔化
-                projA.set(targetPos.x, targetPos.y + CARD_H * 0.7, targetPos.z).project(camera);
-                const goal = targetVisible ? Math.min(0.72, Math.max(0.3, (projA.y + 1) / 2)) : 0.5;
-                post.focus = reduced || !Number.isFinite(post.focus) ? goal : post.focus + (goal - post.focus) * (1 - Math.exp(-dt * 6));
-                post.mat.uniforms.uFocus.value = post.focus;
-                post.mat.uniforms.uSoft.value = 1 - detailK;
-                const bg = scene.background;
-                scene.background = post.paper;
+                post.mat.uniforms.uShade.value = detailK;
                 renderer.setRenderTarget(post.rt);
                 renderer.render(scene, camera);
                 renderer.setRenderTarget(null);
-                scene.background = bg;
                 renderer.render(post.scene, post.camera);
             } else {
                 renderer.render(scene, camera);
@@ -1149,14 +1102,11 @@ vec3 archiveUntone(vec3 y) {
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [polymer, panelMat, tabMat, floorMat, tagMat, ringMat, grooveMat, frameMat, artMat, captionMat]) m.dispose();
-            if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); }
+            for (const m of [cassetteMat, frameMat, artMat, captionMat]) m.dispose();
+            if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); host.classList.remove('archive-post-atmos'); }
             freeCoverTex(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
-            floor.geometry.dispose();
-            tagTex.dispose();
-            envTarget.dispose();
             renderer.dispose();
             renderer.forceContextLoss?.();
             canvas.remove();

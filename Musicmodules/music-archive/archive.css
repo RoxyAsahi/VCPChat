@@ -48,6 +48,8 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
         linear-gradient(0deg, rgba(var(--ar-paper-rgb), .94) 0%, transparent 19%),
         radial-gradient(ellipse at 48% 48%, transparent 45%, rgba(var(--ar-paper-rgb), .18) 90%);
 }
+/* 3D 场景走后期时，上下压边和四角暗角在着色器里按参考播放器的比例做，这层就不再叠 */
+.archive-post-atmos .archive-atmos { display: none; }
 
 .archive-hud {
     --archive-toolbar-top: 56px;
