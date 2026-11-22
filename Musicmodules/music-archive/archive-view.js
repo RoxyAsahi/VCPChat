@@ -1224,7 +1224,9 @@
                         const c = state.scene.pick(pendingPick.x, pendingPick.y, pendingPick.rect);
                         state.scene.setHover(c);
                         showTip(c, pendingPick);
-                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : '';
+                        // 卡上是手指；卡已放回时空白处显示「可抓」，提示能按住拖动整片档案（参考播放器 m_cursor = "grab"）
+                        const browsing = !cardExpanded && !state.scene.detail;
+                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
                     });
                 }
                 kick();
