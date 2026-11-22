@@ -1127,10 +1127,15 @@ vec3 archiveUntone(vec3 y) {
                 /*
                  * 镜头在两列/两行之间滑得快的那一段，画面本来就在动、看不清细节，场景只按 0.67 倍边长画
                  * （约一半像素），由后期放大。滑到慢下来（速度低于 0.25 格/秒）就回到全分辨率，
-                 * 停稳的那一帧和之后的静止画面都是全分辨率，和原来一样。取出端详时不降。
+                 * 停稳的那一帧和之后的静止画面都是全分辨率，和原来一样。
+                 * 取出/收回时卡飞得最快、镜头推进还不到一半的那一段也这样画；推进过半以后封面变大、
+                 * 柔化收掉，就回到全分辨率，端详时的封面一直是清晰的。
+                 * 参考播放器同样是降渲染比例再放大（RenderModePolicy.h 的 renderPercent 50–200%）。
                  */
                 const speed = Math.abs(camLane.vel) + Math.abs(camRow.vel);
-                const s = !reduced && detailK < 0.001 && !detailOn && speed > 0.25 && post.px ? 0.67 : 1;
+                const gliding = detailK < 0.001 && !detailOn && speed > 0.25;
+                const flying = detailK < 0.5 && Math.abs(lift.vel) > 1.5;
+                const s = !reduced && post.px && (gliding || flying) ? 0.67 : 1;
                 const px = post.px || { x: 1, y: 1 };
                 const vw = Math.max(1, Math.round(px.x * s)), vh = Math.max(1, Math.round(px.y * s));
                 post.rt.viewport.set(0, 0, vw, vh);
@@ -1231,7 +1236,7 @@ vec3 archiveUntone(vec3 y) {
             get dirty() { return dirty; },
             get target() { return { ...target }; },
             get themeBusy() { return themeBusy(); },
-            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, detail: Math.round(detailK * 1000) / 1000, returning: returning.size, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
+            debug: () => ({ cam: { lane: Math.round(camLane.v * 1000) / 1000, row: Math.round(camRow.v * 1000) / 1000 }, target: { ...target }, frames, dpr: renderer.getPixelRatio(), labels: labels.filter((L) => L.mesh.visible).length, labelLanes: [...new Set(labels.filter((L) => L.mesh.visible).map((L) => Number(L.cell.split(':')[0])))].sort((x, y) => x - y), waves: waves.length, fading: Boolean(lookFade), bg: scene.background.getHexString(), lift: Math.round(lift.v * 100) / 100, liftVel: Math.round(lift.vel * 100) / 100, lowRes: Boolean(post.lowRes), detail: Math.round(detailK * 1000) / 1000, returning: returning.size, pool: POOL, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs?.length || 0 })
         };
     };
 
