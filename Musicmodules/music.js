@@ -84,7 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
         minimizeBtn: document.getElementById('minimize-music-btn'),
         maximizeBtn: document.getElementById('maximize-music-btn'),
         closeBtn: document.getElementById('close-music-btn'),
-        sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
         leftSidebar: document.getElementById('left-sidebar'),
         sidebarTabs: document.querySelectorAll('.sidebar-tab'),
         sidebarFooter: document.getElementById('sidebar-footer'),
@@ -300,20 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', app.destroy, { once: true });
 
 
-    app.updateSidebarToggleState = (isSidebarCollapsed) => {
-        document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
-        app.sidebarToggleBtn?.classList.toggle('is-collapsed', isSidebarCollapsed);
-        app.sidebarToggleBtn?.setAttribute('title', isSidebarCollapsed ? '展开左侧列表' : '收纳左侧列表');
-        app.sidebarToggleBtn?.setAttribute('aria-label', isSidebarCollapsed ? '展开左侧列表' : '收纳左侧列表');
-        app.sidebarToggleBtn?.setAttribute('aria-pressed', String(isSidebarCollapsed));
-        localStorage.setItem('musicSidebarCollapsed', String(isSidebarCollapsed));
-    };
-
-    app.toggleSidebarPanel = () => {
-        app.updateSidebarToggleState(!document.body.classList.contains('sidebar-collapsed'));
-    };
-
-
     const normalizePlaybackRequest = (payload) => {
         if (payload?.track && typeof payload.track === 'object') {
             return {
@@ -466,7 +451,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await initializeTheme();
         window.MusicIntroLib?.init(app);
 
-        app.updateSidebarToggleState(localStorage.getItem('musicSidebarCollapsed') === 'true');
         if (typeof initMusicDock === 'function') initMusicDock(app);
 
         app.phantomAudio.src = app.createSilentAudio();
@@ -1193,14 +1177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         app.searchInput.oninput = (e) => {
-            if (app.isSemanticSearchActive) {
-                // 语义搜索模式下不随输入过滤；但把框清空就回到整个曲库，不然还停在上一次的语义结果上。
-                if (!app.searchInput.value.trim() && app.currentFilteredTracks) {
-                    app.currentFilteredTracks = null; app.filteredPlaylistSource = null;
-                    app.renderPlaylist(null);
-                }
-                return;
-            }
+            if (app.isSemanticSearchActive) return; // 语义搜索模式下不进行实时过滤
             // 连续输入时只在停顿后过滤一次，避免每敲一个字就重建整个列表。
             clearTimeout(app.searchInputTimer);
             app.searchInputTimer = setTimeout(() => {
@@ -1231,7 +1208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        app.sidebarToggleBtn.onclick = () => app.toggleSidebarPanel();
         app.minimizeBtn.onclick = () => { app.api?.minimizeWindow?.(); };
         app.maximizeBtn.onclick = () => { app.api?.maximizeWindow?.(); };
         app.closeBtn.onclick = () => { app.api?.closeWindow?.(); };

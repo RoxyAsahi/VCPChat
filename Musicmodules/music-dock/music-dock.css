@@ -66,7 +66,7 @@ body.music-dock-on .music-player .controls {
   --md-fl-low-edge: rgba(255, 255, 255, .08);
   --md-fl-ring: #fff;
 }
-body.light-theme #music-dock-root {
+#music-dock-root.md-light {
   /* 浅色抽屉底接近白：次要字 .62/.42 只有 4.3/2.5:1，小字要到 4.5:1 以上 */
   --md-t2: rgba(var(--md-tp-rgb), .74);
   --md-t3: rgba(var(--md-tp-rgb), .66);
@@ -778,7 +778,9 @@ body.music-lyrics-hide-translation #lyrics-list .lyric-translation { display: no
 .md-ext { padding: 0 12px 8px 0; }
 .md-ext[hidden], .md-fx-sc[hidden] { display: none; }
 .md-tab2 { padding: 0; }
+.md-tiles.md-tiles-1 { grid-template-columns: 1fr; }
 .md-tiles.md-tiles-2 { grid-template-columns: repeat(2, 1fr); }
+#music-dock-root:not(.md-in-stage) :is(.md-stage-only, .md-adv-acts .music-stage-settings-footer) { display: none; }
 .md-grp { margin-top: 4px; }
 .md-grp-h { display: flex; align-items: baseline; gap: 8px; min-height: 32px; padding: 12px 4px 4px; margin-top: 4px; border-top: 1px solid var(--md-line); }
 .md-grp-h b { flex-shrink: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--md-t1); }
@@ -897,7 +899,7 @@ body.music-reduce-motion #music-dock-root *::after { transition-duration: 0s !im
   opacity: 0;
   transition: opacity .2s ease-out;
 }
-body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .46); }
+#music-dock-root.md-light .md-cmd-scrim { background: rgba(250, 250, 249, .46); }
 .md-cmd.md-open .md-cmd-scrim { opacity: 1; }
 .md-cmd-wrap {
   position: absolute;
@@ -1438,7 +1440,7 @@ body.music-reduce-motion .mtst-progress .mtst-ic svg { animation: none; }
 /* ───────── 搜索面板（Ctrl+K）收小：和右侧抽屉、目录同一套写法 ─────────
  * 不再是大圆角卡片加图标圆圈：细线方框、一行一个结果，选中行是墨色文字、前面一个实心小方块。 */
 .md-cmd-scrim { background: rgba(0, 0, 0, .22); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-body.light-theme .md-cmd-scrim { background: rgba(250, 250, 249, .3); }
+#music-dock-root.md-light .md-cmd-scrim { background: rgba(250, 250, 249, .3); }
 .md-cmd-box {
   max-width: 30rem;
   border-radius: 2px;
@@ -1518,19 +1520,6 @@ body.music-reduce-motion .md-mist { transition: none; }
     -webkit-mask-composite: source-over;
     mask-composite: add;
   }
-}
-/* 抽屉左边放不下播放条时（music-dock.js syncShift 的 md-raise）：和窄窗一样，抽屉底边抬到播放条上面，底色往下渐隐 */
-#music-dock-root.md-raise .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
-#music-dock-root.md-raise .md-pnl .md-dockrow { padding-right: 0; }
-#music-dock-root.md-raise .md-drbg {
-  -webkit-mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
-  mask-image: linear-gradient(to left, #000 var(--md-dr-solid, 50%), transparent 100%), linear-gradient(to top, transparent 0, #000 calc(var(--music-dock-safe-bottom, 96px) + 8px));
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-position: 0 0;
-  mask-position: 0 0;
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
 }
 /* 节能档（没有流体层）的把手也停在凹口圆心上 */
 #music-dock-root.md-fl-low .md-hdl { right: 16px; bottom: 16px; }
@@ -1619,16 +1608,14 @@ body.music-reduce-motion .mtst::before { display: none; }
 .mfm { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 0; transition: opacity .2s; }
 .mfm-body { fill: var(--mfm-color, var(--md-fl-tint, currentColor)); opacity: .92; }
 
-/* 舞台页签用流体标记代替原来的墨色下划线；离选中越远越淡越糊，悬停、键盘焦点时清楚。
- * 只在底栏接管时（body.music-dock-fluid-tabs）生效；减少动态时不糊，只淡。 */
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button.is-active::after { transform: scaleX(0); }
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button { z-index: 1; transition: color .2s, opacity .3s, filter .3s; }
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="2"] { opacity: .86; }
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="3"] { opacity: .74; filter: blur(.2px); }
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button[data-md-dist="4"] { opacity: .64; filter: blur(.35px); }
-body.music-dock-fluid-tabs .music-stage-mode-switcher:hover .music-stage-mode-button,
-body.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button:focus-visible { opacity: 1; filter: none; }
-body.music-reduce-motion.music-dock-fluid-tabs .music-stage-mode-switcher .music-stage-mode-button { filter: none; }
+/* 远离选中项的舞台页签淡一点，悬停和键盘焦点时恢复清晰。 */
+.music-stage-mode-switcher .music-stage-mode-button { z-index: 1; transition: color .2s, opacity .3s, filter .3s; }
+.music-stage-mode-switcher .music-stage-mode-button[data-md-dist="2"] { opacity: .86; }
+.music-stage-mode-switcher .music-stage-mode-button[data-md-dist="3"] { opacity: .74; filter: blur(.2px); }
+.music-stage-mode-switcher .music-stage-mode-button[data-md-dist="4"] { opacity: .64; filter: blur(.35px); }
+.music-stage-mode-switcher:hover .music-stage-mode-button,
+.music-stage-mode-switcher .music-stage-mode-button:focus-visible { opacity: 1; filter: none; }
+body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button { filter: none; }
 
 /* ───────── 搜索框从播放条鼓出来，关掉时并回去 ─────────
  * 播放条留在原处（不再隐藏），遮罩只盖播放条以上；框从播放条上沿的中间鼓出一滴、拉一截细颈再展开。 */
@@ -1674,8 +1661,8 @@ body.music-reduce-motion .md-cmd-box::after { display: none; }
 /* 停在凹口里时光收紧，只留一圈贴着环的亮，不在角上铺一团雾 */
 #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 0 8px 1px rgba(255, 255, 255, .5), inset 0 0 6px rgba(255, 255, 255, .6); }
 #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .6), inset 0 0 6px rgba(255, 255, 255, .6); }
-body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { color: var(--md-t1); }
-body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open .md-sw .md-i { filter: none; }
+#music-dock-root.md-light.md-fl-on .md-hdl.md-open button { color: var(--md-t1); }
+#music-dock-root.md-light.md-fl-on .md-hdl.md-open .md-sw .md-i { filter: none; }
 
 /* ───────── 抽屉磨砂的面积按画质档位收放 ─────────
  * 背景模糊的开销跟面积走，跟模糊半径几乎无关（实测）。标准档只糊内容那一条（480px，左边 80px 是淡出），半径也小一些，舞台不会被糊成一片；
@@ -1689,7 +1676,7 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open .md-sw .md-i { filter
 }
 #music-dock-root.md-fl-low .md-drbg { backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* 浅色主题下白色焦点圈看不见，换成墨色 */
-body.light-theme #music-dock-root.md-fl-on .md-hdl button:focus-visible { outline-color: var(--md-t1); }
+#music-dock-root.md-light.md-fl-on .md-hdl button:focus-visible { outline-color: var(--md-t1); }
 
 /* ───────── 窗口不够宽、抽屉又开着：播放条收窄让位（宽度由 music-dock.js 写进 --md-bar-w），内容按紧凑档收 ───────── */
 #music-dock-root.md-squeeze .md-nx { visibility: hidden; flex-basis: 0; }
@@ -1704,8 +1691,6 @@ body.music-reduce-motion .mtst-layer { transition: none; }
     radial-gradient(420px 360px at 100% 0%, color-mix(in srgb, var(--md-accent) 14%, transparent), transparent 70%),
     linear-gradient(to left, var(--md-dr-glass, var(--md-glass)) 0, var(--md-dr-glass, var(--md-glass)) var(--md-dr-tint, 46%), transparent 100%);
 }
-#music-dock-root { --md-dr-glass: rgba(40, 40, 45, .88); }
-body.light-theme #music-dock-root { --md-dr-glass: rgba(252, 252, 253, .92); }
 /* 窄窗里抽屉铺满整个宽度，内容贴着左边：底色也要铺满（标准档的 480px 宽度在这里不适用），
    也不能从右往左淡出，否则左边一列的设置项文字压在舞台的曲目卡片和切换条上。 */
 @media (max-width: 639.98px) {
@@ -1717,13 +1702,42 @@ body.light-theme #music-dock-root { --md-dr-glass: rgba(252, 252, 253, .92); }
       var(--md-dr-glass, var(--md-glass));
   }
 }
+/* 阵列曲库的抽屉沿用左侧目录的纸色和透明过渡，留出背景唱片的轮廓。 */
+body.music-archive-on:not(.music-stage-active) #music-dock-root .md-drbg {
+  top: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body.music-archive-on:not(.music-stage-active) #music-dock-root .md-drbg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to left,
+    rgba(var(--ar-paper-rgb), .92),
+    rgba(var(--ar-paper-rgb), .85) var(--md-dr-tint, 60%),
+    transparent);
+  /* 上沿穿过透明标题栏渐入，外层遮罩仍负责侧边和右下角。 */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 76px);
+  mask-image: linear-gradient(to bottom, transparent, #000 76px);
+}
+/* 和歌词栏的纸色交叠，延长抽屉左侧的渐隐。 */
+body.music-archive-on:not(.music-stage-active):has(.archive-hud.beside-drawer.lyrics-open) #music-dock-root .md-drbg {
+  --md-dr-solid: 74%;
+  --md-dr-tint: 76%;
+}
+@media (max-width: 639.98px) {
+  body.music-archive-on:not(.music-stage-active) #music-dock-root .md-drbg::before {
+    background: rgba(var(--ar-paper-rgb), .92);
+  }
+}
 #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 0 10px 1px rgba(255, 255, 255, .35); }
 #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 0 14px 3px rgba(255, 255, 255, .5); }
-body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button { box-shadow: 0 2px 10px rgba(40, 30, 20, .16), 0 0 0 .5px rgba(40, 30, 20, .06); }
-body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 3px 14px rgba(40, 30, 20, .22), 0 0 0 .5px rgba(40, 30, 20, .08); }
+#music-dock-root.md-light.md-fl-on .md-hdl.md-open button { box-shadow: 0 2px 10px rgba(40, 30, 20, .16), 0 0 0 .5px rgba(40, 30, 20, .06); }
+#music-dock-root.md-light.md-fl-on .md-hdl.md-open button:hover { box-shadow: 0 3px 14px rgba(40, 30, 20, .22), 0 0 0 .5px rgba(40, 30, 20, .08); }
 
 /* ───────── 快捷行长在播放条右端 ─────────
- * 条上右边只留一个「更多」；循环、播放列表、歌词舞台、音效、音量都在它上方那一团里，
+ * 条上右边是歌词舞台和「更多」；循环、播放列表、喜欢、音效、音量都在「更多」上方，
  * 指针停在「更多」上就从条里长出来。靠右对齐，音量在最右，音量水滴从它头顶接着往上长。 */
 .md-quick { left: auto; right: 34px; }
 .md-quick-in { padding-bottom: 20px; }
@@ -1732,6 +1746,8 @@ body.light-theme #music-dock-root.md-fl-on .md-hdl.md-open button:hover { box-sh
 #music-dock-root .md-quick-g .md-slot:hover,
 #music-dock-root .md-quick-g .md-slot.md-on,
 #music-dock-root .md-quick-g .md-slot:focus-visible { opacity: 1; }
+#music-dock-root .md-quick-g .md-like[hidden] { display: none; }
+#music-dock-root .md-stage-slot.md-on,
 #music-dock-root .md-more.md-on { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }
 
 /* 队列页顶上「播放过的」：比接下来要放的淡一些，悬停时恢复 */

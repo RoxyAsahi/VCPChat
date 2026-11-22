@@ -332,15 +332,13 @@
     // 指针离开这一排就淡掉。只加一个装饰元素，不改按钮本身的样子。
     const TRAILS = [
         { row: '.archive-nav', item: '.archive-nav > button', key: 'archive-nav', pad: 14 },
-        { row: '.archive-callout-acts', item: '.archive-callout-acts > button', key: 'archive-acts', pad: 18 },
+        { row: '.music-stage-mode-switcher', item: '.music-stage-mode-switcher > .music-stage-mode-button', key: 'stage-tabs', pad: 0 },
         { row: '.archive-empty', item: '.archive-empty > button', key: 'archive-empty', axis: 'xy', pad: 12 },
-        { row: '.archive-list-spacer', item: '.archive-list-row', key: 'archive-list', axis: 'y', pad: -4 },
         { row: '#music-dock-root .md-ql', item: '#music-dock-root .md-qi', key: 'md-queue', axis: 'y', pad: 0 },
         { row: '#modal-song-list', item: '#modal-song-list > .music-modal-song-item', key: 'pl-songs', axis: 'xy', pad: 0 },
         { row: '.webdav-file-list', item: '.webdav-file-list > .webdav-file-item', key: 'dav-files', axis: 'xy', pad: 0 },
         { row: '.webdav-server-list', item: '.webdav-server-list > .webdav-server-item', key: 'dav-servers', axis: 'xy', pad: 0 },
         { row: '.archive-lyrics-track', item: '.archive-lyrics-track > p', key: 'ar-lyrics', axis: 'xy', pad: 0 },
-        { row: '.archive-detail-more', item: '.archive-detail-more li > button', key: 'ar-more', axis: 'xy', pad: 0 },
         { row: '#music-dock-root .md-quick-g', item: '#music-dock-root .md-quick-g > .md-slot', key: 'md-quick', pad: 0 },
         { row: '#music-dock-root .md-slots', item: '#music-dock-root .md-slots > .md-slot', key: 'md-slots', pad: 0 },
         // 子菜单嵌在「加入歌单」那一项里面，要排在主菜单前面先认
@@ -348,10 +346,6 @@
         { row: '.context-menu', item: '.context-menu > .context-menu-item', key: 'ctx-menu', axis: 'y', pad: 0 },
         { row: '.archive-batch-menu', item: '.archive-batch-menu > button', key: 'ar-batch', axis: 'y', pad: 0 },
         { row: '.archive-list-sort-menu', item: '.archive-list-sort-menu > button', key: 'ar-sort', axis: 'y', pad: 0 },
-        // 单独一个按钮（solo）：那一排是一大块，指针离开按钮就淡掉，不等离开整块
-        { row: '.archive-brand', item: '.archive-brand > .archive-brand-play', key: 'ar-brand', axis: 'xy', pad: 10, solo: true },
-        { row: '.archive-detail', item: '.archive-detail > .archive-detail-back', key: 'ar-back', axis: 'xy', pad: 10, solo: true },
-        { row: '.archive-callout', item: '.archive-callout > .archive-file-title', key: 'ar-ftitle', axis: 'xy', pad: 8, solo: true },
     ];
     const watchTrails = () => {
         const doc = global.document;
@@ -473,78 +467,17 @@
         new global.MutationObserver(scan).observe(doc.body, { childList: true });
     };
 
-    /* 档案页用方向键选歌、换组时，底部对应的 ↑ ↓ ← → 按钮跟着被「按」一下：朝那个方向轻推再弹回，
-     * 让键盘操作在屏幕上也有手感。只在档案页真的处理了这个键（preventDefault）之后才推。 */
-    const watchArrows = () => {
-        const doc = global.document;
-        const ACTS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
-        doc.addEventListener('keydown', (e) => {
-            const act = ACTS[e.key];
-            if (!act || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !enabled()) return;
-            global.setTimeout(() => {
-                if (!e.defaultPrevented) return;
-                const view = doc.getElementById('music-archive-view');
-                if (!view || view.hidden || doc.body.classList.contains('music-stage-active')) return;
-                if (e.target?.closest?.('.archive-list, .context-menu, .archive-batch-menu, .archive-list-sort-menu')) return;
-                const btn = view.querySelector(`.archive-bottom button[data-act="${act}"]`);
-                if (!btn) return;
-                btn.classList.remove('mf-nudge');
-                void btn.offsetWidth;
-                btn.classList.add('mf-nudge');
-            }, 0);
-        });
-        doc.addEventListener('animationend', (e) => { if (e.animationName === 'mf-nudge') e.target.classList.remove('mf-nudge'); });
-    };
-
-    /* 档案页的曲目详情卡：进出时整块在淡入淡出、往上浮，卡片背后的模糊（backdrop-filter）每一帧都要对整块背景重算，
-     * 慢机器上这段会掉到十几帧。卡片底色本来就九成不透明，模糊只透出一成，所以动的时候先不模糊，停稳以后再加上；
-     * 收起时一开始就去掉。看起来几乎没有差别，动画却不用每帧重算模糊。 */
-    const watchDetail = () => {
-        const doc = global.document;
-        if (typeof global.MutationObserver !== 'function') return;
-        let tries = 0, timer = 0;
-        const attach = () => {
-            const view = doc.getElementById('music-archive-view');
-            const card = view?.querySelector('.archive-detail-card');
-            if (!card) { if (++tries < 60) global.setTimeout(attach, 500); return; }
-            let open = view.classList.contains('is-detail');
-            const settle = () => { global.clearTimeout(timer); timer = 0; if (view.classList.contains('is-detail')) view.classList.add('mf-detail-still'); };
-            if (open) view.classList.add('mf-detail-still');
-            card.addEventListener('transitionend', (e) => { if (e.target === card && e.propertyName === 'transform') settle(); });
-            new global.MutationObserver(() => {
-                const now = view.classList.contains('is-detail');
-                if (now === open) return;
-                open = now;
-                view.classList.remove('mf-detail-still');
-                global.clearTimeout(timer);
-                // 过渡是 .3s 延迟 + .6s；万一没收到 transitionend（降低动态时没有过渡），到点也补上
-                if (now) timer = global.setTimeout(settle, 1000);
-            }).observe(view, { attributes: true, attributeFilter: ['class'] });
-        };
-        attach();
-    };
-
     /* 首页目录开合（.archive-hud.list-open）：布局由档案页一次切到终态，这里用 FLIP 把这一下变成连续的移动——
      * 按下的那一刻先记住各块的位置和大小，类名换完以后量一次新位置，再用 transform 从旧位置补间回来。
      * 每帧只动 transform 和 opacity，不碰排版；整个过程只排版两次（按下前、换完后）。
      * 新出现的块（目录本身）从左边淡入滑进来；消失的块不做（已经 display:none）。 */
     // s：要跟的块；font：字号会变的（按新旧字号比 scale，不按宽度）；in：嵌在哪个也在动的块里（减掉外层的位移，免得算两遍）
     const HUD_FLIP = [
-        { s: '.archive-brand' },
-        { s: '.archive-brand h1', in: '.archive-brand', font: true },
-        { s: '.archive-brand > div', in: '.archive-brand', font: true },
-        { s: '.archive-brand-play', in: '.archive-brand' },
-        { s: '.archive-brand-resume', in: '.archive-brand' },
         { s: '.archive-counter', in: '.archive-bottom' },
-        { s: '.archive-callout' },
         { s: '.archive-nav' },
         { s: '.archive-bottom' },
         { s: '.archive-list' },
         { s: '.archive-list-foot', in: '.archive-list' },
-        { s: '.archive-cover', in: '.archive-callout' },
-        { s: '.archive-detail' },
-        { s: '.archive-rows', in: '.archive-bottom' },
-        { s: '.archive-lanes', in: '.archive-bottom' },
         { s: '.archive-footer', in: '.archive-bottom' }
     ];
     const watchHud = () => {
@@ -616,7 +549,7 @@
         attach();
     };
 
-    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchArrows(); watchDetail(); watchHud(); };
+    const start = () => { watchDialogs(); watchMenus(); watchNotices(); watchTrails(); watchToasts(); watchHud(); };
     if (global.document?.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
 

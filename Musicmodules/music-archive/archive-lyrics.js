@@ -45,7 +45,7 @@
         <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
     /*
-     * opts: { host, app, reducedMotion(), onChange(shown) }
+     * opts: { host, app, reducedMotion(), onChange() }
      * 返回 { el, sync(), tick(), setAllowed(on), destroy(), debug() }
      */
     const create = ({ host, app, reducedMotion = () => false, onChange = null }) => {
@@ -95,7 +95,7 @@
             el.hidden = !(on || state.none);
             if (on) { state.index = -2; tick(); }
             schedule();
-            onChange?.(on);
+            onChange?.();
         };
 
         /* 播放器换了歌词（或换了歌）就重建；有歌词才显示 */
@@ -114,6 +114,7 @@
             state.none = on;
             el.classList.toggle('none', on);
             el.hidden = !(state.shown || on);
+            onChange?.();
         };
         const wantNone = () => {
             const t = current();
@@ -172,10 +173,18 @@
             state.words = node;
         };
         const place = (animate = true) => {
-            const max = Math.max(0, (state.offsets[state.offsets.length - 1] || 0) - (r.viewport.clientHeight || 600) * 0.4);
-            const y = Math.max(0, Math.min(max + LINE_H_TR, state.shift + state.manual));
+            // 歌曲末尾保留一点渐隐空间，让前面的歌词填满余下的可视区域。
+            const max = Math.max(0, r.track.offsetHeight - r.viewport.clientHeight + 16);
+            const y = Math.max(0, Math.min(max, state.shift + state.manual));
             r.track.style.transition = !animate || reducedMotion() ? 'none' : '';
             r.track.style.transform = `translateY(${-y}px)`;
+        };
+        const updateShift = () => {
+            const y = state.offsets[state.index] || 0;
+            const height = r.viewport.clientHeight;
+            const row = r.track.children[state.index];
+            const rowBottom = row ? row.offsetTop + row.offsetHeight : 0;
+            state.shift = Math.max(0, y - height * ANCHOR, rowBottom - height + 16);
         };
         const tick = () => {
             if (!state.shown) return;
@@ -188,13 +197,20 @@
                 state.index = k;
                 const node = k >= 0 ? r.track.children[k] : null;
                 node?.classList.add('on');
-                const h = r.viewport.clientHeight || 600;
-                const y = k >= 0 ? state.offsets[k] : 0;
-                state.shift = Math.max(0, y - h * ANCHOR);
+                updateShift();
                 if (!state.manualTimer) place();
             }
             paintWords(t);
         };
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (!state.shown) return;
+            const previousShift = state.shift;
+            updateShift();
+            if (state.manualTimer) state.manual += previousShift - state.shift;
+            place(false);
+        });
+        resizeObserver.observe(r.viewport);
 
         // 滚轮自己翻歌词：先不跟随，停手 3 秒后滑回正在唱的那一行（不让档案页把滚轮当成切歌）
         r.viewport.addEventListener('wheel', (e) => {
@@ -246,7 +262,7 @@
             tick,
             setAllowed: (on) => { state.allowed = Boolean(on); sync(); },
             get shown() { return state.shown; },
-            destroy: () => { if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.manualTimer); el.remove(); },
+            destroy: () => { resizeObserver.disconnect(); if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.manualTimer); el.remove(); },
             debug: () => ({ shown: state.shown, none: state.none, lines: state.lines.length, index: state.index, ticking: Boolean(state.timer) })
         };
     };

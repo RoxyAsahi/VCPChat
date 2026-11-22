@@ -45,7 +45,7 @@
     flex-basis: auto;
     gap: 0;
     padding: 0 6px;
-    border: 1px solid var(--ms-glass-edge);
+    border: 0;
     border-radius: 2px;
     background: var(--ms-glass);
     box-shadow: none;
@@ -88,30 +88,20 @@
     transition: color var(--mt-dur-1) var(--mt-ease-std);
 }
 
-.music-stage-mode-switcher .music-stage-mode-button::after {
-    content: "";
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 0;
-    height: 3px;
-    background: var(--ms-ink);
-    transform: scaleX(0);
-    transition: transform var(--mt-dur-2) var(--mt-ease);
+/* 沿用曲库顶栏的圆角悬停层，舞台主题决定底色的明暗。 */
+.music-stage-mode-switcher {
+    --mf-trail-h: 30px;
+    --mf-hover: color-mix(in srgb, var(--ms-ink) 7%, transparent);
 }
 
-.music-stage-mode-switcher .music-stage-mode-button:hover {
-    color: var(--ms-ink);
-    background: transparent;
+.music-stage-mode-switcher .music-stage-mode-button:is(:hover, :focus-visible) {
+    color: color-mix(in srgb, var(--mf-tint) 48%, var(--ms-ink));
 }
 
-.music-stage-mode-switcher .music-stage-mode-button.is-active {
+.music-stage-mode-switcher .music-stage-mode-button.is-active,
+.music-stage-mode-switcher:is(:hover, :focus-within) .music-stage-mode-button.is-active {
     color: var(--ms-ink);
     font-weight: 650;
-}
-
-.music-stage-mode-switcher .music-stage-mode-button.is-active::after {
-    transform: scaleX(1);
 }
 
 .music-stage-mode-switcher .music-stage-mode-button:focus-visible {
@@ -532,11 +522,6 @@ body.music-dock-on .music-stage .music-stage-chrome {
     outline-offset: -2px;
 }
 
-/* 降低动态：读 music-motion.js 挂的 body 类 */
-body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button::after {
-    transition: none;
-}
-
 /* ---------- 窄窗口 ---------- */
 @media (max-width: 900px) {
     .music-stage-wordmark {
@@ -570,16 +555,6 @@ body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button::af
     .music-stage-track-title {
         font-size: 18px;
     }
-}
-
-/* ---------- 标题栏里的舞台开关：单色实心点，不再发金光 ---------- */
-.stage-toggle-btn.is-active,
-body.music-stage-active #custom-title-bar #stage-toggle-btn {
-    color: var(--ms-ink);
-}
-
-.stage-toggle-btn.is-active .stage-toggle-orbit {
-    box-shadow: none;
 }
 
 /* ---------- 镜台遮幅条接上标题栏 ----------

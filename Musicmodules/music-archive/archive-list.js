@@ -25,13 +25,21 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const TEMPLATE = `
-        <label class="archive-list-search">
-            <span class="archive-glyph-search" aria-hidden="true"></span>
-            <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目">
-            <span class="archive-key" aria-hidden="true">/</span>
-            <button type="button" class="archive-list-clear" data-l="clear" aria-label="清除检索" title="清除检索（Esc）"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-            <div class="archive-list-recentq mf-glass" data-l="recentQ" role="listbox" aria-label="最近检索" hidden></div>
-        </label>
+        <div class="archive-list-toolbar">
+            <label class="archive-list-search">
+                <span class="archive-glyph-search" aria-hidden="true"></span>
+                <input type="search" data-l="input" placeholder="标题、歌手、专辑、拼音首字母" autocomplete="off" spellcheck="false" aria-label="检索曲目" aria-keyshortcuts="/">
+                <button type="button" class="archive-list-clear" data-l="clear" aria-label="清除检索" title="清除检索（Esc）"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                <div class="archive-list-recentq mf-glass" data-l="recentQ" role="listbox" aria-label="最近检索" hidden></div>
+            </label>
+            <div class="archive-list-import" data-l="importTools">
+                <button type="button" class="archive-list-import-toggle" data-l="importToggle" aria-label="导入音乐" title="导入音乐" aria-expanded="false" aria-controls="archive-list-import-options"><span aria-hidden="true">+</span></button>
+                <div class="archive-list-import-options mf-glass" data-l="importOptions" id="archive-list-import-options" role="group" aria-label="导入方式" hidden>
+                    <button type="button" data-act="add-local">添加本地文件夹</button>
+                    <button type="button" data-act="add-cloud">从 WebDAV 导入</button>
+                </div>
+            </div>
+        </div>
         <div class="archive-list-kinds" role="tablist" data-l="kinds">
             ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="按${zh === '全部' ? '曲名' : zh}浏览">${zh}</button>`).join('')}
             <span class="archive-list-sort">
@@ -771,6 +779,34 @@
             return { name, items };
         };
 
+        const closeImport = () => {
+            r.importOptions.hidden = true;
+            r.importToggle.setAttribute('aria-expanded', 'false');
+        };
+        r.importToggle.addEventListener('click', () => {
+            if (!r.importOptions.hidden) {
+                closeImport();
+                return;
+            }
+            r.importOptions.hidden = false;
+            r.importToggle.setAttribute('aria-expanded', 'true');
+            r.importOptions.querySelector('button').focus();
+        });
+        r.importTools.addEventListener('focusout', (e) => {
+            if (!r.importTools.contains(e.relatedTarget)) closeImport();
+        });
+        r.importTools.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || r.importOptions.hidden) return;
+            e.preventDefault();
+            r.importToggle.focus();
+            closeImport();
+        });
+        r.importOptions.addEventListener('click', (e) => {
+            if (!e.target.closest('[data-act]')) return;
+            r.importToggle.focus();
+            closeImport();
+        });
+
         // ---------- 输入 ----------
         let typeTimer = 0;
         r.input.addEventListener('input', () => {
@@ -933,8 +969,8 @@
                 e.stopPropagation();
                 clearMulti();
                 pickRow(k);
-                if (row.i === state.playing) { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
-                else play(row.i, row.ctx, { stage: false, group: groupOf(k) });
+                if (row.i === app.currentTrackIndex && (app.isPlaying || app.playIntent)) app.pauseTrack?.();
+                else play(row.i, row.ctx, { resume: true, group: groupOf(k) });
                 return;
             }
             clickRow(Number(node.dataset.k), e);

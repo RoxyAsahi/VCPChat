@@ -16,7 +16,6 @@
     const DESIGN_W = 1920, DESIGN_H = 1080;
     // 窗口再矮，界面也不缩到这个比例以下（小字 11px 缩完还有 10px 左右）；矮窗口改成少显示，不是缩小
     const MIN_SCALE = 0.9;
-    const TICKS = 12;
     const SCRIPT_BASE = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
@@ -31,51 +30,14 @@
         <div class="archive-atmos" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
         <div class="archive-hud" data-ref="hud">
-            <header class="archive-brand"><h1 data-ref="ctxName">曲库</h1><div data-ref="ctxSub"></div><button type="button" class="archive-brand-play" data-act="play-col" data-ref="playCol">播放这一组 <span aria-hidden="true">→</span></button><button type="button" class="archive-brand-resume" data-act="resume" data-ref="resume" hidden><span data-ref="resumeLabel">接着听</span> <b data-ref="resumeName"></b> <span data-ref="resumeAt"></span></button></header>
-            <nav class="archive-nav">
+            <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
-                <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="歌词面板（选好歌播放后自动打开，浏览别的歌时收起）" aria-pressed="false">歌词</button>
+                <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
-            <div class="archive-callout">
-                <div class="archive-eyebrow"><span data-ref="cat"></span><span data-ref="catPos"></span></div>
-                <button type="button" class="archive-file-title" data-act="open-detail" title="查看曲目详情"><span data-ref="ftitle"></span><span class="archive-file-open" aria-hidden="true">↗</span></button>
-                <div class="archive-rule"><i></i></div>
-                <div class="archive-summary"><span data-ref="fmeta"></span><span data-ref="fspec"></span></div>
-                <div class="archive-callout-acts"><button type="button" class="archive-access" data-act="access" data-ref="access" title="播放并进入歌词舞台（回车）">播放 <span aria-hidden="true">→</span></button><button type="button" class="archive-more" data-act="open-detail">详情 <span aria-hidden="true">↗</span></button></div>
-                <div class="archive-cover" data-ref="cover" data-act="open-detail" title="查看曲目详情" aria-hidden="true"></div>
-            </div>
-            <section class="archive-detail" data-ref="detail" role="dialog" aria-label="曲目详情" aria-hidden="true" inert>
-                <button type="button" class="archive-detail-back" data-act="detail-close">← 返回曲库 <span class="archive-key">Esc</span></button>
-                <div class="archive-detail-card">
-                    <div class="archive-detail-head"><b data-ref="dNo"></b><span data-ref="dWhere"></span><span data-ref="dSpec" class="archive-detail-spec"></span></div>
-                    <div class="archive-detail-album" data-ref="dAlbum"></div>
-                    <div class="archive-detail-titlerow"><h2 data-ref="dTitle"></h2><button type="button" class="archive-detail-like" data-act="d-like" data-ref="dLike" aria-pressed="false" title="喜欢" aria-label="喜欢" hidden><span aria-hidden="true">♡</span></button></div>
-                    <div class="archive-detail-artist" data-ref="dArtist"></div>
-                    <div class="archive-detail-actions">
-                        <button type="button" class="is-primary" data-act="d-play" data-ref="dPlay"><i aria-hidden="true">▶</i><span data-ref="dPlayText">播放</span></button>
-                        <button type="button" data-act="d-next"><i aria-hidden="true">▷</i>下一首播放</button>
-                        <button type="button" data-act="d-queue"><i aria-hidden="true">＋</i>加入队列</button>
-                        <button type="button" data-act="d-playlist"><i aria-hidden="true">＋</i>加入歌单</button>
-                        <button type="button" data-act="d-artist" data-ref="dArtistBtn"><i aria-hidden="true">↗</i>这位歌手的歌</button>
-                        <button type="button" data-act="d-lyrics"><i aria-hidden="true">≡</i>获取歌词</button>
-                    </div>
-                    <dl class="archive-detail-meta">
-                        <div><dt>专辑</dt><dd data-ref="dAlbum2"></dd></div>
-                        <div><dt>时长</dt><dd data-ref="dDur"></dd></div>
-                        <div><dt>格式</dt><dd data-ref="dFmt"></dd></div>
-                        <div><dt>所在分组</dt><dd data-ref="dGroup"></dd></div>
-                        <div class="wide"><dt>文件位置</dt><dd data-ref="dPath"></dd></div>
-                    </dl>
-                    <div class="archive-detail-more" data-ref="dMoreWrap">
-                        <div class="archive-detail-more-head" data-ref="dMoreHead">同专辑</div>
-                        <ol data-ref="dMore"></ol>
-                    </div>
-                </div>
-            </section>
             <div class="archive-empty" role="status">
                 <h2 data-ref="emptyTitle">曲库是空的</h2>
                 <p data-ref="emptyText"></p>
@@ -85,9 +47,6 @@
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
-                <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks" role="slider" aria-label="在这一列里的位置（可拖动）"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
-                <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>分组 <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
-                <div class="archive-hint">← → 切换分组 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> 回车 播放 <span>／</span> 点中间的卡 看详情 <span>／</span> 直接打字检索</div>
                 <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
@@ -127,7 +86,6 @@
             destroyed: false,
             coverCache: new Map(),
             dirCovers: new Map(),
-            coverTimer: 0,
             playingKey: '',
             dataRefs: { playlist: null, length: -1, playlists: null, plSig: '' }
         };
@@ -206,7 +164,7 @@
             applyEmpty();
             refs.files.textContent = String(tracks().length);
             if (firstData && !pendingPlace && !placed) { placeSettled = true; followUntil.t = performance.now() + 4000; }
-            renderHud(true);
+            renderHud();
             updatePlaying(true);
             // 大曲库分片重建时，目录（两万行的分组和排序）放到下一片再排
             if (laterList && list) { clearTimeout(listTimer); listTimer = setTimeout(() => { listTimer = 0; if (state.destroyed) return; list.rebuild({ steady }); syncList(steady); }, 0); }
@@ -395,63 +353,7 @@
             });
         };
 
-        /*
-         * 位置条：刻度均匀铺满整列（歌多于 12 首时每格代表一段），竖线游标停在当前位置；
-         * 可以点、可以拖，拖的时候游标上方显示首字母和第几首。
-         */
-        const ticksReady = () => {
-            if (refs.ticks.dataset.ready) return;
-            refs.ticks.dataset.ready = '1';
-            refs.ticks.innerHTML = Array.from({ length: TICKS }, () => '<span></span>').join('')
-                + '<i class="archive-ticks-cursor"></i><b class="archive-ticks-tip" aria-hidden="true"></b>';
-        };
-        const tickTip = (r) => {
-            const col = column();
-            const index = col ? col.items[r] : -1;
-            const g = index >= 0 && searchIndex ? searchIndex.group(index) : '';
-            const letter = g ? (IndexLib.groupName(g) || g) : '';
-            return (letter ? letter + ' · ' : '') + pad(r + 1, 3);
-        };
-        /* 位置条上的流体小滴：底栏的通用模块在时才用，没有就还是竖线游标 */
-        let tickMarker = null;
-        let tickDropAt = null;
-        const tickDrop = () => {
-            if (tickMarker || typeof global.createMusicFluidMarker !== 'function') return tickMarker;
-            tickMarker = global.createMusicFluidMarker(refs.ticks, { axis: 'x', thickness: 7, align: 'center' });
-            if (tickMarker) refs.ticks.classList.add('has-drop');
-            return tickMarker;
-        };
-        const renderTicks = (count, current) => {
-            ticksReady();
-            const n = Math.min(count, TICKS);
-            const frac = count > 1 ? current / (count - 1) : 0;
-            const nearest = n > 1 ? Math.round(frac * (n - 1)) : 0;
-            const marks = refs.ticks.querySelectorAll('span');
-            marks.forEach((m, i) => {
-                const shown = i < n;
-                m.hidden = !shown;
-                if (!shown) return;
-                m.style.left = `calc(${n > 1 ? i / (n - 1) : 0} * (100% - 14px))`;
-                m.classList.toggle('on', i === nearest);
-            });
-            refs.ticks.style.setProperty('--pos', String(frac));
-            // 流体小滴（有底栏的流体标记模块时）：停在当前位置，离得越远的刻度越淡
-            const drop = tickDrop();
-            if (drop) {
-                const w = refs.ticks.clientWidth || 300;
-                const x = frac * (w - 14) + 7;
-                // 位置没变就不叫它（每叫一次它都会排一帧）
-                if (tickDropAt !== x) { tickDropAt = x; drop.moveTo({ start: x - 7, end: x + 7 }); }
-                marks.forEach((m, i) => { if (i < n) m.dataset.mdDist = String(Math.min(4, Math.abs(i - nearest))); });
-            }
-            refs.ticks.setAttribute('aria-valuemin', '1');
-            refs.ticks.setAttribute('aria-valuemax', String(Math.max(1, count)));
-            refs.ticks.setAttribute('aria-valuenow', String(count ? current + 1 : 0));
-            refs.ticks.querySelector('.archive-ticks-tip').textContent = count ? tickTip(current) : '';
-        };
-
-        let searchCtx = null;   // 目录检索中：{ q, n }
-        const renderHud = (force = false) => {
+        const renderHud = () => {
             const col = column();
             if (!col) return;
             const count = col.items.length;
@@ -459,58 +361,14 @@
             const index = selectedIndex();
             const t = tracks()[index];
             state.selPath = t ? t.path : null;
-            refs.cat.textContent = col.name;
-            refs.catPos.textContent = count ? '第 ' + (r + 1) + ' / ' + count + ' 首' : '';
-            refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
-            // 标题被省略号截断时，悬停能看到完整曲名
-            refs.ftitle.title = t ? refs.ftitle.textContent : '';
-            const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
-            // 空列：告诉人下一步怎么做
-            const idle = col.kind === 'search' ? 'Esc 清除检索' : col.kind === 'playlist' ? '在曲目上右键 → 加入歌单' : '';
-            refs.fmeta.textContent = t ? (meta || '未知歌手') : idle;
-            refs.fspec.textContent = t ? [fmtDur(trackDuration(t)), (formatOf(t).split(' · ')[0] || '')].filter(Boolean).join(' · ') : '';
-            // 按首字母拆开的列，大标题还是「全部曲目」，下面一行写明「首字母 H」，免得把「H · 23 首」读成全部只有 23 首
-            const letterCol = col.kind === 'letter';
-            if (searchCtx) {
-                // 目录里在检索：左上写检索词和结果数，免得看着「全部曲目」以为没在搜
-                // 检索词太长时在引号里面截断，右引号总在
-                refs.ctxName.textContent = '';
-                const qEl = document.createElement('span');
-                qEl.className = 'archive-brand-q';
-                qEl.textContent = searchCtx.q;
-                refs.ctxName.append('检索「', qEl, '」');
-                refs.ctxSub.textContent = searchCtx.n ? searchCtx.n + ' 首结果 · 曲库共 ' + tracks().length + ' 首' : '没有结果';
-            } else if (!tracks().length) {
-                // 空曲库：左上不写「全部曲目 · 0 首」，下面的空状态说明会告诉人怎么加歌
-                refs.ctxName.textContent = '曲库';
-                refs.ctxSub.textContent = '还没有歌曲';
-            } else if (groupCtx()) {
-                // 目录切到「歌手」或没有专辑列的「专辑」：阵列没有对应的列停在原处，左上至少跟着目录说分类，
-                // 不再写「全部曲目 · 首字母 H」，跟「为你」切过去时标题会变一样
-                const g = groupCtx();
-                refs.ctxName.textContent = g.name;
-                refs.ctxSub.textContent = g.n + ' ' + g.unit + ' · 曲库共 ' + tracks().length + ' 首';
-            } else {
-                refs.ctxName.textContent = letterCol ? '全部曲目' : col.name;
-                refs.ctxSub.textContent = (letterCol ? '首字母 ' + col.name + ' · ' : '') + count + ' 首' + (count !== tracks().length ? ' · 曲库共 ' + tracks().length + ' 首' : '');
-            }
-            refs.playCol.disabled = !count;
-            // 左上写的是目录分类（歌手/专辑）时，「播放这一组」放的却是阵列当前列，容易误会，先收起
-            refs.playCol.hidden = Boolean(searchCtx || groupCtx());
-            renderResume();
+            const hasTrack = Boolean(t);
+            const layoutChanged = refs.hud.classList.contains('has-track') !== hasTrack;
+            refs.hud.classList.toggle('has-track', hasTrack);
+            if (layoutChanged) syncSceneLayout();
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
-            const lanes = state.columns.length;
-            const laneDigits = Math.max(2, String(lanes).length);
-            rollTo(refs.colN, pad(Model.wrap(state.lane, lanes) + 1, laneDigits));
-            refs.colT.textContent = pad(lanes, laneDigits);
-            refs.colName.textContent = col.name;
-            renderTicks(count, r);
-            refs.access.classList.toggle('is-playing', Boolean(t) && index === app.currentTrackIndex && app.isPlaying);
-            refs.access.disabled = !t;
-            scheduleCover(t, force);
-            renderDetail();
+            syncCard();
         };
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
@@ -524,7 +382,7 @@
         /*
          * 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首。
          * 曲库里带了封面（内嵌封面扫描时已存成文件）就用它；没有的话试同目录下常见的封面图（cover / folder / front），
-         * 每个目录只试一次。图片缓存最多 64 张、目录结果最多 256 条；读不出来的就不显示（露出后面的阵列），不留破图。
+         * 每个目录只试一次。图片缓存最多 64 张、目录结果最多 256 条；读不出来的就保留写有曲名的卡面。
          */
         const COVER_NAMES = ['cover.jpg', 'folder.jpg', 'cover.png', 'front.jpg', 'folder.png', 'Cover.jpg', 'Folder.jpg'];
         const dirOf = (t) => {
@@ -538,28 +396,6 @@
             if (map.size > max) map.delete(map.keys().next().value);
             return value;
         };
-        /* 取出详情的卡面贴图不直接用原图：几千像素的内嵌封面一旦画进贴图，解码后的整张图（一张几十 MB）会跟着
-           缓存里的图片对象一直留着。改成在后台缩成最长边 512 的画布（卡面贴图就是 512）再交给场景，
-           原图对象只留着没解码的文件数据。只在取出详情时才缩，平时翻歌不多花解码 */
-        const COVER_MAX = 512;
-        const smallCover = (entry) => {
-            if (entry.small) return Promise.resolve(entry.small);
-            const img = entry.img;
-            const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
-            if (Math.max(w, h) <= COVER_MAX || typeof global.createImageBitmap !== 'function') return Promise.resolve(img);
-            if (entry.shrinking) return entry.shrinking;
-            const k = COVER_MAX / Math.max(w, h);
-            const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
-            entry.shrinking = global.createImageBitmap(img, { resizeWidth: cw, resizeHeight: ch, resizeQuality: 'high' }).then((bmp) => {
-                const c = document.createElement('canvas');
-                c.width = cw; c.height = ch;
-                c.getContext('2d').drawImage(bmp, 0, 0);
-                bmp.close?.();
-                entry.small = c; entry.shrinking = null;
-                return c;
-            }).catch(() => { entry.shrinking = null; return img; }); // 缩不了就用原图
-            return entry.shrinking;
-        };
         const probeDir = (dir) => {
             const entry = capped(state.dirCovers, dir, { url: null }, 256);
             let k = 0;
@@ -572,7 +408,7 @@
                     entry.url = url;
                     capped(state.coverCache, url, { img, ok: true }, 64);
                     const t = selectedTrack();
-                    if (t && !t.albumArt && dirOf(t) === dir) scheduleCover(t, true);
+                    if (t && !t.albumArt && dirOf(t) === dir) syncCard();
                 };
                 img.onerror = next;
                 img.src = url;
@@ -594,49 +430,42 @@
             const img = new Image();
             img.decoding = 'async';
             const entry = { img, ok: null };
-            img.onload = () => { entry.ok = true; };
+            img.onload = () => {
+                entry.ok = true;
+                if (coverOf(selectedTrack()) === url) syncCard();
+            };
             img.onerror = () => { entry.ok = false; };
             img.src = url;
             capped(state.coverCache, url, entry, 64);
         };
-        const scheduleCover = (t, immediate) => {
-            clearTimeout(state.coverTimer);
-            const url = coverOf(t);
-            // 还是同一张、已经显示着：不动它（曲库重建时会重画说明块，封面不该跟着闪）
-            if (url && refs.cover.dataset.url === url && refs.cover.dataset.state === 'ready') return;
-            refs.cover.dataset.url = '';
-            refs.cover.classList.remove('on');
-            refs.cover.dataset.state = url ? 'loading' : 'none';
-            if (!url) refs.cover.style.backgroundImage = '';
-            state.coverTimer = setTimeout(() => {
-                if (!url) { coverOf(t, true); return; } // 没有自带封面：停稳后才去试同目录的图
-                preload(url);
-                const entry = state.coverCache.get(url);
-                const show = () => {
-                    if (coverOf(selectedTrack()) !== url) return;
-                    refs.cover.style.backgroundImage = `url("${url}")`;
-                    refs.cover.classList.add('on');
-                    refs.cover.dataset.state = 'ready';
-                    refs.cover.dataset.url = url;
-                };
-                const fail = () => {
-                    if (coverOf(selectedTrack()) !== url) return;
-                    refs.cover.style.backgroundImage = '';
-                    refs.cover.dataset.state = 'failed';
-                };
-                if (entry.ok) show();
-                else if (entry.ok === false) fail();
-                else { entry.img.addEventListener('load', show, { once: true }); entry.img.addEventListener('error', fail, { once: true }); }
-                const col = column();
-                if (col && col.items.length > 1) {
-                    for (const d of [-2, -1, 1, 2]) preload(coverOf(tracks()[Model.cellTrack(state.columns, state.lane, state.row + d)]));
-                }
-            }, immediate ? 0 : 120);
+        let cardExpanded = true;
+        let wheelBrowsing = false;
+        const syncCard = () => {
+            if (!state.scene || state.destroyed) return;
+            const t = selectedTrack();
+            const expanded = Boolean(t) && cardExpanded && !wheelBrowsing;
+            state.scene.setDetail(expanded);
+            kick();
+            if (!expanded) return;
+            const url = coverOf(t, true);
+            preload(url);
+            const entry = state.coverCache.get(url);
+            const title = Model.stripExtension(t.title) || '未知标题';
+            const artist = t.artist || '';
+            const specs = global.MusicTrackSpecs;
+            const format = specs?.format(t) || '';
+            const bitrate = specs?.bitrate(t) || '';
+            const key = JSON.stringify([t.path, title, artist, format, bitrate, entry?.ok ? url : '', document.body.classList.contains('light-theme')]);
+            state.scene.setCover(key, entry?.ok ? entry.img : null, { title, artist, format, bitrate });
+        };
+        const setCardExpanded = (on) => {
+            cardExpanded = on;
+            syncCard();
         };
 
         // ---------- 选中与播放 ----------
         /*
-         * 选中移动的速度：给外面的动效用（比如刻度上的小滴，快速滚动时拉长）。
+         * 选中移动的速度：供外部动效使用。
          * onMotion(fn) 每次换选中回调 fn({ axis: 'row' | 'lane', velocity, fraction })，
          * velocity 按最近 160ms 的移动估算（行或列/秒，有符号），fraction 是在这一列里的位置（0..1）。
          */
@@ -655,7 +484,6 @@
             const info = { axis, velocity: (axis === 'lane' ? sum[0] : sum[1]) / span, fraction: count > 1 ? Model.wrap(state.row, count) / (count - 1) : 0 };
             for (const fn of motionListeners) { try { fn(info); } catch (e) { /* 外面的动效出错不影响选中 */ } }
         };
-        motionListeners.add((m) => { if (tickMarker) tickMarker.setVelocity(m.axis === 'row' ? m.velocity : 0); });
         const select = (lane, row, { pulse = true } = {}) => {
             if (!state.columns.length) return;
             if (pendingPlace && tracks().length) settlePlace();
@@ -666,20 +494,18 @@
             state.row = row;
             emitMotion(dLane, dRow);
             refs.tip.classList.remove('on');
-            collapse();
             const col = column();
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
             syncList();
-            if (state.lyricsOn && selectedIndex() !== app.currentTrackIndex) wantLyrics(false);
             schedulePlace();
             kick();
         };
 
         /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
         const focusByColumn = new Map();
-        const stepLane = (dl) => {
+        const stepLane = (dl, opts) => {
             const n = state.columns.length;
             if (!n || !dl) return;
             const lane = state.lane + dl;
@@ -690,13 +516,8 @@
                 const m = col.items.length;
                 row = remembered + m * Math.round((state.row - remembered) / m);
             }
-            select(lane, row);
+            select(lane, row, opts);
         };
-        /*
-         * 取出（曲目详情）：点中间那张卡（或标题）把它从列里取出来，镜头推近，卡面显出封面，右侧是资料卡。
-         * 取出时 ↑ ↓ / 滚轮换前后一首（旧卡落回、新卡升起，详情留着），← → 或 Esc、点空白处放回去。
-         */
-        let detailOpen = false;
         const fmtDur = (sec) => {
             sec = Math.round(Number(sec) || 0);
             if (!(sec > 0)) return '';
@@ -704,177 +525,6 @@
             return (h ? h + ':' + pad(m) : String(m)) + ':' + pad(x);
         };
         const trackDuration = (t) => (Number(t && t.duration) > 0 ? Number(t.duration) : durationOf(t));
-        const formatOf = (t) => {
-            if (!t) return '';
-            const m = /\.([a-z0-9]{2,5})$/i.exec(String(t.path || ''));
-            const parts = [];
-            if (m) parts.push(m[1].toUpperCase());
-            const sr = Number(t.sampleRate || t.sample_rate);
-            if (sr > 0) parts.push((sr / 1000).toFixed(sr % 1000 ? 1 : 0) + ' kHz');
-            const bits = Number(t.bitsPerSample || t.bitDepth);
-            if (bits > 0) parts.push(bits + ' bit');
-            const br = Number(t.bitrate);
-            if (br > 0) parts.push(Math.round(br / 1000) + ' kbps');
-            return parts.join(' · ');
-        };
-        const sameAlbum = (t, index) => {
-            if (!t) return { head: '', items: [] };
-            const all = tracks();
-            const pick = (key, value) => {
-                const out = [];
-                for (let i = 0; i < all.length && out.length < 8; i++) if (i !== index && all[i] && all[i][key] === value) out.push(i);
-                return out;
-            };
-            if (t.album) { const items = pick('album', t.album); if (items.length) return { head: '同专辑', items }; }
-            if (t.artist) { const items = pick('artist', t.artist); if (items.length) return { head: '同一歌手', items }; }
-            return { head: '', items: [] };
-        };
-        // 跳到曲库里第 index 首：优先留在当前列，其次是离得近的列
-        const goToIndex = (index) => {
-            const n = state.columns.length;
-            if (!n) return;
-            const at = Model.locate(state.columns, index, Model.wrap(state.lane, n));
-            if (!at) return;
-            const lane = at.lane + n * Math.round((state.lane - at.lane) / n);
-            const m = state.columns[at.lane].items.length;
-            select(lane, at.row + m * Math.round((state.row - at.row) / m));
-        };
-        // 卡面封面：有图就用图，没有（或还没读到、读不出来）就画一张写着曲名的素色卡面
-        const syncDetailCover = () => {
-            if (!detailOpen || !state.scene) return;
-            const t = selectedTrack();
-            if (!t) return;
-            const url = coverOf(t);
-            const entry = url ? state.coverCache.get(url) : null;
-            if (entry && entry.ok) {
-                if (entry.small || Math.max(entry.img.naturalWidth || 0, entry.img.naturalHeight || 0) <= COVER_MAX || typeof global.createImageBitmap !== 'function') {
-                    state.scene.setCover(url, entry.small || entry.img); kick(); return;
-                }
-                // 大图：缩好之前先放写着曲名的素色卡面，缩好再换上（期间换了歌就不换）
-                if (state.scene.detail) state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
-                smallCover(entry).then((src) => {
-                    if (!detailOpen || !state.scene || coverOf(selectedTrack()) !== url) return;
-                    state.scene.setCover(url, src); kick();
-                });
-                kick();
-                return;
-            }
-            if (entry && entry.ok === null) {
-                entry.img.addEventListener('load', syncDetailCover, { once: true });
-                entry.img.addEventListener('error', syncDetailCover, { once: true });
-                if (state.scene.detail) state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
-                kick();
-                return;
-            }
-            if (url && !entry) preload(url);
-            state.scene.setCover('ph:' + t.path, null, { title: Model.stripExtension(t.title) || '未知标题', artist: t.artist || '' });
-            if (url && !entry) { const e2 = state.coverCache.get(url); e2?.img.addEventListener('load', syncDetailCover, { once: true }); }
-            kick();
-        };
-        // 资料卡滚到底（或本来就放得下）时去掉底边淡出
-        const syncDetailEnd = () => {
-            const card = refs.detail?.querySelector('.archive-detail-card');
-            if (card) card.classList.toggle('at-end', card.scrollTop + card.clientHeight >= card.scrollHeight - 2);
-        };
-        const renderDetail = () => {
-            if (!detailOpen) return;
-            const index = selectedIndex();
-            const t = tracks()[index];
-            if (!t) { closeDetail(); return; }
-            const col = column();
-            const count = col ? col.items.length : 0;
-            const r = count ? Model.wrap(state.row, count) : 0;
-            refs.dNo.textContent = pad(r + 1, Math.max(2, String(count).length));
-            refs.dWhere.textContent = (col ? col.name : '') + ' · 共 ' + count + ' 首';
-            const spec = formatOf(t);
-            refs.dSpec.textContent = spec ? spec.split(' · ')[0] : '';
-            refs.dSpec.hidden = !spec;
-            refs.dAlbum.textContent = t.album || '';
-            refs.dTitle.textContent = Model.stripExtension(t.title) || '未知标题';
-            refs.dArtist.textContent = t.artist || '未知歌手';
-            refs.dAlbum2.textContent = t.album || '—';
-            refs.dDur.textContent = fmtDur(trackDuration(t)) || '—';
-            refs.dFmt.textContent = spec || '—';
-            refs.dGroup.textContent = col ? col.name + ' · 第 ' + (r + 1) + ' 首' : '—';
-            const remote = /^[a-z][a-z0-9+.-]{2,}:\/\//i.test(String(t.path || ''));
-            refs.dPath.textContent = remote ? '云端曲目' : String(t.path || '—');
-            refs.dPath.title = String(t.path || '');
-            refs.dArtistBtn.disabled = !t.artist;
-            const canLike = typeof app.toggleLike === 'function' && typeof app.isLiked === 'function';
-            refs.dLike.hidden = !canLike;
-            if (canLike) {
-                const liked = Boolean(app.isLiked(t));
-                refs.dLike.setAttribute('aria-pressed', String(liked));
-                refs.dLike.title = liked ? '取消喜欢' : '喜欢';
-                refs.dLike.setAttribute('aria-label', refs.dLike.title);
-                refs.dLike.firstChild.textContent = liked ? '♥' : '♡';
-            }
-            // 没有的信息整格不显示，不放占位横线
-            for (const k of ['dAlbum2', 'dDur', 'dFmt']) refs[k].parentElement.hidden = refs[k].textContent === '—';
-            const playingThis = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
-            refs.dPlayText.textContent = playingThis ? '暂停' : index === app.currentTrackIndex ? '继续播放' : '播放';
-            refs.dPlay.querySelector('i').textContent = playingThis ? '❚❚' : '▶';
-            const more = sameAlbum(t, index);
-            refs.dMoreWrap.hidden = !more.items.length;
-            refs.dMoreHead.textContent = more.head;
-            refs.dMore.innerHTML = '';
-            for (const i of more.items) {
-                const x = tracks()[i];
-                const li = document.createElement('li');
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.dataset.act = 'd-goto';
-                b.dataset.index = String(i);
-                const name = document.createElement('span');
-                name.textContent = Model.stripExtension(x.title) || '未知标题';
-                const dur = document.createElement('small');
-                dur.textContent = fmtDur(trackDuration(x));
-                b.append(name, dur);
-                if (i === app.currentTrackIndex) b.classList.add('is-current');
-                li.appendChild(b);
-                refs.dMore.appendChild(li);
-            }
-            syncDetailCover();
-            syncDetailEnd();
-        };
-        let openedFrom = null;
-        const openDetail = () => {
-            if (selectedIndex() < 0) return;
-            if (!detailOpen) {
-                // 记下是从哪里打开的，关掉时把焦点还回去（键盘用户不会掉到页面开头）
-                const from = document.activeElement;
-                openedFrom = from && from !== document.body && root.contains(from) && !refs.detail.contains(from) ? from : null;
-                detailOpen = true;
-                root.classList.add('is-detail');
-                refs.detail.removeAttribute('inert');
-                refs.detail.setAttribute('aria-hidden', 'false');
-                syncDetailRoom();
-                state.scene?.setDetail(true);
-                state.scene?.setHover(null);
-                refs.tip.classList.remove('on');
-            }
-            renderDetail();
-            global.requestAnimationFrame?.(syncDetailEnd);
-            refs.dPlay.focus({ preventScroll: true });
-            kick();
-        };
-        const closeDetail = () => {
-            if (!detailOpen) return;
-            detailOpen = false;
-            root.classList.remove('is-detail');
-            refs.detail.setAttribute('inert', '');
-            refs.detail.setAttribute('aria-hidden', 'true');
-            state.scene?.setDetail(false);
-            if (refs.detail.contains(document.activeElement)) {
-                const back = openedFrom && openedFrom.isConnected && !openedFrom.closest('[hidden],[inert]') ? openedFrom : null;
-                if (back) back.focus({ preventScroll: true }); else document.activeElement.blur();
-            }
-            openedFrom = null;
-            kick();
-        };
-        const expandSelected = openDetail;
-        const collapse = () => {};
-
         /* 整个曲库按当前排序的顺序（就是阵列里从左到右、从上到下看到的顺序） */
         const libraryOrder = () => {
             const letters = state.columns.filter((c) => c.kind === 'letter');
@@ -906,12 +556,14 @@
             app.reorderContext(libraryOrder().map((i) => tracks()[i]).filter(Boolean), 'archive');
         };
 
-        const playSelected = ({ stage = true, group = null } = {}) => {
+        const playSelected = ({ stage = false, group = null, resume = !group } = {}) => {
             const col = column();
             const index = selectedIndex();
             if (!col || index < 0) return;
             const already = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
-            if (!already && group && group.items.includes(index)) {
+            if (!already && resume && index === app.currentTrackIndex && app.playTrack) {
+                app.playTrack();
+            } else if (!already && group && group.items.includes(index)) {
                 // 从目录的某一组点播（歌手、专辑、最近、检索结果）：队列就是看到的这一组
                 startQueue(group.items, index, { type: 'archive-group', name: group.name }, group.name);
             } else if (!already) {
@@ -922,7 +574,8 @@
                 const whole = col.kind === 'letter' || col.kind === 'all';
                 startQueue(whole ? libraryOrder() : col.items, index, source, whole ? '全部曲目' : col.name);
             }
-            wantLyrics(true);
+            setCardExpanded(true);
+            updatePlaying();
             if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
         };
 
@@ -936,70 +589,19 @@
             select(lane, row);
         };
 
-        /* 接着听：上次没听完的那首（听歌记录给的位置），放在「播放这一组」旁边。
-           正在放的就是它时不显示；播放器已经恢复到这首、只是暂停着，就写「继续播放」 */
-        const resumeInfo = () => {
-            let r = null;
-            try { r = app.musicStats?.resume?.() || null; } catch (e) { r = null; }
-            if (!r || !r.track) return null;
-            const index = tracks().indexOf(r.track);
-            return index < 0 ? null : { index, track: r.track, position: Math.max(0, Number(r.position) || 0) };
-        };
-        const renderResume = () => {
-            const el = refs.resume;
-            if (!el) return;
-            const r = resumeInfo();
-            const isCurrent = r && r.index === app.currentTrackIndex;
-            const show = Boolean(r) && !searchCtx && !(isCurrent && (app.isPlaying || app.playIntent));
-            el.hidden = !show;
-            if (!show) return;
-            const name = Model.stripExtension(r.track.title || '') || '未知标题';
-            refs.resumeLabel.textContent = isCurrent ? '继续播放' : '接着听';
-            refs.resumeName.textContent = name;
-            refs.resumeAt.textContent = fmtDur(r.position);
-            el.title = (isCurrent ? '继续播放「' : '从上次停下的地方接着听「') + name + '」' + (r.position ? '（' + fmtDur(r.position) + '）' : '');
-        };
-        let resumeWait = 0;
-        const playResume = () => {
-            const r = resumeInfo();
-            if (!r) return;
-            if (r.index === app.currentTrackIndex && tracks()[app.currentTrackIndex]) {
-                // 播放器已经停在这首（重开窗口时会恢复到原位置），直接接着放
-                goToTrack(r.index, null, { pulse: false });
-                app.playTrack?.();
-                wantLyrics(true);
-                renderResume();
-                return;
-            }
-            goToTrack(r.index, null, { pulse: false });
-            if (selectedIndex() !== r.index) return;
-            playSelected({ stage: false });
-            if (!(r.position > 1) || typeof app.seekTo !== 'function') return;
-            // 等引擎真的换到这首再跳到原位置；中途换了歌就不跳
-            const path = r.track.path, token = ++resumeWait, until = Date.now() + 8000;
-            const check = () => {
-                if (state.destroyed || token !== resumeWait || app.currentTrackIndex !== r.index) return;
-                if (app.engineTrackPath === path || (app.engineTrackPath === undefined && app.isPlaying)) { app.seekTo(r.position); return; }
-                if (Date.now() < until) global.setTimeout(check, 150);
-            };
-            global.setTimeout(check, 150);
-        };
-
         // 正在播放那张卡：在当前视野里找最近的一格
         const updatePlaying = (force = false) => {
-            const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + state.sig;
+            const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + Boolean(app.playIntent) + ':' + state.sig;
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
-            renderDetail();
-            renderResume();
             // 还没放过歌时底栏不写「正在播放 全部曲目」（没有在播放的东西）
             const queueEl = refs.queue?.parentElement;
             if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
-            // 跟着在听：选中停在正在放的那首、歌词开着时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
+            // 跟着在听：选中停在正在放的那首时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
             const prevPlaying = state.playingIndex;
             state.playingIndex = app.currentTrackIndex;
-            if (state.lyricsOn && prevPlaying !== undefined && prevPlaying !== app.currentTrackIndex
+            if (prevPlaying !== undefined && prevPlaying !== app.currentTrackIndex
                 && selectedIndex() === prevPlaying && tracks()[app.currentTrackIndex]) {
                 goToPlaying();
             }
@@ -1009,7 +611,7 @@
                 if (at0) {
                     state.lane = at0.lane; state.row = at0.row;
                     state.scene?.jump(at0.lane, at0.row);
-                    renderHud(true);
+                    renderHud();
                     syncList();
                 }
             }
@@ -1026,7 +628,6 @@
                 if (letterOf) queueMicrotask(() => { if (!state.destroyed) rebuild(); });
                 else if (list && list.kind === 'recent') list.rebuild();
             }
-            refs.access.classList.toggle('is-playing', selectedIndex() === app.currentTrackIndex && app.isPlaying);
             kick();
         };
 
@@ -1155,16 +756,17 @@
 
         let list = null;
         let lyrics = null;
-        /*
-         * 歌词面板平时不占位：在这一页选好歌播放（或点了定位当前播放、LYRICS）之后才出来，
-         * 选中移到别的歌上（在浏览）就收起，把地方还给选中卡的信息
-         */
         const wantLyrics = (on) => {
             on = Boolean(on);
             if (on === Boolean(state.lyricsOn)) return;
             state.lyricsOn = on;
+            refs.hud.classList.toggle('lyrics-open', on);
             refs.lyricsBtn?.setAttribute('aria-pressed', String(on));
-            syncLyrics();
+            if (lastInset) resize();
+            else {
+                syncLyrics();
+                syncSceneLayout();
+            }
         };
         /* 一级入口：原来的控制参数（声学处理、舞台、播放）。播放器给了入口就用它的；没有就回经典视图把声学处理展开 */
         const openControls = (section) => {
@@ -1179,13 +781,12 @@
         };
         const syncLyrics = () => {
             if (!lyrics) return;
-            lyrics.setAllowed(state.lyricsOn && isShown() && !isNarrow() && !document.body.classList.contains('music-stage-active'));
+            lyrics.setAllowed(state.lyricsOn && isShown() && !document.body.classList.contains('music-stage-active'));
             lyrics.sync();
         };
         const LIST_KEY = 'musicArchiveList';
         let listPref = null;
         try { listPref = localStorage.getItem(LIST_KEY); } catch (e) { listPref = null; }
-        const isNarrow = () => refs.hud.classList.contains('narrow');
         const listOpen = () => refs.hud.classList.contains('list-open');
         const setListOpen = (open, { persist = true } = {}) => {
             if (!list) return;
@@ -1194,16 +795,10 @@
             refs.listBtn?.setAttribute('aria-pressed', String(open));
             if (persist) { listPref = open ? '1' : '0'; try { localStorage.setItem(LIST_KEY, listPref); } catch (e) { /* 只是记住 */ } }
             if (open) { list.render(); syncList(); }
-            // 目录切在「歌手」「专辑」时左上写的是目录分类，开合要换回来
-            if (state.columns.length) renderHud();
             // 设置抽屉开着时目录开合会换档（见 resize 里的 midBeside）
-            if (lastInset) resize();
+            if (lastInset) resize(); else syncSceneLayout();
         };
-        const applyListDefault = (narrow = isNarrow()) => {
-            // 宽窗口默认打开，窄窗口默认收起（用户手动开过就按记住的）
-            if (listPref === '1' || listPref === '0') setListOpen(listPref === '1', { persist: false });
-            else setListOpen(!narrow, { persist: false });
-        };
+        const applyListDefault = () => setListOpen(listPref !== '0', { persist: false });
 
         /* 列表选中某首：在对应的列里找到它，相机飞过去 */
         const goToTrack = (i, ctx, { pulse = true } = {}) => {
@@ -1222,8 +817,6 @@
             fromList = true;
             select(nearLane, nearRow, { pulse });
             fromList = false;
-            // 在目录里点到正在放的那首：也算选好了
-            if (i === app.currentTrackIndex && selectedIndex() === i) wantLyrics(true);
         };
         let fromList = false;
         const syncList = (quiet = false) => {
@@ -1232,17 +825,16 @@
             list.reveal(selectedIndex(), col ? col.id : null, { quiet: quiet === true });
         };
 
-        const playIndex = (i, ctx, { stage, group = null }) => {
+        const playIndex = (i, ctx, playback) => {
             goToTrack(i, ctx, { pulse: false });
             if (selectedIndex() !== i) return;
-            playSelected({ stage, group });
+            playSelected(playback);
         };
         /* 底部显示正在放的这一组（队列）叫什么 */
         const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
         const locatePlaying = () => {
             goToPlaying();
-            if (tracks()[app.currentTrackIndex] && selectedIndex() === app.currentTrackIndex) wantLyrics(true);
             if (list && listOpen()) {
                 if (list.kind !== 'all' && !list.query) list.setKind('all');
                 const col = column();
@@ -1250,11 +842,11 @@
             }
         };
 
-        /* 键盘打开选中卡的右键菜单（Shift+F10、菜单键）：菜单出现在 ACCESS FILE 旁边，方向键可以在菜单里移动 */
+        /* 键盘打开选中卡的右键菜单（Shift+F10、菜单键）：菜单出现在当前行或导航旁边，方向键可以在菜单里移动 */
         const openMenuForSelected = () => {
             const index = selectedIndex();
             if (index < 0 || typeof app.showContextMenu !== 'function') return;
-            const anchor = refs.access;
+            const anchor = (listOpen() && list.el.querySelector('.archive-list-row.on')) || refs.listBtn;
             const rect = anchor.getBoundingClientRect();
             const back = document.activeElement && document.activeElement !== document.body ? document.activeElement : anchor;
             // 先在档案页里发一次 contextmenu，播放器据此知道菜单是从档案页打开的（决定「移除」的范围）
@@ -1270,14 +862,12 @@
             if ([...e.key].length !== 1 || /\s/.test(e.key) || /[\u0000-\u001f\u007f]/.test(e.key)) return false;
             e.preventDefault();
             stopInertia();
-            closeDetail();
             if (!listOpen()) setListOpen(true, { persist: false });
             list.typeInto(e.key);
             return true;
         };
         const openSearch = () => {
             if (!list) return;
-            closeDetail();
             if (!listOpen()) setListOpen(true);
             list.focusSearch();
         };
@@ -1299,7 +889,6 @@
 
         const setMode = (mode, { persist = true } = {}) => {
             state.mode = mode === 'classic' ? 'classic' : 'archive';
-            if (state.mode !== 'archive') closeDetail();
             const on = state.mode === 'archive';
             root.hidden = !on;
             document.body.classList.toggle('music-archive-on', on);
@@ -1348,6 +937,7 @@
             if (!state.scene) return;
             const th = readTheme();
             state.scene.setTheme(th.colors, th.dark, wave && isShown() ? { wave: { lane: state.lane, row: state.row } } : {});
+            syncCard();
             kick();
         };
         /* 进播放页的过场期间（body.music-stage-entering）选中卡多抬一点；外部也可以直接调 raise(高度) */
@@ -1375,7 +965,6 @@
             refs.hud.classList.toggle('low-power', sceneQuality === 'energy-saving');
             root.insertBefore(state.scene.canvas, root.firstChild);
             bindCanvas(state.scene.canvas);
-            updateLabelMask();
             // 卡面标题：近处几张卡印曲名和档案号
             state.scene.setLabeler?.((lane, row) => {
                 const index = Model.cellTrack(state.columns, lane, row);
@@ -1389,7 +978,7 @@
             updatePlaying(true);
         };
 
-        const TINY_W = 760, NARROW_W = 1300, MID_W = 1720;
+        const TINY_W = 760, DRAWER_TINY_W = 840, NARROW_W = 1300, MID_W = 1720;
         const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
         // 右侧设置抽屉开着时，首页让出它占的那一条：整层按剩下的宽度重新排版（宽窄分档也按剩下的宽度算），
         // 标题、导航、说明块、封面、资料卡都挪到抽屉左边，不被盖住。用排版位置量，不受抽屉滑入的 transform 影响。
@@ -1406,7 +995,6 @@
             return inset > 0 && inset < w * 0.6 ? inset : 0;
         };
         let lastInset = 0;
-        let lastFullNarrow = null;
         const resize = () => {
             const full = root.clientWidth || global.innerWidth;
             const inset = drawerInset(full);
@@ -1419,51 +1007,50 @@
             refs.hud.style.height = (h / sc) + 'px';
             refs.hud.style.transform = `scale(${sc})`;
             refs.hud.classList.toggle('short', h / sc < 900);
-            // 窄：只留阵列和说明块；中等（笔记本常见的 1280×800 就在这档）：目录照常开着，说明块挪到目录右边
-            // 设置抽屉让位后剩下的宽度落进窄档、目录又开着：窄档的目录会盖住说明块，改用中档那种「目录 + 右边说明块」的摆法
+            // 设置抽屉让位后用中等宽度的搜索栏布局。
             const midBeside = inset > 0 && listOpen() && w / sc >= 900 && w / sc < NARROW_W;
             refs.hud.classList.toggle('narrow', w / sc < NARROW_W && !midBeside);
             refs.hud.classList.toggle('mid', (w / sc >= NARROW_W && w / sc < MID_W) || midBeside);
             refs.hud.classList.toggle('squeeze', midBeside);
-            // 很窄（音乐窗口最小 420 宽时就在这档）：右上的导航挤到标题上、分组切换压在曲名上，改成另一种摆法。
-            refs.hud.classList.toggle('tiny', w / sc < TINY_W);
-            // 目录默认开合按整窗宽度判断：打开设置抽屉让位变窄时不顺手把目录收起来
-            const fullNarrow = full / sc < NARROW_W;
-            if (list && lastFullNarrow !== null && fullNarrow !== lastFullNarrow && listPref !== '1' && listPref !== '0') applyListDefault(fullNarrow);
-            lastFullNarrow = fullNarrow;
+            // 抽屉和歌词同时打开时，提前切到上下布局，给卡片留出足够的宽度。
+            const tinyWidth = inset && listOpen() && state.lyricsOn ? DRAWER_TINY_W : TINY_W;
+            refs.hud.classList.toggle('tiny', w / sc < tinyWidth);
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(full, h);
-            syncDetailRoom(sc);
-            if (detailOpen) syncDetailEnd();
             syncLyrics();
-            updateLabelMask();
+            syncSceneLayout();
             kick();
         };
-        // 资料卡左边那块空地给场景，取出的卡整张放在里面（offsetLeft 不受滑入动画的位移影响）
-        const syncDetailRoom = (sc = hudScale(root.clientHeight || global.innerHeight)) => {
-            const card = refs.detail?.querySelector('.archive-detail-card');
-            if (!card || !state.scene?.setDetailRoom) return;
-            state.scene.setDetailRoom(card.offsetLeft * sc);
-        };
-        // 说明块（档案号、曲名、ACCESS FILE）下面的卡不印标题
-        const updateLabelMask = () => {
-            if (!state.scene?.setLabelMask) return;
-            const callout = root.querySelector('.archive-callout');
-            const base = root.getBoundingClientRect();
-            if (!callout || callout.offsetParent === null) { state.scene.setLabelMask([]); return; }
-            const r = callout.getBoundingClientRect();
+        // 用目录、歌词和设置抽屉之间的可用空间给抽出的卡片构图。
+        const syncSceneLayout = () => {
+            const scene = state.scene;
+            if (!scene || !isShown()) return;
             const sc = hudScale(root.clientHeight || global.innerHeight);
-            const pad = 24 * sc;
-            // 说明块右半是一条延伸到边缘的细线，只挡文字和封面那一段
-            const right = Math.min(r.right, r.left + 730 * sc);
-            const masks = [{ left: r.left - base.left - pad, top: r.top - base.top - pad, right: right - base.left + pad, bottom: r.bottom - base.top + pad }];
-            // 右侧歌词下面的卡也不印标题，免得字叠字
-            if (lyrics && lyrics.shown) {
-                const y = lyrics.el.getBoundingClientRect();
-                masks.push({ left: y.left - base.left - pad, top: y.top - base.top - pad, right: y.right - base.left, bottom: y.bottom - base.top });
+            const stacked = refs.hud.classList.contains('tiny') && listOpen() && refs.hud.classList.contains('has-track');
+            const listWidth = listOpen() && !stacked ? list.el.offsetWidth : 0;
+            const lyricsVisible = lyrics && !lyrics.el.hidden;
+            const paneRight = state.lyricsOn && lyrics ? lyrics.el.offsetLeft : refs.hud.clientWidth;
+            const safe = parseFloat(refs.hud.style.getPropertyValue('--archive-dock-lift')) || 0;
+            const bottom = stacked ? list.el.offsetTop - 8 : refs.hud.clientHeight - safe - 76;
+            scene.setDetailRoom({
+                left: (listWidth + 22) * sc,
+                right: (paneRight - 22) * sc,
+                top: (refs.nav.offsetTop + refs.nav.offsetHeight + 18) * sc,
+                bottom: bottom * sc
+            });
+            const masks = [];
+            if (listOpen()) {
+                const el = list.el;
+                masks.push({ left: 0, right: el.offsetWidth * sc, top: el.offsetTop * sc, bottom: (el.offsetTop + el.offsetHeight) * sc });
             }
-            state.scene.setLabelMask(masks);
+            if (lyricsVisible) {
+                const el = lyrics.el;
+                masks.push({ left: el.offsetLeft * sc, right: (el.offsetLeft + el.offsetWidth) * sc,
+                    top: el.offsetTop * sc, bottom: (el.offsetTop + el.offsetHeight) * sc });
+            }
+            scene.setLabelMask(masks);
+            kick();
         };
 
         const frame = (now) => {
@@ -1489,7 +1076,7 @@
         let turning = null;
         /* 鼠标指着的卡（不是选中那张）：在指针旁边写出曲名和歌手，远处的卡也能认出是哪首 */
         const showTip = (c, at) => {
-            const index = c && !detailOpen && !(c.lane === state.lane && c.row === state.row) ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
+            const index = c && !(c.lane === state.lane && c.row === state.row) ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
             const t = index >= 0 ? tracks()[index] : null;
             if (!t || !at) { refs.tip.classList.remove('on'); return; }
             refs.tip.firstChild.textContent = Model.stripExtension(t.title) || '未知标题';
@@ -1498,7 +1085,8 @@
             refs.tip.style.transform = `translate(${Math.round(at.x - base.left + 16)}px, ${Math.round(at.y - base.top + 18)}px)`;
             refs.tip.classList.add('on');
         };
-        let detailMiss = false;
+        let turned = false;
+        let canvasPlayIndex = -1;
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
                 const rect = canvas.getBoundingClientRect();
@@ -1506,16 +1094,16 @@
                 if (turning) {
                     const dx = e.clientX - turning.x;
                     turning.x = e.clientX;
-                    if (Math.abs(e.clientX - turning.x0) > 4) turning.moved = true;
+                    if (Math.abs(e.clientX - turning.x0) > 4) turned = true;
                     state.scene?.turn(dx * 0.006);
                     kick();
                     return;
                 }
-                if (detailOpen) {
-                    const r = state.scene?.detailRect();
-                    const on = r && e.clientX - rect.left >= r.left && e.clientX - rect.left <= r.right && e.clientY - rect.top >= r.top && e.clientY - rect.top <= r.bottom;
-                    canvas.style.cursor = on ? 'grab' : '';
-                    kick();
+                if (wheelBrowsing || onDetailCard(e)) {
+                    pendingPick = null;
+                    state.scene?.setHover(null);
+                    showTip(null);
+                    canvas.style.cursor = wheelBrowsing ? '' : 'grab';
                     return;
                 }
                 pendingPick = { x: e.clientX, y: e.clientY, rect };
@@ -1539,12 +1127,11 @@
                 return Boolean(r) && e.clientX - rect.left >= r.left && e.clientX - rect.left <= r.right && e.clientY - rect.top >= r.top && e.clientY - rect.top <= r.bottom;
             };
             canvas.addEventListener('pointerdown', (e) => {
-                if (!detailOpen || e.button !== 0) return;
-                if (onDetailCard(e)) {
-                    turning = { x: e.clientX, x0: e.clientX, moved: false };
-                    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
-                    canvas.style.cursor = 'grabbing';
-                } else detailMiss = true;
+                turned = false;
+                if (e.button !== 0 || !onDetailCard(e)) return;
+                turning = { x: e.clientX, x0: e.clientX };
+                try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
+                canvas.style.cursor = 'grabbing';
             });
             const endTurn = () => {
                 if (!turning) return;
@@ -1555,31 +1142,30 @@
             };
             canvas.addEventListener('pointerup', endTurn);
             canvas.addEventListener('pointercancel', endTurn);
-            // 单击侧卡只把它移到中间；再点中间那张才展开（抬高、焦点落到 ACCESS FILE）；双击或回车播放
+            // 点卡取出，点空白收回；两种构图都留在同一个曲库页面。
             canvas.addEventListener('click', (e) => {
-                if (detailOpen) {
-                    if (detailMiss) closeDetail();
-                    detailMiss = false;
+                if (e.detail > 1) return;
+                canvasPlayIndex = -1;
+                if (turned) return;
+                const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
+                canvasPlayIndex = c ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
+                if (canvasPlayIndex < 0) {
+                    setCardExpanded(false);
                     return;
                 }
-                const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
-                if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
-                if (c.lane === state.lane && c.row === state.row) expandSelected();
-                else select(c.lane, c.row);
+                select(c.lane, c.row);
+                setCardExpanded(true);
             });
-            canvas.addEventListener('dblclick', (e) => {
-                if (detailOpen) return;
-                const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
-                if (!c || Model.cellTrack(state.columns, c.lane, c.row) < 0) return;
-                if (c.lane !== state.lane || c.row !== state.row) select(c.lane, c.row);
-                playSelected();
+            canvas.addEventListener('dblclick', () => {
+                if (canvasPlayIndex >= 0 && canvasPlayIndex === selectedIndex()) playSelected();
             });
             canvas.addEventListener('contextmenu', (e) => {
-                const c = state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
-                const index = c ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
+                const featured = onDetailCard(e);
+                const c = featured ? null : state.scene?.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
+                const index = featured ? selectedIndex() : c ? Model.cellTrack(state.columns, c.lane, c.row) : -1;
                 if (index < 0) return;
                 e.preventDefault();
-                if (c.lane !== state.lane || c.row !== state.row) select(c.lane, c.row);
+                if (c) select(c.lane, c.row);
                 app.contextMenuTrackIndex = index;
                 app.showContextMenu?.(e.clientX, e.clientY);
             });
@@ -1598,146 +1184,71 @@
         // 滚轮惯性：松手后按衰减的速度再走几格
         const inertia = Model.createInertia();
         let inertiaTimer = 0, inertiaRaf = 0;
-        const stopInertia = () => { inertia.stop(); clearTimeout(inertiaTimer); if (inertiaRaf) cancelAnimationFrame(inertiaRaf); inertiaRaf = 0; };
+        const finishWheel = () => {
+            if (!wheelBrowsing) return;
+            wheelBrowsing = false;
+            syncCard();
+        };
+        const stopInertia = () => {
+            inertia.stop();
+            clearTimeout(inertiaTimer);
+            inertiaTimer = 0;
+            cancelAnimationFrame(inertiaRaf);
+            inertiaRaf = 0;
+            finishWheel();
+        };
         const glide = (now) => {
             inertiaRaf = 0;
-            if (state.destroyed || !isShown()) { inertia.stop(); return; }
+            if (state.destroyed || !isShown()) { stopInertia(); return; }
             const n = inertia.tick(now / 1000);
             if (n) { state.scene?.touch(); select(state.lane, state.row + n, { pulse: false }); }
             if (inertia.active) inertiaRaf = requestAnimationFrame(glide);
+            else if (!inertiaTimer) finishWheel();
         };
         const releaseWheel = () => {
-            if (inertia.release(performance.now() / 1000) && !inertiaRaf) inertiaRaf = requestAnimationFrame(glide);
+            inertiaTimer = 0;
+            if (inertia.release(performance.now() / 1000)) {
+                if (!inertiaRaf) inertiaRaf = requestAnimationFrame(glide);
+            } else {
+                finishWheel();
+            }
         };
 
-        // 位置条：按下就跳，拖着走，松开停
-        let scrubbing = null;
-        const scrubTo = (clientX) => {
-            const col = column();
-            const count = col ? col.items.length : 0;
-            if (!count) return;
-            const rect = refs.ticks.getBoundingClientRect();
-            const usable = Math.max(1, rect.width - 14);
-            goRow(Model.rowAtFraction((clientX - rect.left - 7) / usable, count), { pulse: false });
-        };
-        refs.ticks.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            stopInertia();
-            state.scene?.touch();
-            scrubbing = e.pointerId;
-            refs.ticks.setPointerCapture?.(e.pointerId);
-            refs.ticks.classList.add('is-scrubbing');
-            scrubTo(e.clientX);
-        });
-        refs.ticks.addEventListener('pointermove', (e) => { if (scrubbing === e.pointerId) scrubTo(e.clientX); });
-        const endScrub = (e) => {
-            if (scrubbing !== e.pointerId) return;
-            scrubbing = null;
-            refs.ticks.classList.remove('is-scrubbing');
-        };
-        refs.ticks.addEventListener('pointerup', endScrub);
-        refs.ticks.addEventListener('pointercancel', endScrub);
         root.addEventListener('wheel', (e) => {
-            if (e.target.closest && e.target.closest('input')) return;
+            if (e.target !== state.scene?.canvas || (!e.deltaX && !e.deltaY)) return;
             e.preventDefault();
-            state.scene?.touch();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+            const delta = horizontal && !e.shiftKey ? e.deltaX : e.deltaY;
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
-            // 鼠标滚轮一格就是一张（不累计余量，系统缩放 125%/150% 时也认得出）；触控板的小增量照常累计，惯性交给系统
             const notch = Model.isWheelNotch(e, global.devicePixelRatio);
-            if (horizontal) {
-                const n = notch ? Math.sign(e.shiftKey ? e.deltaY : e.deltaX) : wheelLanes((e.shiftKey ? e.deltaY : e.deltaX) * unit, e.timeStamp);
-                if (n) stepLane(n);
-            } else {
-                const n = notch ? Math.sign(e.deltaY) : wheelRows(e.deltaY * unit, e.timeStamp);
-                if (n) {
-                    select(state.lane, state.row + n);
-                    // 连续快速拨滚轮松手后再滑一段；触控板自己有惯性，不再叠
-                    if (notch && !reducedMotion()) {
-                        inertia.push(n, performance.now() / 1000);
-                        clearTimeout(inertiaTimer);
-                        inertiaTimer = setTimeout(releaseWheel, 90);
-                    }
-                }
+            const accumulate = horizontal ? wheelLanes : wheelRows;
+            const n = notch ? Math.sign(delta) : accumulate(delta * unit, e.timeStamp);
+            if (n && !wheelBrowsing) {
+                wheelBrowsing = true;
+                pendingPick = null;
+                state.scene.setHover(null);
+                showTip(null);
+                syncCard();
             }
+            if (!wheelBrowsing) return;
+
+            state.scene.touch();
+            if (horizontal || !notch || reducedMotion()) inertia.stop();
+            else if (n) inertia.push(n, performance.now() / 1000);
+            if (horizontal) stepLane(n, { pulse: false });
+            else if (n) select(state.lane, state.row + n, { pulse: false });
+            clearTimeout(inertiaTimer);
+            inertiaTimer = setTimeout(releaseWheel, 160);
         }, { passive: false });
 
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
                 switch (btn.dataset.act) {
-                    case 'access': playSelected(); break;
-                    case 'open-detail': openDetail(); break;
-                    case 'resume': playResume(); break;
-                    case 'play-col': {
-                        // 从这一组的第一首放起（队列就是这一组，和在阵列里点播同一套规则）
-                        const col = column();
-                        if (!col || !col.items.length) break;
-                        const count = col.items.length;
-                        select(state.lane, state.row - Model.wrap(state.row, count), { pulse: false });
-                        playSelected({ stage: false });
-                        break;
-                    }
-                    case 'detail-close': closeDetail(); break;
-                    case 'd-like': {
-                        const t = selectedTrack();
-                        if (t && typeof app.toggleLike === 'function') app.toggleLike(t);
-                        renderDetail();
-                        break;
-                    }
-                    case 'd-play': {
-                        const index = selectedIndex();
-                        if (index < 0) break;
-                        if (index === app.currentTrackIndex && (app.isPlaying || app.playIntent)) app.pauseTrack?.();
-                        else if (index === app.currentTrackIndex && app.playTrack) { app.playTrack(); wantLyrics(true); }
-                        else playSelected({ stage: false });
-                        break;
-                    }
-                    case 'd-next': case 'd-queue': {
-                        const t = selectedTrack();
-                        if (!t) break;
-                        const next = btn.dataset.act === 'd-next';
-                        const before = app.queueSnapshot?.() || [];
-                        const queued = next ? app.queuePlayNext?.(t) : app.queueAdd?.(t);
-                        if (queued) {
-                            const name = Model.stripExtension(queued.title || '');
-                            try {
-                                global.MusicToast?.show({ id: 'queue', kind: 'success', message: (next ? '下一首播放：' : '已加入队列：') + name,
-                                    action: { label: '撤销', run: () => app.queueRevert?.([queued], before) } });
-                            } catch (err) { /* 没有提示层也不影响入队 */ }
-                        }
-                        break;
-                    }
-                    case 'd-playlist': case 'd-lyrics': {
-                        const index = selectedIndex();
-                        if (index < 0) break;
-                        if (btn.dataset.act === 'd-lyrics') { app.openLyricsFetchModal?.(index); break; }
-                        const r = btn.getBoundingClientRect();
-                        app.contextMenuTrackIndex = index;
-                        app.showContextMenu?.(r.left, r.bottom + 8);
-                        // 菜单接上键盘（Esc 能关），并直接展开歌单列表
-                        ListLib?.menuKeyboard?.(app, { restore: btn, playlist: true });
-                        break;
-                    }
-                    case 'd-artist': {
-                        const t = selectedTrack();
-                        if (!t || !t.artist) break;
-                        closeDetail();
-                        if (!listOpen()) setListOpen(true);
-                        list?.typeInto(t.artist);
-                        break;
-                    }
-                    case 'd-goto': goToIndex(Number(btn.dataset.index)); break;
-                    case 'up': select(state.lane, state.row - 1); break;
-                    case 'down': select(state.lane, state.row + 1); break;
-                    case 'left': stepLane(-1); break;
-                    case 'right': stepLane(1); break;
                     case 'search': openSearch(); break;
-                    // 取出看详情时目录和歌词都藏着：这时按它们是想回去看，不是想关掉
-                    case 'list': if (detailOpen) { closeDetail(); setListOpen(true); } else setListOpen(!listOpen()); break;
+                    case 'list': setListOpen(!listOpen()); break;
                     case 'now': locatePlaying(); break;
-                    case 'lyrics': if (detailOpen) { closeDetail(); if (!state.lyricsOn) wantLyrics(true); } else wantLyrics(!state.lyricsOn); break;
+                    case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
@@ -1768,21 +1279,19 @@
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
-            // 方向键在阵列里走：右下角的键盘提示这时才出现
-            if (/^Arrow/.test(e.key)) refs.hud.classList.add('kbd');
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
             stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) {
                 e.preventDefault();
                 state.scene?.touch();
-                if (next.lane !== state.lane) { closeDetail(); stepLane(next.lane - state.lane); }
+                if (next.lane !== state.lane) stepLane(next.lane - state.lane);
                 else select(next.lane, next.row);
                 return;
             }
             if (e.key === 'Enter') {
-                if (tag === 'BUTTON' && e.target.closest('#music-archive-view') && !e.target.closest('.archive-access')) return;
-                e.preventDefault(); playSelected(); return;
+                if (tag === 'BUTTON' && e.target.closest('#music-archive-view')) return;
+                e.preventDefault(); playSelected({ stage: e.shiftKey }); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
             if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenuForSelected(); return; }
@@ -1801,28 +1310,11 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
-        const onPointerKbdOff = () => refs.hud.classList.remove('kbd');
-        root.addEventListener('pointerdown', onPointerKbdOff, true);
-        // 取出时 Esc 先把卡放回去（抢在检索、舞台等其他 Esc 之前）
-        const onEscCapture = (e) => {
-            if (!detailOpen || e.key !== 'Escape' || !isShown() || modalOpen()) return;
-            if (document.body.classList.contains('music-stage-active')) return;
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            closeDetail();
-        };
-        document.addEventListener('keydown', onEscCapture, true);
-
         // ---------- 外部状态 ----------
         const onResize = () => resize();
         global.addEventListener('resize', onResize);
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
-        const onLikeChange = () => { if (detailOpen) renderDetail(); };
-        document.addEventListener('music-like-change', onLikeChange);
-        const onStatsChange = () => renderResume();
-        document.addEventListener('music-stats-change', onStatsChange);
-        refs.detail?.querySelector('.archive-detail-card')?.addEventListener('scroll', syncDetailEnd, { passive: true });
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
         // body 的 style 每次切歌都会变（底栏按封面取的色调），只有底栏高度变了才影响版面
@@ -1841,8 +1333,6 @@
             if (themeChanged) applyTheme({ wave: true });
             if (enteringChanged) syncEntering();
             if (stageChanged) savePlace();
-            // 进了播放页再回来，回到浏览状态（卡放回列里）
-            if (stageChanged && !cls.includes('music-stage-active')) closeDetail();
             if (stageChanged && !cls.includes('music-stage-active') && isShown()) {
                 // 从播放页回来：旧界面的背景声纹不要重新起来
                 app.destroyAmbientPixi?.();
@@ -1898,21 +1388,15 @@
             clearTimeout(listTimer);
             clearTimeout(growTimer);
             scanOff.forEach((off) => { if (typeof off === 'function') off(); });
-            clearTimeout(state.coverTimer);
             stopInertia();
             lyrics?.destroy();
-            tickMarker?.destroy();
             list?.closeBatchMenu?.();
             list?.endPress?.();
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);
-            root.removeEventListener('pointerdown', onPointerKbdOff, true);
-            document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
-            document.removeEventListener('music-like-change', onLikeChange);
-            document.removeEventListener('music-stats-change', onStatsChange);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
             if (typeof unsubscribeQuality === 'function') unsubscribeQuality();
@@ -1927,24 +1411,13 @@
         global.addEventListener('beforeunload', destroy, { once: true });
         global.addEventListener('pagehide', destroy, { once: true });
 
-        /* 目录换了分类（歌单、专辑、为你、全部），阵列跳到对应那一类的列，左上标题和中间说明块说的就是同一件事。
-           已经在那一类的列上就不动；歌手没有对应的列，阵列不动 */
-        const GROUP_KINDS = { artist: ['歌手', '位歌手', 'artist'], album: ['专辑', '张专辑', 'album'] };
-        const groupCtx = () => {
-            if (!list || !listOpen() || list.query) return null;
-            const g = GROUP_KINDS[list.kind];
-            const col = column();
-            if (!g || !col || col.kind === g[2]) return null;
-            const names = new Set();
-            tracks().forEach((t) => { const v = t && t[g[2]] ? String(t[g[2]]).trim() : ''; if (v) names.add(v); });
-            return names.size ? { name: g[0], unit: g[1], n: names.size } : null;
-        };
+        // 目录换分类时，阵列跟到对应的列。
         const LIST_KIND_COLS = { playlist: ['playlist'], album: ['album'], recent: ['daily', 'recent'], all: ['letter', 'all'] };
         const followListKind = (kind) => {
             const want = LIST_KIND_COLS[kind];
             const n = state.columns.length;
-            // 没有对应列的分类（歌手、没有专辑列时的专辑）只刷新左上标题
-            if (!want || !n || !state.columns.some((c) => want.includes(c.kind))) { renderHud(); return; }
+            // 歌手等没有对应列的分类可以在目录里独立浏览。
+            if (!want || !n || !state.columns.some((c) => want.includes(c.kind))) return;
             const cur = column();
             if (cur && want.includes(cur.kind)) return;
             let target = -1;
@@ -1975,28 +1448,26 @@
                     if (playing && playing.type === 'playlist' && app.playbackSourceName) setQueueName(app.playbackSourceName(playing));
                 },
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
-                onResults: (q, n, first) => {
-                    searchCtx = q ? { q, n } : null;
-                    refs.hud.classList.toggle('no-match', Boolean(q) && !n);
-                    // 有结果时阵列和中间的说明块跟到第一条结果，免得还停在检索前那首
+                onResults: (q, _count, first) => {
+                    // 有结果时阵列跟到第一条结果，免得还停在检索前那首
                     if (q && first && first.i !== selectedIndex()) goToTrack(first.i, first.ctx, { pulse: false });
-                    renderHud();
                 },
                 onKind: (kind) => followListKind(kind),
-                onPick: (i, ctx) => goToTrack(i, ctx),
+                onPick: (i, ctx) => {
+                    goToTrack(i, ctx);
+                    setCardExpanded(true);
+                },
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
-            // 目录是后加进来的，放在 HUD 最后，Tab 要走完右边所有按钮才到它。挪到左上标题后面，
-            // Tab 顺序就跟看到的一样：标题、播放这一组、目录（搜索框、分类、曲目），再到右边
+            // 搜索、分类、曲目排在右侧导航之前，Tab 顺序和界面布局一致。
             const listEl = refs.hud.querySelector(':scope > .archive-list');
-            const brandEl = refs.hud.querySelector(':scope > .archive-brand');
-            if (listEl && brandEl) brandEl.after(listEl);
+            if (listEl) refs.hud.prepend(listEl);
         }
-        // 右侧滚动歌词（播放器取到歌词时显示；窄窗口、经典视图、播放页里不显示）
+        // 右侧滚动歌词（档案页打开歌词时显示）
         const LyricsLib = global.MusicArchiveLyrics;
         lyrics = LyricsLib ? LyricsLib.create({
             host: refs.hud, app, reducedMotion,
-            onChange: (on) => { refs.hud.classList.toggle('has-lyrics', on); updateLabelMask(); kick(); }
+            onChange: syncSceneLayout
         }) : null;
         loadPinyin();
 
@@ -2013,9 +1484,6 @@
             refreshSoon: () => rebuildSoon(),
             select,
             playSelected,
-            openDetail,
-            closeDetail,
-            get detailOpen() { return detailOpen; },
             get scene() { return state.scene; },
             openSearch,
             setListOpen,

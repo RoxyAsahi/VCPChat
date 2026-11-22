@@ -7,20 +7,36 @@
     const mount = () => {
         const api = window.utilityAPI || window.electronAPI;
         const input = document.getElementById('legacy-ui-switch');
-        if (!input) return;
-        if (!api?.setMusicLegacyUI) { input.closest('.setting-item')?.setAttribute('hidden', ''); return; }
-        input.checked = false; // 能看到这个开关，说明现在就是新版
-        input.addEventListener('change', async () => {
-            input.disabled = true;
-            try {
-                await api.setMusicLegacyUI(input.checked);
-            } catch (e) {
-                input.checked = !input.checked;
-                console.warn('[Music] 切换界面失败：', e);
-            } finally {
-                input.disabled = false;
+        const button = document.getElementById('music-legacy-btn');
+        if (!api?.setMusicLegacyUI) {
+            input?.closest('.setting-item')?.setAttribute('hidden', '');
+            return;
+        }
+
+        if (input) input.checked = false;
+        if (button) button.hidden = false;
+
+        const switchToLegacy = async () => {
+            if (input?.disabled || button?.disabled) return;
+            if (input) {
+                input.checked = true;
+                input.disabled = true;
             }
-        });
+            if (button) button.disabled = true;
+            try {
+                await api.setMusicLegacyUI(true);
+            } catch (error) {
+                if (input) input.checked = false;
+                window.MusicToast?.show({ kind: 'error', message: '切换旧版界面失败' });
+                console.warn('[Music] 切换界面失败：', error);
+            } finally {
+                if (input) input.disabled = false;
+                if (button) button.disabled = false;
+            }
+        };
+
+        button?.addEventListener('click', switchToLegacy);
+        input?.addEventListener('change', switchToLegacy);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
     else mount();

@@ -37,6 +37,18 @@ body.light-theme {
     pointer-events: none;
 }
 
+/* 进场时压住旧界面的文字，圆环和曲名仍然清晰。 */
+.music-intro.is-transit[data-intro="enter"]:not([data-still])::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center,
+        color-mix(in srgb, var(--mi-paper) 92%, transparent),
+        color-mix(in srgb, var(--mi-paper) 76%, transparent) 80%);
+    backdrop-filter: blur(5px);
+    opacity: var(--mi-enter-backdrop, 0);
+}
+
 .music-intro svg {
     position: absolute;
     inset: 0;

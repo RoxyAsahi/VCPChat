@@ -1,7 +1,7 @@
 // Musicmodules-legacy/legacy-bridge.js
 // 旧版音乐界面（上游原版）的接线：这个文件夹里其余文件都和上游 main 一字不差，只有 music.html 多引了这一个脚本。
 // 只做两件事：
-//   1. 设置面板里加一个「旧版界面（原版）」开关，关掉就回到新版（窗口当场换页，播放不断）。
+//   1. 在标题栏加返回新版的按钮，设置面板也保留「旧版界面（原版）」开关。
 //   2. 音频引擎的端口现在由主进程启动时探测（默认 63789 被系统占用时会换），
 //      原版频谱直接连 ws://127.0.0.1:63789/ws，这里把这个地址换成引擎实际的地址。
 
@@ -48,28 +48,44 @@
         window.WebSocket = Bridged;
     }
 
-    // ---- 2. 「旧版界面（原版）」开关 ----
+    // ---- 2. 返回新版界面 ----
     const mount = () => {
-        if (!api?.setMusicLegacyUI || document.getElementById('legacy-ui-switch')) return;
+        if (!api?.setMusicLegacyUI) return;
+        const windowControls = document.querySelector('#custom-title-bar .window-controls');
+        const button = document.createElement('button');
+        button.id = 'music-current-ui-btn';
+        button.className = 'window-control-btn';
+        button.type = 'button';
+        button.title = '切换到新版界面';
+        button.setAttribute('aria-label', button.title);
+        button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+            + ' stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            + '<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 8h18M9 8v12"></path></svg>';
+        windowControls?.before(button);
+
         const grid = document.querySelector('.settings-container .settings-grid');
-        if (!grid) return;
         const item = document.createElement('div');
         item.className = 'setting-item toggle-item';
         item.innerHTML = '<label for="legacy-ui-switch" title="关掉回到新版音乐界面">旧版界面（原版）</label>'
             + '<label class="switch compact"><input type="checkbox" id="legacy-ui-switch" checked><span class="slider round"></span></label>';
-        grid.appendChild(item);
+        grid?.appendChild(item);
+
         const input = item.querySelector('input');
-        input.addEventListener('change', async () => {
-            input.disabled = true;
+        const switchToCurrent = async () => {
+            if (button.disabled) return;
+            button.disabled = input.disabled = true;
+            input.checked = false;
             try {
-                await api.setMusicLegacyUI(input.checked);
-            } catch (e) {
-                input.checked = !input.checked;
-                console.warn('[Music legacy] 切换界面失败：', e);
+                await api.setMusicLegacyUI(false);
+            } catch (error) {
+                input.checked = true;
+                console.warn('[Music legacy] 切换界面失败：', error);
             } finally {
-                input.disabled = false;
+                button.disabled = input.disabled = false;
             }
-        });
+        };
+        button.addEventListener('click', switchToCurrent);
+        input.addEventListener('change', switchToCurrent);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
     else mount();

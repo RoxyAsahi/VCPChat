@@ -59,8 +59,7 @@
 
     function setupMusicStage(app) {
         const root = document.getElementById('music-stage');
-        const toggleButton = document.getElementById('stage-toggle-btn');
-        if (!root || !toggleButton) {
+        if (!root) {
             console.warn('[MusicStage] Required DOM was not found.');
             return;
         }
@@ -351,13 +350,6 @@
                 frameUpdates: 0,
                 modeSwitches: 0
             }
-        };
-
-        const setButtonState = () => {
-            toggleButton.classList.toggle('is-active', state.active);
-            toggleButton.setAttribute('aria-pressed', String(state.active));
-            toggleButton.setAttribute('aria-label', state.active ? '退出歌词舞台' : '进入歌词舞台');
-            toggleButton.title = state.active ? '退出歌词舞台 (Esc)' : '进入歌词舞台';
         };
 
         // A mode on its way out of a soft-focus switch; see setMode.
@@ -1323,7 +1315,6 @@
             root.setAttribute('aria-hidden', 'false');
             updateTheme();
             createMode(state.modeId);
-            setButtonState();
             const enterGeneration = state.generation;
             requestAnimationFrame(() => {
                 if (!state.active || state.destroyed || state.generation !== enterGeneration) return;
@@ -1340,7 +1331,6 @@
             app.isStageActive = false;
             root.classList.remove('is-visible');
             document.body.classList.remove('music-stage-active', 'music-stage-scene-3d');
-            setButtonState();
             const generation = ++state.generation;
             requestAnimationFrame(() => {
                 if (state.active || state.destroyed || generation !== state.generation) return;
@@ -1352,7 +1342,7 @@
                 state.lastFrame = null;
                 root.hidden = true;
                 root.setAttribute('aria-hidden', 'true');
-                toggleButton.focus({ preventScroll: true });
+                document.querySelector('#music-dock-root [data-md="stage"]')?.focus({ preventScroll: true });
                 app.createAmbientPixi?.();
             }, 380);
         };
@@ -1540,7 +1530,6 @@
         elements.volumeButton.innerHTML = `${icons.volume}${icons.muted}`;
         updateTransportControls();
 
-        scope.listen(toggleButton, 'click', toggle);
         // 面板仅通过 Esc 或关闭按钮关闭，避免再次点击入口时误关闭。
         scope.listen(elements.settingsToggle, 'click', () => setSettingsOpen(true));
         scope.listen(elements.settingsClose, 'click', () => setSettingsOpen(false));
@@ -1665,7 +1654,6 @@
             } else preparePreferredStage();
         }, PREPARE_AFTER_MS);
 
-        setButtonState();
         root.hidden = true;
         root.setAttribute('aria-hidden', 'true');
 

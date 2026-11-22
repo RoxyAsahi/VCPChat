@@ -271,8 +271,19 @@ function setupUI(app) {
         return url;
     };
 
+    const themeButton = document.getElementById('music-theme-toggle-btn');
+    themeButton?.addEventListener('click', () => {
+        app.applyTheme(document.body.classList.contains('light-theme') ? 'dark' : 'light');
+    });
     app.applyTheme = (theme) => {
-        app.currentTheme = theme; document.body.classList.toggle('light-theme', theme === 'light');
+        const light = theme === 'light';
+        app.currentTheme = theme;
+        document.body.classList.toggle('light-theme', light);
+        if (themeButton) {
+            const label = light ? '切换到深色' : '切换到浅色';
+            themeButton.title = label;
+            themeButton.setAttribute('aria-label', label);
+        }
         // CSS variables are immediately readable after changing the theme class.
         // Notify the stage even while paused; no playback restart is necessary.
         app.stageHost?.updateTheme?.();
