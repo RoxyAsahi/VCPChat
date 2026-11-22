@@ -1675,7 +1675,12 @@
             const lyricsClearance = open ? DRAWER_LYRICS_GAP : LIST_GAP;
             const drawerEdge = open ? vw - DRAWER_W - LIST_GAP : vw - (edge ? LIST_GAP : 12);
             // 分栏较紧时，让播放条稍往左，避免整条歌词栏为它让出底部空间。
-            const room = open && lyricsLeft ? Math.min(drawerEdge, lyricsLeft - lyricsClearance) : drawerEdge;
+            let room = open && lyricsLeft ? Math.min(drawerEdge, lyricsLeft - lyricsClearance) : drawerEdge;
+            // 目录和抽屉都开着、中间连最短的播放条（280）都放不下（如 960 宽）：抽屉底边抬到播放条上面，
+            // 播放条从抽屉下面过，只给右下角的关闭小环让出位置。不这样的话歌名和按钮会压在抽屉底部的页签上。
+            const raise = open && !betweenPanes && room - lo < 280;
+            if (raise) room = vw - 72;
+            host.classList.toggle('md-raise', raise);
             const span = room - lo;
             let barW = natural;
             let left = vw / 2 - natural / 2;

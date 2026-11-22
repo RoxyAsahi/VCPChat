@@ -1523,6 +1523,9 @@ body.music-reduce-motion .md-mist { transition: none; }
 }
 /* 节能档（没有流体层）的把手也停在凹口圆心上 */
 #music-dock-root.md-fl-low .md-hdl { right: 16px; bottom: 16px; }
+/* 抽屉左边放不下播放条时（music-dock.js syncShift 的 md-raise）：抽屉底边抬到播放条上面，底色往下渐隐 */
+#music-dock-root.md-raise .md-pnl { bottom: var(--music-dock-safe-bottom, 96px); }
+#music-dock-root.md-raise .md-pnl .md-dockrow { padding-right: 0; }
 
 /* ───────── 播放头：平时是贴在进度线上的小珠子，指针移上去放大并显示时间 ───────── */
 #music-dock-root.md-fl-on .md-hdl.md-hdl-bead:not(.md-open) button { box-shadow: 0 0 10px 2px rgba(255, 255, 255, .55), inset 0 0 6px rgba(255, 255, 255, .7); }
