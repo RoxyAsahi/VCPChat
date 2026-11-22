@@ -103,6 +103,8 @@ void main() {
     const CARD_FRAG = `
 #include <common>
 #include <fog_pars_fragment>
+// 取出端详用象牙白方案（B）；去掉这一行就是照参考的玻璃 + 暖棕内衬（A）
+#define HERO_IVORY
 uniform float uLightOn;
 uniform float uHero;
 uniform float uSeeThrough;
