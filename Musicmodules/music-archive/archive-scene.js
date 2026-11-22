@@ -1031,9 +1031,35 @@ vec3 archiveUntone(vec3 y) {
             return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
         };
 
+        /*
+         * 着色器先在后台编译好再开始画（KHR_parallel_shader_compile）。卡盒着色器很长，Windows 上第一次编译
+         * 能卡住界面几百毫秒；这里编译期间不画，打开音乐页时其余界面照常响应，第一帧出来时已经编好。
+         * 取出时才用到的封面材质、卡面标题也一起预先编译（临时挂一张 1×1 的白图、临时显示），之后第一次取出不再卡一下。
+         */
+        let shadersReady = typeof renderer.compileAsync !== 'function';
+        if (!shadersReady) {
+            const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+            white.needsUpdate = true;
+            const borrowMap = !artMat.map;
+            if (borrowMap) { artMat.map = white; artMat.needsUpdate = true; }
+            const shown = [coverGroup, labels[0]?.mesh].filter(Boolean);
+            const was = shown.map((o) => o.visible);
+            shown.forEach((o) => { o.visible = true; });
+            const jobs = [renderer.compileAsync(scene, camera)];
+            if (post.on) jobs.push(renderer.compileAsync(post.scene, post.camera));
+            shown.forEach((o, i) => { o.visible = was[i]; });
+            const done = () => {
+                if (borrowMap && artMat.map === white) { artMat.map = null; artMat.needsUpdate = true; }
+                white.dispose();
+                shadersReady = true;
+                invalidate();
+            };
+            Promise.all(jobs).then(done, done);
+        }
         let lastStep = performance.now();
         /* 推进一帧。返回这帧是否还在动（给外面决定要不要降帧/停画）。 */
         const step = (now) => {
+            if (!shadersReady) { lastStep = now; return { moving: true, idle: false, animated: true }; }
             const dt = Math.min((now - lastStep) / 1000, 0.05);
             lastStep = now;
             const T = now / 1000;
