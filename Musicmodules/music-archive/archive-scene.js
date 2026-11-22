@@ -864,7 +864,8 @@ vec3 archiveUntone(vec3 y) {
         let lastInput = performance.now();
         let lastPointer = 0;          // 鼠标移动带视差，也算没静止（但不打断待机起伏）
         let frames = 0;
-        const pointer = { x: 0, y: 0 };
+        const pointer = { x: 0, y: 0 };      // 镜头视差用的指针位置
+        const pointerAim = { x: 0, y: 0 };   // 指针实际在哪；取出端详时先记着，不动镜头
         const cellAt = new Int32Array(POOL * 2);
         const dummy = new THREE.Object3D();
         const view = new THREE.Vector3(-Math.sin(YAW) * Math.cos(ELEV), Math.sin(ELEV), Math.cos(YAW) * Math.cos(ELEV));
@@ -1203,6 +1204,10 @@ vec3 archiveUntone(vec3 y) {
                 else cardAim.lerp(targetPos, 1 - Math.exp(-dt * 10));
                 snapCardAim = false;
             }
+            if (!detailOn && detailK >= 0.001 && (pointer.x !== pointerAim.x || pointer.y !== pointerAim.y)) {
+                const f = reduced ? 1 : 1 - Math.exp(-dt * 5);
+                pointer.x += (pointerAim.x - pointer.x) * f; pointer.y += (pointerAim.y - pointer.y) * f;
+            } else if (!detailOn && detailK < 0.001) { pointer.x = pointerAim.x; pointer.y = pointerAim.y; }
             placeCamera(reduced);
             placeCover(targetVisible);
             placeLabels();
@@ -1293,7 +1298,16 @@ vec3 archiveUntone(vec3 y) {
             hovered = reducedMotion() ? null : k;
             invalidate();
         };
-        const setPointer = (x, y) => { pointer.x = x; pointer.y = y; lastPointer = performance.now(); if (!reducedMotion()) invalidate(); };
+        /*
+         * 照参考播放器 NativeSceneUpdate.cpp：只有能浏览（没取出卡）时指针才带动镜头视差。
+         * 卡取出端详时晃鼠标不再整帧重画；放回的过渡里（本来就在逐帧画）视差再缓缓跟上指针，不跳。
+         */
+        const setPointer = (x, y) => {
+            pointerAim.x = x; pointerAim.y = y; lastPointer = performance.now();
+            if (detailOn || reducedMotion()) return;
+            if (detailK < 0.001) { pointer.x = x; pointer.y = y; }
+            invalidate();
+        };
         const setPlaying = (cell, playingNow) => {
             const same = (cell && playing && cell.lane === playing.lane && cell.row === playing.row) || (!cell && !playing);
             if (same && playingNow === isPlaying) return;
