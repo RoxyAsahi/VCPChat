@@ -178,6 +178,11 @@ vec4 normalResponse(vec3 n, float dark) {
 vec3 field(vec3 p, vec3 n, float soft) {
     if (abs(p.x) > 9.0 || abs(p.z) > 7.0) return vec3(0.0);
     p.y = clamp(p.y, -0.4, 4.8);
+    float layer = pow(0.78, min(max(abs(p.z) / 0.62 - 0.35, 0.0), 12.0));
+    // 先估上限：五个光点合起来最多 3.44 / (0.30 + 到光点包围盒距离²)，乘层衰减后小于 0.0015 就不算了
+    // （0.0015 的线性亮度经过色调映射不到 1/255，画面上看不出差别）。阵列远处的大部分像素在这里就退出了
+    vec3 q = p - clamp(p, vec3(-2.22, 0.60, 0.08), vec3(1.10, 2.75, 0.08));
+    if (3.44 * layer / (0.30 + soft + dot(q, q)) < 0.0015) return vec3(0.0);
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 5; i++) {
         vec3 e = i == 0 ? vec3(-2.22, 0.60, 0.08) : i == 1 ? vec3(-2.22, 1.65, 0.08) : i == 2 ? vec3(-2.22, 2.75, 0.08)
@@ -190,7 +195,7 @@ vec3 field(vec3 p, vec3 n, float soft) {
         float I = power * (max(c, 0.0) * 0.28 + scatter) / (0.30 + soft + d2);
         sum += I * WARM * exp(-vec3(0.32, 0.90, 2.5) * 0.12 / max(abs(c), 0.22));
     }
-    return min(sum * pow(0.78, min(max(abs(p.z) / 0.62 - 0.35, 0.0), 12.0)), vec3(4.0));
+    return min(sum * layer, vec3(4.0));
 }
 void main() {
     float dark = vState.x;
@@ -202,7 +207,7 @@ void main() {
     // 托盘正面只在面板的圆孔、缺口里露出来：浏览时按顶面亮色画（孔看着是浅色小圆点），
     // 端详时换成固定螺丝的钛灰（参考 RhiScene.cpp musicDraws：Titanium_Fasteners 固定成暗色）
     bool socket = face == 2 && vLocal.z < 0.2;
-    if (socket) baked.rgb = mix(faceSample(1, vec2(0.5), dark).rgb, radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
+    if (socket) baked.rgb = mix(mix(uCenter[1], uCenter[7], dark), radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
     vec4 nr = normalResponse(n, dark);
     // 深色里暖光只留三分之一（不照搬参考：参考深色下光场和浅色同强度，大片琥珀色压在暗底上显脏）
     float glowGain = mix(1.0, 0.32, dark);
@@ -221,7 +226,7 @@ void main() {
         color = mix(shell, innerColor, uSeeThrough);
 #ifdef HERO_IVORY
         // 端详（方案 B）：内衬换成干净的象牙白，光场只留一成五
-        vec3 ivory = faceSample(1, vec2(0.5), dark).rgb * mix(0.97, 0.8, dark);
+        vec3 ivory = mix(uCenter[1], uCenter[7], dark) * mix(0.97, 0.8, dark);
         vec3 heroFront = ivory + (innerColor - inner.rgb) * 0.15;
 #else
         // 端详（方案 A，照参考）：面板走玻璃分支（opticalSurface.frag flags 3 + hero），
@@ -586,12 +591,13 @@ void main() {
                 sh.uniforms.uKeepExposure = post.exposure;
                 sh.fragmentShader = `uniform float uKeepExposure;
 vec3 archiveUntone(vec3 y) {
-    const mat3 IN_M = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
-    const mat3 OUT_M = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
-    vec3 v = clamp(inverse(OUT_M) * y, 0.0, 0.995);
+    // ACES 输入、输出矩阵的逆，事先算好（逐像素调用 inverse() 太贵）
+    const mat3 IN_INV = mat3(vec3(1.764741, -0.147028, -0.036337), vec3(-0.675778, 1.160252, -0.162436), vec3(-0.088963, -0.013224, 1.198773));
+    const mat3 OUT_INV = mat3(vec3(0.643038, 0.059269, 0.005962), vec3(0.311187, 0.931436, 0.063929), vec3(0.045775, 0.009295, 0.930118));
+    vec3 v = clamp(OUT_INV * y, 0.0, 0.995);
     vec3 qa = 1.0 - 0.983729 * v, qb = 0.0245786 - 0.4329510 * v, qc = -(0.000090537 + 0.238081 * v);
     v = (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa);
-    return max(inverse(IN_M) * v, 0.0) * 0.6 / max(uKeepExposure, 0.01);
+    return max(IN_INV * v, 0.0) * 0.6 / max(uKeepExposure, 0.01);
 }
 ` + sh.fragmentShader.replace('#include <colorspace_fragment>', 'gl_FragColor.rgb = archiveUntone(gl_FragColor.rgb);\n#include <colorspace_fragment>');
             };
@@ -1035,7 +1041,7 @@ vec3 archiveUntone(vec3 y) {
             labelWanted.clear();
             let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
-                for (let ri = -ROWS_BEFORE; ri < ROWS_AFTER; ri++) {
+                for (let ri = ROWS_AFTER - 1; ri >= -ROWS_BEFORE; ri--) {   // 近处的行先画：深度测试挡掉后面被遮住的像素，复杂的卡盒着色只算看得见的
                     const lane = baseLane + li;
                     const row = baseRow + ri;
                     let f = settlingWave(row - shoulder.v) * columnStrength(lane, focus.v);
