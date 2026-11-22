@@ -889,8 +889,31 @@ vec3 archiveUntone(vec3 y) {
             idleGain = 0;
             invalidate();
         };
+        /*
+         * 拖动整片档案：参考播放器 NativeSceneInput.cpp 的 moveArchive / dragProjection。
+         * hold() 直接把镜头放在给定的（可带小数的）格坐标上，unhold() 交回弹簧，从当时的位置和速度接着走。
+         * dragAxes() 给出选中卡中心附近「卡片整体移动一列 / 一行」在画布上对应的像素向量，外面据此把指针位移反解成格数。
+         */
+        let held = null;
+        const hold = (lane, row, vl = 0, vr = 0) => {
+            held = { lane, row, vl, vr };
+            lastInput = performance.now();
+            idleGain = 0;
+            invalidate();
+        };
+        const unhold = () => { if (held) { held = null; invalidate(); } };
+        const camAt = () => ({ lane: camLane.v, row: camRow.v });
+        const dragAxes = () => {
+            const c = new THREE.Vector3((target.lane - camLane.v) * COLUMN_SPACING, BASE_Y + 1.85, (target.row - camRow.v) * ROW_SPACING - 2.17);
+            const px = (v) => { v.project(camera); return { x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H }; };
+            const o = px(c.clone());
+            const l = px(c.clone().add(new THREE.Vector3(COLUMN_SPACING, 0, 0)));
+            const r = px(c.clone().add(new THREE.Vector3(0, 0, ROW_SPACING)));
+            return { lane: { x: l.x - o.x, y: l.y - o.y }, row: { x: r.x - o.x, y: r.y - o.y } };
+        };
         /* 不带动画直接跳到某格（第一次打开、数据重建） */
         const jump = (lane, row) => {
+            held = null;
             target.lane = lane; target.row = row;
             camLane.v = focus.v = lane; camRow.v = shoulder.v = row;
             camLane.vel = camRow.vel = shoulder.vel = focus.vel = 0;
@@ -1012,8 +1035,13 @@ vec3 archiveUntone(vec3 y) {
                 }
             }
             const rate = reduced ? 9 : 3.7;
-            damp(camLane, target.lane, rate, dt);
-            damp(camRow, target.row, rate, dt);
+            if (held) {
+                // 按住拖动或松手滑行时镜头位置由外面给（参考播放器 m_dragTrack / m_momentum）
+                camLane.v = held.lane; camRow.v = held.row; camLane.vel = held.vl; camRow.vel = held.vr;
+            } else {
+                damp(camLane, target.lane, rate, dt);
+                damp(camRow, target.row, rate, dt);
+            }
             // 参考播放器 NativeSceneUpdate.cpp：肩部隆起 5、列聚焦 4，都比镜头（3.7）先到位一点
             damp(shoulder, target.row, reduced ? rate : 5, dt);
             damp(focus, target.lane, reduced ? rate : 4, dt);
@@ -1232,7 +1260,7 @@ vec3 archiveUntone(vec3 y) {
             canvas,
             tier,
             resize, setTheme, select, jump, step, pick, setHover, setPointer, setPlaying, touch, raise, setLabeler, setLabelMask, refreshLabels, dispose,
-            setDetail, setDetailRoom, setCover, turn, detailRect,
+            setDetail, setDetailRoom, setCover, turn, detailRect, hold, unhold, camAt, dragAxes,
             get detail() { return detailOn; },
             get dirty() { return dirty; },
             get target() { return { ...target }; },
