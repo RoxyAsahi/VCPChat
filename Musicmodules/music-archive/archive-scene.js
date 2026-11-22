@@ -488,7 +488,7 @@ void main() {
                     draws++;
                 }
                 L.mesh.position.set(w.x, w.y, w.z);
-                L.mesh.rotation.x = w.tilt || 0;   // 跟卡一起顺着坡度微倾
+                L.mesh.rotation.set(w.tilt || 0, w.turn || 0, 0);   // 跟卡一起顺着坡度微倾、一起转回正面
                 if (underMask(w)) { L.mesh.visible = false; continue; }
                 // 当前列的标题实一些，左右邻列淡一些（邻列离相机更近，不压低会比当前列还显眼）
                 L.mat.opacity = w.li === 0 ? 1 : 0.5;
@@ -881,7 +881,7 @@ vec3 archiveUntone(vec3 y) {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
             // 旧卡抬得明显时（取出中、展开中）从当时的高度落回去，不瞬间掉下
-            if (lift.v > 0.5 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: lift.vel });
+            if (lift.v > 0.5 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: lift.vel, rot: inspect.v });
             returning.delete(lane + ':' + row);
             target.lane = lane; target.row = row;
             lift.v = 0; lift.vel = 0;
@@ -1051,7 +1051,9 @@ vec3 archiveUntone(vec3 y) {
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
                 r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
-                if (Math.abs(r.v) < 0.002) returning.delete(k);
+                // 转着看的卡被换下时边落边转回正面（参考播放器 returning actor 的 returnStep，速率 7）
+                r.rot = Math.abs(r.rot || 0) <= 0.001 ? 0 : r.rot * Math.exp(-dt * (reduced ? 35 : 7));
+                if (Math.abs(r.v) < 0.002 && !r.rot) returning.delete(k);
             }
             {
                 // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
@@ -1104,17 +1106,18 @@ vec3 archiveUntone(vec3 y) {
                     let y = BASE_Y + f + hl;
                     const isTarget = lane === target.lane && row === target.row;
                     if (isTarget) y += lift.v;
-                    else if (returning.size) { const r = returning.get(lane + ':' + row); if (r) y += r.v; }
+                    let backRot = 0;
+                    if (!isTarget && returning.size) { const r = returning.get(lane + ':' + row); if (r) { y += r.v; backRot = r.rot || 0; } }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
                     // 选中卡抬起后不再跟着坡度倾斜（× (1 − smoother(lift / 0.4))），取出时可以转着看
                     dummy.rotation.x = isTarget ? tilt * (1 - smoother(lift.v / 0.4)) : tilt;
-                    dummy.rotation.y = isTarget ? inspect.v : 0;
+                    dummy.rotation.y = isTarget ? inspect.v : backRot;
                     if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
                     const dl = lane - target.lane, dr = row - target.row;
                     if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
                         const info = labelFor(lane, row);
-                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z, tilt: dummy.rotation.x });
+                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z, tilt: dummy.rotation.x, turn: dummy.rotation.y });
                     }
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
