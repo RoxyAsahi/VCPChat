@@ -539,24 +539,27 @@ void main() {
                     tColor: { value: post.rt.texture },
                     uTexel: { value: new THREE.Vector2(1, 1) },
                     uTheme: { value: 1 },
-                    uShade: { value: 0 }
+                    uShade: { value: 0 },
+                    uScale: { value: new THREE.Vector2(1, 1) }
                 },
                 vertexShader: 'varying vec2 vUv;\nvoid main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
                 fragmentShader: `uniform sampler2D tColor;
 uniform vec2 uTexel;
 uniform float uTheme;
 uniform float uShade;
+uniform vec2 uScale;
 varying vec2 vUv;
+// 镜头快速移动时场景只画到渲染目标左下角一块（见 render 处），这里按比例取样，并且不读出那块范围
+vec3 tap(vec2 uv) { return texture2D(tColor, clamp(uv, vec2(0.0), uScale - 0.5 * uTexel)).rgb; }
 void main() {
     float down = 1.0 - vUv.y;   // 从画面顶边往下量
     float keep = 1.0 - uShade;
     float away = smoothstep(0.05, 0.48, abs(down - 0.52));
-    vec2 t = uTexel * (1.0 + 6.0 * away * keep);
-    vec3 c = texture2D(tColor, vUv).rgb * 4.0;
-    c += 2.0 * (texture2D(tColor, vUv + vec2(t.x, 0.0)).rgb + texture2D(tColor, vUv - vec2(t.x, 0.0)).rgb
-        + texture2D(tColor, vUv + vec2(0.0, t.y)).rgb + texture2D(tColor, vUv - vec2(0.0, t.y)).rgb);
-    c += texture2D(tColor, vUv + t).rgb + texture2D(tColor, vUv - t).rgb
-        + texture2D(tColor, vUv + vec2(t.x, -t.y)).rgb + texture2D(tColor, vUv + vec2(-t.x, t.y)).rgb;
+    vec2 t = uTexel * (1.0 + 6.0 * away * keep) * uScale;
+    vec2 uv = vUv * uScale;
+    vec3 c = tap(uv) * 4.0;
+    c += 2.0 * (tap(uv + vec2(t.x, 0.0)) + tap(uv - vec2(t.x, 0.0)) + tap(uv + vec2(0.0, t.y)) + tap(uv - vec2(0.0, t.y)));
+    c += tap(uv + t) + tap(uv - t) + tap(uv + vec2(t.x, -t.y)) + tap(uv + vec2(-t.x, t.y));
     gl_FragColor = vec4(c / 16.0, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -862,6 +865,7 @@ vec3 archiveUntone(vec3 y) {
                 const dpr = renderer.getPixelRatio();
                 const px = { x: Math.max(1, Math.floor(W * dpr)), y: Math.max(1, Math.floor(H * dpr)) };
                 post.rt.setSize(px.x, px.y);
+                post.px = px;
                 post.mat.uniforms.uTexel.value.set(1 / px.x, 1 / px.y);
             }
             camera.aspect = W / H;
@@ -1120,6 +1124,20 @@ vec3 archiveUntone(vec3 y) {
             glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
                 post.mat.uniforms.uShade.value = detailK;
+                /*
+                 * 镜头在两列/两行之间滑得快的那一段，画面本来就在动、看不清细节，场景只按 0.67 倍边长画
+                 * （约一半像素），由后期放大。滑到慢下来（速度低于 0.25 格/秒）就回到全分辨率，
+                 * 停稳的那一帧和之后的静止画面都是全分辨率，和原来一样。取出端详时不降。
+                 */
+                const speed = Math.abs(camLane.vel) + Math.abs(camRow.vel);
+                const s = !reduced && detailK < 0.001 && !detailOn && speed > 0.25 && post.px ? 0.67 : 1;
+                const px = post.px || { x: 1, y: 1 };
+                const vw = Math.max(1, Math.round(px.x * s)), vh = Math.max(1, Math.round(px.y * s));
+                post.rt.viewport.set(0, 0, vw, vh);
+                post.rt.scissor.set(0, 0, vw, vh);
+                post.rt.scissorTest = s < 1;
+                post.mat.uniforms.uScale.value.set(vw / px.x, vh / px.y);
+                post.lowRes = s < 1;
                 renderer.setRenderTarget(post.rt);
                 renderer.render(scene, camera);
                 renderer.setRenderTarget(null);
