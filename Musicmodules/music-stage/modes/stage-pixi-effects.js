@@ -79,7 +79,12 @@ void main() {
     float vignette = smoothstep(0.52,1.08,radius)*uVignette*0.6;
     finalColor = mix(color,vec4(uPaper,1.0),vignette);
 }`;
-    const createPostProcess = (PIXI, stage) => {
+    // Whether a stage created with this config draws through the print filter.
+    // The directors leave the canvas without multisampling when it does.
+    const lensOn = (config, mode) => config?.quality !== 'energy-saving'
+        && config?.modes?.[mode]?.postProcess !== false;
+    const createPostProcess = (PIXI, stage, options = {}) => {
+        const canvasAntialias = options.canvasAntialias !== false;
         const descriptors = {};
         ['Distortion', 'Dispersion', 'Rgb', 'Grain', 'Contrast', 'Halftone', 'Vignette', 'Time']
             .forEach(key => { descriptors[`u${key}`] = { value: 0, type: 'f32' }; });
@@ -90,6 +95,22 @@ void main() {
             resources: { opticalUniforms: uniforms },
             antialias: 'on'
         });
+        // With the print filter on, the stage is drawn into the filter's own
+        // multisampled target and the canvas only receives one full-screen
+        // quad, so a canvas created for that case has no multisampling of its
+        // own (a second multisampled buffer and resolve every frame, for
+        // nothing). If the filter is switched off later on such a canvas, a
+        // pass that copies the stage unchanged keeps the edges smoothed.
+        const copy = canvasAntialias ? null : new PIXI.AlphaFilter({ alpha: 1, antialias: 'on' });
+        let applied = null;
+        const apply = (next, width, height) => {
+            if (applied !== next) { stage.filters = next ? [next] : null; applied = next; }
+            if (!next) return;
+            if (!stage.filterArea) stage.filterArea = new PIXI.Rectangle();
+            stage.filterArea.x = stage.filterArea.y = 0;
+            stage.filterArea.width = width;
+            stage.filterArea.height = height;
+        };
         return {
             update(frame, tuning, width, height) {
                 const kick = motionScale(tuning) * amount(tuning.opticalImpact, 0.65, 1) * clamp(tuning.performance?.impact || 0);
@@ -104,19 +125,15 @@ void main() {
                 };
                 const enabled = tuning.postProcess !== false && tuning.quality !== 'energy-saving'
                     && Object.values(values).some(value => value > 0);
-                stage.filters = enabled ? [filter] : null;
+                apply(enabled ? filter : copy, width, height);
                 if (!enabled) return;
-                if (!stage.filterArea) stage.filterArea = new PIXI.Rectangle();
-                stage.filterArea.x = stage.filterArea.y = 0;
-                stage.filterArea.width = width;
-                stage.filterArea.height = height;
                 Object.entries(values).forEach(([key, value]) => { uniforms.uniforms[`u${key}`] = value; });
                 uniforms.uniforms.uTime = frame.playbackTime || 0;
                 const paper = tuning.palette?.background || '#171a1d';
                 const n = parseInt(paper.slice(1), 16);
                 uniforms.uniforms.uPaper.set([(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]);
             },
-            destroy() { stage.filters = null; filter.destroy(); }
+            destroy() { stage.filters = null; applied = null; filter.destroy(); copy?.destroy(); }
         };
     };
 
@@ -1346,7 +1363,7 @@ void main() {
     };
 
     global.MusicStagePixiEffects = Object.freeze({
-        createRetirement, createEditorialTrack,
+        createRetirement, createEditorialTrack, lensOn,
         createPerformance, buildPhraseStage, animatePhraseStage, createAccentChoreography,
         amount, ease, expo, clear, camera, shotKind, glyphTiming, buildLyrics, animateLyrics, motionScale, createPostProcess,
         applyQuality, transition, buildMotif, compilePhrases

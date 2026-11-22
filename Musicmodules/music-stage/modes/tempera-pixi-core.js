@@ -194,7 +194,10 @@
 
     // Pixi 渲染器实现
     class TemperaPixiDirector {
-        constructor(container) {
+        constructor(container, options = {}) {
+            // Multisampled canvas only when the stage will not be drawn through
+            // the print filter's own multisampled target (createPostProcess).
+            this.canvasAntialias = options.canvasAntialias !== false;
             this.container = container;
             // The size is known from the resize observer; reading it every
             // frame makes the browser lay the page out again before each one.
@@ -239,7 +242,8 @@
                 backgroundAlpha: 0,
                 preference: 'webgl',
                 autoStart: false,
-                antialias: true,
+                // See canvasAntialias in the constructor.
+                antialias: this.canvasAntialias,
                 resolution: Math.min(2, global.devicePixelRatio || 1),
                 autoDensity: true
             });
@@ -280,7 +284,7 @@
             this.sceneContainer.addChild(this.bloomContainer);
             this.app.stage.addChild(this.sceneContainer);
 
-            this.postProcess = Effects.createPostProcess(PIXI, this.app.stage);
+            this.postProcess = Effects.createPostProcess(PIXI, this.app.stage, { canvasAntialias: this.canvasAntialias });
             this.retirement = Effects.createRetirement(PIXI, this.app.stage);
             this.initialized = true;
             this.resize();

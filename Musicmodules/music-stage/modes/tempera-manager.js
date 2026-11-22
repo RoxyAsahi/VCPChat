@@ -44,7 +44,9 @@
         });
 
         // 实例化 Pixi.js 凝彩高级导演
-        const director = global.TemperaPixiDirector ? new global.TemperaPixiDirector(stageContainer) : null;
+        const director = global.TemperaPixiDirector ? new global.TemperaPixiDirector(stageContainer, {
+            canvasAntialias: !global.MusicStagePixiEffects.lensOn(mode.config, 'tempera')
+        }) : null;
         if (director) {
             director.init().then(() => {
                 if (!mode.destroyed && latestFrame) mode.updateFrame(latestFrame);

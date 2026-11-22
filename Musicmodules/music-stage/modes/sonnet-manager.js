@@ -35,7 +35,9 @@
         });
 
         // 实例化 Pixi.js 商籁高级图形导演
-        const director = global.SonnetPixiDirector ? new global.SonnetPixiDirector(stageContainer) : null;
+        const director = global.SonnetPixiDirector ? new global.SonnetPixiDirector(stageContainer, {
+            canvasAntialias: !global.MusicStagePixiEffects.lensOn(mode.config, 'sonnet')
+        }) : null;
         if (director) {
             director.init().then(() => {
                 if (!mode.destroyed && latestFrame) mode.updateFrame(latestFrame);
