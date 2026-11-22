@@ -36,6 +36,7 @@
         let cameraY = 0, cameraX = 0, cameraScale = 1;
         let paperWidth = 1, paperHeight = 1;
         let shapes = [];
+        const still = U.createStillGate();
         const tuning = () => mode.config.modes?.fume || {};
         const intensity = () => reduced?.matches ? 0 : value(mode.config.animationIntensity, 1);
 
@@ -354,6 +355,15 @@
             if (lines !== frame.lines || trackKey !== nextTrackKey) {
                 lines = frame.lines; trackKey = nextTrackKey; dirty = true;
             }
+            // Paused and nothing changed: the page and its background already
+            // show this frame, so neither is written or repainted again.
+            if (!dirty) {
+                const accent = resolveAccent(services?.app);
+                const box = card.box;
+                const extra = `${width}x${height}@${pixelRatio}|${accent.r},${accent.g},${accent.b}|${intensity()}`
+                    + `|${box ? `${box.left},${box.right},${box.top},${box.bottom}` : ''}`;
+                if (still.same(frame, extra)) return;
+            } else still.invalidate();
             if (dirty) compile();
             rebuildShapes();
             const t = tuning();
@@ -416,12 +426,13 @@
             const after = config.modes?.fume || {};
             if (['heroScale', 'articleSpacing'].some(key => before[key] !== after[key])) dirty = true;
             updateConfig(config);
+            still.invalidate();
             if (latestFrame) mode.updateFrame(latestFrame);
         };
         mode.resize = () => { resize(); if (latestFrame) mode.updateFrame(latestFrame); };
         mode.suspend = () => { paused = true; };
-        mode.resume = () => { paused = false; if (latestFrame) mode.updateFrame(latestFrame); };
-        mode.updateTheme = () => { shapeKey = ''; dirty = true; };
+        mode.resume = () => { paused = false; still.invalidate(); if (latestFrame) mode.updateFrame(latestFrame); };
+        mode.updateTheme = () => { shapeKey = ''; dirty = true; still.invalidate(); };
         mode.scope.listen(document.fonts, 'loadingdone', () => {
             dirty = true;
             if (latestFrame) mode.updateFrame(latestFrame);

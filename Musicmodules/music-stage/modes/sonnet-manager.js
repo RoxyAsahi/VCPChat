@@ -22,6 +22,7 @@
 
         let renderedKey = '';
         let paused = false;
+        const still = Utils.createStillGate();
 
         let latestFrame = null;
         const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -67,10 +68,12 @@
             if (key !== renderedKey || changed) buildScene(currentFrame);
 
             const tuning = getTuning();
-            director?.update(currentFrame, tuning);
-
             const caption = Utils.lineCounter(currentFrame);
             if (hud.textContent !== caption) hud.textContent = caption;
+            // Paused and nothing changed: the canvas already shows this frame.
+            if (still.same(currentFrame, `${Boolean(director?.initialized)}|${director?.width}x${director?.height}`
+                + `|${JSON.stringify(tuning.palette ?? null)}|${tuning.reducedMotion}`)) return;
+            director?.update(currentFrame, tuning);
         };
 
         const updateConfig = mode.updateConfig;
@@ -80,6 +83,7 @@
             const rebuild = ['fontScale', 'shotFlow', 'lyricLayout', 'phraseLength'].some(key => before[key] !== after[key]);
             updateConfig(config);
             if (rebuild) renderedKey = '';
+            still.invalidate();
             if (latestFrame) mode.updateFrame(latestFrame);
         };
         mode.getDebugSnapshot = () => director?.getDebugSnapshot() || { initialized: false };
@@ -90,10 +94,12 @@
         };
         mode.resume = () => {
             paused = false;
+            still.invalidate();
             mode.root.classList.remove('is-suspended');
         };
         mode.updateTheme = () => {
             renderedKey = '';
+            still.invalidate();
         };
         mode.scope.add(() => {
             director?.destroy();
