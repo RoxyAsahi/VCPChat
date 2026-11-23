@@ -3277,6 +3277,44 @@ body.music-stage-active #custom-title-bar,
 .music-stage .music-stage-edge-corners i {
     opacity: calc((0.2 + var(--stage-audio-bass, 0) * 0.74) * var(--stage-edge-fade));
 }
+/* The orbiting light is a child the size of the ring's diagonal carrying the
+   same conic gradient; turning it about the centre draws what the moving
+   `from` angle drew, but as a compositor transform: the ring is no longer
+   restyled and its masked gradient no longer repainted at every step. */
+.music-stage .music-stage-edge-flow {
+    container-type: size;
+    background: none;
+    animation: none;
+}
+.music-stage-edge-flow-light {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: hypot(100cqw, 100cqh);
+    height: hypot(100cqw, 100cqh);
+    translate: -50% -50%;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg 36deg,
+        color-mix(in srgb, var(--stage-accent) 16%, transparent) 58deg,
+        color-mix(in srgb, var(--stage-accent) 90%, var(--stage-ink)) 76deg,
+        transparent 101deg 192deg,
+        color-mix(in srgb, var(--stage-ink) 28%, transparent) 220deg,
+        color-mix(in srgb, var(--stage-accent) 72%, var(--stage-ink)) 242deg,
+        transparent 270deg 360deg
+    );
+    animation: stage-edge-flow-turn 9s steps(270) infinite;
+}
+.music-stage:not(.is-playing) .music-stage-edge-flow-light {
+    animation-duration: 18s;
+    animation-timing-function: steps(540);
+    animation-play-state: paused;
+}
+@keyframes stage-edge-flow-turn {
+    to {
+        rotate: 360deg;
+    }
+}
 
 /* The ambience blurred once into a small canvas (see softCanvas in the host). */
 .music-stage-backdrop-soft {

@@ -113,6 +113,15 @@
             edgeStrips[side] = { canvas, context, x: 0, y: 0, width: 0, height: 0 };
         });
         const edgeContext = edgeStrips.left ? edgeStrips.top.context : null;
+        // The orbiting light of the edge ring: its gradient is drawn once and
+        // turned by the compositor, instead of the ring being restyled and its
+        // masked gradient painted again at every step of the orbit.
+        const edgeFlow = elements.edgeSpectrum?.querySelector('.music-stage-edge-flow');
+        if (edgeFlow && !edgeFlow.querySelector('.music-stage-edge-flow-light')) {
+            const light = document.createElement('div');
+            light.className = 'music-stage-edge-flow-light';
+            edgeFlow.prepend(light);
+        }
         const prefersReducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const edgeCanvasState = {
             width: 0,
