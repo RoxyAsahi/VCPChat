@@ -718,7 +718,11 @@ body.music-dock-beside-lyrics:has(#music-dock-root.md-fl-low) .archive-hud.lyric
 body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 .archive-list { --brand-room: 108px; }
 .archive-hud:not(.narrow):not(.squeeze):not(.tiny) .archive-list { top: calc(var(--archive-toolbar-top) + var(--brand-room) - 34px); }
-.archive-hud:is(.narrow, .squeeze, .tiny) .archive-list-brand { display: none; }
+.archive-hud:is(.squeeze, .tiny) .archive-list-brand { display: none; }
+/* 窄窗口：目录顶上只有一行导航的高度，栏名缩小、不放小字 */
+.archive-hud.narrow .archive-list-brand { bottom: calc(100% + 12px); }
+.archive-hud.narrow .archive-list-brand-title { height: 36px; font-size: 30px; line-height: 36px; }
+.archive-hud.narrow .archive-list-brand-sub { display: none; }
 .archive-list-brand { position: absolute; left: var(--gutter); right: var(--text-end-inset); bottom: calc(100% + 18px); color: var(--ar-ink); pointer-events: none; white-space: nowrap; }
 .archive-list-brand-title { position: relative; height: 50px; margin: 0; overflow: hidden; font-size: 44px; line-height: 50px; font-weight: 750; letter-spacing: 1.5px; }
 .archive-list-brand-title > span { position: absolute; left: 0; top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
@@ -734,10 +738,15 @@ body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 /* 表头：原版目录表上方一行 9–10px 的列名（编号 / 曲目 / 时长），下面一条细线，和下面的行对齐成列 */
 .archive-list-cols { display: grid; grid-template-columns: var(--no-w) minmax(0, 1fr) auto; gap: 10px; margin-left: var(--gutter); padding: 0 var(--text-end-inset) 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--ar-ink) 24%, transparent); font-size: 10px; line-height: 12px; letter-spacing: .8px; color: color-mix(in srgb, var(--ar-ink) 55%, transparent); white-space: nowrap; }
 .archive-list-cols > span:first-child { padding-left: 10px; }
-.archive-hud:is(.narrow, .tiny) .archive-list-cols { display: none; }
+.archive-hud.tiny .archive-list-cols { display: none; }
 #music-archive-view.is-empty .archive-list-cols { visibility: hidden; }
 /* 检索命中：原版在命中的字下面画一条 2px 琥珀色线 */
 .archive-list-row .tx mark { text-decoration-color: var(--ar-accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
 /* 最上面那个分组紧贴表头的细线，不再自己压一条结构线 */
 .archive-list-group[data-k="0"] { box-shadow: none; }
 .archive-list-letter[data-k="0"] { border-top-color: transparent; }
+/* 小字对比度：浅色纸底上编号、副标题、时长、表头都到 4.5:1 以上（原来 42–55% 在浅色下只有 2.8–4.2:1） */
+.archive-list-row .no { color: color-mix(in srgb, var(--ar-ink) 58%, transparent); }
+.archive-list-row .tx em, .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 64%, transparent); }
+.archive-list-cols, .archive-list-letter > i { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); }
+.archive-list-group i { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); }
