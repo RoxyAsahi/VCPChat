@@ -98,4 +98,4 @@ process.stdin.on('end', () => {
         console.error(error.message);
         process.exit(1); // Exit with a non-zero code to indicate failure.
     }
-});
+});
