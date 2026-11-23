@@ -15,11 +15,14 @@ const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
+const { createMusicThumbar } = require('../musicThumbar');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
 
 let musicWindow = null;
+// 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
+const musicThumbar = createMusicThumbar({ nativeImage: electron.nativeImage });
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
@@ -171,6 +174,11 @@ function createOrFocusMusicWindow() {
             musicWindow.show();
             musicCapsuleState = { ...musicCapsuleState, open: true };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
+        });
+        // 窗口藏起来再显示时 Windows 会丢掉缩略图按钮，重新设一遍
+        musicWindow.on('show', () => {
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
         });
 
         // Wait for the renderer to signal that it's ready
@@ -224,6 +232,7 @@ function createOrFocusMusicWindow() {
             currentSongInfo = null; // 清理歌曲信息
             musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
             publishMusicCapsule();
+            musicThumbar.reset();
             musicGrooveBus.publish({ playing: false });
             pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
@@ -251,6 +260,7 @@ function createOrFocusMusicWindow() {
             audioEngineApi('/pause', 'POST').catch(() => {});
             musicCapsuleState = { ...musicCapsuleState, playing: false };
             publishMusicCapsule();
+            musicThumbar.update(crashedWindow, { playing: false });
             musicGrooveBus.publish({ playing: false });
             const now = Date.now();
             crashTimes = crashTimes.filter((at) => now - at < MUSIC_CRASH_WINDOW_MS).concat(now);
@@ -691,6 +701,7 @@ function initialize(options) {
                 playing: state?.playing === true
             };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing });
             if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
             followTrackChange(state).catch(() => {});
         });
