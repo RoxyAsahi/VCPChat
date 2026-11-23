@@ -350,7 +350,7 @@ void main() {
      * 两块合成一个几何体，只有位置和法线。
      */
     const cassetteGeometry = (THREE) => {
-        const tray = roundedBox(THREE, 4.986, 3.68, 0.32, 2, 0.03);
+        const tray = roundedBox(THREE, 4.986, 3.68, 0.32, 3, 0.022);   // 外框圆角照参考模型量的 0.018–0.035，取 0.022
         tray.translate(0, 1.85, 0.03);            // z -0.13 … 0.19
         const B = 0.012;                          // 面板倒角
         const shape = new THREE.Shape();
