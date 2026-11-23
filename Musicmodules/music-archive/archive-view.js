@@ -47,7 +47,7 @@
                 <button type="button" data-act="add-cloud">从云端导入 <span aria-hidden="true">→</span></button>
             </div>
             <div class="archive-bottom">
-                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
+                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
                 <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
@@ -370,7 +370,87 @@
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
+            renderRuler(col, count, r);
             syncCard();
+        };
+
+        /*
+         * 索引标尺（借鉴 RhinE 档案页阵列下方的刻度尺）：一组里的曲目摊成一排细刻线，
+         * 多于刻线数时每根代表相等的一段；当前位置是一根高的强调色刻线。
+         * 悬停在上面显示那一格的曲名，按住左右拖动一路选过去，松手停下；两头的 ↑ ↓ 逐首走。
+         */
+        const RULER_TICKS = 32;
+        let rulerKey = '';
+        const rulerTicks = (count) => Math.min(count, RULER_TICKS);
+        const renderRuler = (col, count, r) => {
+            const el = refs.ruler;
+            if (!el) return;
+            el.hidden = count < 2;
+            if (count < 2) return;
+            const n = rulerTicks(count);
+            const key = col.id + ':' + count;
+            if (key !== rulerKey) {
+                rulerKey = key;
+                refs.rulerTrack.style.setProperty('--ticks', n);
+                refs.rulerTrack.setAttribute('aria-valuemin', '1');
+                refs.rulerTrack.setAttribute('aria-valuemax', String(count));
+            }
+            // 刻线 i 管 [i*count/n, (i+1)*count/n) 这几首；位置线按所在那一段的中点放
+            const tick = Math.min(n - 1, Math.floor(r * n / count));
+            refs.rulerAt.style.setProperty('--at', ((tick + 0.5) / n).toFixed(4));
+            refs.rulerTrack.setAttribute('aria-valuenow', String(r + 1));
+        };
+        const rulerRowAt = (clientX) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (count < 2) return -1;
+            const box = refs.rulerTrack.getBoundingClientRect();
+            const f = Math.min(0.9999, Math.max(0, (clientX - box.left) / Math.max(1, box.width)));
+            const n = rulerTicks(count);
+            const tick = Math.floor(f * n);
+            // 一根刻线代表好几首时，按刻线内的位置细分，拖动时能走到每一首
+            return Math.min(count - 1, Math.floor((tick + (f * n - tick)) * count / n));
+        };
+        const rulerTipAt = (clientX) => {
+            const row = rulerRowAt(clientX);
+            const col = column();
+            const t = row >= 0 && col ? tracks()[col.items[row]] : null;
+            if (!t) { refs.rulerTip.classList.remove('on'); return; }
+            const box = refs.rulerTrack.getBoundingClientRect();
+            refs.rulerTip.textContent = pad(row + 1, Math.max(2, String(col.items.length).length)) + '  ' + (Model.stripExtension(t.title) || '未知标题');
+            // HUD 整体按设计稿缩放过：屏幕像素换回标尺自己的像素
+            const k = refs.rulerTrack.offsetWidth / Math.max(1, box.width);
+            refs.rulerTip.style.left = Math.round(Math.min(box.width, Math.max(0, clientX - box.left)) * k) + 'px';
+            refs.rulerTip.classList.add('on');
+        };
+        const bindRuler = () => {
+            const track = refs.rulerTrack;
+            if (!track) return;
+            let dragging = false;
+            track.addEventListener('pointermove', (e) => {
+                rulerTipAt(e.clientX);
+                if (dragging) { const row = rulerRowAt(e.clientX); if (row >= 0) goRow(row, { pulse: false }); }
+            });
+            track.addEventListener('pointerleave', () => { if (!dragging) refs.rulerTip.classList.remove('on'); });
+            track.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                dragging = true;
+                track.setPointerCapture?.(e.pointerId);
+                track.classList.add('drag');
+                stopInertia();
+                const row = rulerRowAt(e.clientX);
+                if (row >= 0) goRow(row);
+            });
+            const end = (e) => {
+                if (!dragging) return;
+                dragging = false;
+                track.classList.remove('drag');
+                track.releasePointerCapture?.(e.pointerId);
+                if (e.type === 'pointercancel' || !track.matches(':hover')) refs.rulerTip.classList.remove('on');
+            };
+            track.addEventListener('pointerup', end);
+            track.addEventListener('pointercancel', end);
         };
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
@@ -1470,6 +1550,8 @@
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
                     case 'pick': randomPick(); break;
+                    case 'row-prev': select(state.lane, state.row - 1); break;
+                    case 'row-next': select(state.lane, state.row + 1); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
@@ -1536,6 +1618,7 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        bindRuler();
         // 随机抽取跑着时，点哪里、滚轮都先停下（抽取按钮自己除外：再点一下不会重来）
         const onPickInterrupt = (e) => {
             if (!pick.on) return;

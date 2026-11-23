@@ -89,6 +89,20 @@ body.music-reduce-motion .archive-nav > button.running .archive-glyph-pick { ani
 .archive-tiny { font-size: 11px; letter-spacing: 1.7px; }
 .archive-counter > div { font-size: 58px; line-height: 1.1; margin-top: 16px; display: flex; gap: 21px; align-items: baseline; }
 .archive-counter i { font-style: normal; font-weight: 300; font-size: 32px; color: var(--ar-slash, var(--ar-muted)); }
+/* 索引标尺：计数下面一排细刻线，当前位置一根高的强调色线；悬停显示曲名，按住拖动选曲 */
+.archive-ruler { position: absolute; top: calc(100% + 14px); left: -6px; display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+.archive-ruler[hidden] { display: none; }
+.archive-ruler > button { width: 22px; height: 22px; display: grid; place-items: center; font-size: 13px; line-height: 1; color: var(--ar-muted); }
+.archive-ruler > button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-ruler-track { --ticks: 32; position: relative; width: calc(var(--ticks) * 7px); height: 22px; cursor: ew-resize; touch-action: none;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ar-ink) 42%, transparent) 0 1px, transparent 1px 7px) 3px 50% / calc(100% - 3px) 9px no-repeat; }
+.archive-ruler-track:hover, .archive-ruler-track.drag { background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ar-ink) 70%, transparent) 0 1px, transparent 1px 7px); }
+.archive-ruler-at { --at: 0; position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 2px; margin-left: -1px; background: var(--ar-accent); transition: left .32s var(--mt-ease, ease); pointer-events: none; }
+.archive-ruler-track.drag .archive-ruler-at { transition: none; }
+.archive-ruler-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); padding: 3px 8px; font-size: 11px; font-weight: 400; letter-spacing: .5px; line-height: 16px; white-space: pre; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--ar-paper, #fff); background: var(--ar-ink); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.archive-ruler-tip.on { opacity: 1; }
+body.music-reduce-motion .archive-ruler-at { transition: none; }
+.archive-hud.short .archive-ruler { display: none; }
 .archive-count-total { font-size: 22px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 .archive-footer { position: absolute; bottom: 35px; left: 59px; right: 59px; font-size: 10px; letter-spacing: .9px; display: flex; gap: 44px; color: var(--ar-foot, var(--ar-muted)); }
 .archive-footer > span { display: flex; align-items: center; gap: 10px; }
