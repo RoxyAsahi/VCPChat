@@ -227,6 +227,8 @@
                 fontScale: 1,
                 waitingOpacity: 0.35,
                 secondHand: true,
+                smoke: 1,
+                wireframe: true,
                 audioReactivity: 1,
                 grain: 0.3,
                 showTranslation: true
@@ -335,6 +337,7 @@
             density: fallback.density === undefined ? source.density : clamp(source.density, 0.4, 1.6, fallback.density),
             trails: fallback.trails === undefined ? source.trails : clamp(source.trails, 0, 1.6, fallback.trails),
             reflection: fallback.reflection === undefined ? source.reflection : bool(source.reflection, fallback.reflection),
+            wireframe: fallback.wireframe === undefined ? source.wireframe : bool(source.wireframe, fallback.wireframe),
             secondHand: fallback.secondHand === undefined ? source.secondHand : bool(source.secondHand, fallback.secondHand),
             tilt: fallback.tilt === undefined ? source.tilt : clamp(source.tilt, 0.15, 0.6, fallback.tilt),
             roll: fallback.roll === undefined ? source.roll : clamp(source.roll, -30, 30, fallback.roll),

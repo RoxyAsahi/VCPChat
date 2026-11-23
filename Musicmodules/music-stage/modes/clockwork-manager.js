@@ -92,6 +92,11 @@ uniform vec3 uBrass;
 uniform vec3 uSteel;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform float uBeat;      // 鼓点（0..1，衰减）
+uniform float uSmoke;     // 背景烟纹
+uniform float uWire;      // 蓝图线稿层
+uniform vec2 uShake;
+uniform float uDrift;     // 视差：转过的句数
 out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -103,6 +108,18 @@ float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { v += vnoise(p) * a; p = p * 2.03 + 7.1; a *= 0.5; }
+    return v;
 }
 
 // 一个齿轮：返回 (覆盖, 斜面, 刷纹坐标)。teeth 齿数，spokes 辐条数，ang 转角
@@ -146,7 +163,7 @@ void main() {
     float aspect = uRes.x / uRes.y;
     vec2 p = vec2(uv.x * aspect, uv.y);
     float aa = 1.5 / uRes.y;
-    vec2 hubC = vec2(min(0.3, aspect * 0.16), 0.5);
+    vec2 hubC = vec2(min(0.3, aspect * 0.16), 0.5) + uShake;
 
     // 两个小齿轮都咬着主齿轮：左下一个，左上一个。转角按齿数比算，齿正好错开半个齿
     const float PHI2 = 4.0, PHI3 = 2.1;
@@ -157,6 +174,46 @@ void main() {
 
     // 底：一点从左上来的光
     vec3 col = uField * (0.82 + 0.3 * smoothstep(1.4, 0.0, length(p - vec2(0.2, 0.95))));
+
+    // 背景：慢慢流动的大理石烟纹，亮的地方叠一层细网点
+    if (uSmoke > 0.0) {
+        vec2 sp = p * 1.3 + vec2(uTime * 0.012, uDrift * 0.05);
+        vec2 w = vec2(fbm(sp + uTime * 0.02), fbm(sp + 5.2 - uTime * 0.015));
+        float m = fbm(sp + w * 2.2);
+        float vein = smoothstep(0.42, 0.75, m) * (0.6 + 0.4 * smoothstep(0.3, 1.2, p.x));
+        vec3 tone = mix(uInk, uSteel, 0.4);
+        col += tone * vein * mix(0.09, 0.05, uLight) * uSmoke;
+        float ca = 0.7071;
+        vec2 g = vec2(gl_FragCoord.x * ca + gl_FragCoord.y * ca, -gl_FragCoord.x * ca + gl_FragCoord.y * ca) / 4.0;
+        float dots = 1.0 - smoothstep(0.18, 0.32, length(fract(g) - 0.5) / max(vein, 0.05) * 0.4);
+        col = mix(col, tone * mix(0.32, 0.6, uLight), dots * vein * 0.18 * uSmoke);
+    }
+
+    // 蓝图线稿：主齿轮后面一层细线画的齿轮组和作图圆，转动时比主齿轮慢一拍（视差）
+    if (uWire > 0.0) {
+        vec2 off = vec2(0.0, -uDrift * 0.004);
+        vec3 lineCol = mix(uInk, uSteel, 0.5);
+        float wl = 0.0;
+        for (int i = 0; i < 5; i++) {
+            float fi = float(i);
+            vec2 c = hubC + off + vec2(0.62 + fi * 0.31 + sin(fi * 3.1) * 0.08, sin(fi * 2.3) * 0.36);
+            if (i == 4) c = hubC + off + vec2(-0.05, 0.0);
+            float R = i == 4 ? 0.46 : 0.07 + fract(fi * 0.618) * 0.09;
+            float teeth = i == 4 ? 96.0 : floor(R * 220.0);
+            float ang = uGear * (i == 4 ? -0.75 : (mod(fi, 2.0) < 1.0 ? 1.0 : -1.0) * 72.0 / teeth * 0.3);
+            vec3 gw = gear(p - c, R, teeth, i == 4 ? 7.0 : 3.0 + mod(fi, 3.0), ang, aa * 1.2);
+            wl = max(wl, gw.x * (1.0 - gw.x) * 4.0);
+            float r = length(p - c);
+            wl = max(wl, (1.0 - smoothstep(0.0, aa * 1.2, abs(r - R * 0.55))) * 0.6);
+        }
+        // 作图线：过主轴的几条放射线和同心圆
+        vec2 q = p - hubC - off;
+        float r = length(q), a = atan(q.y, q.x);
+        float rad = (1.0 - smoothstep(0.0, aa * 1.2, abs(fract(a * 8.0 / (2.0 * PI) + 0.5) - 0.5) * 2.0 * PI * r / 8.0)) * step(0.4, r) * step(r, 0.62);
+        float circ = (1.0 - smoothstep(0.0, aa * 1.2, abs(r - 0.52))) + (1.0 - smoothstep(0.0, aa * 1.2, abs(r - 0.6))) * 0.6;
+        wl = max(wl, max(rad * 0.5, circ * 0.7));
+        col = mix(col, lineCol, wl * mix(0.16, 0.22, uLight) * uWire * (1.0 + uBeat * 0.6));
+    }
 
     // 刻度环：固定不转，60 格，指针位置（三点钟）那格是强调色
     {
@@ -173,7 +230,11 @@ void main() {
         float line = (1.0 - smoothstep(0.0012, 0.0012 + aa, abs(r - ringOut + 0.002)));
         float here = 1.0 - smoothstep(0.03, 0.05, abs(a));
         vec3 ink = mix(uInk, uAccent, here);
-        col = mix(col, ink, (mark + line * 0.8) * 0.55);
+        col = mix(col, ink, (mark + line * 0.8) * min(1.0, 0.55 + uBeat * 0.45));
+        // 鼓点：刻度一圈亮起来，再从轴心推出一道冲击波
+        float wave = 0.39 + (1.0 - uBeat) * 0.55;
+        float shock = exp(-pow((r - wave) / 0.006, 2.0)) * uBeat * uBeat;
+        col += mix(uInk, uAccent, 0.4) * shock * 0.35;
     }
 
     // 落影
@@ -205,6 +266,11 @@ void main() {
         float body = 1.0 - smoothstep(rr - aa, rr, d);
         col = mix(col, ruby * (0.7 + 0.6 * (1.0 - d / rr)) + vec3(1.0, 0.75, 0.7) * smoothstep(rr * 0.5, 0.0, length(p - c - vec2(-0.3, 0.35) * rr)) * 0.6, body);
         col += vec3(1.0, 0.25, 0.25) * uGlow * exp(-d * d / (rr * rr * 6.0)) * 0.35;
+        if (i == 0 && uBeat > 0.01) {
+            vec2 dq = (p - c) / rr;
+            float star = exp(-abs(dq.x) * 3.0) * exp(-abs(dq.y) * 0.18) + exp(-abs(dq.y) * 3.0) * exp(-abs(dq.x) * 0.18);
+            col += vec3(1.0, 0.55, 0.5) * (star * 0.5 + exp(-dot(dq, dq) * 0.4) * 0.8) * uBeat;
+        }
     }
 
     // 秒针：从轴心伸到刻度环，跟播放时间走
@@ -330,6 +396,8 @@ void main() {
         let lostContext = false;
         let idleHandle = 0;
         let glow = 0;
+        let lastOnsets = -1;
+        let beatTime = -Infinity;
         const stats = { builds: 0, buildMs: 0, draws: 0, index: -2 };
 
         const settings = () => {
@@ -338,6 +406,8 @@ void main() {
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 secondHand: tuning.secondHand !== false,
+                smoke: clamp(tuning.smoke ?? 1, 0, 2),
+                wireframe: tuning.wireframe !== false,
                 audioReactivity: clamp(tuning.audioReactivity ?? 1, 0, 2),
                 grain: clamp(tuning.grain ?? 0.3, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -465,6 +535,12 @@ void main() {
             const tick = s.reducedMotion ? Math.floor(t) : escapement(t);
             // 一句转 STEP 弧度；每秒的擒纵也让主齿轮挪一点
             const gearAngle = turned * STEP + tick * 0.004;
+            if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {
+                if (lastOnsets >= 0 && frame.isPlaying) beatTime = t;
+                lastOnsets = audio.onsets;
+            }
+            const beat = !s.reducedMotion && t >= beatTime ? Math.exp(-(t - beatTime) * 5) * Math.min(1, s.audioReactivity) : 0;
+            const shake = beat * 0.0025;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(program);
@@ -488,6 +564,11 @@ void main() {
             gl.uniform3fv(u.uSteel, colours.steel);
             gl.uniform1f(u.uGrain, s.grain);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
+            gl.uniform1f(u.uBeat, beat);
+            gl.uniform1f(u.uSmoke, s.smoke);
+            gl.uniform1f(u.uWire, s.wireframe ? 1 : 0);
+            gl.uniform2f(u.uShake, Math.sin(t * 91) * shake, Math.cos(t * 77) * shake);
+            gl.uniform1f(u.uDrift, turned);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
