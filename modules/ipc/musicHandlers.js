@@ -45,6 +45,12 @@ const libraryWatch = createLibraryWatch({
         try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
     },
     writeFolders: async (list) => { const file = musicFoldersFile(); if (file) await writeJsonAtomic(file, list, { spaces: 2 }); },
+    readExcluded: async () => {
+        const file = musicFoldersFile() && path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json');
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeExcluded: async (list) => { if (MUSIC_PLAYLIST_FILE) await writeJsonAtomic(path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json'), list); },
     send: (channel, payload) => { if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send(channel, payload); }
 });
 // 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
@@ -1050,7 +1056,10 @@ function initialize(options) {
                 if (!Array.isArray(playlist)) throw new TypeError('playlist must be an array');
                 // 一份非空曲库被清空时先留个备份：曲库读取失败后界面以空列表存盘，整个曲库就没了。
                 if (playlist.length === 0) await backupBeforeEmptying(MUSIC_PLAYLIST_FILE);
+                // 用户移出曲库的歌记下来，后台同步文件夹时不再加回来（空列表多半是读取失败，不算）
+                const previous = playlist.length ? await readPlaylistFile() : null;
                 await writeJsonAtomic(MUSIC_PLAYLIST_FILE, playlist);
+                if (previous) libraryWatch.noteLibrarySaved(previous, playlist);
                 return { success: true };
             } catch (error) {
                 console.error('Error saving music playlist:', error);

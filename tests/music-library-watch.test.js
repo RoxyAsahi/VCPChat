@@ -81,3 +81,36 @@ test('nothing changed: nothing sent; a file event rescans after the debounce; fo
     assert.equal(h.sent.length, 1);
     assert.equal(h.sent[0][1].background, true);
 });
+
+test('songs the user removed from the library (file still on disk) are not added back by a full sync', async () => {
+    const music = P('music');
+    const a = { path: P('music', 'a.flac'), size: 1, mtimeMs: 1 };
+    const b = { path: P('music', 'b.flac'), size: 1, mtimeMs: 1 };
+    const gone = { path: P('music', 'gone.flac'), size: 1, mtimeMs: 1 };
+    let excluded = [];
+    const sent = [];
+    const timers = [];
+    const w = createLibraryWatch({
+        scan: async () => ({ tracks: [a, b], stats: { total: 2 } }),
+        readKnown: async () => [a],
+        readFolders: async () => [music],
+        writeFolders: async () => {},
+        readExcluded: async () => excluded,
+        writeExcluded: async (l) => { excluded = l; },
+        fileExists: async (p) => p !== gone.path,
+        send: (ch, p) => sent.push(p),
+        exists: async () => true,
+        watch: () => ({ close() {}, on() {} }),
+        setTimer: (fn) => { timers.push(fn); return 1; },
+        clearTimer: () => {},
+        log: {}
+    });
+    await w.noteLibrarySaved([a, b, gone], [a]);
+    assert.deepEqual(excluded, [b.path], 'b was removed by hand; gone.flac was deleted from disk');
+    w.start();
+    while (timers.length) await timers.shift()();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(sent.length, 0, 'b stays out, nothing else changed');
+    await w.noteLibrarySaved([a], [a, b]);
+    assert.deepEqual(excluded, [], 'added back by the user: no longer excluded');
+});

@@ -67,6 +67,9 @@ function createLibraryWatch({
     readKnown,            // () => Promise<track[]>
     readFolders,          // () => Promise<string[]>
     writeFolders,         // (folders) => Promise<void>
+    readExcluded = async () => [],   // 用户亲手移出曲库、文件还在的路径：完整同步时不再加回来
+    writeExcluded = async () => {},
+    fileExists = (p) => fs.promises.stat(p).then((st) => st.isFile(), () => false),
     send,                 // (channel, payload) => void
     exists = (dir) => fs.promises.stat(dir).then((s) => s.isDirectory(), () => false),
     watch = (dir, cb) => fs.watch(dir, { recursive: true }, cb),
@@ -121,7 +124,15 @@ function createLibraryWatch({
                         return k && (Number(k.size) !== Number(t.size) || Math.abs((Number(k.mtimeMs) || 0) - (Number(t.mtimeMs) || 0)) > 1);
                     });
                     if (!tracks.length) continue;
-                } else if (!changedSince(known, tracks, root)) continue;
+                    // 扫的这段时间里用户可能把其中一些移出了曲库（整理重复的歌）：按最新的曲库再筛一遍，不把它们加回去
+                    const latest = new Set(((await readKnown().catch(() => [])) || []).map((t) => t && t.path));
+                    tracks = tracks.filter((t) => latest.has(t.path));
+                    if (!tracks.length || gen !== generation) continue;
+                } else {
+                    const excluded = new Set((await readExcluded().catch(() => [])) || []);
+                    if (excluded.size) tracks = tracks.filter((t) => !excluded.has(t.path));
+                    if (!changedSince(known, tracks, root)) continue;
+                }
                 log.log?.(`[MusicWatch] ${root} changed on disk, syncing ${tracks.length} tracks (${full ? 'full' : 'update only'})`);
                 // folderPath 为空时窗口只加、只更新，不删
                 send('music-scan-complete', { tracks, folderPath: full ? root : null, stats: { total: result.stats?.total || 0, failed: result.stats?.failed || 0 }, background: true });
@@ -175,11 +186,29 @@ function createLibraryWatch({
         watchers = [];
     }
 
+    // 曲库存盘时比一比：少了的路径里文件还在磁盘上的，是用户移出曲库的（右键移除、整理重复的歌），记下来；
+    // 又出现在曲库里的（重新加了文件夹、撤销），从记录里拿掉。
+    let excludeChain = Promise.resolve();
+    const noteLibrarySaved = (prev, next) => {
+        excludeChain = excludeChain.then(async () => {
+            const nextPaths = new Set((next || []).map((t) => t && t.path).filter(Boolean));
+            const removed = (prev || []).map((t) => t && t.path).filter((p) => typeof p === 'string' && !nextPaths.has(p) && !/^https?:\/\//i.test(p));
+            const list = (await readExcluded().catch(() => [])) || [];
+            const set = new Set(list.filter((p) => !nextPaths.has(p)));
+            let changed = set.size !== list.length;
+            for (const p of removed.slice(0, 5000)) {
+                if (!set.has(p) && await fileExists(p)) { set.add(p); changed = true; }
+            }
+            if (changed) await writeExcluded([...set].slice(-20000));
+        }).catch((e) => log.warn?.('[MusicWatch] note removals failed:', e?.message || e));
+        return excludeChain;
+    };
+
     const rememberAndSync = async (dir) => {
         await rememberFolder(dir);
         if (!rememberedNow.some((r) => norm(r) === norm(dir))) rememberedNow = collapseRoots([...rememberedNow, dir]);
     };
-    return { start, stop, rememberFolder: rememberAndSync, rescanNow: () => roots().then(({ list, remembered }) => { rememberedNow = remembered; list.forEach(enqueue); }) };
+    return { start, stop, noteLibrarySaved, rememberFolder: rememberAndSync, rescanNow: () => roots().then(({ list, remembered }) => { rememberedNow = remembered; list.forEach(enqueue); }) };
 }
 
 module.exports = { createLibraryWatch, collapseRoots, inferredDirs, changedSince };
