@@ -18,6 +18,8 @@ module.exports = {
         publishMusicCapsuleState: send('music-capsule-publish', 'state'),
         publishMusicGroove: send('music-groove-publish', 'payload'),
         getMusicPendingTrack: invoke('music-get-pending-track'),
+        // 外语歌词没有翻译时用 VCP 的模型翻成中文（modules/musicLyricsTranslate.js）
+        translateMusicLyrics: invoke('music-translate-lyrics', 'payload'),
         // 新版 / 旧版（上游原版）音乐界面
         getMusicLegacyUI: invoke('music-get-legacy-ui'),
         setMusicLegacyUI: invoke('music-set-legacy-ui', 'enabled'),

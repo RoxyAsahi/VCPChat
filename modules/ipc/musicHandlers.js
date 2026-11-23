@@ -16,6 +16,7 @@ const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
 const { createMusicThumbar } = require('../musicThumbar');
+const { createLyricsTranslator } = require('../musicLyricsTranslate');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -23,6 +24,11 @@ let fetch;
 let musicWindow = null;
 // 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
 const musicThumbar = createMusicThumbar({ nativeImage: electron.nativeImage });
+// 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
+const lyricsTranslator = createLyricsTranslator({
+    getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
+    getCacheDir: () => (LYRIC_DIR ? path.join(LYRIC_DIR, 'translations') : null)
+});
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
@@ -712,6 +718,12 @@ function initialize(options) {
         });
 
         ipcMain.handle('music-get-audio-engine-endpoint', () => audioEngineEndpoint.getEndpoint());
+        ipcMain.handle('music-translate-lyrics', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { status: 'error', message: '只有音乐窗口可以翻译歌词' };
+            }
+            return lyricsTranslator.translate(payload || {});
+        });
 
         audioEngineEndpoint.onStatus((endpoint) => {
             if (musicWindow && !musicWindow.isDestroyed()) {
