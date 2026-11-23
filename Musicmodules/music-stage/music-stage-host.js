@@ -303,6 +303,14 @@
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' }
             ],
+            clockwork: [
+                { key: 'secondHand', label: '秒针', type: 'toggle' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '其他句可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
             hanabi: [
                 { key: 'density', label: '烟花密度', type: 'range', min: 0.4, max: 1.6, step: 0.05, unit: 'x' },
                 { key: 'trails', label: '尾迹长度', type: 'range', min: 0, max: 1.6, step: 0.05, unit: 'x' },
@@ -437,7 +445,7 @@
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
-            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi'));
+            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork'));
             // 雾笺、绘光的画面在浅色主题下也是夜色，左上角字标要换成浅色才看得见。
             root.classList.toggle('stage-night', state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi');
             document.body.classList.toggle('music-stage-scene-3d', scene3d);

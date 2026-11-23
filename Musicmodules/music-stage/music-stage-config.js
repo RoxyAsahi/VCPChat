@@ -2,9 +2,9 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 9;
+    const VERSION = 10;
     // 后来加的模式：旧版本存下的启用列表里没有它们，读到旧版本时补上。
-    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7, lumiere: 8, hanabi: 9 });
+    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7, lumiere: 8, hanabi: 9, clockwork: 10 });
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -27,7 +27,8 @@
         { id: 'inkdraft', label: '墨痕', description: '墨团凝成歌词、演算纸线稿、半调网点与踩词硬切' },
         { id: 'fogpane', label: '雾笺', description: '雨夜车窗起了雾，手指一笔一笔写下歌词，透出窗外街景' },
         { id: 'lumiere', label: '绘光', description: '舞台顶光、烟雾和浮尘，每一句歌词被光束照亮' },
-        { id: 'hanabi', label: '花火', description: '夏夜河边的烟花大会，每句歌词升起一发烟花，倒映在河面上' }
+        { id: 'hanabi', label: '花火', description: '夏夜河边的烟花大会，每句歌词升起一发烟花，倒映在河面上' },
+        { id: 'clockwork', label: '时计', description: '一组咬合的齿轮，歌词像指针从轴心伸出，每唱一句齿轮转一格' }
     ]);
 
     const PIXI_DEFAULTS = Object.freeze({
@@ -42,7 +43,7 @@
         rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
     });
     const DEFAULTS = Object.freeze({
-        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane', 'lumiere', 'hanabi'],
+        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane', 'lumiere', 'hanabi', 'clockwork'],
         quality: 'standard',
         animationIntensity: 1,
         edgeSpectrum: true,
@@ -216,6 +217,14 @@
                 audioReactivity: 1,
                 grain: 0.3,
                 showTranslation: true
+            },
+            clockwork: {
+                fontScale: 1,
+                waitingOpacity: 0.35,
+                secondHand: true,
+                audioReactivity: 1,
+                grain: 0.3,
+                showTranslation: true
             }
         }
     });
@@ -307,6 +316,7 @@
             density: fallback.density === undefined ? source.density : clamp(source.density, 0.4, 1.6, fallback.density),
             trails: fallback.trails === undefined ? source.trails : clamp(source.trails, 0, 1.6, fallback.trails),
             reflection: fallback.reflection === undefined ? source.reflection : bool(source.reflection, fallback.reflection),
+            secondHand: fallback.secondHand === undefined ? source.secondHand : bool(source.secondHand, fallback.secondHand),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),

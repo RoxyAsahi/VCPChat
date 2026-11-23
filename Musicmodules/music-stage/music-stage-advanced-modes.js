@@ -11,7 +11,8 @@
         inkdraft: global.MusicStageInkdraftManager,
         fogpane: global.MusicStageFogpaneManager,
         lumiere: global.MusicStageLumiereManager,
-        hanabi: global.MusicStageHanabiManager
+        hanabi: global.MusicStageHanabiManager,
+        clockwork: global.MusicStageClockworkManager
     };
 
     const definitions = [
@@ -24,7 +25,8 @@
         { id: 'inkdraft', label: '墨痕', manager: managers.inkdraft },
         { id: 'fogpane', label: '雾笺', manager: managers.fogpane },
         { id: 'lumiere', label: '绘光', manager: managers.lumiere },
-        { id: 'hanabi', label: '花火', manager: managers.hanabi }
+        { id: 'hanabi', label: '花火', manager: managers.hanabi },
+        { id: 'clockwork', label: '时计', manager: managers.clockwork }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({

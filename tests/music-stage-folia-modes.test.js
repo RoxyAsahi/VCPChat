@@ -111,3 +111,19 @@ test('hanabi: every sung line launches a shell at its start, the show is determi
         }
     }
 });
+
+require(path.join(stage, 'modes', 'clockwork-manager.js'));
+test('clockwork: the wheel turns one step per sung line, settles with a small overshoot, and escapement ticks once a second', () => {
+    const C = window.MusicStageClockworkManager._test;
+    const sung = window.MusicStageRuntime.normalizeLines([{ time: 5, original: '一' }, { time: 9, original: '二' }, { time: 14, original: '三' }]);
+    assert.equal(C.wheelAt(sung, 2).index, -1);
+    assert.equal(C.wheelAt(sung, 9.0).turned, 0);
+    assert.equal(C.wheelAt(sung, 12).turned, 1);
+    const mid = C.wheelAt(sung, 9.35).turned;
+    assert.ok(mid > 0.5 && mid <= 1.2, `turning ${mid}`);
+    let peak = 0;
+    for (let x = 0; x <= 1; x += 0.01) peak = Math.max(peak, C.settle(x));
+    assert.ok(peak > 1 && peak < 1.15, 'overshoots a little');
+    assert.equal(C.escapement(3.5), 4);
+    assert.ok(C.escapement(3.02) > 3 && C.escapement(3.02) < 4.15);
+});
