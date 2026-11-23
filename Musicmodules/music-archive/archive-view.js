@@ -13,6 +13,7 @@
     const Model = global.MusicArchiveModel;
     const SceneLib = global.MusicArchiveScene;
     const VIEW_KEY = 'musicArchiveView';
+    const LAYOUT_KEY = 'musicArchiveLayout';   // 档案页里用哪种视图：array（3D 档案阵列）/ wall（封面墙）
     const DESIGN_W = 1920, DESIGN_H = 1080;
     // 窗口再矮，界面也不缩到这个比例以下（小字 11px 缩完还有 10px 左右）；矮窗口改成少显示，不是缩小
     const MIN_SCALE = 0.9;
@@ -35,6 +36,7 @@
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
+                <button type="button" data-act="layout" data-ref="layoutBtn" title="在档案阵列和封面墙之间切换" aria-pressed="false"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span> <span data-ref="layoutLabel">封面墙</span></button>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
@@ -79,6 +81,7 @@
             row: 0,
             playedLane: 0,           // 最近一次从哪一列开始播放
             mode: 'archive',
+            layout: 'array',
             scene: null,
             raf: 0,
             wait: 0,                 // 低帧率时两帧之间用定时器等，不每个显示帧都醒一次
@@ -370,6 +373,7 @@
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
             syncCard();
+            wall?.sync();
         };
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
@@ -410,6 +414,7 @@
                     capped(state.coverCache, url, { img, ok: true }, 64);
                     const t = selectedTrack();
                     if (t && !t.albumArt && dirOf(t) === dir) syncCard();
+                    wall?.coverFound();
                 };
                 img.onerror = next;
                 img.src = url;
@@ -619,6 +624,7 @@
             if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
             // 跟着在听：选中停在正在放的那首时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
+            wall?.sync();
             const prevPlaying = state.playingIndex;
             state.playingIndex = app.currentTrackIndex;
             if (prevPlaying !== undefined && prevPlaying !== app.currentTrackIndex
@@ -776,6 +782,7 @@
 
         let list = null;
         let lyrics = null;
+        let wall = null;            // 封面墙（archive-wall.js），没有那个文件时只有档案阵列
         const wantLyrics = (on) => {
             on = Boolean(on);
             if (on === Boolean(state.lyricsOn)) return;
@@ -899,7 +906,7 @@
         // 开场动画（music-intro-playing）是一层不透明全屏层，期间不画
         let enteringSince = 0;
         const renderAllowed = () => {
-            if (!isShown() || state.destroyed || document.hidden) return false;
+            if (!isShown() || state.destroyed || document.hidden || state.layout === 'wall') return false;
             const body = document.body.classList;
             if (body.contains('music-intro-playing')) return false;
             if (!body.contains('music-stage-active')) return true;
@@ -922,7 +929,10 @@
                 if (dataChanged()) rebuildSoon();
                 updatePlaying(true);
                 kick();
+                wall?.show(state.layout === 'wall');
+                syncWallRoom();
             } else {
+                wall?.show(false);
                 if (!app.isStageActive) originalCreateAmbient?.();
                 app.visualizerCanvas && (app.visualizerCanvas.width = app.visualizerCanvas.clientWidth);
             }
@@ -1044,6 +1054,7 @@
         };
         // 用目录、歌词和设置抽屉之间的可用空间给抽出的卡片构图。
         const syncSceneLayout = () => {
+            syncWallRoom();
             const scene = state.scene;
             if (!scene || !isShown()) return;
             const sc = hudScale(root.clientHeight || global.innerHeight);
@@ -1403,6 +1414,7 @@
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
+                    case 'layout': setLayout(state.layout === 'wall' ? 'array' : 'wall'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
                     case 'add-cloud': document.getElementById('add-webdav-btn')?.click(); break;
                     case 'save': {
@@ -1434,6 +1446,11 @@
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
             stopInertia();
+            if (wall && wall.on) {
+                // 封面墙：方向键在墙上按位置走，Esc 收起展开的大卡
+                if (/^Arrow/.test(e.key)) { e.preventDefault(); wall.step(e.key); return; }
+                if (e.key === 'Escape' && wall.collapse()) { e.preventDefault(); return; }
+            }
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) {
                 e.preventDefault();
@@ -1611,6 +1628,7 @@
                 onPick: (i, ctx) => {
                     goToTrack(i, ctx);
                     setCardExpanded(true);
+                    wall?.sync({ expand: true });
                 },
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
@@ -1626,10 +1644,88 @@
         }) : null;
         loadPinyin();
 
+        // ---------- 封面墙（第二种视图） ----------
+        const WallLib = global.MusicArchiveWall;
+        /* 墙上放哪些歌：和档案阵列里这一列一样；按首字母拆开的列就是整个曲库按当前排序 */
+        const wallItems = () => {
+            const col = column();
+            if (!col) return { key: '', ids: [] };
+            const whole = col.kind === 'letter' || col.kind === 'all';
+            return whole ? { key: 'library:' + sortMode + ':' + state.sig, ids: libraryOrder(), name: '全部曲目' } : { key: col.id + ':' + state.sig, ids: col.items, name: col.name };
+        };
+        wall = WallLib ? WallLib.create({
+            host: root,
+            before: refs.hud,
+            items: wallItems,
+            track: (i) => tracks()[i],
+            cover: (t) => coverOf(t, true),
+            selected: selectedIndex,
+            playing: () => ({ index: tracks()[app.currentTrackIndex] ? app.currentTrackIndex : -1, active: Boolean(app.isPlaying || app.playIntent) }),
+            meta: (t, i) => ({
+                title: (t && Model.stripExtension(t.title)) || '未知标题',
+                artist: (t && t.artist) || '',
+                album: (t && t.album) || '',
+                code: t ? fileNumber(t, i) : '',
+                duration: fmtDur(trackDuration(t))
+            }),
+            pick: (i) => {
+                const col = column();
+                goToTrack(i, col && col.items.includes(i) ? col.id : null, { pulse: false });
+                syncList();
+            },
+            play: (i, { stage = false } = {}) => {
+                const col = column();
+                playIndex(i, col && col.items.includes(i) ? col.id : null, { stage });
+            },
+            menu: (i, x, y, restore) => {
+                if (typeof app.showContextMenu !== 'function') return;
+                app.contextMenuTrackIndex = i;
+                app.showContextMenu(x, y);
+                ListLib?.menuKeyboard?.(app, { restore: restore || refs.layoutBtn });
+            },
+            reducedMotion
+        }) : null;
+        if (wall) wall.el.addEventListener('wheel', (e) => e.stopPropagation());
+        /* 墙只占目录、歌词、导航和页脚之间的空地：按它们实际的位置量（HUD 整体有缩放） */
+        function syncWallRoom() {
+            if (!wall || !wall.on) return;
+            const box = root.getBoundingClientRect();
+            const hud = refs.hud.getBoundingClientRect();
+            const listEl = list && listOpen() ? list.el : null;
+            const lr = listEl && listEl.offsetWidth ? listEl.getBoundingClientRect() : null;
+            const stacked = refs.hud.classList.contains('tiny');
+            const lyr = lyrics && !lyrics.el.hidden && state.lyricsOn ? lyrics.el.getBoundingClientRect() : null;
+            const nav = refs.nav.getBoundingClientRect();
+            // 页脚（正在播放 · 经典视图）那一行在底栏上方，墙停在它上面
+            const foot = refs.hud.querySelector('.archive-footer')?.getBoundingClientRect();
+            const gutter = Math.max(24, Math.round(hud.width * 0.022));
+            const left = lr && !stacked ? lr.right - box.left + gutter * 0.6 : gutter;
+            const right = (lyr ? lyr.left - box.left - gutter * 0.6 : hud.right - box.left - gutter);
+            const top = nav.bottom - box.top + 14;
+            const bottomEdge = foot && foot.height ? foot.top - box.top - 16 : box.height - 90;
+            const bottom = lr && stacked ? Math.min(bottomEdge, lr.top - box.top - 10) : bottomEdge;
+            wall.setRoom({ left, top, width: right - left, height: bottom - top });
+        }
+        const setLayout = (layout, { persist = true } = {}) => {
+            if (!wall) layout = 'array';
+            state.layout = layout === 'wall' ? 'wall' : 'array';
+            const on = state.layout === 'wall';
+            root.classList.toggle('layout-wall', on);
+            refs.layoutBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            refs.layoutLabel.textContent = on ? '档案阵列' : '封面墙';
+            refs.layoutBtn.title = on ? '切回 3D 档案阵列' : '换成平铺的封面墙';
+            if (persist) { try { localStorage.setItem(LAYOUT_KEY, state.layout); } catch (e) { /* 只是记住 */ } }
+            if (!wall) return;
+            wall.show(on && isShown());
+            if (on) { syncWallRoom(); wall.sync(); } else { state.lastDraw = 0; kick(); }
+        };
+        try { state.layout = localStorage.getItem(LAYOUT_KEY) === 'wall' ? 'wall' : 'array'; } catch (e) { /* 默认档案阵列 */ }
+
         let initialMode = 'archive';
         try { initialMode = localStorage.getItem(VIEW_KEY) || 'archive'; } catch (e) { /* 默认档案页 */ }
         rebuild({ keep: false });
         setMode(initialMode, { persist: false });
+        setLayout(state.layout, { persist: false });
         applyListDefault();
 
         const api = {
@@ -1650,8 +1746,11 @@
             get list() { return list; },
             destroy,
             get mode() { return state.mode; },
+            get layout() { return state.layout; },
+            setLayout,
+            get wall() { return wall; },
             debug: () => ({
-                mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
+                mode: state.mode, layout: state.layout, wall: wall ? wall.debug() : null, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
                 selected: selectedIndex(), rendering: Boolean(state.raf || state.wait), allowed: renderAllowed(), scene: state.scene?.debug() || null,
                 lyrics: lyrics ? lyrics.debug() : null, lyricsOn: Boolean(state.lyricsOn)
             })

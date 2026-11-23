@@ -1,0 +1,836 @@
+/*
+ * 档案页的第二种视图「封面墙」：把当前这一组曲目的封面平铺成一面可以四处拖动的墙。
+ *
+ * 版式：墙由 12×8 格的「块」拼成，每块放 12 张大小不一的封面（块的切法是开机时用固定种子切出来的几种，
+ * 再按块坐标翻转，墙面看不出周期）。一组歌放完一遍以后接着从头放，墙向四个方向都没有尽头。
+ * 点一张封面：它在自己那一块里长成 6×6 的大卡（带曲名和播放按钮），同一块里的其他封面重新切分让出地方，
+ * 块的外轮廓不变，所以别的块都不动。双击直接播放。
+ * 只建视野里的封面（最多 MAX_TILES 个），拖动、滚轮只改整层的位移；封面图先在后台缩小再显示。
+ *
+ * 这一层只管画和输入；选中、播放、队列都交还给档案页（archive-view.js 传进来的回调）。
+ */
+(function (global) {
+    'use strict';
+
+    const BW = 12, BH = 8, SLOTS = 12;
+    const HERO = 6;                // 展开后的大卡是 6×6 格
+    const MAX_TILES = 420;
+    const MIN_SIDE = 2;
+
+    // ---------- 块的切法 ----------
+    const rng = (seed) => () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const aspectOk = (r, maxAspect) => Math.max(r.w, r.h) <= maxAspect * Math.min(r.w, r.h);
+    /* 把矩形 r 沿长边一刀刀切成 k 块；每块边长至少 MIN_SIDE 格、长宽比不超过 maxAspect。切不出来返回 null */
+    const partition = (r, k, rand, maxAspect = 2, tries = 14) => {
+        if (k === 1) return r.w >= MIN_SIDE && r.h >= MIN_SIDE && aspectOk(r, maxAspect) ? [r] : null;
+        if (r.w * r.h < k * MIN_SIDE * MIN_SIDE) return null;
+        for (let n = 0; n < tries; n++) {
+            const alongX = r.w === r.h ? rand() < 0.5 : (r.w > r.h) !== (rand() < 0.22);
+            const len = alongX ? r.w : r.h;
+            const other = alongX ? r.h : r.w;
+            // 偶尔只切下一张（做出一张大卡），其余时候大致对半
+            const k1 = rand() < 0.3 ? 1 : Math.max(1, Math.min(k - 1, Math.round(k / 2 + (rand() - 0.5) * 2)));
+            const k2 = k - k1;
+            let cut = Math.round(len * k1 / k + (rand() - 0.5) * 2);
+            const need1 = Math.max(MIN_SIDE, Math.ceil(k1 * MIN_SIDE * MIN_SIDE / other));
+            const need2 = Math.max(MIN_SIDE, Math.ceil(k2 * MIN_SIDE * MIN_SIDE / other));
+            cut = Math.max(need1, Math.min(len - need2, cut));
+            if (cut < need1 || len - cut < need2) continue;
+            const a = alongX ? { x: r.x, y: r.y, w: cut, h: r.h } : { x: r.x, y: r.y, w: r.w, h: cut };
+            const b = alongX ? { x: r.x + cut, y: r.y, w: r.w - cut, h: r.h } : { x: r.x, y: r.y + cut, w: r.w, h: r.h - cut };
+            const pa = partition(a, k1, rand, maxAspect, 6);
+            if (!pa) continue;
+            const pb = partition(b, k2, rand, maxAspect, 6);
+            if (!pb) continue;
+            return pa.concat(pb);
+        }
+        return null;
+    };
+    const readingOrder = (a, b) => (a.y - b.y) || (a.x - b.x);
+    /* 开机时切出几种块：每种恰好 12 张、有一张够大的主卡、大小有起伏 */
+    const TEMPLATES = (() => {
+        const out = [];
+        for (let seed = 1; out.length < 6 && seed < 4000; seed++) {
+            const p = partition({ x: 0, y: 0, w: BW, h: BH }, SLOTS, rng(seed * 7919));
+            if (!p) continue;
+            const areas = p.map((r) => r.w * r.h).sort((a, b) => b - a);
+            if (areas[0] < 16 || areas[0] > 30 || areas[1] > 16) continue;  // 一张主卡，不要两张一样大的
+            if (new Set(areas).size < 4) continue;                         // 太整齐的不要
+            out.push(p.sort(readingOrder));
+        }
+        return out;
+    })();
+    const flipX = (r) => ({ x: BW - r.x - r.w, y: r.y, w: r.w, h: r.h });
+    const flipY = (r) => ({ x: r.x, y: BH - r.y - r.h, w: r.w, h: r.h });
+    // 翻转后保持下标不变：同一张卡在四个朝向里还是第几张
+    const ORIENTED = TEMPLATES.flatMap((t) => [t, t.map(flipX), t.map(flipY), t.map((r) => flipX(flipY(r)))]);
+    const hash2 = (a, b) => {
+        let v = Math.imul(a | 0, 0x27d4eb2d) ^ Math.imul(b | 0, 0x165667b1);
+        v = Math.imul(v ^ (v >>> 15), 0x85ebca77);
+        return (v ^ (v >>> 13)) >>> 0;
+    };
+    const orientationOf = (bc, br) => {
+        const n = TEMPLATES.length;
+        const t = (((bc + br * 2) % n) + n) % n;    // 相邻两块永远不用同一种切法
+        return t * 4 + (hash2(bc, br) % 4);
+    };
+
+    /*
+     * 展开：被点的那张长成 6×6，放在离它原来位置最近的地方（横向按 2 格对齐，纵向贴上或贴下）；
+     * 块里剩下的 L 形空地切成两三条，按面积分给其余 11 张，再按离原位置最近的顺序一一对上。
+     */
+    const reflowCache = new Map();
+    const centerOf = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+    const reflowFor = (orient, slot) => {
+        const key = orient * SLOTS + slot;
+        if (reflowCache.has(key)) return reflowCache.get(key);
+        const tpl = ORIENTED[orient];
+        const s = tpl[slot];
+        const c = centerOf(s);
+        const hx = Math.max(0, Math.min(BW - HERO, Math.round((c.x - HERO / 2) / 2) * 2));
+        const hy = c.y < BH / 2 ? 0 : BH - HERO;
+        const hero = { x: hx, y: hy, w: HERO, h: HERO };
+        const rects = [];
+        if (hx > 0) rects.push({ x: 0, y: 0, w: hx, h: BH });
+        if (hx + HERO < BW) rects.push({ x: hx + HERO, y: 0, w: BW - hx - HERO, h: BH });
+        if (hy > 0) rects.push({ x: hx, y: 0, w: HERO, h: hy });
+        if (hy + HERO < BH) rects.push({ x: hx, y: hy + HERO, w: HERO, h: BH - hy - HERO });
+        const rest = SLOTS - 1;
+        const cap = (r) => Math.floor(r.w / MIN_SIDE) * Math.floor(r.h / MIN_SIDE);
+        const floor = (r) => Math.max(1, Math.ceil(Math.max(r.w, r.h) / (2 * Math.min(r.w, r.h))));
+        const total = rects.reduce((a, r) => a + r.w * r.h, 0);
+        const counts = rects.map((r) => Math.max(floor(r), Math.min(cap(r), Math.round(rest * r.w * r.h / total))));
+        // 凑到正好 11 张：多了从能少的里减，少了往还放得下的里加（先动面积大的）
+        const order = rects.map((r, i) => i).sort((a, b) => rects[b].w * rects[b].h - rects[a].w * rects[a].h);
+        let sum = counts.reduce((a, b) => a + b, 0);
+        for (let guard = 0; sum !== rest && guard < 40; guard++) {
+            for (const i of order) {
+                if (sum > rest && counts[i] > floor(rects[i])) { counts[i]--; sum--; break; }
+                if (sum < rest && counts[i] < cap(rects[i])) { counts[i]++; sum++; break; }
+            }
+        }
+        let pieces = [];
+        for (let i = 0; i < rects.length; i++) {
+            let p = null;
+            for (let seed = 1; !p && seed < 60; seed++) p = partition(rects[i], counts[i], rng(key * 131 + seed), seed < 30 ? 2 : 3);
+            if (!p) { pieces = null; break; }
+            pieces.push(...p);
+        }
+        if (!pieces || pieces.length !== rest) { reflowCache.set(key, null); return null; }
+        // 其余 11 张：两两距离从近到远贪心配对，每张尽量落在原来附近
+        const others = tpl.map((r, i) => i).filter((i) => i !== slot);
+        const pairs = [];
+        others.forEach((i) => pieces.forEach((p, j) => {
+            const a = centerOf(tpl[i]), b = centerOf(p);
+            pairs.push([(a.x - b.x) ** 2 + (a.y - b.y) ** 2, i, j]);
+        }));
+        pairs.sort((a, b) => a[0] - b[0]);
+        const out = new Array(SLOTS);
+        const usedPiece = new Set();
+        out[slot] = hero;
+        for (const [, i, j] of pairs) {
+            if (out[i] || usedPiece.has(j)) continue;
+            out[i] = pieces[j];
+            usedPiece.add(j);
+        }
+        reflowCache.set(key, out);
+        return out;
+    };
+
+    // ---------- 墙的几何（世界坐标，单位像素） ----------
+    const FIELD_ASPECT = 2.2;      // 一遍放完的那一片宽一点，左右和上下重复得差不多快
+    /*
+     * 曲库按标题、专辑排好以后，同一张专辑的歌挨在一起，墙上就会一片片同一张封面。
+     * 所以墙上的座位按一个固定步长跳着放（步长和曲目数互质，约 0.38 倍），一遍里每首还是正好出现一次。
+     */
+    const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
+    const strideFor = (n) => {
+        if (n < 5) return 1;
+        let s = Math.max(2, Math.round(n * 0.382));
+        while (gcd(s, n) !== 1) s++;
+        return s;
+    };
+    const geometryFor = (n, pitch) => {
+        const blocks = Math.max(1, Math.ceil(Math.max(1, n) / SLOTS));
+        const perRow = blocks <= 1 ? 1 : Math.max(1, Math.round(Math.sqrt(FIELD_ASPECT * blocks * BH / BW)));
+        const rows = Math.ceil(blocks / perRow);
+        n = Math.max(1, n);
+        const stride = strideFor(n);
+        const seat = new Int32Array(n);      // 第几首 → 一遍里的第几个座位
+        for (let k = 0; k < n; k++) seat[(k * stride) % n] = k;
+        return { n, pitch, perRow, rows, stride, seat, slots: perRow * rows * SLOTS, blockW: BW * pitch, blockH: BH * pitch, cellW: perRow * BW * pitch, cellH: rows * BH * pitch };
+    };
+    const mod = (a, m) => ((a % m) + m) % m;
+    /* 块坐标（可以是负数）和块里第几张 → 这张封面 */
+    const instanceAt = (g, bc, br, slot, gap) => {
+        const rx = Math.floor(bc / g.perRow), ry = Math.floor(br / g.rows);
+        const lc = bc - rx * g.perRow, lr = br - ry * g.rows;
+        const orient = orientationOf(lc, lr);
+        const r = ORIENTED[orient][slot];
+        const cellSlot = (lr * g.perRow + lc) * SLOTS + slot;
+        return {
+            id: bc + ':' + br + ':' + slot,
+            bc, br, slot, orient,
+            item: ((cellSlot % g.n) * g.stride) % g.n,
+            x: bc * g.blockW + r.x * g.pitch, y: br * g.blockH + r.y * g.pitch,
+            w: r.w * g.pitch - gap, h: r.h * g.pitch - gap,
+            cols: r.w
+        };
+    };
+    /* 第 item 首在离 point 最近的那一份里的位置 */
+    const nearestOf = (g, item, point, gap) => {
+        let best = null, bestD = Infinity;
+        for (let cs = g.seat[item]; cs < g.slots; cs += g.n) {
+            const block = Math.floor(cs / SLOTS), slot = cs % SLOTS;
+            const lc = block % g.perRow, lr = Math.floor(block / g.perRow);
+            const base = instanceAt(g, lc, lr, slot, gap);
+            const rx = Math.round((point.x - base.x - base.w / 2) / g.cellW);
+            const ry = Math.round((point.y - base.y - base.h / 2) / g.cellH);
+            const inst = instanceAt(g, rx * g.perRow + lc, ry * g.rows + lr, slot, gap);
+            const d = (inst.x + inst.w / 2 - point.x) ** 2 + (inst.y + inst.h / 2 - point.y) ** 2;
+            if (d < bestD) { bestD = d; best = inst; }
+        }
+        return best;
+    };
+
+    // ---------- 封面缩略图 ----------
+    /* 原图常有一两千像素：按显示尺寸分三档缩小后存成 blob，最多留 360 张；同时最多解 4 张 */
+    const createThumbs = (onReady) => {
+        const cache = new Map();       // key → { url, state }
+        const queue = [];
+        let busy = 0;
+        const LIMIT = 360;
+        const bucket = (px) => (px <= 200 ? 192 : px <= 420 ? 384 : 768);
+        const evict = () => {
+            while (cache.size > LIMIT) {
+                const [k, v] = cache.entries().next().value;
+                cache.delete(k);
+                if (v.url && v.url.startsWith('blob:')) URL.revokeObjectURL(v.url);
+            }
+        };
+        const pump = () => {
+            while (busy < 4 && queue.length) {
+                const job = queue.pop();      // 后进先出：刚出现在视野里的先解
+                const entry = cache.get(job.key);
+                if (!entry || entry.state !== 'queued') continue;
+                busy++;
+                entry.state = 'loading';
+                const img = new Image();
+                img.decoding = 'async';
+                const done = (url) => {
+                    busy--;
+                    entry.state = url ? 'ok' : 'fail';
+                    entry.url = url || '';
+                    if (url) onReady(job.src);
+                    pump();
+                };
+                img.onload = () => {
+                    const w = img.naturalWidth, h = img.naturalHeight;
+                    const k = Math.min(1, job.size / Math.max(1, Math.min(w, h)));
+                    if (k >= 0.9 || typeof global.createImageBitmap !== 'function') { done(job.src); return; }
+                    const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+                    global.createImageBitmap(img, { resizeWidth: cw, resizeHeight: ch, resizeQuality: 'high' }).then((bmp) => {
+                        const c = document.createElement('canvas');
+                        c.width = cw; c.height = ch;
+                        c.getContext('2d').drawImage(bmp, 0, 0);
+                        bmp.close?.();
+                        c.toBlob((blob) => done(blob ? URL.createObjectURL(blob) : job.src), 'image/jpeg', 0.86);
+                    }).catch(() => done(job.src));
+                };
+                img.onerror = () => done('');
+                img.src = job.src;
+            }
+        };
+        return {
+            /* 有了就给地址；没有就排队，好了回调 onReady(src) */
+            get(src, px) {
+                if (!src) return '';
+                const size = bucket(px);
+                // 已经有更大一档的就直接用
+                for (const s of [size, 384, 768]) {
+                    if (s < size) continue;
+                    const e = cache.get(src + '|' + s);
+                    if (e && e.state === 'ok') { cache.delete(src + '|' + s); cache.set(src + '|' + s, e); return e.url; }
+                }
+                const key = src + '|' + size;
+                const e = cache.get(key);
+                if (e && e.state === 'fail') return '';
+                if (!e) {
+                    cache.set(key, { state: 'queued', url: '' });
+                    queue.push({ key, src, size });
+                    evict();
+                    pump();
+                } else if (e.state === 'queued') {
+                    queue.push({ key, src, size });
+                    pump();
+                }
+                // 小一档的先顶着
+                for (const s of [384, 192]) {
+                    if (s >= size) continue;
+                    const lower = cache.get(src + '|' + s);
+                    if (lower && lower.state === 'ok') return lower.url;
+                }
+                return '';
+            },
+            failed(src) { return [192, 384, 768].some((s) => cache.get(src + '|' + s)?.state === 'fail'); },
+            clearQueue() { queue.length = 0; for (const v of cache.values()) if (v.state === 'queued') v.state = 'idle'; for (const [k, v] of cache) if (v.state === 'idle') cache.delete(k); },
+            destroy() { for (const v of cache.values()) if (v.url && v.url.startsWith('blob:')) URL.revokeObjectURL(v.url); cache.clear(); queue.length = 0; },
+            get size() { return cache.size; }
+        };
+    };
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    /*
+     * opts:
+     *   host            挂在哪个元素里（档案页根节点），插在 before 前面
+     *   items()         → { key, ids: number[], name }：当前这一组，ids 是曲库下标
+     *   track(i)        → 曲目对象
+     *   cover(t)        → 封面地址（可能为空）
+     *   selected()      → 当前选中的曲库下标
+     *   playing()       → { index, active }
+     *   meta(t, i)      → { title, artist, album, code, duration }
+     *   pick(i)         选中（不播放）
+     *   play(i, {stage}) 播放
+     *   menu(i, x, y)   右键菜单
+     *   reducedMotion()
+     */
+    const create = (opts) => {
+        const el = document.createElement('div');
+        el.className = 'archive-wall';
+        el.setAttribute('role', 'grid');
+        el.setAttribute('aria-label', '封面墙');
+        el.hidden = true;
+        el.innerHTML = '<div class="aw-world"></div><div class="aw-empty" hidden></div>';
+        const world = el.firstChild;
+        const emptyEl = el.lastChild;
+        opts.host.insertBefore(el, opts.before || null);
+        const reduced = () => Boolean(opts.reducedMotion && opts.reducedMotion());
+
+        const st = {
+            on: false,
+            key: '', ids: [], g: null, gap: 10,
+            cam: { x: 0, y: 0 }, aim: null, vel: { x: 0, y: 0 },
+            room: { left: 0, top: 0, width: 0, height: 0 },
+            focus: null,                // 选中的那一张（具体哪一份）
+            expanded: null,             // 展开的那一张
+            expandedRects: new Map(),
+            nodes: new Map(), pool: [],
+            laidAt: null, dirty: true,
+            raf: 0, last: 0,
+            selIndex: -1, playKey: '',
+            enterUntil: 0,
+            drag: null,
+            wheelAim: null
+        };
+        const thumbs = createThumbs(() => { st.coverDirty = true; schedule(); });
+
+        // ---------- 尺寸 ----------
+        const pitchFor = (h) => Math.max(38, Math.min(104, Math.round(h * 0.8 / BH)));
+        const setRoom = (room) => {
+            const r = { left: Math.round(room.left), top: Math.round(room.top), width: Math.max(0, Math.round(room.width)), height: Math.max(0, Math.round(room.height)) };
+            const same = ['left', 'top', 'width', 'height'].every((k) => r[k] === st.room[k]);
+            if (same) return;
+            const oldCenter = viewCenter();
+            st.room = r;
+            el.style.left = r.left + 'px';
+            el.style.top = r.top + 'px';
+            el.style.width = r.width + 'px';
+            el.style.height = r.height + 'px';
+            const pitch = pitchFor(r.height);
+            if (!st.g || st.g.pitch !== pitch) {
+                const focusItem = st.focus ? st.focus.item : -1;
+                const expandedItem = st.expanded ? st.expanded.item : -1;
+                st.gap = Math.max(6, Math.round(pitch * 0.11));
+                rebuildGeometry(pitch);
+                if (focusItem >= 0) st.focus = nearestOf(st.g, focusItem, oldCenter.x ? scalePoint(oldCenter) : { x: 0, y: 0 }, st.gap);
+                if (expandedItem >= 0 && st.focus) setExpanded(st.focus, { animate: false });
+                if (st.focus) centerOn(st.focus, { instant: true });
+            } else {
+                // 视口变了大小：保持原来看着的中心
+                st.cam.x = oldCenter.x - r.width / 2;
+                st.cam.y = oldCenter.y - r.height / 2;
+            }
+            st.dirty = true;
+            schedule();
+        };
+        let lastPitch = 0;
+        const scalePoint = (p) => (lastPitch && st.g ? { x: p.x * st.g.pitch / lastPitch, y: p.y * st.g.pitch / lastPitch } : p);
+        const rebuildGeometry = (pitch) => {
+            lastPitch = st.g ? st.g.pitch : pitch;
+            st.g = geometryFor(st.ids.length, pitch);
+            st.expandedRects.clear();
+            st.expanded = null;
+            st.dirty = true;
+        };
+        const viewCenter = () => ({ x: st.cam.x + st.room.width / 2, y: st.cam.y + st.room.height / 2 });
+
+        // ---------- 数据 ----------
+        /* 换了一组（目录里换了分类、换了歌单）：整面墙重排，镜头落到选中的那首 */
+        const syncItems = ({ force = false } = {}) => {
+            const it = opts.items() || { key: '', ids: [] };
+            const ids = it.ids || [];
+            const sig = it.key + '#' + ids.length + '#' + (ids[0] ?? '') + '#' + (ids[ids.length - 1] ?? '');
+            if (!force && sig === st.key) return false;
+            const firstShow = !st.key;
+            st.key = sig;
+            st.ids = ids;
+            st.name = it.name || '';
+            rebuildGeometry(st.g ? st.g.pitch : pitchFor(st.room.height || 800));
+            for (const node of st.nodes.values()) recycle(node);
+            st.nodes.clear();
+            thumbs.clearQueue();
+            emptyEl.hidden = ids.length > 0;
+            emptyEl.textContent = ids.length ? '' : '这一组还没有曲目';
+            st.focus = null;
+            st.selIndex = -1;
+            syncSelection({ center: true, instant: true });
+            if (!st.focus) { st.cam.x = -st.room.width / 2 + st.g.blockW / 2; st.cam.y = -st.room.height / 2 + st.g.blockH / 2; }
+            enter(firstShow ? 0 : 1);
+            return true;
+        };
+        const enter = () => {
+            if (reduced()) return;
+            st.enterUntil = performance.now() + 650;
+            st.enterOrigin = viewCenter();
+        };
+
+        // ---------- 选中、展开 ----------
+        const instancesOfFocusBlock = () => st.focus;
+        const syncSelection = ({ center = false, instant = false } = {}) => {
+            const sel = opts.selected();
+            if (sel === st.selIndex && st.focus) return;
+            st.selIndex = sel;
+            const pos = st.ids.indexOf(sel);
+            if (pos < 0 || !st.g) { st.focus = null; setExpanded(null); st.dirty = true; schedule(); return; }
+            if (st.focus && st.focus.item === pos) return;
+            const keepExpanded = Boolean(st.expanded);
+            st.focus = nearestOf(st.g, pos, viewCenter(), st.gap);
+            if (keepExpanded || st.wantExpand) setExpanded(st.focus);
+            st.wantExpand = false;
+            const r = rectOf(st.focus);
+            const outside = r.x < st.cam.x + 20 || r.y < st.cam.y + 20 || r.x + r.w > st.cam.x + st.room.width - 20 || r.y + r.h > st.cam.y + st.room.height - 20;
+            if (center || outside || st.expanded) centerOn(st.expanded || st.focus, { instant });
+            st.dirty = true;
+            schedule();
+        };
+        const rectOf = (inst) => st.expandedRects.get(inst.id) || inst;
+        const setExpanded = (inst, { animate = true } = {}) => {
+            const prev = st.expanded;
+            st.expandedRects.clear();
+            st.expanded = null;
+            if (inst) {
+                const flow = reflowFor(inst.orient, inst.slot);
+                if (flow) {
+                    for (let s = 0; s < SLOTS; s++) {
+                        const r = flow[s];
+                        const id = inst.bc + ':' + inst.br + ':' + s;
+                        st.expandedRects.set(id, { x: inst.bc * st.g.blockW + r.x * st.g.pitch, y: inst.br * st.g.blockH + r.y * st.g.pitch, w: r.w * st.g.pitch - st.gap, h: r.h * st.g.pitch - st.gap, cols: r.w });
+                    }
+                    st.expanded = inst;
+                }
+            }
+            if ((prev ? prev.id : '') !== (st.expanded ? st.expanded.id : '')) {
+                if (animate && !reduced()) {
+                    world.classList.add('aw-reflow');
+                    clearTimeout(st.reflowTimer);
+                    st.reflowTimer = setTimeout(() => world.classList.remove('aw-reflow'), 560);
+                }
+                st.dirty = true;
+                schedule();
+            }
+        };
+        const centerOn = (inst, { instant = false } = {}) => {
+            if (!inst) return;
+            const r = rectOf(inst);
+            const target = { x: r.x + r.w / 2 - st.room.width / 2, y: r.y + r.h / 2 - st.room.height / 2 };
+            st.vel.x = st.vel.y = 0;
+            st.wheelAim = null;
+            if (instant || reduced()) { st.cam.x = target.x; st.cam.y = target.y; st.aim = null; st.dirty = true; }
+            else st.aim = target;
+            schedule();
+        };
+        const focusInstance = (inst, { expand = false, center = false } = {}) => {
+            st.focus = inst;
+            st.selIndex = st.ids[inst.item];
+            if (expand) setExpanded(inst);
+            else if (st.expanded && st.expanded.id !== inst.id) setExpanded(null);
+            opts.pick(st.ids[inst.item]);
+            if (center || expand) centerOn(st.expanded || inst);
+            st.dirty = true;
+            schedule();
+        };
+
+        /* 方向键：在附近九块里找这个方向上最近的一张（偏离方向的距离算两倍） */
+        const step = (key) => {
+            if (!st.g || !st.ids.length) return false;
+            const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+            if (!dir) return false;
+            let from = st.focus;
+            if (!from) {
+                const c = viewCenter();
+                const bc = Math.floor(c.x / st.g.blockW), br = Math.floor(c.y / st.g.blockH);
+                from = instanceAt(st.g, bc, br, 0, st.gap);
+                focusInstance(from, { center: true });
+                return true;
+            }
+            const fr = rectOf(from);
+            const fc = { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2 };
+            let best = null, bestScore = Infinity;
+            for (let br = from.br - 1; br <= from.br + 1; br++) {
+                for (let bc = from.bc - 1; bc <= from.bc + 1; bc++) {
+                    for (let s = 0; s < SLOTS; s++) {
+                        const inst = instanceAt(st.g, bc, br, s, st.gap);
+                        if (inst.id === from.id) continue;
+                        const r = rectOf(inst);
+                        // 用相邻边算：往右走看对方左边是不是在我右边的右侧
+                        const along = dir[0] ? (dir[0] > 0 ? r.x - (fr.x + fr.w) : fr.x - (r.x + r.w)) : (dir[1] > 0 ? r.y - (fr.y + fr.h) : fr.y - (r.y + r.h));
+                        if (along < -st.gap) continue;
+                        const across = dir[0] ? Math.abs(r.y + r.h / 2 - fc.y) : Math.abs(r.x + r.w / 2 - fc.x);
+                        const score = Math.max(0, along) + across * 2;
+                        if (score < bestScore) { bestScore = score; best = inst; }
+                    }
+                }
+            }
+            if (!best) return false;
+            const wasExpanded = Boolean(st.expanded);
+            focusInstance(best, { expand: wasExpanded });
+            const r = rectOf(st.expanded || best);
+            const pad = 28;
+            if (r.x < st.cam.x + pad || r.y < st.cam.y + pad || r.x + r.w > st.cam.x + st.room.width - pad || r.y + r.h > st.cam.y + st.room.height - pad) centerOn(st.expanded || best);
+            return true;
+        };
+
+        // ---------- 画 ----------
+        const recycle = (node) => {
+            node.el.remove();
+            node.item = -2;
+            if (st.pool.length < 80) st.pool.push(node);
+        };
+        const makeNode = () => {
+            const node = st.pool.pop();
+            if (node) return node;
+            const t = document.createElement('div');
+            t.className = 'aw-tile';
+            t.setAttribute('role', 'gridcell');
+            t.innerHTML = '<div class="aw-in"><div class="aw-art"><img alt="" draggable="false" decoding="async"><span class="aw-blank"></span></div><span class="aw-no"></span><div class="aw-cap"><b></b><span></span></div></div>';
+            const inner = t.firstChild;
+            return {
+                el: t, inner, img: inner.querySelector('img'), blank: inner.querySelector('.aw-blank'),
+                no: inner.querySelector('.aw-no'), title: inner.querySelector('.aw-cap b'), sub: inner.querySelector('.aw-cap span'),
+                item: -2, x: NaN, y: NaN, w: NaN, h: NaN, src: null, cls: ''
+            };
+        };
+        const panel = document.createElement('div');
+        panel.className = 'aw-panel';
+        panel.innerHTML = '<div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
+            + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary">播放</button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
+        const fillPanel = (i) => {
+            const t = opts.track(i);
+            const m = opts.meta(t, i);
+            panel.querySelector('.aw-panel-no').textContent = m.code || '';
+            panel.querySelector('.aw-panel-dur').textContent = m.duration || '';
+            panel.querySelector('.aw-panel-title').textContent = m.title;
+            panel.querySelector('.aw-panel-sub').textContent = [m.artist, m.album].filter(Boolean).join(' · ');
+            const p = opts.playing();
+            const isNow = p.index === i && p.active;
+            const btn = panel.querySelector('[data-wall="play"]');
+            btn.textContent = isNow ? '正在播放' : (p.index === i ? '继续播放' : '播放');
+            btn.disabled = isNow;
+        };
+
+        const fillContent = (node, idx, px) => {
+            const i = st.ids[idx];
+            const t = opts.track(i);
+            const changed = node.item !== idx;
+            if (changed) {
+                node.item = idx;
+                const m = opts.meta(t, i);
+                node.title.textContent = m.title;
+                node.sub.textContent = m.artist || '';
+                node.no.textContent = m.code || '';
+                node.blank.textContent = m.title;
+                node.el.setAttribute('aria-label', m.title + (m.artist ? '，' + m.artist : ''));
+                node.src = null;
+            }
+            const src = opts.cover(t);
+            const url = src ? thumbs.get(src, px) : '';
+            if (url !== node.src) {
+                node.src = url;
+                if (url) {
+                    node.img.src = url;
+                    node.el.classList.add('has-art');
+                } else {
+                    node.img.removeAttribute('src');
+                    node.el.classList.remove('has-art');
+                }
+            }
+        };
+
+        const layout = () => {
+            st.dirty = false;
+            if (!st.g || !st.ids.length || !st.room.width) {
+                for (const node of st.nodes.values()) recycle(node);
+                st.nodes.clear();
+                return;
+            }
+            const g = st.g;
+            const over = g.pitch * 3;
+            const vx0 = st.cam.x - over, vy0 = st.cam.y - over, vx1 = st.cam.x + st.room.width + over, vy1 = st.cam.y + st.room.height + over;
+            const c0 = Math.floor(vx0 / g.blockW), c1 = Math.floor(vx1 / g.blockW);
+            const r0 = Math.floor(vy0 / g.blockH), r1 = Math.floor(vy1 / g.blockH);
+            const keep = new Set();
+            const dpr = global.devicePixelRatio || 1;
+            const now = performance.now();
+            const entering = now < st.enterUntil;
+            const sel = st.focus ? st.focus.id : '';
+            const exp = st.expanded ? st.expanded.id : '';
+            const play = opts.playing();
+            const playPos = play.index >= 0 ? st.ids.indexOf(play.index) : -1;
+            let count = 0;
+            for (let br = r0; br <= r1 && count < MAX_TILES; br++) {
+                for (let bc = c0; bc <= c1 && count < MAX_TILES; bc++) {
+                    for (let s = 0; s < SLOTS; s++) {
+                        const inst = instanceAt(g, bc, br, s, st.gap);
+                        const r = st.expandedRects.get(inst.id) || inst;
+                        if (r.x + r.w < vx0 || r.x > vx1 || r.y + r.h < vy0 || r.y > vy1) continue;
+                        count++;
+                        keep.add(inst.id);
+                        let node = st.nodes.get(inst.id);
+                        const fresh = !node;
+                        if (fresh) {
+                            node = makeNode();
+                            st.nodes.set(inst.id, node);
+                            node.x = node.y = node.w = node.h = NaN;
+                            node.el.dataset.id = inst.id;
+                            world.appendChild(node.el);
+                            if (entering) {
+                                const o = st.enterOrigin || viewCenter();
+                                const d = Math.hypot(r.x + r.w / 2 - o.x, r.y + r.h / 2 - o.y);
+                                node.inner.style.animationDelay = Math.min(420, d * 0.32) + 'ms';
+                                node.el.classList.add('aw-entering');
+                            } else node.el.classList.remove('aw-entering');
+                        }
+                        if (r.x !== node.x || r.y !== node.y) { node.el.style.transform = `translate3d(${r.x}px,${r.y}px,0)`; node.x = r.x; node.y = r.y; }
+                        if (r.w !== node.w || r.h !== node.h) { node.el.style.width = r.w + 'px'; node.el.style.height = r.h + 'px'; node.w = r.w; node.h = r.h; }
+                        fillContent(node, inst.item, Math.max(r.w, r.h) * dpr);
+                        const size = r.cols >= 4 ? 'aw-l' : r.cols >= 3 ? 'aw-m' : 'aw-s';
+                        const cls = size + (inst.id === sel ? ' is-focus' : '') + (inst.id === exp ? ' is-open' : '') + (inst.item === playPos ? (play.active ? ' is-playing' : ' is-current') : '');
+                        if (cls !== node.cls) {
+                            node.el.classList.remove('aw-l', 'aw-m', 'aw-s', 'is-focus', 'is-open', 'is-playing', 'is-current');
+                            node.el.classList.add(...cls.split(' '));
+                            node.cls = cls;
+                            node.el.setAttribute('aria-selected', inst.id === sel ? 'true' : 'false');
+                        }
+                        if (inst.id === exp) {
+                            if (panel.parentNode !== node.inner) node.inner.appendChild(panel);
+                            fillPanel(st.ids[inst.item]);
+                        }
+                    }
+                }
+            }
+            for (const [id, node] of st.nodes) {
+                if (!keep.has(id)) { st.nodes.delete(id); recycle(node); }
+            }
+            if (!exp && panel.parentNode) panel.remove();
+            st.laidAt = { x: st.cam.x, y: st.cam.y };
+        };
+
+        const applyCamera = () => {
+            world.style.transform = `translate3d(${-Math.round(st.cam.x * 2) / 2}px,${-Math.round(st.cam.y * 2) / 2}px,0)`;
+            const g = st.g;
+            if (!st.laidAt || !g || Math.abs(st.cam.x - st.laidAt.x) > g.pitch * 1.5 || Math.abs(st.cam.y - st.laidAt.y) > g.pitch * 1.5) st.dirty = true;
+        };
+
+        const tick = (now) => {
+            st.raf = 0;
+            if (!st.on) return;
+            const dt = Math.min(0.05, st.last ? (now - st.last) / 1000 : 1 / 60);
+            st.last = now;
+            let moving = false;
+            if (st.aim) {
+                const k = 1 - Math.exp(-dt / 0.16);
+                st.cam.x += (st.aim.x - st.cam.x) * k;
+                st.cam.y += (st.aim.y - st.cam.y) * k;
+                if (Math.abs(st.aim.x - st.cam.x) < 0.5 && Math.abs(st.aim.y - st.cam.y) < 0.5) { st.cam.x = st.aim.x; st.cam.y = st.aim.y; st.aim = null; }
+                else moving = true;
+            } else if (st.wheelAim) {
+                const k = 1 - Math.exp(-dt / 0.085);
+                st.cam.x += (st.wheelAim.x - st.cam.x) * k;
+                st.cam.y += (st.wheelAim.y - st.cam.y) * k;
+                if (Math.abs(st.wheelAim.x - st.cam.x) < 0.5 && Math.abs(st.wheelAim.y - st.cam.y) < 0.5) { st.cam.x = st.wheelAim.x; st.cam.y = st.wheelAim.y; st.wheelAim = null; }
+                else moving = true;
+            } else if (!st.drag && (Math.abs(st.vel.x) > 4 || Math.abs(st.vel.y) > 4)) {
+                st.cam.x -= st.vel.x * dt;
+                st.cam.y -= st.vel.y * dt;
+                const k = Math.exp(-dt / 0.3);
+                st.vel.x *= k; st.vel.y *= k;
+                moving = true;
+            } else if (!st.drag) { st.vel.x = st.vel.y = 0; }
+            applyCamera();
+            if (st.dirty || st.coverDirty) { st.coverDirty = false; layout(); }
+            if (moving || st.drag || performance.now() < st.enterUntil) { st.last = now; st.raf = requestAnimationFrame(tick); }
+            else st.last = 0;
+        };
+        const schedule = () => { if (st.on && !st.raf) st.raf = requestAnimationFrame(tick); };
+
+        // ---------- 输入 ----------
+        const tileOf = (target) => {
+            const t = target && target.closest ? target.closest('.aw-tile') : null;
+            if (!t || !t.dataset.id) return null;
+            const [bc, br, slot] = t.dataset.id.split(':').map(Number);
+            return instanceAt(st.g, bc, br, slot, st.gap);
+        };
+        let lastClick = { id: '', t: 0 };
+        el.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 || e.target.closest('button')) return;
+            st.aim = null; st.wheelAim = null;
+            st.vel.x = st.vel.y = 0;
+            st.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, samples: [[performance.now(), e.clientX, e.clientY]] };
+        });
+        el.addEventListener('pointermove', (e) => {
+            const d = st.drag;
+            if (!d || d.id !== e.pointerId) return;
+            if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 5) return;
+            if (!d.moved) { d.moved = true; el.setPointerCapture?.(e.pointerId); el.classList.add('is-grabbing'); }
+            st.cam.x -= e.clientX - d.x;
+            st.cam.y -= e.clientY - d.y;
+            d.x = e.clientX; d.y = e.clientY;
+            const now = performance.now();
+            d.samples.push([now, e.clientX, e.clientY]);
+            while (d.samples.length > 2 && now - d.samples[0][0] > 90) d.samples.shift();
+            schedule();
+        });
+        const endDrag = (e) => {
+            const d = st.drag;
+            if (!d || d.id !== e.pointerId) return;
+            st.drag = null;
+            el.classList.remove('is-grabbing');
+            if (!d.moved) return;
+            const now = performance.now();
+            const s = d.samples;
+            const a = s[0], b = s[s.length - 1];
+            const span = (b[0] - a[0]) / 1000;
+            if (span > 0.008 && now - b[0] < 80 && !reduced()) {
+                const vx = (b[1] - a[1]) / span, vy = (b[2] - a[2]) / span;
+                const sp = Math.hypot(vx, vy);
+                const lim = sp > 4000 ? 4000 / sp : 1;
+                if (sp > 40) { st.vel.x = vx * lim; st.vel.y = vy * lim; }
+            }
+            d.wasDrag = true;
+            st.justDragged = now;
+            schedule();
+        };
+        el.addEventListener('pointerup', endDrag);
+        el.addEventListener('pointercancel', endDrag);
+        el.addEventListener('click', (e) => {
+            if (st.justDragged && performance.now() - st.justDragged < 60) return;
+            const btn = e.target.closest('[data-wall]');
+            if (btn) {
+                e.stopPropagation();
+                const i = st.expanded ? st.ids[st.expanded.item] : -1;
+                if (i < 0) return;
+                if (btn.dataset.wall === 'play') opts.play(i, {});
+                else if (btn.dataset.wall === 'stage') opts.play(i, { stage: true });
+                else if (btn.dataset.wall === 'menu') { const r = btn.getBoundingClientRect(); opts.menu(i, r.left, r.bottom + 6, btn); }
+                schedule();
+                return;
+            }
+            const inst = tileOf(e.target);
+            const now = performance.now();
+            if (!inst) { if (st.expanded) setExpanded(null); return; }
+            const dbl = lastClick.id === inst.id && now - lastClick.t < 380;
+            lastClick = { id: inst.id, t: now };
+            if (dbl) { opts.play(st.ids[inst.item], {}); return; }
+            if (st.expanded && st.expanded.id === inst.id) return;
+            focusInstance(inst, { expand: true });
+        });
+        el.addEventListener('contextmenu', (e) => {
+            const inst = tileOf(e.target);
+            if (!inst) return;
+            e.preventDefault();
+            if (!st.focus || st.focus.id !== inst.id) focusInstance(inst);
+            opts.menu(st.ids[inst.item], e.clientX, e.clientY, null);
+        });
+        let wheelGesture = { t: -1e9, kind: '' };
+        el.addEventListener('wheel', (e) => {
+            if (!st.g) return;
+            e.preventDefault();
+            st.aim = null;
+            st.vel.x = st.vel.y = 0;
+            let dx = e.deltaX, dy = e.deltaY;
+            if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= st.room.width; dy *= st.room.height; }
+            if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+            // 鼠标滚轮一格（单轴、步子大）平滑走过去；触控板的小增量直接跟手
+            const same = e.timeStamp - wheelGesture.t < 120;
+            wheelGesture.t = e.timeStamp;
+            const padLike = (dx && dy) || Math.max(Math.abs(dx), Math.abs(dy)) < 50;
+            if (!same) wheelGesture.kind = padLike ? 'pad' : 'wheel';
+            else if (padLike) wheelGesture.kind = 'pad';
+            if (wheelGesture.kind === 'pad' || reduced()) {
+                st.wheelAim = null;
+                st.cam.x += dx; st.cam.y += dy;
+            } else {
+                const base = st.wheelAim || { x: st.cam.x, y: st.cam.y };
+                st.wheelAim = { x: base.x + dx * 1.4, y: base.y + dy * 1.4 };
+            }
+            schedule();
+        }, { passive: false });
+
+        // ---------- 对外 ----------
+        const api = {
+            el,
+            show(on) {
+                on = Boolean(on);
+                if (on === st.on) return;
+                st.on = on;
+                el.hidden = !on;
+                if (on) {
+                    syncItems({ force: true });
+                    st.dirty = true;
+                    schedule();
+                } else {
+                    cancelAnimationFrame(st.raf);
+                    st.raf = 0;
+                    setExpanded(null, { animate: false });
+                    for (const node of st.nodes.values()) recycle(node);
+                    st.nodes.clear();
+                    thumbs.clearQueue();
+                }
+            },
+            get on() { return st.on; },
+            setRoom,
+            /* 档案页每次换选中、换列、播放状态变了都调一下；没变的部分不动 */
+            sync({ expand = false } = {}) {
+                if (!st.on) return;
+                if (syncItems()) { if (expand) { st.wantExpand = true; st.selIndex = -2; syncSelection({ center: true, instant: true }); } return; }
+                if (expand && (!st.expanded || st.ids[st.expanded.item] !== opts.selected())) { st.wantExpand = true; st.selIndex = -2; }
+                syncSelection();
+                const p = opts.playing();
+                const pk = p.index + ':' + p.active;
+                if (pk !== st.playKey) { st.playKey = pk; st.dirty = true; schedule(); }
+            },
+            coverFound() { st.coverDirty = true; schedule(); },
+            step,
+            collapse() { if (!st.expanded) return false; setExpanded(null); return true; },
+            get expanded() { return Boolean(st.expanded); },
+            refresh() { st.dirty = true; schedule(); },
+            destroy() {
+                st.on = false;
+                cancelAnimationFrame(st.raf);
+                clearTimeout(st.reflowTimer);
+                thumbs.destroy();
+                el.remove();
+            },
+            debug: () => ({ on: st.on, items: st.ids.length, tiles: st.nodes.size, cam: { ...st.cam }, pitch: st.g?.pitch, focus: st.focus?.id || null, expanded: st.expanded?.id || null, thumbs: thumbs.size, templates: TEMPLATES.length })
+        };
+        return api;
+    };
+
+    global.MusicArchiveWall = Object.freeze({ create, _test: { TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+})(typeof window !== 'undefined' ? window : globalThis);
