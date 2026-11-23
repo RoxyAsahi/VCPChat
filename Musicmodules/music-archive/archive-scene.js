@@ -872,6 +872,7 @@ vec3 archiveUntone(vec3 y) {
         let playing = null;          // { lane, row } 正在播放那张卡（同列轻微跳动）
         let isPlaying = false;
         let idleGain = 0;
+        let bounceGain = 1;            // 正在放的那一列轻跳的幅度，取出端详时收到 0
         let lastInput = performance.now();
         let lastPointer = 0;          // 鼠标移动带视差，也算没静止（但不打断待机起伏）
         let frames = 0;
@@ -1137,7 +1138,11 @@ vec3 archiveUntone(vec3 y) {
             const tinting = waves.length > 0;
             const tmpC = tinting ? (stepTheme.c || (stepTheme.c = new THREE.Color())) : null;
             // 静止后的缓慢起伏只在播放时才有：暂停时没有东西在动，画面停住，外面的帧循环也就不再排下一帧
-            const idleTarget = !reduced && isPlaying && now - lastInput > 2500 ? 1 : 0;
+            // 取出端详时背景不起伏、正在放的那一列也不跳（参考播放器：m_targetDetail == 0 且 m_detail < 0.01 才起伏），
+            // 卡停稳后整个场景就不再画
+            const idleTarget = !reduced && isPlaying && !detailOn && detailK < 0.01 && now - lastInput > 2500 ? 1 : 0;
+            bounceGain += ((detailOn ? 0 : 1) - bounceGain) * (reduced ? 1 : 1 - Math.exp(-dt * 4));
+            if (bounceGain < 0.001) bounceGain = 0;
             idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 0.8 : 4));   // 参考播放器：起伏 0.8 慢慢起、4 快速收
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
@@ -1167,9 +1172,9 @@ vec3 archiveUntone(vec3 y) {
                     let f = fieldAt(row, lane);
                     // 卡顺着起伏的坡度前后微倾（参考播放器 NativeSceneUpdate.cpp：slope × 0.024 × (1 − 取出进度)）
                     const tilt = (fieldAt(row + 0.5, lane) - fieldAt(row - 0.5, lane)) * 0.024 * (1 - detailK);
-                    if (isPlaying && playing && !reduced && lane === playing.lane) {
+                    if (isPlaying && playing && !reduced && bounceGain > 0 && lane === playing.lane) {
                         const dd = Math.abs(row - playing.row);
-                        if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8);
+                        if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8) * bounceGain;
                     }
                     const hl = hoverLifts.size ? hoverLifts.get(lane + ':' + row) || 0 : 0;   // 没有悬停的卡时不为每张卡拼字符串
                     let y = BASE_Y + f + hl;
@@ -1287,7 +1292,7 @@ vec3 archiveUntone(vec3 y) {
             return {
                 moving: !settled,
                 idle: now - Math.max(lastInput, lastPointer) > IDLE_AFTER,
-                animated: !settled || idleGain > 0.001 || (isPlaying && playing && !reduced)
+                animated: !settled || idleGain > 0.001 || (isPlaying && playing && !reduced && bounceGain > 0)
             };
         };
 
