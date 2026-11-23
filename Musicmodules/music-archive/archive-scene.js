@@ -1447,7 +1447,7 @@ vec3 archiveUntone(vec3 y) {
         const setHover = (cell) => {
             const k = cell ? cell.lane + ':' + cell.row : null;
             if (k === hovered) return;
-            hovered = reducedMotion() ? null : k;
+            hovered = k;   // 减少动态时也探出，只是直接到位不带过渡（参考播放器 m_reduced 下 next = target）
             invalidate();
         };
         /*
