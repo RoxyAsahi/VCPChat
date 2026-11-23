@@ -363,8 +363,9 @@ body.music-reduce-motion .archive-list-group.live-on::before { animation: none; 
 .archive-list-shelf button { max-width: 180px; padding: 5px 10px; border: 1px solid var(--ar-rule); font-size: 12px; color: var(--ar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 歌单里拖动排序：落点是行与行之间的一道线 */
 .archive-list .archive-list-row.drop-before::before, .archive-list .archive-list-row.drop-after::after { content: ""; position: absolute; left: 0; right: 0; width: auto; height: 2px; border-radius: 1px; background: var(--ar-accent, var(--ar-ink)); transform: none; animation: none; pointer-events: none; }
-.archive-list .archive-list-row.drop-before::before { top: -1px; bottom: auto; }
-.archive-list .archive-list-row.drop-after::after { top: auto; bottom: -1px; }
+/* 落点线也落在两行缝隙正中（行上下各 3px 透明边） */
+.archive-list .archive-list-row.drop-before::before { top: -4px; bottom: auto; }
+.archive-list .archive-list-row.drop-after::after { top: auto; bottom: -4px; }
 .archive-list-shelf button.drop-over { border-color: var(--ar-accent); color: var(--ar-accent-text, var(--ar-accent)); }
 
 .archive-list-row { position: absolute; left: calc(var(--gutter) - var(--row-icon-space)); right: 0; top: 0; height: 58px; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding-inline: calc(var(--row-icon-space) - var(--row-inline-border)) calc(var(--text-end-inset) - var(--row-inline-border)); cursor: pointer; color: var(--ar-summary, var(--ar-muted)); }
@@ -397,10 +398,12 @@ body.music-reduce-motion .archive-list-group.live-on::before { animation: none; 
 .archive-list-row:active { --row-wash: color-mix(in srgb, var(--ar-ink) 12%, transparent); }
 .archive-list-row .go:active { transform: scale(.92); }
 .archive-list.grabbing .archive-list-row, .archive-list.has-multi .archive-list-row:not(:hover) { --row-wash: transparent; }
-/* 选中：说明块同款记号，左边实心小方块 + 一条细线延伸到行尾 */
+/* 选中：说明块同款记号，左边实心小方块 + 一条细线延伸到行尾。
+   记号画在这一行和上一行之间的缝里（上下各 3px 透明边，缝宽 6px，正中在 -3px），
+   不压进本行的高亮底色，看上去就是两行正中间的分隔线 */
 .archive-list-row.on .tx b { font-weight: 750; }
-.archive-list-row.on::before { content: ""; position: absolute; left: 0; top: 4px; width: 6px; height: 6px; background: var(--ar-square); }
-.archive-list-row.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 6.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
+.archive-list-row.on::before { content: ""; position: absolute; left: 0; top: -6px; width: 6px; height: 6px; background: var(--ar-square); }
+.archive-list-row.on::after { content: ""; position: absolute; left: 6px; right: 0; top: -3.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
 @keyframes archive-list-rule { from { transform: scaleX(0); } }
 /* 正在播放：方块的位置换成三根跟着跳动的竖条，暂停时静止 */
 /* 行首播放键：悬停（或键盘选中）时出现在左边留白里；正在放的那一行悬停时换成暂停 */
@@ -657,3 +660,73 @@ body.music-dock-beside-lyrics:has(#music-dock-root.md-fl-low) .archive-hud.lyric
 .archive-list-row { height: 52px; }
 .archive-counter > div { font-size: 46px; gap: 16px; }
 .archive-counter i { font-size: 26px; }
+
+/* ═════════ 档案目录表：序号 / 标题 / 时长成三列，行间细线，分组是行内小标题 ═════════
+   照原版资料库的目录规范：序号、标题、辅助信息、时长形成稳定的列，1px 低对比细线分隔；
+   选中的行用浅底，正在放的那一首另用左侧琥珀短条 + 跳动竖条标出来。 */
+.archive-list { --gutter: 30px; --row-icon-space: 0px; --row-inline-border: 0px; --text-end-inset: 14px; --no-w: calc(var(--no-digits, 3) * 7.4px + 12px); --ar-hair: color-mix(in srgb, var(--ar-ink) 11%, transparent); }
+.archive-list-sticky { display: none; }
+.archive-list-viewport .mfm { display: none; }
+
+.archive-list-row { border-width: 0; grid-template-columns: var(--no-w) minmax(0, 1fr) auto; gap: 10px; padding-inline: 0 var(--text-end-inset); }
+.archive-list-row .no { font-size: 12px; letter-spacing: .3px; padding-left: 10px; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--ar-ink) 42%, transparent); }
+.archive-list-row .tx { gap: 3px; }
+.archive-list-row .tx b { font-size: 15px; line-height: 21px; font-weight: 500; letter-spacing: .1px; }
+.archive-list-row .tx em { font-size: 12px; letter-spacing: .2px; color: color-mix(in srgb, var(--ar-ink) 58%, transparent); }
+.archive-list-row .rt { font-size: 12px; letter-spacing: .2px; opacity: 1; color: color-mix(in srgb, var(--ar-ink) 55%, transparent); }
+/* 每行底下一条细线 */
+.archive-list-row::after { content: ""; position: absolute; left: 0; right: 0; top: auto; bottom: 0; height: 1px; background: var(--ar-hair); pointer-events: none; }
+/* 悬停 / 选中的浅底：方角，铺满整行（含序号列），不压住底下那条细线 */
+.archive-list-row .tx::before { inset: 0 0 1px; border-radius: 0; }
+.archive-list-row.on { --row-wash: color-mix(in srgb, var(--ar-ink) 6%, transparent); }
+.archive-list-row.on:is(:hover, :focus-within) { --row-wash: color-mix(in srgb, var(--ar-ink) 9%, transparent); }
+.archive-list-row.on .tx b { font-weight: 600; }
+/* 选中不再画方块 + 延伸细线 */
+.archive-list-row.on::before { content: none; }
+.archive-list-row.on::after, .archive-list-row.current.on::after { left: 0; top: auto; bottom: 0; background: var(--ar-hair); animation: none; }
+.archive-list-row.before-head::after { content: none; }
+.archive-list .archive-list-row.before-head.drop-after::after { content: ""; }
+/* 正在放：左侧琥珀短条，序号位置换成跳动竖条 */
+.archive-list-row.current::before, .archive-list-row.current.on::before { content: ""; display: block; position: absolute; left: 0; top: 9px; bottom: 10px; width: 3px; height: auto; background: var(--ar-accent); }
+.archive-list-row.current .no { visibility: hidden; }
+.archive-list-row .eq, .archive-list-row.current .eq { left: 12px; top: 20px; }
+/* 行首播放键盖在序号上 */
+.archive-list-row .go { left: 4px; }
+.archive-list-row:is(:hover, :focus-within) .no { visibility: hidden; }
+.archive-list-row:is(:hover, :focus-within)::before { visibility: visible; }
+@media (hover: none) { .archive-list-row:is(:hover, :focus-within) .no { visibility: visible; } }
+.archive-list.grabbing .archive-list-row .no, .archive-list.has-multi .archive-list-row .no { visibility: visible; }
+/* 拖动排序的落点线贴着行边 */
+.archive-list .archive-list-row.drop-before::before { top: -1px; }
+.archive-list .archive-list-row.drop-after::after { bottom: -1px; height: 2px; background: var(--ar-accent, var(--ar-ink)); }
+/* 多选标记让开序号列 */
+.archive-list-row.picked::before { left: 0; top: 9px; bottom: 10px; width: 3px; }
+
+/* 分组小标题：上面一条结构线，字母（或歌手/专辑/歌单名）+ 首数 */
+.archive-list-letter { left: var(--gutter); right: var(--text-end-inset); width: auto; height: 28px; overflow: hidden; display: flex; align-items: flex-end; gap: 8px; padding-bottom: 6px; box-sizing: border-box; text-align: left; border-top: 1.5px solid color-mix(in srgb, var(--ar-ink) 62%, transparent); margin-top: 6px; }
+.archive-list-letter > span, .archive-list-letter > span.wide { padding: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 1px; color: var(--ar-ink); }
+.archive-list-letter > i { font-style: normal; font-size: 11px; line-height: 16px; letter-spacing: .3px; color: color-mix(in srgb, var(--ar-ink) 50%, transparent); font-variant-numeric: tabular-nums; }
+.archive-list.has-drop .archive-list-letter > span { opacity: 1 !important; filter: none !important; }
+.archive-list-group { box-shadow: inset 0 1.5px 0 color-mix(in srgb, var(--ar-ink) 62%, transparent); height: 28px; box-sizing: border-box; margin-top: 12px; padding-bottom: 6px; align-items: flex-end; }
+.archive-list-group.has-playing::before { left: auto; right: calc(100% + 8px); }
+
+/* 抽屉展开时目录变窄：序号列收一点 */
+.archive-hud.beside-drawer.lyrics-open.list-open:not(.tiny) .archive-list { --gutter: 22px; --no-w: calc(var(--no-digits, 3) * 7px + 8px); --text-end-inset: 12px; }
+
+/* ═════════ 目录左上角标题区：照原版，大号粗体栏名 + 一行小字（记号 + MUSIC DATABASE） ═════════
+   原版 1920 画布上：栏名 44px 粗体在 x59，下面 14px 半粗小字，两行之间约 14px。 */
+body.music-archive-on #custom-title-bar .title { visibility: hidden; }
+.archive-list { --brand-room: 108px; }
+.archive-hud:not(.narrow):not(.squeeze):not(.tiny) .archive-list { top: calc(var(--archive-toolbar-top) + var(--brand-room) - 34px); }
+.archive-hud:is(.narrow, .squeeze, .tiny) .archive-list-brand { display: none; }
+.archive-list-brand { position: absolute; left: var(--gutter); right: var(--text-end-inset); bottom: calc(100% + 18px); color: var(--ar-ink); pointer-events: none; white-space: nowrap; }
+.archive-list-brand-title { position: relative; height: 50px; margin: 0; overflow: hidden; font-size: 44px; line-height: 50px; font-weight: 750; letter-spacing: 1.5px; }
+.archive-list-brand-title > span { position: absolute; left: 0; top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.archive-list-brand-title > span.in { animation: archive-brand-in .42s var(--mt-ease, cubic-bezier(.2, .8, .2, 1)) both; }
+.archive-list-brand-title > span.out { animation: archive-brand-out .42s var(--mt-ease, cubic-bezier(.2, .8, .2, 1)) both; }
+@keyframes archive-brand-in { from { transform: translateY(60%); opacity: 0; } }
+@keyframes archive-brand-out { to { transform: translateY(-60%); opacity: 0; } }
+.archive-list-brand-sub { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; line-height: 16px; font-weight: 600; letter-spacing: 1px; }
+.archive-list-brand-mark { display: block; width: 16px; height: 16px; flex-shrink: 0; }
+/* 吸附字母已不显示，分组标题里的字母不能跟着被藏 */
+.archive-list-letter.stuck > span { visibility: visible; }
