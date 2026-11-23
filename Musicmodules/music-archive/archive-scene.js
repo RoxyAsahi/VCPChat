@@ -1166,12 +1166,15 @@ vec3 archiveUntone(vec3 y) {
             labelWanted.clear();
             let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
+                let upper = fieldAt(baseRow + ROWS_AFTER - 0.5, baseLane + li);   // 行从后往前走，这一行的下半格就是上一行的上半格，复用省掉三分之一的采样
                 for (let ri = ROWS_AFTER - 1; ri >= -ROWS_BEFORE; ri--) {   // 近处的行先画：深度测试挡掉后面被遮住的像素，复杂的卡盒着色只算看得见的
                     const lane = baseLane + li;
                     const row = baseRow + ri;
                     let f = fieldAt(row, lane);
                     // 卡顺着起伏的坡度前后微倾（参考播放器 NativeSceneUpdate.cpp：slope × 0.024 × (1 − 取出进度)）
-                    const tilt = (fieldAt(row + 0.5, lane) - fieldAt(row - 0.5, lane)) * 0.024 * (1 - detailK);
+                    const lower = fieldAt(row - 0.5, lane);
+                    const tilt = (upper - lower) * 0.024 * (1 - detailK);
+                    upper = lower;
                     if (isPlaying && playing && !reduced && bounceGain > 0 && lane === playing.lane) {
                         const dd = Math.abs(row - playing.row);
                         if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8) * bounceGain;
