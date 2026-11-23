@@ -483,6 +483,19 @@ void main() {
             L.drawn = info.key + '#' + labelEpoch;
         };
         const labelWanted = new Map();
+        const wantSpare = [];   // 贴标题的格子信息每帧复用，不每帧新建对象
+        // 'lane:row' 键字符串缓存：每帧要查几百次，不再每次拼新字符串
+        const cellKeys = new Map();
+        const cellKey = (lane, row) => {
+            const n = lane * 100003 + row;
+            let k = cellKeys.get(n);
+            if (k === undefined) {
+                if (cellKeys.size > 8192) cellKeys.clear();
+                k = lane + ':' + row;
+                cellKeys.set(n, k);
+            }
+            return k;
+        };
         let labelsPending = false;
         const placeLabels = () => {
             labelsPending = false;
@@ -492,7 +505,8 @@ void main() {
                 L.cell = null;
                 free.push(L);
             }
-            const taken = new Set(labels.filter((L) => L.cell).map((L) => L.cell));
+            const taken = new Set();
+            for (const L of labels) if (L.cell) taken.add(L.cell);
             for (const [cell] of labelWanted) {
                 if (taken.has(cell)) continue;
                 // 优先用之前就画着这张卡的贴片，省得重画
@@ -1163,6 +1177,7 @@ vec3 archiveUntone(vec3 y) {
             };
             const baseLane = Math.round(camLane.v);
             const baseRow = Math.round(camRow.v);
+            for (const w of labelWanted.values()) wantSpare.push(w);
             labelWanted.clear();
             let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
@@ -1179,12 +1194,12 @@ vec3 archiveUntone(vec3 y) {
                         const dd = Math.abs(row - playing.row);
                         if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8) * bounceGain;
                     }
-                    const hl = hoverLifts.size ? hoverLifts.get(lane + ':' + row) || 0 : 0;   // 没有悬停的卡时不为每张卡拼字符串
+                    const hl = hoverLifts.size ? hoverLifts.get(cellKey(lane, row)) || 0 : 0;   // 没有悬停的卡时不为每张卡拼字符串
                     let y = BASE_Y + f + hl;
                     const isTarget = lane === target.lane && row === target.row;
                     if (isTarget) y += lift.v;
                     let backRot = 0;
-                    if (!isTarget && returning.size) { const r = returning.get(lane + ':' + row); if (r) { y += r.v; backRot = r.rot || 0; } }
+                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; } }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
                     // 选中卡抬起后不再跟着坡度倾斜（× (1 − smoother(lift / 0.4))），取出时可以转着看
                     dummy.rotation.x = isTarget ? tilt * (1 - smoother(lift.v / 0.4)) : tilt;
@@ -1194,7 +1209,11 @@ vec3 archiveUntone(vec3 y) {
                     const dl = lane - target.lane, dr = row - target.row;
                     if (labelFor && dl >= -LABEL_LANES && dl <= LABEL_LANES && dr >= LABEL_ROWS[0] && dr <= LABEL_ROWS[1]) {
                         const info = labelFor(lane, row);
-                        if (info) labelWanted.set(lane + ':' + row, { info, li: dl, x: dummy.position.x, y, z: dummy.position.z, tilt: dummy.rotation.x, turn: dummy.rotation.y });
+                        if (info) {
+                            const w = wantSpare.pop() || {};
+                            w.info = info; w.li = dl; w.x = dummy.position.x; w.y = y; w.z = dummy.position.z; w.tilt = dummy.rotation.x; w.turn = dummy.rotation.y;
+                            labelWanted.set(cellKey(lane, row), w);
+                        }
                     }
                     dummy.updateMatrix();
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
