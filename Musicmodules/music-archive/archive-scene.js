@@ -381,7 +381,13 @@ void main() {
         canvas.className = 'archive-canvas';
         host.appendChild(canvas);
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier.antialias, powerPreference: 'high-performance', alpha: false });
+        /*
+         * 走后期时场景画进自己的 4 倍多重采样渲染目标，画布上只画一个铺满全屏的三角形：
+         * 画布本身的多重采样和深度、模板缓冲完全用不上，每帧却要多解析一遍整屏（2880×1620 时约 150 MB 显存带宽）。
+         * 这时画布不开抗锯齿、不要深度和模板，画面逐像素不变。
+         */
+        const wantPost = tier.antialias;
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier.antialias && !wantPost, depth: !wantPost, stencil: false, powerPreference: 'high-performance', alpha: false });
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
@@ -551,7 +557,7 @@ void main() {
          * 之后上半截、下沿、四角往纸色压（浅色、深色各一套比例）。取出详情时柔化和压边都收掉。
          * 省电档不走这一步，直接画到屏幕。
          */
-        const post = { on: tier.antialias && typeof renderer.setRenderTarget === 'function', rt: null, scene: null, camera: null, mat: null, exposure: { value: 1 } };
+        const post = { on: wantPost && typeof renderer.setRenderTarget === 'function', rt: null, scene: null, camera: null, mat: null, exposure: { value: 1 } };
         if (post.on) {
             post.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, depthBuffer: true });
             post.mat = new THREE.ShaderMaterial({
