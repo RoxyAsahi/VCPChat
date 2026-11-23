@@ -207,6 +207,8 @@
                 waitingOpacity: 0.22,
                 audioReactivity: 1,
                 grain: 0.4,
+                flare: 1,
+                bokeh: 1,
                 showTranslation: true
             },
             hanabi: {
@@ -323,6 +325,8 @@
             negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
             drops: fallback.drops === undefined ? source.drops : bool(source.drops, fallback.drops),
             drips: fallback.drips === undefined ? source.drips : bool(source.drips, fallback.drips),
+            flare: fallback.flare === undefined ? source.flare : clamp(source.flare, 0, 2, fallback.flare),
+            bokeh: fallback.bokeh === undefined ? source.bokeh : clamp(source.bokeh, 0, 2, fallback.bokeh),
             cloud: fallback.cloud === undefined ? source.cloud : clamp(source.cloud, 0, 1, fallback.cloud),
             smoke: fallback.smoke === undefined ? source.smoke : clamp(source.smoke, 0, 2, fallback.smoke),
             dust: fallback.dust === undefined ? source.dust : clamp(source.dust, 0, 2, fallback.dust),

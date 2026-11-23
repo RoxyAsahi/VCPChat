@@ -20,6 +20,7 @@
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
     const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const MAX_BEAMS = 5;
+    const MAX_SPARKS = 6;
     const RIGS = Object.freeze(['zenith', 'lattice', 'prism', 'stage', 'caustic', 'motes']);
     const RIG_ID = Object.freeze({ zenith: 0, lattice: 1, prism: 2, stage: 3, caustic: 4, motes: 5 });
     const SECTION_LINES = 4;
@@ -71,6 +72,7 @@
                 cue.rig = options[Math.floor(random() * options.length)];
                 cue.sectionStart = true;
                 cue.seed = random() * 100;
+                cue.flash = section > 0 && random() < 0.5;
                 previousRig = cue.rig;
             } else {
                 cue.rig = cues[i - 1].rig;
@@ -175,6 +177,10 @@ uniform vec3 uAccent;
 uniform float uWaiting;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform vec4 uSpark[${MAX_SPARKS}];  // 屏幕 uv、大小、强度：唱到的字边上闪一颗星芒
+uniform int uSparkCount;
+uniform vec4 uFlare;     // 光源屏幕位置、强度、闪白
+uniform float uBokeh;
 out vec4 outColor;
 
 float hash12(vec2 p) {
@@ -265,6 +271,13 @@ void main() {
 
     vec3 col = uField + air;
 
+    // 背景层：上一句的空心大字、下一句的小字，只在光里隐约看得见
+    {
+        vec2 tb = (vec2(uv.x, 1.0 - uv.y) - 0.5) / (uZoom * 0.985) + 0.5;
+        float bg = texture(uText, tb).b;
+        col += (uInk * 0.05 + light * 0.5) * bg;
+    }
+
     // 字：纹理坐标（y 朝下），整句慢慢推近
     vec2 tc = vec2(uv.x, 1.0 - uv.y);
     vec2 t1 = (tc - 0.5) / uZoom + 0.5;
@@ -290,6 +303,41 @@ void main() {
         col = mix(col, ink, r0 * uPrevFade * (0.42 + lit * 0.75));
         col += light * h0 * uPrevFade * 0.8;
     }
+    // 星芒：十字细芒 + 一点核
+    for (int i = 0; i < ${MAX_SPARKS}; i++) {
+        if (i >= uSparkCount) break;
+        vec4 s = uSpark[i];
+        vec2 d = (uv - s.xy) * vec2(aspect, 1.0) / s.z;
+        float core = exp(-dot(d, d) * 60.0);
+        float cross = exp(-abs(d.x) * 70.0) * exp(-abs(d.y) * 3.5) + exp(-abs(d.y) * 70.0) * exp(-abs(d.x) * 3.5);
+        float diag = (exp(-abs(d.x - d.y) * 90.0) + exp(-abs(d.x + d.y) * 90.0)) * exp(-length(d) * 9.0) * 0.4;
+        col += mix(uInk, uAccent, 0.25) * (core * 1.4 + cross * 0.55 + diag) * s.w;
+    }
+    // 光源：亮核、横向拉长的光条、十字芒，对面一圈鬼影
+    if (uFlare.z > 0.0) {
+        vec2 fd = (uv - uFlare.xy) * vec2(aspect, 1.0);
+        float r = length(fd);
+        vec3 fc = mix(vec3(1.0, 0.9, 0.72), uAccent, 0.15);
+        float glow = exp(-r * r * 900.0) * 1.6 + exp(-r * 9.0) * 0.22;
+        float streak = exp(-abs(fd.y) * 260.0) * exp(-abs(fd.x) * 2.2) * 0.5;
+        float star = (exp(-abs(fd.x) * 400.0) * exp(-abs(fd.y) * 14.0) + exp(-abs(fd.y) * 400.0) * exp(-abs(fd.x) * 14.0)) * 0.6;
+        vec2 gp = (vec2(1.0) - uFlare.xy - uv) * vec2(aspect, 1.0);
+        float ghost = smoothstep(0.012, 0.0, abs(length(gp) - 0.07)) * 0.12 + exp(-dot(gp, gp) * 400.0) * 0.08;
+        col += fc * (glow + streak + star + ghost) * uFlare.z;
+    }
+    // 前景散景：几团很大、很虚的光斑从镜头前飘过
+    if (uBokeh > 0.0) {
+        for (int i = 0; i < 5; i++) {
+            float fi = float(i);
+            vec2 c = vec2(fract(0.17 + fi * 0.31 + uTime * (0.006 + fi * 0.002) + uSeed * 0.1), fract(0.73 + fi * 0.47 + sin(uTime * 0.05 + fi) * 0.08));
+            vec2 d = (uv - c) * vec2(aspect, 1.0);
+            float rad = 0.06 + fract(fi * 0.618) * 0.07;
+            float disc = smoothstep(rad, rad * 0.82, length(d));
+            float rim = smoothstep(rad * 0.75, rad, length(d)) * disc;
+            col += (light * 0.12 + uInk * 0.012) * (disc + rim * 0.8) * uBokeh;
+        }
+    }
+    col += vec3(1.0, 0.95, 0.88) * uFlare.w;
     vec2 v = uv - 0.5;
     col *= 1.0 - dot(v, v) * 0.8;
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
@@ -344,7 +392,11 @@ void main() {
         const translation = createElement('div', 'stage-translation lumiere-translation');
         const notice = createElement('div', 'lumiere-notice');
         notice.hidden = true;
-        mode.root.append(canvas, kicker, translation, notice);
+        // 取景框：四角、两侧准星、顶上两段虚线
+        const viewfinder = createElement('div', 'lumiere-viewfinder');
+        viewfinder.setAttribute('aria-hidden', 'true');
+        ['tl', 'tr', 'bl', 'br', 'cl', 'cr', 'dl', 'dr'].forEach(k => viewfinder.append(createElement('i', `vf-${k}`)));
+        mode.root.append(canvas, viewfinder, kicker, translation, notice);
         const textCanvas = document.createElement('canvas');
 
         let glState = null;
@@ -357,6 +409,9 @@ void main() {
         const still = Utils.createStillGate();
         const beamBuffer = new Float32Array(MAX_BEAMS * 4);
         const beamColours = new Float32Array(MAX_BEAMS * 4);
+        const sparkBuffer = new Float32Array(MAX_SPARKS * 4);
+        let lastOnsets = -1;
+        let beatTime = -Infinity;
         let cues = [];
         let cuesFor = null;
         let world = { W: 0, H: 0 };
@@ -379,6 +434,8 @@ void main() {
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.22, 0, 1),
                 audioReactivity: clamp(tuning.audioReactivity ?? 1, 0, 2),
                 grain: clamp(tuning.grain ?? 0.4, 0, 1),
+                flare: clamp(tuning.flare ?? 1, 0, 2),
+                bokeh: clamp(tuning.bokeh ?? 1, 0, 2),
                 showTranslation: tuning.showTranslation !== false,
                 reducedMotion: Boolean(reducedMotion?.matches)
             };
@@ -451,48 +508,134 @@ void main() {
                 glyphs = Array.from(title).map((text, i) => ({ text, start: cue.start + 0.8 + i * 0.07, end: cue.start + 1.2 + i * 0.07 }));
             }
             const data = new Float32Array(256 * 4);
+            const placedGlyphs = [];
+            const random = seededRandom(`lumiere:${cuesFor?.key}:${index}:layout`);
+            const font = (size, cjk) => `${cjk ? 400 : 300} ${size.toFixed(1)}px ${family()}`;
+            // 背景层（B 通道）：上一句的大号空心字回声，下一句的小字预告；都只在光里隐约可见
+            const textOf = c => (c && c.kind === 'line' && readableText(c.line.fullText) ? String(c.line.fullText).trim() : '');
+            const echo = textOf(cues[index - 1]);
+            if (echo && cue.kind === 'line') {
+                ctx.save();
+                const echoSize = H * (0.34 + random() * 0.12);
+                ctx.translate(random() < 0.5 ? W * 0.62 : W * 0.04, H * (0.2 + random() * 0.5));
+                ctx.rotate((random() - 0.5) * 0.5);
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.strokeStyle = 'rgb(0,0,255)';
+                ctx.lineWidth = Math.max(2, echoSize * 0.012);
+                ctx.font = font(echoSize, CJK.test(echo));
+                ctx.strokeText(Array.from(echo).slice(0, 8).join(''), 0, 0);
+                ctx.restore();
+            }
             if (glyphs.length) {
                 const visible = glyphs.filter(g => g.text.trim()).length;
                 const cjk = glyphs.filter(g => CJK.test(g.text)).length > visible / 2;
-                const rows = [];
-                const perRow = cjk ? 10 : 22;
-                let row = [];
+                const style = cue.kind === 'rest' ? 'row'
+                    : (cjk && visible <= 14 ? ['row', 'stagger', 'stagger', 'diagonal', 'column'] : ['row', 'stagger', 'diagonal'])[Math.floor(random() * (cjk && visible <= 14 ? 5 : 3))];
+                cue.layout = style;
+                // 词块：CJK 每 1~3 字一块，其他按空格
+                const chunks = [];
+                let chunk = [];
                 glyphs.forEach((g, i) => {
-                    row.push(g);
-                    const filled = row.filter(x => x.text.trim()).length;
-                    const target = Math.ceil(visible / Math.ceil(visible / perRow));
-                    if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
+                    if (!g.text.trim()) { if (chunk.length) chunks.push(chunk); chunk = []; return; }
+                    chunk.push(g);
+                    if (cjk && chunk.length >= 1 + Math.floor(random() * 3)) { chunks.push(chunk); chunk = []; }
                 });
-                if (row.length) rows.push(row);
-                const font = size => `${cjk ? 400 : 300} ${size.toFixed(1)}px ${family()}`;
-                ctx.font = font(100);
-                const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
-                const size = clamp(W * 0.64 / widest * 100, H * 0.05, H * (cue.kind === 'rest' ? 0.1 : 0.12)) * s.fontScale;
-                ctx.font = font(size);
-                const lineH = size * 1.32;
-                const top = H * 0.5 - rows.length * lineH / 2 + size * 0.95;
-                let id = 0;
-                rows.forEach((r, ri) => {
-                    const text = r.map(g => g.text).join('');
-                    const trimmed = text.replace(/\s+$/, '');
-                    let x = (W - ctx.measureText(trimmed).width) / 2;
-                    const baseline = top + ri * lineH;
-                    r.forEach((g) => {
-                        const w = ctx.measureText(g.text).width;
-                        if (g.text.trim()) {
-                            id = Math.min(255, id + 1);
-                            ctx.globalCompositeOperation = 'lighten';
-                            ctx.fillStyle = `rgb(0,${id},0)`;
-                            ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
-                            ctx.globalCompositeOperation = 'lighter';
-                            ctx.fillStyle = 'rgb(255,0,0)';
-                            ctx.fillText(g.text, x, baseline);
-                            data[id * 4] = g.start;
-                            data[id * 4 + 1] = g.end;
-                        }
-                        x += w;
+                if (chunk.length) chunks.push(chunk);
+                ctx.font = font(100, cjk);
+                const width100 = list => ctx.measureText(list.map(g => g.text).join('')).width;
+                const items = [];
+                if (style === 'column') {
+                    const perCol = visible > 9 ? Math.ceil(visible / 2) : visible;
+                    const cols = Math.ceil(visible / perCol);
+                    const size = clamp(H * 0.56 / perCol, H * 0.05, H * 0.12) * s.fontScale;
+                    let k = 0;
+                    glyphs.filter(g => g.text.trim()).forEach((g) => {
+                        const col = Math.floor(k / perCol), row = k % perCol;
+                        const x = W / 2 + (cols / 2 - col - 0.5) * size * 1.5 - size / 2 + (col % 2 ? size * 0.2 : 0);
+                        items.push({ g, x, baseline: H * 0.46 - perCol * size * 1.08 / 2 + (row + 0.88) * size * 1.08 + col * size * 0.6, size });
+                        k += 1;
                     });
+                } else if (style === 'row') {
+                    const rows = [];
+                    const perRow = cjk ? 10 : 22;
+                    let row = [];
+                    glyphs.forEach((g, i) => {
+                        row.push(g);
+                        const filled = row.filter(x => x.text.trim()).length;
+                        const target = Math.ceil(visible / Math.ceil(visible / perRow));
+                        if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
+                    });
+                    if (row.length) rows.push(row);
+                    const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
+                    const size = clamp(W * 0.64 / widest * 100, H * 0.05, H * (cue.kind === 'rest' ? 0.1 : 0.12)) * s.fontScale;
+                    ctx.font = font(size, cjk);
+                    const lineH = size * 1.32;
+                    const top = H * 0.5 - rows.length * lineH / 2 + size * 0.95;
+                    rows.forEach((r, ri) => {
+                        const trimmed = r.map(g => g.text).join('').replace(/\s+$/, '');
+                        let x = (W - ctx.measureText(trimmed).width) / 2;
+                        r.forEach((g) => {
+                            const w = ctx.measureText(g.text).width;
+                            if (g.text.trim()) items.push({ g, x, baseline: top + ri * lineH, size });
+                            x += w;
+                        });
+                    });
+                } else {
+                    // 错落：词块大小不一、基线上下错开；斜排：整句沿一条斜线往下走
+                    const scales = chunks.map(() => 0.55 + random() * 0.6);
+                    chunks.forEach((c, i) => { if (c.length >= 2 && random() < 0.5) scales[i] = Math.max(scales[i], 1.05); });
+                    const total100 = chunks.reduce((sum, c, i) => sum + width100(c) * scales[i] + 30, 0);
+                    const base = clamp(W * 0.66 / total100 * 100, H * 0.05, H * 0.14) * s.fontScale;
+                    const slope = style === 'diagonal' ? (0.18 + random() * 0.16) * (random() < 0.7 ? 1 : -1) : 0;
+                    let x = (W - total100 * base / 100) / 2;
+                    const mid = H * 0.5 + base * 0.35;
+                    chunks.forEach((c, i) => {
+                        const size = base * scales[i];
+                        const jitter = style === 'stagger' ? (random() - 0.5) * base * 0.9 : 0;
+                        ctx.font = font(size, cjk);
+                        c.forEach((g) => {
+                            const w = ctx.measureText(g.text).width;
+                            items.push({ g, x, baseline: mid + jitter + (x - W / 2) * slope + (size - base) * 0.2, size });
+                            x += w;
+                        });
+                        x += base * 0.3;
+                    });
+                }
+                // 句子整体略斜，像打在墙上的投影
+                const tilt = style === 'row' || style === 'column' ? 0 : (random() - 0.5) * 0.12;
+                const cos = Math.cos(tilt), sin = Math.sin(tilt);
+                ctx.save();
+                ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.translate(-W / 2, -H / 2);
+                let id = 0;
+                items.forEach(({ g, x, baseline, size }) => {
+                    ctx.font = font(size, CJK.test(g.text));
+                    const w = ctx.measureText(g.text).width;
+                    id = Math.min(255, id + 1);
+                    ctx.globalCompositeOperation = 'lighten';
+                    ctx.fillStyle = `rgb(0,${id},0)`;
+                    ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = 'rgb(255,0,0)';
+                    ctx.fillText(g.text, x, baseline);
+                    data[id * 4] = g.start;
+                    data[id * 4 + 1] = g.end;
+                    const cx = x + w / 2 - W / 2, cy = baseline - size * 0.35 - H / 2;
+                    placedGlyphs.push({ x: (W / 2 + cx * cos - cy * sin) / W, y: (H / 2 + cx * sin + cy * cos) / H, size: size / H, w: w / W, start: g.start, end: g.end });
                 });
+                ctx.restore();
+            }
+            // 下一句的小字预告，放在这句下面偏一侧
+            const preview = textOf(cues[index + 1]);
+            if (preview && cue.kind === 'line' && random() < 0.65) {
+                const size = H * 0.04;
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillStyle = 'rgb(0,0,200)';
+                ctx.font = font(size, CJK.test(preview));
+                ctx.translate(W * (0.5 + (random() - 0.3) * 0.25), H * (0.72 + random() * 0.06));
+                ctx.rotate((random() - 0.5) * 0.12);
+                ctx.fillText(Array.from(preview).slice(0, 24).join(''), 0, 0);
+                ctx.restore();
             }
             const { gl } = glState;
             const busy = new Set([stats.cue, stats.cue - 1].map(i => `${cuesFor?.key}|${i}|${world.W}x${world.H}|${s.fontScale}`));
@@ -503,6 +646,7 @@ void main() {
             gl.bindTexture(gl.TEXTURE_2D, slot.glyph);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 256, 1, 0, gl.RGBA, gl.FLOAT, data);
             slot.key = key;
+            slot.glyphs = placedGlyphs;
             slot.used = performance.now();
             stats.builds += 1;
             stats.buildMs = Math.round(performance.now() - started);
@@ -530,7 +674,7 @@ void main() {
             // 换光位时熄灯再亮：段首 0.5 秒亮起，段尾 0.35 秒熄
             const nextCue = cues[index + 1];
             const sectionEnds = !nextCue || nextCue.sectionStart;
-            const lights = (cue.sectionStart ? smooth(0, 0.6, local) : 1) * (sectionEnds ? 1 - smooth(cue.end - 0.4, cue.end, t) * 0.85 : 1);
+            const lights = (cue.sectionStart && !cue.flash ? smooth(0, 0.6, local) : 1) * (sectionEnds ? 1 - smooth(cue.end - 0.4, cue.end, t) * 0.85 : 1);
             const beams = beamsAt(cue.rig, cue.seed, t, colours, beamBuffer, beamColours);
             const prev = index > 0 && local < 0.6 ? slotFor(index - 1, false) : null;
             const prevFade = prev ? 1 - smooth(0, 0.6, local) : 0;
@@ -538,6 +682,33 @@ void main() {
             const prevCue = cues[index - 1];
             const prevZoom = prevCue ? 1.045 + local * 0.06 : 1;
             const audio = frame.audio || {};
+            if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {
+                if (lastOnsets >= 0 && frame.isPlaying) beatTime = t;
+                lastOnsets = audio.onsets;
+            }
+            const beat = t >= beatTime ? Math.exp(-(t - beatTime) * 6) * s.audioReactivity : 0;
+            // 唱到的字：字右上角闪一颗星芒，0.7 秒收掉
+            let sparks = 0;
+            sparkBuffer.fill(0);
+            if (!s.reducedMotion) {
+                for (const g of slot.glyphs || []) {
+                    const tau = t - g.start;
+                    if (tau < -0.05 || tau > 0.7 || sparks >= MAX_SPARKS) continue;
+                    const sx = (g.x + g.w * 0.45 - 0.5) * zoom + 0.5;
+                    const sy = 1 - ((g.y - g.size * 0.45 - 0.5) * zoom + 0.5);
+                    sparkBuffer[sparks * 4] = sx; sparkBuffer[sparks * 4 + 1] = sy;
+                    sparkBuffer[sparks * 4 + 2] = g.size * 2.4;
+                    sparkBuffer[sparks * 4 + 3] = Math.sin(clamp((tau + 0.05) / 0.75, 0, 1) * Math.PI) * 0.9;
+                    sparks += 1;
+                }
+            }
+            // 光源点：第一束光的出发点拉回画面角上
+            let flare = [0, 0, 0];
+            if (beams > 0 && cue.rig !== 'caustic' && cue.rig !== 'motes') {
+                flare = [clamp(beamBuffer[0], 0.07, 0.93), 0.9, (0.55 + beat * 0.5) * lights * s.flare];
+            }
+            // 段首闪光切：一半的段落从一片白里亮起来，另一半熄灯再亮
+            const flash = cue.sectionStart && cue.flash && !s.reducedMotion ? Math.pow(1 - smooth(0, 0.35, local), 2) * 0.85 : 0;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(program);
@@ -567,6 +738,10 @@ void main() {
             gl.uniform1f(u.uWaiting, s.waitingOpacity);
             gl.uniform1f(u.uGrain, s.grain);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
+            gl.uniform4fv(u.uSpark, sparkBuffer);
+            gl.uniform1i(u.uSparkCount, sparks);
+            gl.uniform4f(u.uFlare, flare[0], flare[1], flare[2], flash);
+            gl.uniform1f(u.uBokeh, s.reducedMotion ? 0 : s.bokeh);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);

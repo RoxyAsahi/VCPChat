@@ -3544,6 +3544,46 @@ body.music-stage-active #custom-title-bar,
     z-index: 0;
     pointer-events: none;
 }
+.lumiere-viewfinder {
+    position: absolute;
+    inset: max(8.5%, 60px) max(6.5%, 64px) max(8.5%, 60px);
+    z-index: 1;
+    pointer-events: none;
+    --vf: rgba(240, 232, 214, 0.38);
+}
+.lumiere-viewfinder > i {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border: 0 solid var(--vf);
+}
+.lumiere-viewfinder > .vf-tl { left: 0; top: 0; border-left-width: 1px; border-top-width: 1px; }
+.lumiere-viewfinder > .vf-tr { right: 0; top: 0; border-right-width: 1px; border-top-width: 1px; }
+.lumiere-viewfinder > .vf-bl { left: 0; bottom: 0; border-left-width: 1px; border-bottom-width: 1px; }
+.lumiere-viewfinder > .vf-br { right: 0; bottom: 0; border-right-width: 1px; border-bottom-width: 1px; }
+.lumiere-viewfinder > .vf-cl,
+.lumiere-viewfinder > .vf-cr {
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    border: 1px solid var(--vf);
+    border-radius: 50%;
+    background:
+        linear-gradient(var(--vf), var(--vf)) center / 1px 18px no-repeat,
+        linear-gradient(var(--vf), var(--vf)) center / 18px 1px no-repeat;
+}
+.lumiere-viewfinder > .vf-cl { left: -6px; }
+.lumiere-viewfinder > .vf-cr { right: -6px; }
+.lumiere-viewfinder > .vf-dl,
+.lumiere-viewfinder > .vf-dr {
+    top: 0;
+    width: 46px;
+    height: 1px;
+    background: repeating-linear-gradient(90deg, var(--vf) 0 6px, transparent 6px 12px);
+}
+.lumiere-viewfinder > .vf-dl { left: 36%; }
+.lumiere-viewfinder > .vf-dr { right: 36%; }
 .lumiere-kicker {
     position: absolute;
     z-index: 2;

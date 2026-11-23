@@ -336,6 +336,8 @@
             lumiere: [
                 { key: 'smoke', label: '舞台烟雾', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'dust', label: '光里的浮尘', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'flare', label: '光源眩光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'bokeh', label: '前景散景', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
