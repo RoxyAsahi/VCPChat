@@ -768,6 +768,26 @@ function initialize(options) {
             return lyricsTranslator.translate(payload || {});
         });
 
+        // 频谱检查（真假无损）：把本机音频文件的原始字节交给音乐窗口去解码分析。只认音频扩展名、只给音乐窗口。
+        ipcMain.handle('music-read-audio-file', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { ok: false, message: '只有音乐窗口可以读' };
+            }
+            const file = payload && typeof payload.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file) || !/\.(flac|mp3|wav|m4a|aac|ogg|opus|wv|aiff?|alac|ape|dsf|dff|wma)$/i.test(file)) {
+                return { ok: false, message: '只能分析本机的音频文件' };
+            }
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile()) return { ok: false, message: '文件不在了' };
+                if (stat.size > 400 * 1024 * 1024) return { ok: false, message: '文件太大（超过 400 MB），没法在窗口里分析' };
+                const data = await fs.readFile(file);
+                return { ok: true, data, size: stat.size };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
+
         audioEngineEndpoint.onStatus((endpoint) => {
             if (musicWindow && !musicWindow.isDestroyed()) {
                 musicWindow.webContents.send('audio-engine-status', endpoint);

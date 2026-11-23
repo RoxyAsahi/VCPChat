@@ -187,6 +187,23 @@
 .mdupes .dialog-actions { flex: none; margin-top: 16px; justify-content: flex-end; }
 .mdupes .dialog-actions .dialog-btn { flex: 0 0 auto; min-width: 96px; }
 
+/* 频谱检查（music-spectrum.js）也用同一个对话框 */
+.mspec .mstats-head h3 { flex: none; }
+.mspec-track { flex: 1; min-width: 0; text-align: left; color: var(--ms-ink2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mspec-status { margin: 28px 0; color: var(--ms-ink2); font-size: 13px; text-align: center; }
+.mspec-verdict { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--ms-hover); color: var(--ms-ink); font-size: 13px; line-height: 1.6; }
+.mspec-verdict::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: var(--ms-ink2); }
+.mspec-verdict.good::before { background: #5bbf7a; }
+.mspec-verdict.warn::before { background: #e0a43a; }
+.mspec-figure { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 6px; }
+.mspec-yaxis { position: relative; color: var(--ms-ink2); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mspec-yaxis span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
+.mspec-plot { position: relative; border-radius: 8px; overflow: hidden; background: #08061a; }
+.mspec-canvas { display: block; width: 100%; height: 220px; image-rendering: auto; }
+.mspec-cut { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(255, 255, 255, .75); pointer-events: none; }
+.mspec-spec { margin: 10px 0 0 36px; color: var(--ms-ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mspec .mstats-note { margin: 4px 0 0 36px; }
+
 @media (max-width: 640px) {
     .mstats-tops, .mstats-totals { grid-template-columns: 1fr; }
     .mstats-head { flex-wrap: wrap; }
