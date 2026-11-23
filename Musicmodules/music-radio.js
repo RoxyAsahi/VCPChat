@@ -294,4 +294,5 @@
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental };
     if (typeof module !== 'undefined' && module.exports) module.exports = exported;
     global.setupMusicRadio = setupMusicRadio;
+    global.MusicRadioUtils = exported; // 整理重复的歌（music-dupes.js）也用同一套「同一首」判断
 })(typeof window !== 'undefined' ? window : globalThis);
