@@ -338,6 +338,7 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
+            el.classList.toggle('no-rows', !out.count);
             if (!out.count) setFoot(0, 0);   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();

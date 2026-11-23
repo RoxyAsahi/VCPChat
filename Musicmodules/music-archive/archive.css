@@ -776,3 +776,8 @@ body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 .archive-list-thumb::after { opacity: .2; }
 .archive-list-thumb::before { content: ""; position: absolute; left: 5px; width: 3px; top: calc(-1 * var(--thumb-top, 0px)); height: var(--thumb-track, 0px); background: var(--ar-ink); opacity: .08; }
 .archive-list:hover .archive-list-thumb::after { opacity: .45; }
+/* 没有结果：表头一起收起，提示文字和曲目标题对齐成一列 */
+.archive-list.no-rows .archive-list-cols { visibility: hidden; }
+.archive-list-empty { margin-left: calc(var(--gutter) + var(--no-w) + 10px); padding-left: 0; }
+/* 排序前面一条 1px 竖分隔线，和原版一样把「看哪一栏」和「怎么排」分开 */
+.archive-list-sort::before { content: ""; position: absolute; left: 0; top: 50%; width: 1px; height: 12px; margin-top: -6px; background: color-mix(in srgb, var(--ar-ink) 22%, transparent); }
