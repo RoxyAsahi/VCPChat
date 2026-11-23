@@ -68,3 +68,22 @@ test('fogpane: every sung line gets a place on the window, and fogs over before 
     });
     assert.deepEqual(planSong(many, 960, 540, 1, (t, s) => s * t.length, 'k').map(p => p.box), plan.map(p => p.box), 'deterministic');
 });
+
+require(path.join(stage, 'modes', 'lumiere-manager.js'));
+test('lumiere: cues tile the song, every four sung lines share one light rig, beams stay bounded', () => {
+    const L = window.MusicStageLumiereManager._test;
+    const many = window.MusicStageRuntime.normalizeLines(Array.from({ length: 10 }, (_, i) => ({ time: 5 + i * 3, original: `第${i + 1}句歌词` })));
+    const cues = L.buildCues(many, 60, 'k');
+    assert.equal(cues[0].start, 0);
+    for (let i = 1; i < cues.length; i += 1) assert.ok(Math.abs(cues[i].start - cues[i - 1].end) < 1e-9, `gap before cue ${i}`);
+    const sung = cues.filter(c => c.kind === 'line');
+    assert.equal(sung.length, 10);
+    assert.equal(sung[0].rig, sung[3].rig);
+    assert.ok(sung[4].sectionStart && sung[4].rig !== sung[3].rig, 'a new section picks a different rig');
+    assert.deepEqual(L.buildCues(many, 60, 'k').map(c => c.rig), cues.map(c => c.rig), 'deterministic');
+    const colours = { warm: [1, 0.9, 0.7], cool: [0.6, 0.8, 1], accent: [1, 0.4, 0.5] };
+    for (const rig of ['zenith', 'lattice', 'prism', 'stage', 'caustic', 'motes']) {
+        const n = L.beamsAt(rig, 12.3, 40, colours, new Float32Array(20), new Float32Array(20));
+        assert.ok(n >= 1 && n <= 5, rig);
+    }
+});

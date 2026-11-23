@@ -2,9 +2,9 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 7;
+    const VERSION = 8;
     // 后来加的模式：旧版本存下的启用列表里没有它们，读到旧版本时补上。
-    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7 });
+    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7, lumiere: 8 });
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -25,7 +25,8 @@
         { id: 'tunnel', label: '隧图', description: '点阵星际穿行、实体化歌词与深空物体演出' },
         { id: 'kowloon', label: '町景', description: '雨夜叠楼城寨：霓虹招牌、窄巷与广告屏上的歌词' },
         { id: 'inkdraft', label: '墨痕', description: '墨团凝成歌词、演算纸线稿、半调网点与踩词硬切' },
-        { id: 'fogpane', label: '雾笺', description: '雨夜车窗起了雾，手指一笔一笔写下歌词，透出窗外街景' }
+        { id: 'fogpane', label: '雾笺', description: '雨夜车窗起了雾，手指一笔一笔写下歌词，透出窗外街景' },
+        { id: 'lumiere', label: '绘光', description: '舞台顶光、烟雾和浮尘，每一句歌词被光束照亮' }
     ]);
 
     const PIXI_DEFAULTS = Object.freeze({
@@ -40,7 +41,7 @@
         rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
     });
     const DEFAULTS = Object.freeze({
-        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane'],
+        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane', 'lumiere'],
         quality: 'standard',
         animationIntensity: 1,
         edgeSpectrum: true,
@@ -194,6 +195,15 @@
                 cameraSpeed: 1,
                 grain: 0.4,
                 showTranslation: true
+            },
+            lumiere: {
+                fontScale: 1,
+                smoke: 1,
+                dust: 1,
+                waitingOpacity: 0.22,
+                audioReactivity: 1,
+                grain: 0.4,
+                showTranslation: true
             }
         }
     });
@@ -280,6 +290,8 @@
             negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
             drops: fallback.drops === undefined ? source.drops : bool(source.drops, fallback.drops),
             drips: fallback.drips === undefined ? source.drips : bool(source.drips, fallback.drips),
+            smoke: fallback.smoke === undefined ? source.smoke : clamp(source.smoke, 0, 2, fallback.smoke),
+            dust: fallback.dust === undefined ? source.dust : clamp(source.dust, 0, 2, fallback.dust),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),

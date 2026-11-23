@@ -9,7 +9,8 @@
         tunnel: global.MusicStageTunnelManager,
         kowloon: global.MusicStageKowloonManager,
         inkdraft: global.MusicStageInkdraftManager,
-        fogpane: global.MusicStageFogpaneManager
+        fogpane: global.MusicStageFogpaneManager,
+        lumiere: global.MusicStageLumiereManager
     };
 
     const definitions = [
@@ -20,7 +21,8 @@
         { id: 'tunnel', label: '隧图', manager: managers.tunnel },
         { id: 'kowloon', label: '町景', manager: managers.kowloon },
         { id: 'inkdraft', label: '墨痕', manager: managers.inkdraft },
-        { id: 'fogpane', label: '雾笺', manager: managers.fogpane }
+        { id: 'fogpane', label: '雾笺', manager: managers.fogpane },
+        { id: 'lumiere', label: '绘光', manager: managers.lumiere }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({
