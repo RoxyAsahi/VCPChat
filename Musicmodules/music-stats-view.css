@@ -189,7 +189,7 @@
 
 /* 频谱检查（music-spectrum.js）也用同一个对话框 */
 .mspec .mstats-head h3 { flex: none; }
-.mspec-track { flex: 1; min-width: 0; text-align: left; color: var(--ms-ink2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog-overlay .mspec .mspec-track { flex: 1; min-width: 0; text-align: left; color: var(--ms-ink2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mspec-status { margin: 28px 0; color: var(--ms-ink2); font-size: 13px; text-align: center; }
 .mspec-verdict { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--ms-hover); color: var(--ms-ink); font-size: 13px; line-height: 1.6; }
 .mspec-verdict::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: var(--ms-ink2); }
@@ -205,8 +205,14 @@
 .mspec .mstats-note { margin: 4px 0 0 36px; }
 
 @media (max-width: 640px) {
-    .mstats-tops, .mstats-totals { grid-template-columns: 1fr; }
+    .mstats-tops { grid-template-columns: 1fr; }
+    /* 窄窗口：三项总数仍排一行（字小一点），关闭按钮留在标题那一行，时间范围换到下一行占满 */
+    .mstats-totals { gap: 8px; }
+    .mstats-total { padding: 10px 12px; }
+    .dialog-overlay .mstats .mstats-total strong { font-size: 16px; }
     .mstats-head { flex-wrap: wrap; }
+    .mstats-head .mstats-range { order: 3; flex: 1 1 100%; justify-content: space-between; }
+    .mstats-head .mstats-range button { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
     .mstats-range button { transition: none; }

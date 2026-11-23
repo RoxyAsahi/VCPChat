@@ -137,7 +137,7 @@
             return { level: 'info', text: cutoff ? `这是有损文件，频谱到 ${kHz(cutoff)} 为止，属于正常。` : `这是有损文件，频谱一直到 ${kHz(nyquist)}。` };
         }
         const guess = cutoff ? LOSSY_GUESS.find(([limit]) => cutoff < limit) : null;
-        if (guess) return { level: 'warn', text: `频谱在 ${kHz(cutoff)} 处被齐刷刷切掉，像是 ${guess[1]} 的有损文件转成的${sampleRate > 50000 ? '高采样率文件' : '无损'}。` };
+        if (guess) return { level: 'warn', text: `频谱在 ${kHz(cutoff)} 处被齐刷刷切掉，像是 ${guess[1]}${/[a-z0-9]$/i.test(guess[1]) ? ' ' : ''}的有损文件转成的${sampleRate > 50000 ? '高采样率文件' : '无损'}。` };
         if (sampleRate > 50000) {
             if (cutoff && cutoff < 24500) return { level: 'warn', text: `标的是 ${kHz(sampleRate)} 高采样率，但 ${kHz(cutoff)} 以上几乎没有内容，像是从 CD 规格（44.1/48 kHz）升上来的。` };
             return { level: 'good', text: cutoff ? `频谱到 ${kHz(cutoff)}，高于 CD 规格，看着是真的高解析度。` : `频谱一直到 ${kHz(nyquist)}，看着是真的高解析度。` };
