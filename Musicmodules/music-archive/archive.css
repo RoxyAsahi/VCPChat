@@ -730,3 +730,14 @@ body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 .archive-list-brand-mark { display: block; width: 16px; height: 16px; flex-shrink: 0; }
 /* 吸附字母已不显示，分组标题里的字母不能跟着被藏 */
 .archive-list-letter.stuck > span { visibility: visible; }
+
+/* 表头：原版目录表上方一行 9–10px 的列名（编号 / 曲目 / 时长），下面一条细线，和下面的行对齐成列 */
+.archive-list-cols { display: grid; grid-template-columns: var(--no-w) minmax(0, 1fr) auto; gap: 10px; margin-left: var(--gutter); padding: 0 var(--text-end-inset) 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--ar-ink) 24%, transparent); font-size: 10px; line-height: 12px; letter-spacing: .8px; color: color-mix(in srgb, var(--ar-ink) 55%, transparent); white-space: nowrap; }
+.archive-list-cols > span:first-child { padding-left: 10px; }
+.archive-hud:is(.narrow, .tiny) .archive-list-cols { display: none; }
+#music-archive-view.is-empty .archive-list-cols { visibility: hidden; }
+/* 检索命中：原版在命中的字下面画一条 2px 琥珀色线 */
+.archive-list-row .tx mark { text-decoration-color: var(--ar-accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* 最上面那个分组紧贴表头的细线，不再自己压一条结构线 */
+.archive-list-group[data-k="0"] { box-shadow: none; }
+.archive-list-letter[data-k="0"] { border-top-color: transparent; }

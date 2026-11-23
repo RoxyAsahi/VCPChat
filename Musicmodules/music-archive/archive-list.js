@@ -78,6 +78,7 @@
                 </span>
             </span>
         </div>
+        <div class="archive-list-cols" aria-hidden="true"><span>编号</span><span>曲目 / TITLE</span><span>时长 / TIME</span></div>
         <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单</button></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
