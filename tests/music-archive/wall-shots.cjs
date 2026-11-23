@@ -110,6 +110,19 @@ const FAKE = ({ n, light, covers }) => {
   await page.waitForTimeout(1500);
   const calls = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'musicLoad').length);
   check('播放按钮调了 musicLoad', calls > 0, 'calls=' + calls);
+  // 大卡进度条：展开的是正在播放的那首时出现
+  const seek = await page.evaluate(async () => {
+    const a = window.app;
+    a.lastKnownDuration = 200; a.lastKnownCurrentTime = 50; a.lastStateUpdateTime = Date.now(); a.isPlaying = true;
+    const sel = a.__archiveSel ?? null;
+    window.__wallRefresh?.();
+    await new Promise((r) => setTimeout(r, 700));
+    const el = document.querySelector('.aw-tile.is-open .aw-seek');
+    if (!el) return { none: true, open: document.querySelectorAll('.aw-tile.is-open').length, panel: !!document.querySelector('.aw-panel'), cur: a.currentTrackIndex };
+    return el ? { hidden: el.hidden, t: el.firstChild.textContent, d: el.lastChild.textContent, cur: a.currentTrackIndex } : null;
+  });
+  check('大卡进度条', seek && !seek.hidden && seek.d === '3:20', JSON.stringify(seek));
+  await shot(tag + '-2b-seek');
 
   // Esc 收起
   await page.keyboard.press('Escape');

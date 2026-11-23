@@ -407,8 +407,11 @@
         const syncItems = ({ force = false } = {}) => {
             const it = opts.items() || { key: '', ids: [] };
             const ids = it.ids || [];
-            const sig = it.key + '#' + ids.length + '#' + (ids[0] ?? '') + '#' + (ids[ids.length - 1] ?? '');
-            if (!force && sig === st.key) return false;
+            // 按内容比：曲库签名变了（比如刚播的一首进了「最近播放」）但这一组的曲目和顺序没变，就不重排
+            let h = ids.length | 0;
+            for (let k = 0; k < ids.length; k++) h = (Math.imul(h, 31) + ids[k]) | 0;
+            const sig = (it.name || '') + '#' + ids.length + '#' + h;
+            if (!force && sig === st.key) { st.ids = ids; return false; }
             const firstShow = !st.key;
             if (!firstShow && !force) leave();
             st.key = sig;
@@ -584,6 +587,7 @@
         const panel = document.createElement('div');
         panel.className = 'aw-panel';
         panel.innerHTML = '<div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
+            + '<div class="aw-seek" data-wall="seek" hidden><span class="aw-seek-t">0:00</span><div class="aw-seek-bar"><i></i></div><span class="aw-seek-d">0:00</span></div>'
             + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
         const fillPanel = (i) => {
             const t = opts.track(i);
@@ -597,8 +601,58 @@
             const btn = panel.querySelector('[data-wall="play"]');
             btn.lastChild.textContent = isNow ? '正在播放' : (p.index === i ? '继续播放' : '播放');
             btn.classList.toggle('is-now', isNow);
+            panel.dataset.item = String(i);
+            syncSeek();
             btn.disabled = isNow;
         };
+
+        // ---------- 大卡进度条：只在展开的是当前这首时出现 ----------
+        const seekEl = panel.querySelector('.aw-seek');
+        const seekFill = seekEl.querySelector('.aw-seek-bar i');
+        const fmt = (sec) => { sec = Math.max(0, Math.floor(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+        let seekTimer = 0, seekDrag = null;
+        const seekIsLive = () => {
+            if (!opts.progress || !panel.parentNode || !st.expanded) return false;
+            return opts.playing().index === Number(panel.dataset.item);
+        };
+        const paintSeek = () => {
+            if (!seekIsLive()) { seekEl.hidden = true; clearInterval(seekTimer); seekTimer = 0; return; }
+            const p = opts.progress();
+            const t = seekDrag ? seekDrag.t : p.t;
+            seekEl.hidden = !(p.d > 0);
+            seekFill.style.transform = 'scaleX(' + (p.d ? Math.min(1, t / p.d) : 0).toFixed(4) + ')';
+            seekEl.firstChild.textContent = fmt(t);
+            seekEl.lastChild.textContent = fmt(p.d);
+        };
+        const syncSeek = () => {
+            paintSeek();
+            if (seekIsLive() && !seekTimer) seekTimer = setInterval(paintSeek, 250);
+        };
+        const seekAt = (clientX) => {
+            const r = seekEl.querySelector('.aw-seek-bar').getBoundingClientRect();
+            const d = opts.progress().d;
+            return Math.max(0, Math.min(1, (clientX - r.left) / Math.max(1, r.width))) * d;
+        };
+        seekEl.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            seekEl.setPointerCapture?.(e.pointerId);
+            seekDrag = { id: e.pointerId, t: seekAt(e.clientX) };
+            seekEl.classList.add('is-drag');
+            paintSeek();
+        });
+        seekEl.addEventListener('pointermove', (e) => { if (seekDrag && seekDrag.id === e.pointerId) { seekDrag.t = seekAt(e.clientX); paintSeek(); } });
+        const seekEnd = (e) => {
+            if (!seekDrag || seekDrag.id !== e.pointerId) return;
+            const t = seekDrag.t;
+            seekDrag = null;
+            seekEl.classList.remove('is-drag');
+            if (e.type === 'pointerup' && opts.seek) opts.seek(t);
+            setTimeout(paintSeek, 60);
+        };
+        seekEl.addEventListener('pointerup', seekEnd);
+        seekEl.addEventListener('pointercancel', seekEnd);
+        seekEl.addEventListener('click', (e) => e.stopPropagation());
 
         const fillContent = (node, idx, px) => {
             const i = st.ids[idx];
@@ -714,7 +768,7 @@
             for (const [id, node] of st.nodes) {
                 if (!keep.has(id)) { st.nodes.delete(id); recycle(node); }
             }
-            if (!exp && panel.parentNode) panel.remove();
+            if (!exp && panel.parentNode) { panel.remove(); paintSeek(); }
             world.classList.toggle('aw-has-open', Boolean(exp));
             st.laidAt = { x: st.cam.x, y: st.cam.y };
             st.revealOk = !reduced();
@@ -933,6 +987,7 @@
                 st.on = false;
                 cancelAnimationFrame(st.raf);
                 clearTimeout(st.reflowTimer);
+                clearInterval(seekTimer);
                 thumbs.destroy();
                 el.remove();
             },

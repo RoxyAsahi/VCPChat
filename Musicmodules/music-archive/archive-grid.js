@@ -28,9 +28,13 @@
         const content = el.querySelector('.ag-content');
         const sticky = el.querySelector('.ag-sticky');
         const emptyEl = el.querySelector('.ag-empty');
+        // 入场和封面墙用同一条弹簧曲线
+        const SP = global.MusicArchiveWall && global.MusicArchiveWall._test && global.MusicArchiveWall._test.SPRING_ENTER;
+        if (SP && global.CSS && CSS.supports && CSS.supports('transition-timing-function', SP.ease)) el.style.setProperty('--aw-sp-enter', SP.ease);
         opts.host.insertBefore(el, opts.before || null);
         const reduced = () => Boolean(opts.reducedMotion && opts.reducedMotion());
 
+        const hueOf = (str) => { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
         const st = {
             on: false, key: '', secs: [], rows: [], total: 0,
             width: 0, height: 0, cols: 1, cell: 150,
@@ -72,8 +76,16 @@
 
         const syncData = (force = false) => {
             const d = opts.sections() || { key: '', list: [] };
-            if (!force && d.key === st.key) return false;
-            st.key = d.key;
+            // 按内容比：只是曲库签名变了（刚播的一首进了「最近播放」之类），各节曲目没变就不重排
+            let h = 0;
+            for (const sec of d.list) {
+                for (const c of String(sec.name || '')) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0;
+                for (let k = 0; k < sec.ids.length; k++) h = (Math.imul(h, 31) + sec.ids[k]) | 0;
+                h = (Math.imul(h, 31) + sec.ids.length) | 0;
+            }
+            const sig = d.list.length + '#' + h;
+            if (!force && sig === st.key) return false;
+            st.key = sig;
             st.secs = d.list.filter((x) => x.ids.length);
             st.where.clear();
             st.secs.forEach((sec, s) => sec.ids.forEach((i, k) => { if (!st.where.has(i)) st.where.set(i, { s, k }); }));
@@ -83,6 +95,9 @@
             st.heads.clear();
             thumbs.clearQueue();
             emptyEl.hidden = st.secs.length > 0;
+            // 换一组：这一屏的格子按行列依次落下（从左上往右下一波）
+            st.enterUntil = reduced() ? 0 : performance.now() + 700;
+            st.revealOk = false;
             measure();
             st.sel = -2;
             syncSelection(true);
@@ -97,13 +112,13 @@
             const t = document.createElement('div');
             t.className = 'ag-cell';
             t.setAttribute('role', 'gridcell');
-            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><button type="button" class="ag-play" data-grid="play" title="播放" aria-label="播放"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
-            return { el: t, img: t.querySelector('img'), blank: t.querySelector('.ag-blank'), title: t.querySelector('.ag-t'), sub: t.querySelector('.ag-a'), idx: -1, src: null, cls: '' };
+            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><span class="ag-no"></span><button type="button" class="ag-play" data-grid="play" title="播放" aria-label="播放"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
+            return { el: t, img: t.querySelector('img'), blank: t.querySelector('.ag-blank'), no: t.querySelector('.ag-no'), title: t.querySelector('.ag-t'), sub: t.querySelector('.ag-a'), idx: -1, src: null, cls: '' };
         };
         const headNode = (s) => {
             const sec = st.secs[s];
             const h = document.createElement('div');
-            h.className = 'ag-head';
+            h.className = 'ag-head' + (st.revealOk ? ' ag-reveal' : (performance.now() < (st.enterUntil || 0) ? ' ag-entering' : ''));
             h.innerHTML = '<b></b><span></span><i></i>';
             h.firstChild.textContent = sec.name;
             h.children[1].textContent = sec.ids.length + ' 首' + (sec.sub ? ' · ' + sec.sub : '');
@@ -141,6 +156,15 @@
                         n.el.dataset.id = id;
                         content.appendChild(n.el);
                         n.idx = -1;
+                        n.el.classList.remove('ag-entering', 'ag-reveal');
+                        if (performance.now() < (st.enterUntil || 0)) {
+                            const vr = Math.max(0, (row.y - top) / st.rowH);
+                            n.el.style.setProperty('--ag-d', Math.round(Math.min(360, (vr + c * 0.6) * 45)) + 'ms');
+                            n.el.classList.add('ag-entering');
+                        } else if (st.revealOk) {
+                            n.el.style.setProperty('--ag-d', (c * 22) + 'ms');
+                            n.el.classList.add('ag-reveal');
+                        }
                     }
                     const x = st.left + c * (st.cell + GAP_X);
                     const pos = x + ',' + row.y + ',' + st.cell;
@@ -157,6 +181,9 @@
                         n.title.textContent = m.title;
                         n.sub.textContent = m.artist || m.album || '';
                         n.blank.textContent = m.title;
+                        n.code = m.code || '';
+                        n.badge = null;
+                        n.el.style.setProperty('--aw-h', hueOf(m.title + '|' + (m.album || '')));
                         n.el.setAttribute('aria-label', m.title + (m.artist ? '，' + m.artist : ''));
                         n.src = null;
                     }
@@ -173,6 +200,8 @@
                         n.cls = cls;
                         n.el.setAttribute('aria-selected', i === st.sel ? 'true' : 'false');
                     }
+                    const badge = i === play.index ? (play.active ? '正在播放' : '暂停') : n.code;
+                    if (badge !== n.badge) { n.badge = badge; n.no.textContent = badge; }
                 }
             }
             for (const [id, n] of st.nodes) if (!keep.has(id)) { st.nodes.delete(id); recycle(n); }
@@ -189,6 +218,7 @@
                     sticky.lastChild.textContent = sec.ids.length + ' 首';
                 }
             } else sticky.hidden = true;
+            st.revealOk = !reduced();
         };
         const schedule = () => { if (st.on && !st.raf) st.raf = requestAnimationFrame(render); };
         scroller.addEventListener('scroll', schedule, { passive: true });

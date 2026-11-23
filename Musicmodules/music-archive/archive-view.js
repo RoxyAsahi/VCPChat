@@ -32,6 +32,7 @@
         <div class="archive-atmos" aria-hidden="true"></div>
         <div class="archive-grain" data-ref="grain" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
+        <div class="archive-keys" data-ref="keys" role="dialog" aria-label="快捷键" hidden><div class="archive-keys-head"><span class="archive-tiny">KEYS</span><b>快捷键</b><button type="button" data-act="keys" aria-label="关闭">×</button></div><dl><dt>↑ ↓</dt><dd>上一首 / 下一首</dd><dt>← →</dt><dd>换一组</dd><dt>PgUp PgDn</dt><dd>跳 10 首</dd><dt>Home End</dt><dd>这一组的第一首 / 最后一首</dd><dt>Enter</dt><dd>播放选中（Shift+Enter 直接进舞台）</dd><dt>空格</dt><dd>播放 / 暂停</dd><dt>/ 或直接打字</dt><dd>检索</dd><dt>Ctrl+L</dt><dd>回到正在播放</dd><dt>Shift+R</dt><dd>随机抽取</dd><dt>Shift+F10</dt><dd>选中曲目的菜单</dd><dt>Esc</dt><dd>收起 / 停下</dd></dl><p class="archive-keys-wall">封面墙 / 网格里：方向键按位置走，单击展开大卡、双击播放，PgUp PgDn 在网格里翻页，拖动或滚轮平移</p><p>再按 ? 或 Esc 关闭</p></div>
         <div class="archive-hud" data-ref="hud">
             <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
@@ -40,7 +41,7 @@
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
                 <span class="archive-layouts" role="group" aria-label="视图" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><button type="button" data-act="layout" data-layout="array" title="3D 档案阵列" aria-pressed="true">阵列</button><button type="button" data-act="layout" data-layout="wall" title="平铺的封面墙，可以四处拖" aria-pressed="false">封面墙</button><button type="button" data-act="layout" data-layout="table" title="封面平放在桌面上，低机位往远处看" aria-pressed="false">平放</button><button type="button" data-act="layout" data-layout="grid" title="按首字母分节的封面网格" aria-pressed="false">网格</button></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
-                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
+                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
             <div class="archive-empty" role="status">
@@ -437,7 +438,11 @@
             const row = rulerRowAt(clientX);
             const col = column();
             const t = row >= 0 && col ? tracks()[col.items[row]] : null;
-            if (!t) { refs.rulerTip.classList.remove('on'); return; }
+            if (!t) { refs.rulerTip.classList.remove('on'); refs.rulerTrack.classList.remove('hovering'); return; }
+            // 悬停的那一格先亮一根细线（借鉴 RhinE 刻度尺的 hoverTick），松手或点下去才真的选过去
+            const hn = rulerTicks(col.items.length);
+            refs.rulerTrack.style.setProperty('--hover', ((Math.min(hn - 1, Math.floor(row * hn / col.items.length)) + 0.5) / hn).toFixed(4));
+            refs.rulerTrack.classList.add('hovering');
             const box = refs.rulerTrack.getBoundingClientRect();
             refs.rulerTip.textContent = pad(row + 1, Math.max(2, String(col.items.length).length)) + '  ' + (Model.stripExtension(t.title) || '未知标题');
             // HUD 整体按设计稿缩放过：屏幕像素换回标尺自己的像素
@@ -453,7 +458,7 @@
                 rulerTipAt(e.clientX);
                 if (dragging) { const row = rulerRowAt(e.clientX); if (row >= 0) goRow(row, { pulse: false }); }
             });
-            track.addEventListener('pointerleave', () => { if (!dragging) refs.rulerTip.classList.remove('on'); });
+            track.addEventListener('pointerleave', () => { if (!dragging) { refs.rulerTip.classList.remove('on'); track.classList.remove('hovering'); } });
             track.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
@@ -564,6 +569,31 @@
             capped(state.coverCache, url, entry, 64);
         };
         let cardExpanded = true;
+        /*
+         * 借鉴 RhinE「鼠标不动、档案在它下面移动后重新找一次指着的那张」：键盘、标尺、滚轮换了选中后，
+         * 镜头停稳时按鼠标最后的位置重新判一次悬停，高亮不会还挂在原来那张卡上。只改悬停和光标，不弹提示。
+         */
+        let lastPtr = null, rehoverTimer = 0;
+        let picking = false;   // 随机抽取正在跑（pick 在后面才声明，select 里用这个）
+        const rehover = () => {
+            rehoverTimer = 0;
+            const sc = state.scene;
+            if (!lastPtr || !sc || !sc.canvas || wheelBrowsing || turning || (plane && plane.active)) return;
+            const rect = sc.canvas.getBoundingClientRect();
+            const d = sc.detailRect && sc.detailRect();
+            const x = lastPtr.x - rect.left, y = lastPtr.y - rect.top;
+            if (d && x >= d.left && x <= d.right && y >= d.top && y <= d.bottom) return;
+            const c = sc.pick(lastPtr.x, lastPtr.y, rect);
+            sc.setHover(c);
+            const browsing = !cardExpanded && !sc.detail;
+            sc.canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
+            kick();
+        };
+        const rehoverSoon = () => {
+            if (!lastPtr) return;
+            clearTimeout(rehoverTimer);
+            rehoverTimer = setTimeout(rehover, reducedMotion() ? 0 : 420);
+        };
         let wheelBrowsing = false;
         const syncCard = () => {
             if (!state.scene || state.destroyed) return;
@@ -623,9 +653,12 @@
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
-            syncList();
+            // 随机抽取跑着时左侧目录先不跟（借鉴 RhinE：抽取途中资料面板不动，落定才显示）：
+            // 每一跳都换分组、滚列表又费又晃，停下或被打断时再一次对齐
+            if (!picking) syncList();
             schedulePlace();
             kick();
+            rehoverSoon();
         };
 
         /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
@@ -969,10 +1002,12 @@
         const pickStop = () => {
             if (!pick.on) return;
             pick.on = false;
+            picking = false;
             pick.timers.forEach(clearTimeout);
             pick.timers = [];
             refs.pickBtn?.classList.remove('running');
             setCardExpanded(true);
+            syncList();
         };
         const randomPick = () => {
             if (pick.on || !state.columns.length) return;
@@ -1009,6 +1044,7 @@
                 if (last !== row1 || !steps.length) steps.push({ t: t += 100, lane: lane1, row: row1 });
             }
             pick.on = true;
+            picking = true;
             refs.pickBtn?.classList.add('running');
             setCardExpanded(false);
             for (const s of steps) {
@@ -1022,9 +1058,11 @@
             pick.timers.push(setTimeout(() => {
                 if (!pick.on || state.destroyed) return;
                 pick.on = false;
+                picking = false;
                 pick.timers = [];
                 refs.pickBtn?.classList.remove('running');
                 if (selectedIndex() !== target) select(lane1, row1);
+                syncList();
                 setCardExpanded(true);
                 playSelected();
             }, t + (reducedMotion() ? 0 : 450)));
@@ -1360,6 +1398,7 @@
         };
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
+                lastPtr = { x: e.clientX, y: e.clientY };
                 const rect = canvas.getBoundingClientRect();
                 state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
                 if (plane && (e.buttons & 1)) {
@@ -1424,7 +1463,7 @@
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { lastPtr = null; clearTimeout(rehoverTimer); pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
@@ -1524,6 +1563,7 @@
             if (!wheelBrowsing) return;
             wheelBrowsing = false;
             syncCard();
+            rehoverSoon();
         };
         const stopInertia = () => {
             inertia.stop();
@@ -1578,6 +1618,26 @@
             inertiaTimer = setTimeout(releaseWheel, 160);
         }, { passive: false });
 
+        // 借鉴 RhinE「在排名上滚轮换排」：滚轮停在分组名上换组、停在标尺上逐首走，不必先挪到场景里
+        const wheelLaneName = Model.createWheel(60);
+        const wheelRuler = Model.createWheel(60);
+        const onHudWheel = (e) => {
+            const onLanes = refs.lanes && refs.lanes.contains(e.target);
+            const onRuler = !onLanes && refs.ruler && refs.ruler.contains(e.target);
+            if (!onLanes && !onRuler) return;
+            const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta) return;
+            e.preventDefault();
+            const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            const n = Model.isWheelNotch(e, global.devicePixelRatio)
+                ? Math.sign(delta)
+                : (onLanes ? wheelLaneName : wheelRuler)(delta * unit, e.timeStamp);
+            if (!n) return;
+            if (onLanes) stepLane(Math.sign(n));
+            else select(state.lane, state.row + n);
+        };
+        root.addEventListener('wheel', onHudWheel, { passive: false });
+
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
@@ -1588,6 +1648,7 @@
                     case 'row-prev': select(state.lane, state.row - 1); break;
                     case 'row-next': select(state.lane, state.row + 1); break;
                     case 'lane-prev': stepLane(-1); break;
+                    case 'keys': toggleKeys(false); break;
                     case 'lane-next': stepLane(1); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
@@ -1615,6 +1676,15 @@
         root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
 
+        // 借鉴 RhinE 的按键说明：按 ? 摊开一张快捷键卡，Esc / 再按 ? / 点别处收起
+        const keysOpen = () => Boolean(refs.keys && !refs.keys.hidden);
+        const toggleKeys = (on = !keysOpen()) => {
+            if (!refs.keys) return;
+            refs.keys.hidden = !on;
+            if (on && !reducedMotion()) refs.keys.animate([{ opacity: 0, transform: 'translate(-50%, calc(-50% + 6px))' }, { opacity: 1, transform: 'translate(-50%, -50%)' }], { duration: 160, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        };
+        const onKeysOutside = (e) => { if (keysOpen() && !refs.keys.contains(e.target)) toggleKeys(false); };
+        document.addEventListener('pointerdown', onKeysOutside, true);
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
             if (momentum && isShown()) stopMomentum();
@@ -1625,6 +1695,8 @@
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
+            if (keysOpen() && (e.key === 'Escape' || e.key === '?')) { e.preventDefault(); toggleKeys(false); return; }
+            if (e.key === '?') { e.preventDefault(); toggleKeys(true); return; }
             stopInertia();
             const fl = flat();
             if (fl && fl.on) {
@@ -1836,6 +1908,8 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            clearTimeout(rehoverTimer);
+            document.removeEventListener('pointerdown', onKeysOutside, true);
             grainObserver.disconnect();
             modeObserver.disconnect(); modeSweepEl?.remove();
             pick.timers.forEach(clearTimeout); pick.on = false;
@@ -1964,6 +2038,15 @@
                 app.showContextMenu(x, y);
                 ListLib?.menuKeyboard?.(app, { restore: restore || refs.layouts.querySelector("[aria-pressed=\"true\"]") });
             },
+            // 展开大卡里的进度条：读播放器上次报的时间，播放中按经过的时间往前推
+            progress: () => {
+                const d = Math.max(0, Number(app.lastKnownDuration) || 0);
+                const base = Number(app.lastKnownCurrentTime) || 0;
+                const run = app.isPlaying && app.lastStateUpdateTime && !app.isTrackLoading ? (Date.now() - app.lastStateUpdateTime) / 1000 : 0;
+                const t = Math.max(0, base + run);
+                return { t: d ? Math.min(d, t) : t, d };
+            },
+            seek: (t) => app.seekTo?.(t),
             reducedMotion
         };
         wall = WallLib ? WallLib.create(wallOpts) : null;
