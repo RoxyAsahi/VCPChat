@@ -382,6 +382,7 @@
             localStorage.setItem('musicStageMode', state.modeId);
             // The 3D modes paint every pixel themselves; see .stage-scene-3d.
             const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
+            state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
@@ -1263,6 +1264,22 @@
             }
         };
 
+        // The lyric stages draw at most 60 frames a second, as the 3D stages do
+        // on their standard tier: a 120 or 144 Hz display would otherwise run
+        // every one of them twice as often as the eye can follow, at twice the
+        // power. The 3D modes pace their own drawing, and the ultimate tier is
+        // left unpaced. Calls from the stage itself (enter, theme) still draw.
+        const frameCap = global.MusicStageModeUtils.createFrameCap();
+        let lastPaced = -Infinity;
+        const paceFrame = (timestamp) => {
+            // A clock that went back (a caller's own timeline) starts over.
+            if (timestamp < lastPaced) frameCap.reset();
+            lastPaced = timestamp;
+            if (!state.scene3d && state.config.quality !== 'ultimate'
+                && !frameCap.take(timestamp, 'standard')) return;
+            updateFrame(timestamp);
+        };
+
         // The player polls the engine every 250 ms. During a drag, and until the
         // engine reports the committed position, those polls still carry the old
         // position, so the target is re-asserted before every stage frame.
@@ -1689,7 +1706,7 @@
             exit,
             toggle,
             setMode,
-            updateFrame,
+            updateFrame: paceFrame,
             updateTrack,
             updateTheme,
             get active() { return state.active; },
