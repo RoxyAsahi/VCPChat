@@ -359,7 +359,8 @@ test('music stage keeps one mode instance and releases canvases across switches'
     // soft-focus crossfade; drive frames until only the new one is left.
     const settleSwitch = async (time) => {
         for (let i = 0; i < 40; i++) {
-            app.stageHost.updateFrame(time);
+            // Display time moves on between frames (the stage paces to 60 a second).
+            app.stageHost.updateFrame(time + i * 100);
             if (!app.stageHost.getDebugSnapshot().switching) return;
             await wait(dom.window, 100);
         }
@@ -504,4 +505,32 @@ test('3D stage waits for the new song\'s lyrics behind a fade instead of buildin
     await wait(dom.window, 40);
     assert.equal(modeRoot().classList.contains('is-song-leaving'), false);
     app.stageHost.destroy();
+});
+
+test('lyric stages draw at most 60 frames a second unless the ultimate tier is chosen', async () => {
+    const frames = async (quality) => {
+        const dom = createStageDom();
+        installCanvasStub(dom.window);
+        for (const file of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js',
+            'modes/stage-lyric-layout.js', 'modes/stage-lyric-performance.js', 'modes/luminous-manager.js',
+            'modes/partita-manager.js', 'modes/cadenza-manager.js', 'modes/diorama-manager.js',
+            'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-host.js']) {
+            runScript(dom, `Musicmodules/music-stage/${file}`);
+        }
+        dom.window.localStorage.setItem('musicStageMode', 'luminous');
+        if (quality) dom.window.MusicStageConfig.update({ quality });
+        const { app } = createApp();
+        dom.window.setupMusicStage(app);
+        app.stageHost.enter();
+        await wait(dom.window, 20);
+        const before = app.stageHost.getDebugSnapshot().frameUpdates;
+        // One second of a 120 Hz display.
+        for (let i = 0; i < 120; i++) app.stageHost.updateFrame(10000 + i * (1000 / 120));
+        const drawn = app.stageHost.getDebugSnapshot().frameUpdates - before;
+        app.stageHost.destroy();
+        return drawn;
+    };
+    const standard = await frames(null);
+    assert.ok(standard >= 58 && standard <= 62, `standard tier drew ${standard} of 120`);
+    assert.equal(await frames('ultimate'), 120);
 });

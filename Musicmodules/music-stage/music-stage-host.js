@@ -113,6 +113,15 @@
             edgeStrips[side] = { canvas, context, x: 0, y: 0, width: 0, height: 0 };
         });
         const edgeContext = edgeStrips.left ? edgeStrips.top.context : null;
+        // The orbiting light of the edge ring: its gradient is drawn once and
+        // turned by the compositor, instead of the ring being restyled and its
+        // masked gradient painted again at every step of the orbit.
+        const edgeFlow = elements.edgeSpectrum?.querySelector('.music-stage-edge-flow');
+        if (edgeFlow && !edgeFlow.querySelector('.music-stage-edge-flow-light')) {
+            const light = document.createElement('div');
+            light.className = 'music-stage-edge-flow-light';
+            edgeFlow.prepend(light);
+        }
         const prefersReducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const edgeCanvasState = {
             width: 0,
@@ -335,9 +344,6 @@
             lastProgressAriaValue: '',
             lastProgressAriaText: '',
             lastPlaybackState: null,
-            lastAudioPower: '',
-            lastAudioBass: '',
-            lastAudioVocal: '',
             lastNonZeroVolume: Math.max(0.35, Number(app.volumeSlider?.value) || 1),
             themeCatalog: [],
             appliedThemeVariables: new Set(),
@@ -385,6 +391,7 @@
             localStorage.setItem('musicStageMode', state.modeId);
             // The 3D modes paint every pixel themselves; see .stage-scene-3d.
             const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
+            state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
@@ -1201,6 +1208,50 @@
             note.hidden = !text;
         };
 
+        /*
+         * The audio levels change every frame. Set on the stage root they would
+         * be inherited by, and restyle, every element of the stage each frame,
+         * although only a handful of parts read them. They go to those parts
+         * only: the backdrop, the edge spectrum (its corners and flow inherit),
+         * the cover, and the two mode roots whose own decoration reads them.
+         */
+        const audioWritten = new WeakMap();
+        const audioSinks = [];
+        const collectAudioSinks = () => {
+            audioSinks.length = 0;
+            root.querySelectorAll(':scope .music-stage-backdrop-layer').forEach(node => audioSinks.push(node));
+            if (elements.edgeSpectrum) audioSinks.push(elements.edgeSpectrum);
+            if (elements.cover) audioSinks.push(elements.cover);
+            for (const child of elements.modeRoot?.children || []) {
+                if (child.classList.contains('music-stage-mode-tunnel')) audioSinks.push(child);
+                else if (child.classList.contains('music-stage-mode-starborn')) {
+                    child.querySelectorAll(':scope > .starborn-star, :scope > .starborn-transition-burst')
+                        .forEach(node => audioSinks.push(node));
+                }
+            }
+        };
+        let audioSinkChildren = null;
+        const writeAudioLevels = (audio) => {
+            const power = audio.power.toFixed(4);
+            const bass = audio.bass.toFixed(4);
+            const vocal = audio.vocal.toFixed(4);
+            const key = `${power}|${bass}|${vocal}`;
+            // Mode roots come and go with switches; the list follows them.
+            const children = elements.modeRoot?.children;
+            const signature = children ? Array.prototype.map.call(children, child => child.className).join('\n') : '';
+            if (signature !== audioSinkChildren) {
+                audioSinkChildren = signature;
+                collectAudioSinks();
+            }
+            for (const node of audioSinks) {
+                if (audioWritten.get(node) === key) continue;
+                audioWritten.set(node, key);
+                node.style.setProperty('--stage-audio-power', power);
+                node.style.setProperty('--stage-audio-bass', bass);
+                node.style.setProperty('--stage-audio-vocal', vocal);
+            }
+        };
+
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
             applySeekHold();
@@ -1212,21 +1263,7 @@
             updateProgress(frame);
             updatePlaybackState(frame.isPlaying);
             updateTransportControls();
-            const audioPower = frame.audio.power.toFixed(4);
-            if (audioPower !== state.lastAudioPower) {
-                state.lastAudioPower = audioPower;
-                root.style.setProperty('--stage-audio-power', audioPower);
-            }
-            const audioBass = frame.audio.bass.toFixed(4);
-            if (audioBass !== state.lastAudioBass) {
-                state.lastAudioBass = audioBass;
-                root.style.setProperty('--stage-audio-bass', audioBass);
-            }
-            const audioVocal = frame.audio.vocal.toFixed(4);
-            if (audioVocal !== state.lastAudioVocal) {
-                state.lastAudioVocal = audioVocal;
-                root.style.setProperty('--stage-audio-vocal', audioVocal);
-            }
+            writeAudioLevels(frame.audio);
             drawEdgeSpectrum(frame);
             if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
             updateDegradeNote(timestamp);
@@ -1234,6 +1271,22 @@
                 state.leaving?.instance.updateFrame?.(frame);
                 advanceSoftSwitch(performance.now());
             }
+        };
+
+        // The lyric stages draw at most 60 frames a second, as the 3D stages do
+        // on their standard tier: a 120 or 144 Hz display would otherwise run
+        // every one of them twice as often as the eye can follow, at twice the
+        // power. The 3D modes pace their own drawing, and the ultimate tier is
+        // left unpaced. Calls from the stage itself (enter, theme) still draw.
+        const frameCap = global.MusicStageModeUtils.createFrameCap();
+        let lastPaced = -Infinity;
+        const paceFrame = (timestamp) => {
+            // A clock that went back (a caller's own timeline) starts over.
+            if (timestamp < lastPaced) frameCap.reset();
+            lastPaced = timestamp;
+            if (!state.scene3d && state.config.quality !== 'ultimate'
+                && !frameCap.take(timestamp, 'standard')) return;
+            updateFrame(timestamp);
         };
 
         // The player polls the engine every 250 ms. During a drag, and until the
@@ -1662,7 +1715,7 @@
             exit,
             toggle,
             setMode,
-            updateFrame,
+            updateFrame: paceFrame,
             updateTrack,
             updateTheme,
             get active() { return state.active; },
