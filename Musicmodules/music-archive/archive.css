@@ -827,3 +827,5 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 .archive-keys dt { font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .4px; color: var(--ar-accent-text, var(--ar-accent)); white-space: nowrap; }
 .archive-keys dd { margin: 0; color: var(--ar-ink); }
 .archive-keys p { margin: 10px 0 0; font-size: 11px; color: var(--ar-muted); }
+.archive-keys { max-width: 420px; }
+.archive-keys p.archive-keys-wall { line-height: 1.6; padding-top: 8px; border-top: 1px dashed var(--ar-rule); }
