@@ -236,9 +236,9 @@
             const PIXI = global.PIXI;
             if (!PIXI) throw new Error('PIXI is not loaded');
 
-            const application = new PIXI.Application();
-            this.app = application;
-            await application.init({
+            // A renderer parked by a stage that just went away is reused when
+            // its canvas settings match (see createApplication).
+            const application = await Effects.createApplication(PIXI, {
                 backgroundAlpha: 0,
                 preference: 'webgl',
                 autoStart: false,
@@ -247,17 +247,12 @@
                 resolution: Math.min(2, global.devicePixelRatio || 1),
                 autoDensity: true
             });
-
-            if (this.destroyed || this.app !== application) {
-                // destroy() may have already released this application while
-                // init was pending. PIXI destruction is not guaranteed to be
-                // safely repeatable, so only dispose it here while still owned.
-                if (this.app === application) {
-                    application.destroy(true, { children: true });
-                    this.app = null;
-                }
+            if (this.destroyed) {
+                // destroy() ran while the renderer was being set up.
+                Effects.releaseApplication(application);
                 return;
             }
+            this.app = application;
             this.app.stop();
             this.container.appendChild(this.app.canvas);
             this.app.canvas.className = 'tempera-pixi-canvas';
@@ -540,16 +535,11 @@
             this.retirement = null;
             this.postProcess?.destroy();
             this.postProcess = null;
-            // PIXI.Application may already own a renderer/canvas even when init()
-            // rejected before `initialized` became true. Always destroy the
-            // application object so failed or interrupted stage entries cannot
-            // retain a WebGL context.
+            // The renderer is parked for the next stage with the same canvas
+            // settings, or destroyed; an unclaimed one is destroyed shortly.
+            // (An init that fails disposes its own application.)
             if (this.app) {
-                try {
-                    this.app.destroy(true, { children: true });
-                } catch (error) {
-                    console.warn('[MusicStage:Tempera] PIXI cleanup failed:', error);
-                }
+                Effects.releaseApplication(this.app);
                 this.app = null;
             }
             this.sceneContainer = null;

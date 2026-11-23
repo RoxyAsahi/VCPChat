@@ -1362,7 +1362,82 @@ void main() {
         };
     };
 
+    // Renderers kept for a moment after their stage goes away. Starborn mounts
+    // a new Tempera or Sonnet on many line cuts, and a new WebGL context has to
+    // compile every shader again on its first frame, which shows as a hitch
+    // right at the cut. A director that is torn down parks its application
+    // here instead; the next one created with the same canvas settings takes
+    // it with an empty stage. Anything left unclaimed is destroyed shortly.
+    const PARK_LIMIT = 2;
+    const PARK_MS = 45000;
+    const parked = [];
+    const applicationKey = options => `${options.antialias ? 1 : 0}:${options.resolution}:${options.preference || ''}`;
+    const takeApplication = (PIXI, options) => {
+        const key = applicationKey(options);
+        const index = parked.findIndex(entry => entry.PIXI === PIXI && entry.key === key);
+        if (index < 0) return null;
+        const [entry] = parked.splice(index, 1);
+        clearTimeout(entry.timer);
+        return entry.app;
+    };
+    const dispose = app => {
+        try { app.destroy(true, { children: true }); } catch (error) { console.warn('[MusicStage] PIXI cleanup failed:', error); }
+    };
+    const createApplication = async (PIXI, options) => {
+        const reused = takeApplication(PIXI, options);
+        if (reused) return reused;
+        const app = new PIXI.Application();
+        app.__stageParkKey = applicationKey(options);
+        app.__stagePixi = PIXI;
+        try {
+            await app.init(options);
+        } catch (error) {
+            dispose(app);
+            throw error;
+        }
+        return app;
+    };
+    // Returns false when the application was destroyed instead of parked.
+    const releaseApplication = app => {
+        if (!app) return false;
+        const key = app.__stageParkKey;
+        if (!key || !app.renderer || !app.stage || parked.length >= PARK_LIMIT || global.document?.hidden) {
+            dispose(app);
+            return false;
+        }
+        try {
+            app.stop();
+            for (const child of app.stage.removeChildren()) child.destroy({ children: true });
+            const stage = app.stage;
+            stage.filters = null;
+            stage.filterArea = null;
+            stage.mask = null;
+            stage.alpha = 1;
+            stage.visible = true;
+            stage.rotation = 0;
+            stage.position.set(0, 0);
+            stage.pivot.set(0, 0);
+            stage.scale.set(1, 1);
+            // Leave the canvas transparent so it shows nothing stale when it
+            // is attached again before the next stage has drawn.
+            app.render();
+            app.canvas.remove();
+        } catch (error) {
+            dispose(app);
+            return false;
+        }
+        const entry = { app, key, PIXI: app.__stagePixi };
+        entry.timer = setTimeout(() => {
+            const index = parked.indexOf(entry);
+            if (index >= 0) parked.splice(index, 1);
+            dispose(app);
+        }, PARK_MS);
+        parked.push(entry);
+        return true;
+    };
+
     global.MusicStagePixiEffects = Object.freeze({
+        createApplication, releaseApplication,
         createRetirement, createEditorialTrack, lensOn,
         createPerformance, buildPhraseStage, animatePhraseStage, createAccentChoreography,
         amount, ease, expo, clear, camera, shotKind, glyphTiming, buildLyrics, animateLyrics, motionScale, createPostProcess,
