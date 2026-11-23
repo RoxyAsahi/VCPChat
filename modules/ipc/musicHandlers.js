@@ -17,6 +17,7 @@ const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
 const { createMusicThumbar } = require('../musicThumbar');
 const { createLyricsTranslator } = require('../musicLyricsTranslate');
+const { createLibraryWatch } = require('../musicLibraryWatch');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -24,6 +25,28 @@ let fetch;
 let musicWindow = null;
 // 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
 const musicThumbar = createMusicThumbar({ nativeImage: electron.nativeImage });
+// 曲库文件夹自动同步：记住加过的文件夹，音乐窗口开着时后台对磁盘、监听变化（modules/musicLibraryWatch.js）
+const musicFoldersFile = () => (MUSIC_PLAYLIST_FILE ? path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_folders.json') : null);
+const libraryWatch = createLibraryWatch({
+    // 用户自己在加文件夹时先等它扫完：两边的结果同时回到窗口会互相打乱「正在扫描」和排序
+    scan: async (folderPath, signal) => {
+        while (activeUserScans > 0 && !signal.aborted) await new Promise((r) => setTimeout(r, 2000));
+        return scanFolder({
+        folderPath,
+        coverCachePath: MUSIC_COVER_CACHE_DIR,
+        knownTracks: await readPlaylistFile(),
+        signal
+        });
+    },
+    readKnown: () => readPlaylistFile(),
+    readFolders: async () => {
+        const file = musicFoldersFile();
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeFolders: async (list) => { const file = musicFoldersFile(); if (file) await writeJsonAtomic(file, list, { spaces: 2 }); },
+    send: (channel, payload) => { if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send(channel, payload); }
+});
 // 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
 const lyricsTranslator = createLyricsTranslator({
     getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
@@ -192,6 +215,7 @@ function createOrFocusMusicWindow() {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
                 desktopLyrics?.musicReady();
+                libraryWatch.start();
                 // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
@@ -239,6 +263,7 @@ function createOrFocusMusicWindow() {
             musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
             publishMusicCapsule();
             musicThumbar.reset();
+            libraryWatch.stop();
             musicGrooveBus.publish({ playing: false });
             pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
@@ -318,7 +343,12 @@ function runLibraryScan(event, options = {}) {
     return scan;
 }
 
-async function scanLibrary(event, { folderPath = null, filePaths } = {}) {
+let activeUserScans = 0;
+async function scanLibrary(event, options = {}) {
+    activeUserScans++;
+    try { return await scanLibraryNow(event, options); } finally { activeUserScans--; }
+}
+async function scanLibraryNow(event, { folderPath = null, filePaths } = {}) {
     const sendToRequester = (channel, payload) => {
         if (event.sender && !event.sender.isDestroyed()) {
             event.sender.send(channel, payload);
@@ -990,6 +1020,7 @@ function initialize(options) {
             }
 
             await runLibraryScan(event, { folderPath: result.filePaths[0] });
+            await libraryWatch.rememberFolder(result.filePaths[0]);
         });
 
         // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
@@ -1003,7 +1034,10 @@ function initialize(options) {
                 if (stat?.isDirectory()) folders.push(raw);
                 else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
-            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
+            for (const folderPath of folders) {
+                await runLibraryScan(event, { folderPath });
+                await libraryWatch.rememberFolder(folderPath);
+            }
             if (files.length) await runLibraryScan(event, { filePaths: files });
             return { folders: folders.length, files: files.length };
         });
