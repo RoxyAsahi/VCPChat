@@ -7,9 +7,11 @@
 (function (global) {
     'use strict';
 
-    const LETTER_H = 20;  // 首字母分组前的留白（字母本身在左侧外边距里）
+    const LETTER_H = 34;  // 首字母分组的行内小标题（字母 + 首数，上面压一条结构线）
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
     const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
+    // 分组标题都在行内（档案目录表的排法），左侧外边距不再放吸附的大字母，也不画跟着它走的液态记号
+    const INLINE_HEADS = true;
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];
@@ -69,12 +71,12 @@
      *   全部曲目且没有检索词时不给（按首字母分的组只是索引，队列仍是整个曲库）
      * }
      */
-    /* 首字母分组（全部曲目、无检索词）：字母放到左侧外边距里，大号细体 */
+    /* 首字母分组（全部曲目、无检索词）：和其他分组一样做成行内小标题，字母后面跟这一组的首数 */
     const isLetter = (row) => row.type === 'head' && String(row.key || '').startsWith('letter:');
     const letterHtml = (row) => {
         const g = String(row.key).slice(7);
         const text = g === '0-9' ? '0–9' : g === '#' ? '#' : g;
-        return `<span class="${text.length > 1 ? 'wide' : ''}">${esc(text)}</span>`;
+        return `<span class="${text.length > 1 ? 'wide' : ''}">${esc(text)}</span>${row.n > 0 ? `<i>${row.n} 首</i>` : ''}`;
     };
 
 
@@ -213,6 +215,7 @@
             selected: -1,       // 曲库下标
             selectedRow: -1,    // rows 里的下标
             rendered: new Map(),
+            ord: [],
             dirty: true,
             raf: 0,
             playing: -1
@@ -291,10 +294,15 @@
             state.rows = out.rows;
             state.count = out.count;
             state.offsets = new Array(out.rows.length + 1);
+            state.ord = new Array(out.rows.length);
+            state.ordWidth = Math.max(2, String(out.count || 0).length);
+            el.style.setProperty('--no-digits', String(state.ordWidth));
             state.heads = [];
             let y = 0;
+            let nth = 0;
             out.rows.forEach((row, k) => {
                 state.offsets[k] = y;
+                if (row.type === 'track') state.ord[k] = ++nth;
                 if (row.type === 'head') state.heads.push(k);
                 y += row.type === 'head' ? (isLetter(row) ? LETTER_H : LABEL_H) : ROW_H;
             });
@@ -411,7 +419,8 @@
             const title = String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') || '未知标题';
             const time = durationOf(t, row.i);
             const liked = typeof app.isLiked === 'function' && app.isLiked(t);
-            return '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
+            return `<span class="no" aria-hidden="true">${pad(state.ord?.[k] || 0, state.ordWidth || 2)}</span>`
+                + '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'
                 + '<button type="button" class="go" data-go tabindex="-1" aria-label="播放"><svg viewBox="0 0 12 12" aria-hidden="true"><path class="go-play" d="M3 1.6v8.8L10.2 6z"/><path class="go-pause" d="M2.6 1.8h2.4v8.4H2.6zM7 1.8h2.4v8.4H7z"/></svg></button>'
                 + `<span class="tx"><b>${markHit(title)}</b><em>${markHit(meta)}</em></span>`
                 + `<span class="rt">${liked ? '<s class="lk" title="喜欢" aria-label="喜欢">♥</s>' : ''}${time > 0 ? `<i>${fmtTime(time)}</i>` : ''}</span>`;
@@ -541,7 +550,11 @@
                     node = document.createElement('div');
                     node.className = row.type === 'track' ? 'archive-list-row' : isLetter(row) ? 'archive-list-letter' : 'archive-list-group';
                     node.dataset.k = k;
-                    if (row.type === 'track') { node.setAttribute('role', 'option'); }
+                    if (row.type === 'track') {
+                        node.setAttribute('role', 'option');
+                        // 下面紧跟分组标题的那一行不画底线，免得和标题的结构线叠成两道
+                        if (state.rows[k + 1]?.type === 'head') node.classList.add('before-head');
+                    }
                     else if (playlistOfHead(row)) node.classList.add('is-playlist');
                     node.style.transform = `translateY(${state.offsets[k]}px)`;
                     node.innerHTML = rowHtml(row, k);
@@ -552,7 +565,7 @@
             }
             // 吸附字母停在顶上，下一组的字母顶上来时把它推上去
             let stickyY = null;
-            if (state.stuck === -1) {
+            if (state.stuck === -1 || INLINE_HEADS) {
                 r.sticky.style.visibility = 'hidden';
             } else {
                 r.sticky.style.visibility = '';
@@ -566,9 +579,7 @@
             }
             syncDrop(headK, top, stickyY);
             const sel = state.selectedRow;
-            let nth = 0;
-            if (sel >= 0) for (let k = 0; k <= sel; k++) if (state.rows[k].type === 'track') nth++;
-            setFoot(sel >= 0 ? nth : 0, state.count);
+            setFoot(sel >= 0 ? state.ord[sel] || 0 : 0, state.count);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
         // 底部计数：选中了一首是「012 / 120」；没选中时不放「--- / 120」这种占位，直接说「120 首」
@@ -636,7 +647,7 @@
         let dropAt = null;
         let lastScroll = null;
         const syncDrop = (headK, top, stickyY) => {
-            if (typeof global.createMusicFluidMarker !== 'function') return;
+            if (INLINE_HEADS || typeof global.createMusicFluidMarker !== 'function') return;
             // 一下跳出一屏以外（换排序、键盘跳到很远的一首）：小滴不拖着长颈飞过去，直接落在新位置
             const far = Boolean(drop && lastScroll && Math.abs(top - lastScroll.top) > (r.viewport.clientHeight || 600));
             if (!drop) {
