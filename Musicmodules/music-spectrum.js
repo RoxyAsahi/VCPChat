@@ -312,6 +312,21 @@
             busy = true;
             try { await analyse(track); } catch (e) { setStatus('分析失败：' + (e && e.message || e)); } finally { busy = false; }
         };
+
+        // 右键菜单：看这首的频谱
+        const menu = app.contextMenu;
+        if (menu && doc && !menu.querySelector('[data-action="spectrum"]')) {
+            const item = el('div', 'context-menu-item');
+            item.dataset.action = 'spectrum';
+            item.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg><span>看频谱（真假无损）</span>';
+            const anchor = menu.querySelector('[data-action="start-radio"]') || menu.querySelector('[data-action="add-to-queue"]');
+            if (anchor && anchor.parentNode === menu) menu.insertBefore(item, anchor.nextSibling); else menu.appendChild(item);
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.remove('visible');
+                app.openSpectrum(app.contextMenuTrackIndex);
+            });
+        }
     }
 
     const open = (app, ref) => { setupMusicSpectrum(app); return app?.openSpectrum?.(ref); };

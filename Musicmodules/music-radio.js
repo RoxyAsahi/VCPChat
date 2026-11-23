@@ -357,6 +357,8 @@
                 app.startRadio(app.contextMenuTrackIndex);
             });
         }
+        // 频谱检查（music-spectrum.js 在本文件之后加载、这里运行时已经在了）：右键菜单里接上「看频谱」
+        try { global.MusicSpectrum?.setupMusicSpectrum?.(app); } catch (e) { /* 没有频谱模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };
