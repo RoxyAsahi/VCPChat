@@ -845,6 +845,16 @@ vec3 archiveUntone(vec3 y) {
             g.font = `400 26px ${fontStack}`;
             g.textBaseline = 'alphabetic';
             g.fillText('MUSIC ARCHIVE', X(-1.15), Y(0.27));
+            // 左边台阶里一行竖排模压字（位置照参考播放器 Moulded_Lettering，字是我们自己的）：从上往下读，压出来的凹字配亮边
+            g.save();
+            g.translate(X(-2.17), Y(2.5));
+            g.rotate(Math.PI / 2);
+            g.font = `500 22px ${fontStack}`;
+            g.textBaseline = 'middle';
+            if ('letterSpacing' in g) g.letterSpacing = '5px';
+            g.fillStyle = lighting.etchHi; g.fillText('MUSIC ARCHIVE', 1.6, -1.6);
+            g.fillStyle = lighting.etch; g.fillText('MUSIC ARCHIVE', 0, 0);
+            g.restore();
             etchMap.needsUpdate = true;
         };
         coverGroup.add(frameMesh, artMesh, captionMesh);
