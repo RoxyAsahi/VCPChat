@@ -1630,6 +1630,42 @@
         // ---------- 外部状态 ----------
         const onResize = () => resize();
         global.addEventListener('resize', onResize);
+        /*
+         * 浅色/深色切换时的扫描带（借鉴 RhinE 换色时横扫整窗的那一道扫描线）：颜色先换好，
+         * 再有一条带横向扫描线的窄带从左扫到右，右边缘是一根强调色扫描头，扫过就散。
+         * 启动时第一次定主题不扫；降低动态时不扫；窗口在后台时不扫。
+         */
+        let modeLight = document.body.classList.contains('light-theme');
+        const modeReadyAt = performance.now() + 1500;
+        let modeSweepEl = null;
+        const modeSweep = () => {
+            if (reducedMotion() || document.hidden || performance.now() < modeReadyAt) return;
+            modeSweepEl?.remove();
+            const cs = getComputedStyle(root);
+            const el = document.createElement('div');
+            el.className = 'archive-mode-sweep';
+            el.setAttribute('aria-hidden', 'true');
+            el.style.setProperty('--sweep-ink', cs.getPropertyValue('--ar-ink').trim() || 'currentColor');
+            el.style.setProperty('--sweep-accent', cs.getPropertyValue('--ar-accent').trim() || 'currentColor');
+            el.innerHTML = '<i></i>';
+            document.body.appendChild(el);
+            modeSweepEl = el;
+            const band = el.firstChild;
+            const w = global.innerWidth || 1600;
+            const bw = Math.round(Math.min(260, Math.max(160, w * 0.12)));
+            band.style.width = bw + 'px';
+            const anim = band.animate?.([{ transform: `translateX(${-bw}px)` }, { transform: `translateX(${w}px)` }],
+                { duration: Math.round(Math.min(760, 420 + w * 0.12)), easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (modeSweepEl === el) modeSweepEl = null; el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else setTimeout(done, 0);
+        };
+        const modeObserver = new MutationObserver(() => {
+            const light = document.body.classList.contains('light-theme');
+            if (light === modeLight) return;
+            modeLight = light;
+            modeSweep();
+        });
+        modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
@@ -1715,6 +1751,7 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            modeObserver.disconnect(); modeSweepEl?.remove();
             pick.timers.forEach(clearTimeout); pick.on = false;
             document.removeEventListener('pointerdown', onPickInterrupt, true);
             document.removeEventListener('wheel', onPickInterrupt, { capture: true });
