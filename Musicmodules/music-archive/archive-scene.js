@@ -876,7 +876,8 @@ vec3 archiveUntone(vec3 y) {
         const view = new THREE.Vector3(-Math.sin(YAW) * Math.cos(ELEV), Math.sin(ELEV), Math.cos(YAW) * Math.cos(ELEV));
         const aim = new THREE.Vector3(AIM[0], AIM[1], AIM[2]);
         let W = 1, H = 1;
-        let pxPerUnit = 200;           // 对焦处一个世界单位在屏幕上多少物理像素（判断「还看得出在动」用）
+        let pxPerUnit = 200;
+        let liftRate = 8;           // 对焦处一个世界单位在屏幕上多少物理像素（判断「还看得出在动」用）
         let dirty = true;
         const invalidate = () => { dirty = true; };
 
@@ -1099,7 +1100,8 @@ vec3 archiveUntone(vec3 y) {
             damp(shoulder, target.row, reduced ? rate : 5, dt);
             damp(focus, target.lane, reduced ? rate : 4, dt);
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
-            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
+            liftRate = reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8;
+            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
                 r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
@@ -1266,7 +1268,7 @@ vec3 archiveUntone(vec3 y) {
             // 速度 0.001 行/秒判，最后约半秒都在画一帧挪零点几像素的画面（参考播放器也是位移不变才休眠）。
             const rowRest = (Math.abs(camRow.v - target.row) + Math.abs(camRow.vel) / 3.7) * ROW_SPACING * pxPerUnit;
             const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
-                && Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) < 0.001 && !returning.size
+                && (Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) + Math.abs(lift.vel) / liftRate) * pxPerUnit < 0.5 && !returning.size
                 && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
                 && !themeBusy() && Math.abs(camLane.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
