@@ -112,6 +112,8 @@ body.music-reduce-motion .archive-nav > button.running .archive-glyph-pick { ani
 .archive-ruler-track:hover .archive-ruler-tick, .archive-ruler-track.drag .archive-ruler-tick { background: color-mix(in srgb, var(--ar-ink) 70%, transparent); }
 .archive-ruler-at { --at: 0; position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 2px; margin-left: -1px; background: var(--ar-accent); transition: left .32s var(--mt-ease, ease); pointer-events: none; }
 .archive-ruler-track.drag .archive-ruler-at { transition: none; }
+.archive-ruler-track::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: calc(var(--hover, 0) * 100%); width: 1px; margin-left: -.5px; background: var(--ar-ink); opacity: 0; transition: opacity .12s; pointer-events: none; }
+.archive-ruler-track.hovering::after { opacity: .85; }
 .archive-ruler-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); padding: 3px 8px; font-size: 11px; font-weight: 400; letter-spacing: .5px; line-height: 16px; white-space: pre; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--ar-paper, #fff); background: var(--ar-ink); opacity: 0; transition: opacity .15s; pointer-events: none; }
 .archive-ruler-tip.on { opacity: 1; }
 body.music-reduce-motion .archive-ruler-at { transition: none; }

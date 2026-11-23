@@ -432,7 +432,11 @@
             const row = rulerRowAt(clientX);
             const col = column();
             const t = row >= 0 && col ? tracks()[col.items[row]] : null;
-            if (!t) { refs.rulerTip.classList.remove('on'); return; }
+            if (!t) { refs.rulerTip.classList.remove('on'); refs.rulerTrack.classList.remove('hovering'); return; }
+            // 悬停的那一格先亮一根细线（借鉴 RhinE 刻度尺的 hoverTick），松手或点下去才真的选过去
+            const hn = rulerTicks(col.items.length);
+            refs.rulerTrack.style.setProperty('--hover', ((Math.min(hn - 1, Math.floor(row * hn / col.items.length)) + 0.5) / hn).toFixed(4));
+            refs.rulerTrack.classList.add('hovering');
             const box = refs.rulerTrack.getBoundingClientRect();
             refs.rulerTip.textContent = pad(row + 1, Math.max(2, String(col.items.length).length)) + '  ' + (Model.stripExtension(t.title) || '未知标题');
             // HUD 整体按设计稿缩放过：屏幕像素换回标尺自己的像素
@@ -448,7 +452,7 @@
                 rulerTipAt(e.clientX);
                 if (dragging) { const row = rulerRowAt(e.clientX); if (row >= 0) goRow(row, { pulse: false }); }
             });
-            track.addEventListener('pointerleave', () => { if (!dragging) refs.rulerTip.classList.remove('on'); });
+            track.addEventListener('pointerleave', () => { if (!dragging) { refs.rulerTip.classList.remove('on'); track.classList.remove('hovering'); } });
             track.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
