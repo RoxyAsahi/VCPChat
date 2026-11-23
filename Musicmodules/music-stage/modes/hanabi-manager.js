@@ -190,6 +190,12 @@ uniform vec3 uAccent;
 uniform float uWaiting;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform vec4 uSpark[6];
+uniform int uSparkCount;
+uniform vec4 uFuse;      // 导火索两端（纹理坐标）
+uniform float uFuseAt;   // 烧到哪里（0..1），<0 不画
+uniform float uBloom;    // 副歌泛光
+uniform vec3 uTags[4];   // 纸签的颜色
 out vec4 outColor;
 
 const float WATER = ${WATER.toFixed(3)};
@@ -239,6 +245,21 @@ void main() {
     vec2 sc = floor(gl_FragCoord.xy / 2.0);
     float star = step(0.9965, hash12(sc)) * smoothstep(0.4, 0.8, uv.y) * (0.5 + 0.5 * sin(uTime * 1.3 + hash12(sc + 5.0) * 40.0));
     col += star * 0.22;
+    // 天边一层暖色的余晖；流星每隔几秒划过一颗
+    col += mix(uAccent, vec3(0.95, 0.35, 0.55), 0.55) * exp(-pow((uv.y - WATER - 0.06) * 7.0, 2.0)) * 0.16;
+    {
+        float slot = floor(uTime / 3.7);
+        float ph = fract(uTime / 3.7);
+        vec2 h0 = vec2(hash12(vec2(slot, 1.0)), hash12(vec2(slot, 2.0)));
+        vec2 o = vec2((0.2 + h0.x * 0.8) * aspect, 0.72 + h0.y * 0.26);
+        vec2 dir = normalize(vec2(-0.82, -0.38));
+        vec2 head = o + dir * ph * 0.9;
+        vec2 d = p - head;
+        float along = -dot(d, dir);
+        float across = abs(d.x * dir.y - d.y * dir.x);
+        float tail = smoothstep(0.22, 0.0, along) * step(0.0, along) * smoothstep(0.0025, 0.0, across);
+        col += vec3(0.9, 0.92, 1.0) * tail * smoothstep(0.0, 0.1, ph) * (1.0 - smoothstep(0.35, 0.5, ph)) * 0.55 * step(0.35, h0.x);
+    }
 
     float total;
     vec3 glow = glowAt(p, aspect, total);
@@ -280,6 +301,14 @@ void main() {
         float singing = smoothstep(se.x - 0.1, se.x + 0.05, uTime) * (1.0 - smoothstep(se.y, se.y + 0.5, uTime));
         float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.7 + lit * 0.4));
         vec3 ink = mix(uInk, uInk * mix(vec3(1.0), tint, 0.5), clamp(lit, 0.0, 1.0)) * (0.8 + lit * 0.45);
+        // 纸签：块里第一个字开唱前 0.15 秒从下往上刷出来
+        int sid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).b * 255.0 + 0.5);
+        if (sid > 0) {
+            float st = texelFetch(uGlyph, ivec2(sid, 0), 0).x;
+            float on = smoothstep(st - 0.2, st, uTime);
+            vec3 tag = uTags[sid % 4];
+            col = mix(col, tag * (0.75 + lit * 0.35), on * 0.92);
+        }
         col = mix(col, ink, clamp(body, 0.0, 1.0));
         col += uAccent * tx.r * singing * 0.4;
         col += (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5;
@@ -290,6 +319,34 @@ void main() {
         col = mix(col, uInk * (0.8 + lit * 0.45), r0 * uPrevFade * 0.75);
     }
 
+    if (uFuseAt >= 0.0) {
+        vec2 a = vec2(uFuse.x, 1.0 - uFuse.y), b = vec2(uFuse.z, 1.0 - uFuse.w);
+        a = (a - 0.5) * uZoom + 0.5; b = (b - 0.5) * uZoom + 0.5;
+        vec2 ab = (b - a) * vec2(aspect, 1.0);
+        vec2 ap = (uv - a) * vec2(aspect, 1.0);
+        float L = length(ab);
+        float k = dot(ap, ab) / (L * L);
+        vec2 n = vec2(-ab.y, ab.x) / L;
+        float wave = sin(k * L * 70.0) * 0.006;
+        float dist = abs(dot(ap, n) - wave);
+        float inside = step(0.0, k) * step(k, 1.0);
+        float line = smoothstep(0.0022, 0.0006, dist) * inside;
+        float burnt = step(k, uFuseAt);
+        col = mix(col, mix(uInk * 0.55, vec3(0.08, 0.06, 0.06), burnt), line * 0.85);
+        vec2 tip = a + (b - a) * uFuseAt;
+        vec2 td = (uv - tip) * vec2(aspect, 1.0);
+        float flick = 0.8 + 0.2 * sin(uTime * 47.0);
+        col += vec3(1.0, 0.72, 0.35) * (exp(-dot(td, td) * 9000.0) * 1.6 + exp(-length(td) * 60.0) * 0.35) * flick;
+    }
+    for (int i = 0; i < 6; i++) {
+        if (i >= uSparkCount) break;
+        vec4 s = uSpark[i];
+        vec2 d = (uv - s.xy) * vec2(aspect, 1.0) / s.z;
+        float core = exp(-dot(d, d) * 60.0);
+        float cross = exp(-abs(d.x) * 70.0) * exp(-abs(d.y) * 4.0) + exp(-abs(d.y) * 70.0) * exp(-abs(d.x) * 4.0);
+        col += mix(uInk, uAccent, 0.5) * (core * 1.3 + cross * 0.5) * s.w;
+    }
+    col += glow * uBloom * 0.35 + mix(uSkyTop, uAccent, 0.4) * uBloom * 0.06;
     vec2 v = uv - 0.5;
     col *= 1.0 - dot(v, v) * 0.7;
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
@@ -492,6 +549,8 @@ void main() {
         const active = new Int32Array(MAX_ACTIVE);
         const lights = new Float32Array(MAX_LIGHTS * 4);
         const lightColours = new Float32Array(MAX_LIGHTS * 3);
+        const sparkBuffer = new Float32Array(24);
+        let bloom = 0;
         const lightPick = [];
         let cues = [];
         let bursts = [];
@@ -513,6 +572,7 @@ void main() {
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 density: clamp(tuning.density ?? 1, 0.4, 1.6),
                 trails: clamp(tuning.trails ?? 1, 0, 1.6),
+                bloom: clamp(tuning.bloom ?? 1, 0, 2),
                 smoke: clamp(tuning.smoke ?? 1, 0, 2),
                 reflection: tuning.reflection !== false,
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.25, 0, 1),
@@ -532,7 +592,9 @@ void main() {
                 top: mixRgb(bg, [0.012, 0.016, 0.04], 0.9),
                 low: mixRgb(bg, [0.07, 0.06, 0.1], 0.82),
                 ink: [0.97, 0.95, 0.92],
-                accent
+                accent,
+                // 纸签：浴衣那几种颜色（靛、薄红、若竹、山吹）
+                tags: new Float32Array([0.2, 0.36, 0.82, 0.86, 0.36, 0.5, 0.2, 0.62, 0.56, 0.92, 0.7, 0.28])
             };
             mode.root.style.setProperty('--hanabi-sky', `rgb(${colours.top.map(v => Math.round(v * 255)).join(',')})`);
         };
@@ -604,49 +666,124 @@ void main() {
                 glyphs = Array.from(title).map((text, i) => ({ text, start: cue.start + 0.8 + i * 0.07, end: cue.start + 1.2 + i * 0.07 }));
             }
             const data = new Float32Array(256 * 4);
+            const placed = [];
+            let fuse = null;
+            const random = seededRandom(`hanabi:${cuesFor?.key}:${index}:layout`);
             if (glyphs.length) {
                 const visible = glyphs.filter(g => g.text.trim()).length;
                 const cjk = glyphs.filter(g => CJK.test(g.text)).length > visible / 2;
-                const rows = [];
-                const perRow = cjk ? 12 : 26;
-                let row = [];
-                glyphs.forEach((g, i) => {
-                    row.push(g);
-                    const filled = row.filter(x => x.text.trim()).length;
-                    const target = Math.ceil(visible / Math.ceil(visible / perRow));
-                    if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
-                });
-                if (row.length) rows.push(row);
                 const font = size => `${cjk ? 500 : 400} ${size.toFixed(1)}px ${family()}`;
-                ctx.font = font(100);
-                const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
-                const size = clamp(W * 0.56 / widest * 100, H * 0.045, H * 0.085) * s.fontScale;
-                ctx.font = font(size);
-                const lineH = size * 1.3;
-                // 字在河岸上方，留出天空给烟花
-                const top = H * 0.62 - rows.length * lineH / 2 + size * 0.95;
-                let id = 0;
-                rows.forEach((r, ri) => {
-                    const text = r.map(g => g.text).join('');
-                    const trimmed = text.replace(/\s+$/, '');
-                    let x = (W - ctx.measureText(trimmed).width) / 2;
-                    const baseline = top + ri * lineH;
-                    r.forEach((g) => {
-                        const w = ctx.measureText(g.text).width;
-                        if (g.text.trim()) {
-                            id = Math.min(255, id + 1);
-                            ctx.globalCompositeOperation = 'lighten';
-                            ctx.fillStyle = `rgb(0,${id},0)`;
-                            ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
-                            ctx.globalCompositeOperation = 'lighter';
-                            ctx.fillStyle = 'rgb(255,0,0)';
-                            ctx.fillText(g.text, x, baseline);
-                            data[id * 4] = g.start;
-                            data[id * 4 + 1] = g.end;
-                        }
-                        x += w;
+                // 两种排法：河岸上方一两行；或者竖着斜挂在天上，每个词块左边贴一条彩色纸签
+                const vertical = cue.kind === 'line' && cjk && visible <= 16 && random() < 0.5;
+                cue.layout = vertical ? 'tanzaku' : 'row';
+                const items = [];
+                let tilt = 0;
+                if (vertical) {
+                    const size = clamp(H * 0.48 / visible, H * 0.04, H * 0.08) * s.fontScale;
+                    tilt = (0.32 + random() * 0.18) * (random() < 0.7 ? 1 : -1);
+                    const ox = W * (tilt > 0 ? 0.62 + random() * 0.08 : 0.32 + random() * 0.08);
+                    let y = H * 0.1 + size;
+                    let chunk = 0, left = 0;
+                    glyphs.forEach((g) => {
+                        if (!g.text.trim()) { left = 0; y += size * 0.35; return; }
+                        if (left <= 0) { chunk += 1; left = 1 + Math.floor(random() * 3); }
+                        items.push({ g, x: ox - size / 2, baseline: y, size, chunk });
+                        left -= 1;
+                        y += size * 1.04;
                     });
+                } else {
+                    const rows = [];
+                    const perRow = cjk ? 12 : 26;
+                    let row = [];
+                    glyphs.forEach((g, i) => {
+                        row.push(g);
+                        const filled = row.filter(x => x.text.trim()).length;
+                        const target = Math.ceil(visible / Math.ceil(visible / perRow));
+                        if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
+                    });
+                    if (row.length) rows.push(row);
+                    ctx.font = font(100);
+                    const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
+                    const size = clamp(W * 0.56 / widest * 100, H * 0.045, H * 0.085) * s.fontScale;
+                    ctx.font = font(size);
+                    const lineH = size * 1.3;
+                    // 字在河岸上方，留出天空给烟花
+                    const top = H * 0.62 - rows.length * lineH / 2 + size * 0.95;
+                    rows.forEach((r, ri) => {
+                        const trimmed = r.map(g => g.text).join('').replace(/\s+$/, '');
+                        let x = (W - ctx.measureText(trimmed).width) / 2;
+                        r.forEach((g) => {
+                            const w = ctx.measureText(g.text).width;
+                            if (g.text.trim()) items.push({ g, x, baseline: top + ri * lineH, size, chunk: 0 });
+                            x += w;
+                        });
+                    });
+                }
+                // 背景：这句里最长的词放大、淡淡地斜着铺两三遍（被烟花照到才看得清）
+                if (cue.kind === 'line') {
+                    const words = [];
+                    let w = '';
+                    glyphs.forEach((g) => { if (g.text.trim()) w += g.text; else { if (w) words.push(w); w = ''; } });
+                    if (w) words.push(w);
+                    const word = cjk ? Array.from(words.join('')).slice(Math.floor(random() * 3), 3 + Math.floor(random() * 3)).join('')
+                        : words.sort((a, b) => b.length - a.length)[0] || '';
+                    if (word) {
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'lighter';
+                        ctx.fillStyle = 'rgb(46,0,0)';
+                        const big = H * (0.17 + random() * 0.06);
+                        ctx.font = `700 ${big.toFixed(1)}px ${family()}`;
+                        const rot = (random() - 0.5) * 0.5 + 0.18;
+                        for (let k = 0; k < 3; k += 1) {
+                            ctx.save();
+                            ctx.translate(W * (0.08 + k * 0.33 + random() * 0.08), H * (0.14 + random() * 0.6));
+                            ctx.rotate(rot);
+                            ctx.fillText(word, 0, 0);
+                            ctx.restore();
+                        }
+                        ctx.restore();
+                    }
+                }
+                ctx.save();
+                const cos = Math.cos(tilt), sin = Math.sin(tilt);
+                const pivot = items.length ? [items[0].x + items[0].size / 2, (items[0].baseline + items[items.length - 1].baseline) / 2] : [W / 2, H / 2];
+                ctx.translate(pivot[0], pivot[1]); ctx.rotate(tilt); ctx.translate(-pivot[0], -pivot[1]);
+                const toTex = (x, y) => {
+                    const dx = x - pivot[0], dy = y - pivot[1];
+                    return [(pivot[0] + dx * cos - dy * sin) / W, (pivot[1] + dx * sin + dy * cos) / H];
+                };
+                let id = 0;
+                let chunkFirst = 0, lastChunk = -1;
+                items.forEach(({ g, x, baseline, size, chunk }) => {
+                    ctx.font = font(size);
+                    const w = ctx.measureText(g.text).width;
+                    id = Math.min(255, id + 1);
+                    if (vertical && chunk !== lastChunk) { chunkFirst = id; lastChunk = chunk; }
+                    if (vertical) {
+                        // 纸签（B 通道存这一块第一个字的编号，着色器按它开唱的时刻点亮）
+                        ctx.globalCompositeOperation = 'lighten';
+                        ctx.fillStyle = `rgb(0,0,${chunkFirst})`;
+                        ctx.fillRect(Math.floor(x - size * 0.3), Math.floor(baseline - size * 0.9), Math.ceil(size * 0.16), Math.ceil(size * 0.96));
+                    }
+                    ctx.globalCompositeOperation = 'lighten';
+                    ctx.fillStyle = `rgb(0,${id},0)`;
+                    ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = 'rgb(255,0,0)';
+                    ctx.fillText(g.text, x, baseline);
+                    data[id * 4] = g.start;
+                    data[id * 4 + 1] = g.end;
+                    const c = toTex(x + w / 2, baseline - size * 0.35);
+                    placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end });
                 });
+                ctx.restore();
+                // 导火索：沿着字走一条波浪线，按唱到的位置烧过去
+                if (placed.length > 1 && cue.kind === 'line' && (vertical || Math.abs(placed[0].y - placed[placed.length - 1].y) < 0.01)) {
+                    const a = placed[0], b = placed[placed.length - 1];
+                    const off = vertical ? [cos * a.size * 0.55 * H / W, sin * a.size * 0.55] : [0, a.size * 0.62];
+                    const back = vertical ? [-sin * a.size * 0.6 * H / W, cos * a.size * 0.6] : [-a.w * 0.6, 0];
+                    fuse = [a.x + off[0] - back[0], a.y + off[1] - back[1], b.x + off[0] + back[0] * 0.5, b.y + off[1] + back[1] * 0.5];
+                }
             }
             const { gl } = glState;
             const busy = new Set([stats.cue, stats.cue - 1].map(i => `${cuesFor?.key}|${i}|${world.W}x${world.H}|${s.fontScale}`));
@@ -657,6 +794,8 @@ void main() {
             gl.bindTexture(gl.TEXTURE_2D, slot.glyph);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 256, 1, 0, gl.RGBA, gl.FLOAT, data);
             slot.key = key;
+            slot.glyphs = placed;
+            slot.fuse = fuse;
             slot.used = performance.now();
             stats.builds += 1;
             stats.buildMs = Math.round(performance.now() - started);
@@ -710,6 +849,35 @@ void main() {
             const count = activeAt(bursts, t, active);
             stats.active = count;
             const lightCount = pickLights(t, count);
+            // 唱到的字：右上角闪一颗星；导火索按唱到的位置烧
+            let sparks = 0;
+            sparkBuffer.fill(0);
+            let fuseAt = -1;
+            const placed = slot.glyphs || [];
+            if (placed.length) {
+                if (slot.fuse) {
+                    let k = 0;
+                    while (k < placed.length && placed[k].start <= t) k += 1;
+                    if (k === 0) fuseAt = 0;
+                    else if (k >= placed.length) fuseAt = 1;
+                    else {
+                        const a = placed[k - 1], b = placed[k];
+                        fuseAt = (k - 1 + clamp((t - a.start) / Math.max(0.05, b.start - a.start), 0, 1)) / (placed.length - 1);
+                    }
+                }
+                if (!s.reducedMotion) {
+                    for (const g of placed) {
+                        const tau = t - g.start;
+                        if (tau < -0.05 || tau > 0.7 || sparks >= 6) continue;
+                        const sx = (g.x + g.w * 0.45 - 0.5) * zoom + 0.5;
+                        const sy = 1 - ((g.y - g.size * 0.45 - 0.5) * zoom + 0.5);
+                        sparkBuffer.set([sx, sy, g.size * 2.2, Math.sin(clamp((tau + 0.05) / 0.75, 0, 1) * Math.PI) * 0.8], sparks * 4);
+                        sparks += 1;
+                    }
+                }
+            }
+            const energy = clamp(((audio.energy || 0) - 0.55) * 2.2 * s.audioReactivity, 0, 1);
+            bloom += (energy - bloom) * 0.08;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.bindVertexArray(vao);
@@ -738,6 +906,12 @@ void main() {
             gl.uniform1f(u.uWaiting, s.waitingOpacity);
             gl.uniform1f(u.uGrain, s.grain);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
+            gl.uniform4fv(u.uSpark, sparkBuffer);
+            gl.uniform1i(u.uSparkCount, sparks);
+            if (slot.fuse) gl.uniform4fv(u.uFuse, slot.fuse);
+            gl.uniform1f(u.uFuseAt, slot.fuse ? fuseAt : -1);
+            gl.uniform1f(u.uBloom, s.reducedMotion ? 0 : bloom * s.bloom);
+            gl.uniform3fv(u.uTags, colours.tags);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 
             if (count) {

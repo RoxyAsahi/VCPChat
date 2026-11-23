@@ -220,6 +220,7 @@
                 waitingOpacity: 0.25,
                 audioReactivity: 1,
                 grain: 0.3,
+                bloom: 1,
                 showTranslation: true
             },
             clockwork: {
@@ -325,6 +326,7 @@
             negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
             drops: fallback.drops === undefined ? source.drops : bool(source.drops, fallback.drops),
             drips: fallback.drips === undefined ? source.drips : bool(source.drips, fallback.drips),
+            bloom: fallback.bloom === undefined ? source.bloom : clamp(source.bloom, 0, 2, fallback.bloom),
             flare: fallback.flare === undefined ? source.flare : clamp(source.flare, 0, 2, fallback.flare),
             bokeh: fallback.bokeh === undefined ? source.bokeh : clamp(source.bokeh, 0, 2, fallback.bokeh),
             cloud: fallback.cloud === undefined ? source.cloud : clamp(source.cloud, 0, 1, fallback.cloud),
