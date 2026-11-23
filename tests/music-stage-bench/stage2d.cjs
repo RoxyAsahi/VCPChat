@@ -89,6 +89,8 @@ const shots = async (browser, origin, mode, dir, times, config) => {
     await page.evaluate(([m, c]) => { localStorage.clear(); localStorage.setItem('musicStageMode', m); if (c) localStorage.setItem('musicStageConfig', JSON.stringify(c)); }, [mode, config || null]);
     await page.goto(`${origin}/Musicmodules/harness.html?lyrics=${LYR}&duration=215&t=${times[0]}`);
     await page.waitForTimeout(600);
+    // LIGHT=1: the app's light theme.
+    if (process.env.LIGHT) await page.evaluate(() => { __h.app.currentTheme = 'light'; document.body.classList.add('light-theme'); });
     await page.evaluate(() => __h.app.stageHost.enter());
     await page.addStyleTag({ content: '#music-intro-cover{display:none!important}*,*::before,*::after{animation-play-state:paused!important;transition:none!important}' });
     await page.waitForTimeout(3000);

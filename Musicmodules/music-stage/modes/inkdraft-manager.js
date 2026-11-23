@@ -593,7 +593,8 @@
         // 镜头里只极慢地蠕动：推近 3.5%，挪 2%。
         const u = clamp((t - shot.start) / Math.max(0.5, shot.end - shot.start), 0, 1);
         h *= 1 - 0.035 * u;
-        c = [c[0] + shot.drift[0] * h * 0.04 * u, c[1] + shot.drift[1] * h * 0.04 * u];
+        // 顶上是模式栏、底下是播放条：取景中心放在两者之间（比屏幕正中略高）
+        c = [c[0] + shot.drift[0] * h * 0.04 * u, c[1] + shot.drift[1] * h * 0.04 * u + h * 0.035];
         return { c, h, roll: shot.roll, neg: shot.neg, shot: shot.type };
     };
 
@@ -727,8 +728,9 @@ void main() {
     vec2 w = flowed(worldAt(uView));
     vec2 uv = w / uWorld;
     bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-    // 取样偏软一档：边缘的坡更宽，阈值噪点切出来的毛边才明显
-    vec4 m = inside ? texture(uMain, uv, 0.8) : vec4(0.0);
+    vec4 m = inside ? texture(uMain, uv) : vec4(0.0);
+    // 字形取样偏软一档：边缘的坡更宽，阈值噪点切出来的毛边才明显（线稿和注记小字不软，免得糊）
+    m.r = inside ? texture(uMain, uv, 0.8).r : 0.0;
     float halo = inside ? textureLod(uMain, uv, 4.0).r : 0.0;
     vec4 idv = inside ? texelFetch(uIds, min(ivec2(uv * uIdSize), ivec2(uIdSize) - 1), 0) : vec4(0.0);
     int gid = int(idv.r * 255.0 + 0.5);
