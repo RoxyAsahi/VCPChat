@@ -213,3 +213,35 @@ body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel, bo
 #music-archive-view .ag-play:hover::before { border-left-color: var(--ar-paper); }
 .ag-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ar-muted); font-size: 15px; }
 body.music-reduce-motion .ag-art, body.music-reduce-motion .ag-play { transition: none; }
+
+/* ---------- 平放（archive-wall.js tilt）：封面平躺在桌面上，低机位往远处看，远处没进纸色的雾里 ---------- */
+.archive-wall.aw-table {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%), linear-gradient(180deg, transparent 0, rgba(0, 0, 0, .25) 10%, #000 42%, #000 93%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%), linear-gradient(180deg, transparent 0, rgba(0, 0, 0, .25) 10%, #000 42%, #000 93%, transparent 100%);
+    perspective: 1500px;
+    perspective-origin: 50% 8%;
+}
+.aw-table .aw-world { transform-origin: 0 0; transform-style: preserve-3d; }
+.aw-table .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+.aw-table .aw-tile:hover .aw-in { transform: translateZ(10px); box-shadow: 0 0 0 1px var(--ar-ink), 0 0 0 4px rgba(var(--ar-paper-rgb), .5); }
+.aw-table .aw-tile.is-focus .aw-in { box-shadow: 0 0 0 3px var(--ar-accent); }
+/* 选中展开的那张：从后边缘为轴立起来，正对镜头，桌面上留一块影子 */
+.aw-table .aw-tile.is-open { transform-style: preserve-3d; z-index: 5; }
+.aw-table .aw-tile.is-open::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, .34), rgba(0, 0, 0, 0));
+    transform: translateY(14%) scale(1.05, .7);
+    pointer-events: none;
+}
+.aw-table .aw-tile.is-open .aw-in {
+    transform-origin: 50% 100%;
+    transform: rotateX(-56deg) scale(.86);
+    transition: transform .55s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1));
+    box-shadow: 0 0 0 1px var(--ar-ink), 0 30px 60px rgba(0, 0, 0, .28);
+    animation: aw-stand .6s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)) both;
+}
+@keyframes aw-stand { from { transform: rotateX(0deg) scale(1); } to { transform: rotateX(-56deg) scale(.86); } }
+body.music-reduce-motion .aw-table .aw-tile.is-open .aw-in { animation: none; }

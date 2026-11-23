@@ -14,7 +14,7 @@
     const SceneLib = global.MusicArchiveScene;
     const VIEW_KEY = 'musicArchiveView';
     const LAYOUT_KEY = 'musicArchiveLayout';   // 档案页里用哪种视图：array（3D 档案阵列）/ wall（封面墙）/ grid（分节网格）
-    const LAYOUTS = ['array', 'wall', 'grid'];
+    const LAYOUTS = ['array', 'wall', 'table', 'grid'];
     const DESIGN_W = 1920, DESIGN_H = 1080;
     // 窗口再矮，界面也不缩到这个比例以下（小字 11px 缩完还有 10px 左右）；矮窗口改成少显示，不是缩小
     const MIN_SCALE = 0.9;
@@ -37,7 +37,7 @@
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
-                <span class="archive-layouts" role="group" aria-label="视图" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><button type="button" data-act="layout" data-layout="array" title="3D 档案阵列" aria-pressed="true">阵列</button><button type="button" data-act="layout" data-layout="wall" title="平铺的封面墙，可以四处拖" aria-pressed="false">封面墙</button><button type="button" data-act="layout" data-layout="grid" title="按首字母分节的封面网格" aria-pressed="false">网格</button></span>
+                <span class="archive-layouts" role="group" aria-label="视图" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><button type="button" data-act="layout" data-layout="array" title="3D 档案阵列" aria-pressed="true">阵列</button><button type="button" data-act="layout" data-layout="wall" title="平铺的封面墙，可以四处拖" aria-pressed="false">封面墙</button><button type="button" data-act="layout" data-layout="table" title="封面平放在桌面上，低机位往远处看" aria-pressed="false">平放</button><button type="button" data-act="layout" data-layout="grid" title="按首字母分节的封面网格" aria-pressed="false">网格</button></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
@@ -786,7 +786,8 @@
         let lyrics = null;
         let wall = null;            // 封面墙（archive-wall.js），没有那个文件时只有档案阵列
         let grid = null;            // 分节网格（archive-grid.js）
-        const flat = () => (state.layout === 'wall' ? wall : state.layout === 'grid' ? grid : null);
+        let table = null;           // 平放（封面墙倒下去的那一版）
+        const flat = () => (state.layout === 'wall' ? wall : state.layout === 'table' ? table : state.layout === 'grid' ? grid : null);
         const wantLyrics = (on) => {
             on = Boolean(on);
             if (on === Boolean(state.lyricsOn)) return;
@@ -1006,6 +1007,7 @@
                 syncWallRoom();
             } else {
                 wall?.show(false);
+                table?.show(false);
                 grid?.show(false);
                 if (!app.isStageActive) originalCreateAmbient?.();
                 app.visualizerCanvas && (app.visualizerCanvas.width = app.visualizerCanvas.clientWidth);
@@ -1742,6 +1744,18 @@
             const whole = col.kind === 'letter' || col.kind === 'all';
             return whole ? { key: 'library:' + sortMode + ':' + state.sig, ids: libraryOrder(), name: '全部曲目' } : { key: col.id + ':' + state.sig, ids: col.items, name: col.name };
         };
+        /*
+         * 墙和网格上点的那首落在哪一列：墙上放的是整个曲库时，落到它所在的首字母列；
+         * 不指定的话会落到最前面含有它的列（每日推荐、最近播放），墙就跟着换成那一组了
+         */
+        const flatContext = (i) => {
+            const col = column();
+            if (!col) return null;
+            if (col.items.includes(i)) return col.id;
+            if (col.kind !== 'letter' && col.kind !== 'all') return null;
+            const home = state.columns.find((c) => (c.kind === 'letter' || c.kind === 'all') && c.items.includes(i));
+            return home ? home.id : null;
+        };
         const wallOpts = {
             host: root,
             before: refs.hud,
@@ -1758,14 +1772,10 @@
                 duration: fmtDur(trackDuration(t))
             }),
             pick: (i) => {
-                const col = column();
-                goToTrack(i, col && col.items.includes(i) ? col.id : null, { pulse: false });
+                goToTrack(i, flatContext(i), { pulse: false });
                 syncList();
             },
-            play: (i, { stage = false } = {}) => {
-                const col = column();
-                playIndex(i, col && col.items.includes(i) ? col.id : null, { stage });
-            },
+            play: (i, { stage = false } = {}) => playIndex(i, flatContext(i), { stage }),
             menu: (i, x, y, restore) => {
                 if (typeof app.showContextMenu !== 'function') return;
                 app.contextMenuTrackIndex = i;
@@ -1775,6 +1785,8 @@
             reducedMotion
         };
         wall = WallLib ? WallLib.create(wallOpts) : null;
+        table = WallLib ? WallLib.create({ ...wallOpts, tilt: true }) : null;
+        if (table) table.el.addEventListener('wheel', (e) => e.stopPropagation());
         if (wall) wall.el.addEventListener('wheel', (e) => e.stopPropagation());
         /* 网格按节排：整个曲库时一节一个首字母列，其他列就是一节 */
         const gridSections = () => {
@@ -1814,15 +1826,17 @@
             fl.setRoom({ left, top, width: right - left, height: bottom - top });
         }
         const setLayout = (layout, { persist = true } = {}) => {
-            if (!LAYOUTS.includes(layout) || (layout === 'wall' && !wall) || (layout === 'grid' && !grid)) layout = 'array';
+            if (!LAYOUTS.includes(layout) || (layout === 'wall' && !wall) || (layout === 'table' && !table) || (layout === 'grid' && !grid)) layout = 'array';
             state.layout = layout;
             const flatOn = layout !== 'array';
             root.classList.toggle('layout-wall', layout === 'wall');
+            root.classList.toggle('layout-table', layout === 'table');
             root.classList.toggle('layout-grid', layout === 'grid');
             root.classList.toggle('layout-flat', flatOn);
             refs.layouts.querySelectorAll('[data-layout]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.layout === layout ? 'true' : 'false'));
             if (persist) { try { localStorage.setItem(LAYOUT_KEY, state.layout); } catch (e) { /* 只是记住 */ } }
             wall?.show(layout === 'wall' && isShown());
+            table?.show(layout === 'table' && isShown());
             grid?.show(layout === 'grid' && isShown());
             if (flatOn) { syncWallRoom(); flat()?.sync(); } else { state.lastDraw = 0; kick(); }
         };

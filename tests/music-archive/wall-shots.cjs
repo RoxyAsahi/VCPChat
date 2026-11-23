@@ -159,6 +159,26 @@ const FAKE = ({ n, light, covers }) => {
   const calls2 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'musicLoad').length);
   check('网格双击播放', calls2 > calls, calls + ' → ' + calls2);
 
+  // 平放
+  await page.click('.archive-nav [data-layout="table"]');
+  await page.waitForTimeout(3000);
+  d = await dbg();
+  const tdbg = await page.evaluate(() => ({ on: !document.querySelector('.archive-wall.aw-table').hidden, tiles: document.querySelectorAll('.aw-table .aw-tile').length }));
+  check('平放开着', d.layout === 'table' && tdbg.on && tdbg.tiles > 20 && d.allowed === false, JSON.stringify(tdbg));
+  await shot(tag + '-9-table');
+  const tb = await page.evaluate(() => {
+    const el = document.querySelector('.aw-table');
+    const r = el.getBoundingClientRect();
+    const t = [...el.querySelectorAll('.aw-tile')].map((x) => x.getBoundingClientRect()).find((b) => b.left > r.left + r.width * 0.35 && b.right < r.right - r.width * 0.35 && b.top > r.top + r.height * 0.5 && b.bottom < r.bottom - 30);
+    return t ? { x: t.left + t.width / 2, y: t.top + t.height / 2 } : null;
+  });
+  if (tb) await page.mouse.click(tb.x, tb.y);
+  await page.waitForTimeout(2200);
+  const opened = await page.evaluate(() => Boolean(document.querySelector('.aw-table .aw-tile.is-open')));
+  check('平放点了立起来', opened, JSON.stringify(tb));
+  await shot(tag + '-10-table-open');
+  await page.keyboard.press('Escape');
+
   // 切回阵列
   await page.click('.archive-nav [data-layout="array"]');
   await page.waitForTimeout(2500);

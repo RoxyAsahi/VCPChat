@@ -15,6 +15,8 @@
     const BW = 12, BH = 8, SLOTS = 12;
     const HERO = 6;                // 展开后的大卡是 6×6 格
     const MAX_TILES = 420;
+    const TILT = 56;               // 「平放」：桌面往后倒的角度
+    const TILT_EYE = 0.62;         // 视野中心落在屏幕高度的哪里（偏下，前景大、远处多看一些）
     const MIN_SIDE = 2;
 
     // ---------- 块的切法 ----------
@@ -302,11 +304,13 @@
      */
     const create = (opts) => {
         const el = document.createElement('div');
-        el.className = 'archive-wall';
+        const tilt = Boolean(opts.tilt);
+        el.className = 'archive-wall' + (tilt ? ' aw-table' : '');
         el.setAttribute('role', 'grid');
         el.setAttribute('aria-label', '封面墙');
         el.hidden = true;
         el.innerHTML = '<div class="aw-world"></div><div class="aw-empty" hidden></div>';
+        if (tilt) el.setAttribute('aria-label', '平放');
         const world = el.firstChild;
         const emptyEl = el.lastChild;
         opts.host.insertBefore(el, opts.before || null);
@@ -331,7 +335,8 @@
         const thumbs = createThumbs(() => { st.coverDirty = true; schedule(); });
 
         // ---------- 尺寸 ----------
-        const pitchFor = (h) => Math.max(38, Math.min(104, Math.round(h * 0.8 / BH)));
+        const pitchFor = (h) => (tilt ? Math.max(40, Math.min(96, Math.round(h * 0.72 / BH))) : Math.max(38, Math.min(104, Math.round(h * 0.8 / BH))));
+        const maxTiles = tilt ? 640 : MAX_TILES;
         const setRoom = (room) => {
             const r = { left: Math.round(room.left), top: Math.round(room.top), width: Math.max(0, Math.round(room.width)), height: Math.max(0, Math.round(room.height)) };
             const same = ['left', 'top', 'width', 'height'].every((k) => r[k] === st.room[k]);
@@ -581,7 +586,13 @@
             }
             const g = st.g;
             const over = g.pitch * 3;
-            const vx0 = st.cam.x - over, vy0 = st.cam.y - over, vx1 = st.cam.x + st.room.width + over, vy1 = st.cam.y + st.room.height + over;
+            let vx0 = st.cam.x - over, vy0 = st.cam.y - over, vx1 = st.cam.x + st.room.width + over, vy1 = st.cam.y + st.room.height + over;
+            if (tilt) {
+                // 倒下去的桌面：远处（上方）看得很远、也更宽，近处（下方）出画快
+                const W = st.room.width, H = st.room.height;
+                vx0 = st.cam.x - W * 0.9; vx1 = st.cam.x + W * 1.9;
+                vy0 = st.cam.y - H * 1.9; vy1 = st.cam.y + H * 1.05;
+            }
             const c0 = Math.floor(vx0 / g.blockW), c1 = Math.floor(vx1 / g.blockW);
             const r0 = Math.floor(vy0 / g.blockH), r1 = Math.floor(vy1 / g.blockH);
             const keep = new Set();
@@ -593,8 +604,8 @@
             const play = opts.playing();
             const playPos = play.index >= 0 ? st.ids.indexOf(play.index) : -1;
             let count = 0;
-            for (let br = r0; br <= r1 && count < MAX_TILES; br++) {
-                for (let bc = c0; bc <= c1 && count < MAX_TILES; bc++) {
+            for (let br = r0; br <= r1 && count < maxTiles; br++) {
+                for (let bc = c0; bc <= c1 && count < maxTiles; bc++) {
                     for (let s = 0; s < SLOTS; s++) {
                         const inst = instanceAt(g, bc, br, s, st.gap);
                         const r = st.expandedRects.get(inst.id) || inst;
@@ -616,7 +627,7 @@
                                 node.el.classList.add('aw-entering');
                             } else node.el.classList.remove('aw-entering');
                         }
-                        if (r.x !== node.x || r.y !== node.y) { node.el.style.transform = `translate3d(${r.x}px,${r.y}px,0)`; node.x = r.x; node.y = r.y; }
+                        if (r.x !== node.x || r.y !== node.y) { node.el.style.transform = `translate(${r.x}px,${r.y}px)`; node.x = r.x; node.y = r.y; }
                         if (r.w !== node.w || r.h !== node.h) { node.el.style.width = r.w + 'px'; node.el.style.height = r.h + 'px'; node.w = r.w; node.h = r.h; }
                         fillContent(node, inst.item, Math.max(r.w, r.h) * dpr);
                         const size = r.cols >= 4 ? 'aw-l' : r.cols >= 3 ? 'aw-m' : 'aw-s';
@@ -642,7 +653,11 @@
         };
 
         const applyCamera = () => {
-            world.style.transform = `translate3d(${-Math.round(st.cam.x * 2) / 2}px,${-Math.round(st.cam.y * 2) / 2}px,0)`;
+            if (tilt) {
+                // 视野中心（cam + 半个视口）放到屏幕 (50%, TILT_EYE) 处，整块桌面绕那里往后倒
+                const cx = st.cam.x + st.room.width / 2, cy = st.cam.y + st.room.height / 2;
+                world.style.transform = `translate3d(${st.room.width / 2}px,${Math.round(st.room.height * TILT_EYE)}px,0) rotateX(${TILT}deg) translate3d(${-Math.round(cx * 2) / 2}px,${-Math.round(cy * 2) / 2}px,0)`;
+            } else world.style.transform = `translate3d(${-Math.round(st.cam.x * 2) / 2}px,${-Math.round(st.cam.y * 2) / 2}px,0)`;
             const g = st.g;
             if (!st.laidAt || !g || Math.abs(st.cam.x - st.laidAt.x) > g.pitch * 1.5 || Math.abs(st.cam.y - st.laidAt.y) > g.pitch * 1.5) st.dirty = true;
         };
@@ -686,6 +701,8 @@
             const [bc, br, slot] = t.dataset.id.split(':').map(Number);
             return instanceAt(st.g, bc, br, slot, st.gap);
         };
+        // 平放时屏幕上挪一像素，桌面上要走得更远（纵向按倒下的角度放大）
+        const panK = tilt ? { x: 1.15, y: 1 / Math.cos(TILT * Math.PI / 180) } : { x: 1, y: 1 };
         let lastClick = { id: '', t: 0 };
         el.addEventListener('pointerdown', (e) => {
             if (e.button !== 0 || e.target.closest('button')) return;
@@ -698,8 +715,8 @@
             if (!d || d.id !== e.pointerId) return;
             if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 5) return;
             if (!d.moved) { d.moved = true; el.setPointerCapture?.(e.pointerId); el.classList.add('is-grabbing'); }
-            st.cam.x -= e.clientX - d.x;
-            st.cam.y -= e.clientY - d.y;
+            st.cam.x -= (e.clientX - d.x) * panK.x;
+            st.cam.y -= (e.clientY - d.y) * panK.y;
             d.x = e.clientX; d.y = e.clientY;
             const now = performance.now();
             d.samples.push([now, e.clientX, e.clientY]);
@@ -720,7 +737,7 @@
                 const vx = (b[1] - a[1]) / span, vy = (b[2] - a[2]) / span;
                 const sp = Math.hypot(vx, vy);
                 const lim = sp > 4000 ? 4000 / sp : 1;
-                if (sp > 40) { st.vel.x = vx * lim; st.vel.y = vy * lim; }
+                if (sp > 40) { st.vel.x = vx * lim * panK.x; st.vel.y = vy * lim * panK.y; }
             }
             d.wasDrag = true;
             st.justDragged = now;
@@ -766,6 +783,7 @@
             let dx = e.deltaX, dy = e.deltaY;
             if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= st.room.width; dy *= st.room.height; }
             if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+            dx *= panK.x; dy *= panK.y;
             // 鼠标滚轮一格（单轴、步子大）平滑走过去；触控板的小增量直接跟手
             const same = e.timeStamp - wheelGesture.t < 120;
             wheelGesture.t = e.timeStamp;
