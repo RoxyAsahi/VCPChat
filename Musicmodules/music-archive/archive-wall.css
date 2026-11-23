@@ -40,7 +40,7 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 10%, transparent);
     transition: transform .2s var(--mt-ease, ease), box-shadow .2s var(--mt-ease, ease);
 }
-.aw-tile:hover .aw-in { transform: scale(1.025); box-shadow: 0 0 0 1px var(--ar-ink), 0 10px 26px rgba(0, 0, 0, .16); z-index: 1; }
+.aw-tile:hover .aw-in { transform: scale(var(--hx, 1.025), var(--hy, 1.025)); box-shadow: 0 0 0 1px var(--ar-ink), 0 10px 26px rgba(0, 0, 0, .16); z-index: 1; }
 .aw-tile:hover, .aw-tile.is-focus, .aw-tile.is-open { z-index: 2; }
 .aw-tile.is-focus .aw-in { box-shadow: 0 0 0 2px var(--ar-accent), 0 10px 26px rgba(0, 0, 0, .14); }
 .aw-tile.is-open .aw-in { transform: none; box-shadow: 0 0 0 1px var(--ar-ink), 0 18px 44px rgba(0, 0, 0, .22); }
@@ -245,3 +245,29 @@ body.music-reduce-motion .ag-art, body.music-reduce-motion .ag-play { transition
 }
 @keyframes aw-stand { from { transform: rotateX(0deg) scale(1); } to { transform: rotateX(-56deg) scale(.86); } }
 body.music-reduce-motion .aw-table .aw-tile.is-open .aw-in { animation: none; }
+
+/* ---------- 换视图的扫描过场（archive-view.js layoutSweep） ---------- */
+.archive-layout-sweep { position: absolute; inset: 0; z-index: 4; overflow: hidden; pointer-events: none; }
+.archive-layout-sweep > i {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    background: var(--ar-paper);
+    border-left: 2px solid var(--ar-accent);
+    will-change: transform;
+}
+/* 扫描头身后（已经露出来的那边）拖一段每 4px 一根的细线，越远越淡 */
+.archive-layout-sweep > i::before {
+    content: "";
+    position: absolute;
+    right: 100%;
+    top: 0;
+    bottom: 0;
+    width: 90px;
+    margin-right: 2px;
+    background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ar-ink) 28%, transparent) 0 1px, transparent 1px 4px);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000);
+    mask-image: linear-gradient(90deg, transparent, #000);
+}

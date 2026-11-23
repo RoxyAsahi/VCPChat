@@ -628,7 +628,10 @@
                             } else node.el.classList.remove('aw-entering');
                         }
                         if (r.x !== node.x || r.y !== node.y) { node.el.style.transform = `translate(${r.x}px,${r.y}px)`; node.x = r.x; node.y = r.y; }
-                        if (r.w !== node.w || r.h !== node.h) { node.el.style.width = r.w + 'px'; node.el.style.height = r.h + 'px'; node.w = r.w; node.h = r.h; }
+                        if (r.w !== node.w || r.h !== node.h) { node.el.style.width = r.w + 'px'; node.el.style.height = r.h + 'px'; node.w = r.w; node.h = r.h;
+                            // 悬停放大：每条边往外长同样的距离（缝宽的六成），大小卡看起来抬得一样多
+                            node.el.style.setProperty('--hx', (1 + 1.2 * st.gap / r.w).toFixed(4));
+                            node.el.style.setProperty('--hy', (1 + 1.2 * st.gap / r.h).toFixed(4)); }
                         fillContent(node, inst.item, Math.max(r.w, r.h) * dpr);
                         const size = r.cols >= 4 ? 'aw-l' : r.cols >= 3 ? 'aw-m' : 'aw-s';
                         const cls = size + (inst.id === sel ? ' is-focus' : '') + (inst.id === exp ? ' is-open' : '') + (inst.item === playPos ? (play.active ? ' is-playing' : ' is-current') : '');

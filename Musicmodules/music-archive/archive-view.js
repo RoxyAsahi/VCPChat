@@ -2007,7 +2007,28 @@
             const bottom = lr && stacked ? Math.min(bottomEdge, lr.top - box.top - 10) : bottomEdge;
             fl.setRoom({ left, top, width: right - left, height: bottom - top });
         }
+        /*
+         * 换视图的过场：一块纸色面板盖住画面，从左往右滑开，左缘一道 2px 的扫描头、身后拖一段细扫描线，
+         * 新视图从左到右露出来（和浅深色切换的扫描带同一路）。降低动态、窗口在后台时直接换。
+         */
+        let layoutSweepEl = null;
+        const layoutSweep = () => {
+            if (reducedMotion() || document.hidden || !isShown()) return;
+            layoutSweepEl?.remove();
+            const el = document.createElement('div');
+            el.className = 'archive-layout-sweep';
+            el.setAttribute('aria-hidden', 'true');
+            el.innerHTML = '<i></i>';
+            root.insertBefore(el, refs.hud);
+            layoutSweepEl = el;
+            const w = root.clientWidth || global.innerWidth || 1600;
+            const anim = el.firstChild.animate?.([{ transform: 'translateX(0)' }, { transform: `translateX(${w + 90}px)` }],
+                { duration: Math.round(Math.min(720, 380 + w * 0.16)), easing: 'cubic-bezier(.5, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (layoutSweepEl === el) layoutSweepEl = null; el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else done();
+        };
         const setLayout = (layout, { persist = true } = {}) => {
+            const before = state.layout;
             if (!LAYOUTS.includes(layout) || (layout === 'wall' && !wall) || (layout === 'table' && !table) || (layout === 'grid' && !grid)) layout = 'array';
             state.layout = layout;
             const flatOn = layout !== 'array';
@@ -2021,6 +2042,7 @@
             table?.show(layout === 'table' && isShown());
             grid?.show(layout === 'grid' && isShown());
             if (flatOn) { syncWallRoom(); flat()?.sync(); } else { state.lastDraw = 0; kick(); }
+            if (persist && before !== layout) layoutSweep();
         };
         try { const l = localStorage.getItem(LAYOUT_KEY); state.layout = LAYOUTS.includes(l) ? l : 'array'; } catch (e) { /* 默认档案阵列 */ }
 
