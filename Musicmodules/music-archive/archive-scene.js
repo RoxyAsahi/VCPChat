@@ -217,6 +217,17 @@ void main() {
         vec3 browse = mix(uCenter[1], uCenter[7], dark);
         vec3 part = notch ? radiance(mix(vec3(0.78, 0.73, 0.66), vec3(0.62, 0.52, 0.36), dark))
                           : radiance(mix(vec3(0.70, 0.67, 0.63), vec3(0.58, 0.61, 0.62), dark));
+        // 孔和缺口底下是空心盒子（参考 Ivory_Edges 只是一圈外框）：靠面板边的那一侧落进阴影，
+        // 浏览时看着是一个有深度的凹孔（左侧一道暗月牙），不是平贴的白点
+        float pit;
+        if (notch) {
+            pit = max(smoothstep(0.06, 0.0, vLocal.x + 2.284), smoothstep(0.05, 0.0, vLocal.y - 3.476) * 0.7);
+        } else {
+            vec2 hc = vLocal.x > 0.0 ? vec2(2.389, 3.526) : vec2(-2.335, 0.14);
+            vec2 d = (vLocal.xy - hc) / 0.082;
+            pit = smoothstep(0.35, 0.95, length(d)) * smoothstep(0.15, -0.65, d.x + 0.35 * d.y);
+        }
+        browse *= 1.0 - mix(0.5, 0.35, dark) * pit;
         baked.rgb = mix(browse, part, q);
         // 端详：螺钉换成钛灰（象牙白卡面上暗色螺钉像个黑洞），索引片保留
         if (!notch) baked.rgb = mix(baked.rgb, radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
