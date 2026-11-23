@@ -105,19 +105,15 @@
         let fitRaf = 0;
         const fitLines = () => {
             fitRaf = 0;
-            const rows = [...r.track.children];
-            const need = rows.map((p) => {
-                const b = p.firstElementChild;
-                if (!b) return 1;
+            // 原文和译文各算各的（译文行 <em> 同样先缩字再省略）
+            const nodes = [...r.track.querySelectorAll('p > b, p > em')];
+            const need = nodes.map((b) => {
                 const prev = b.style.getPropertyValue('--fit');
                 if (prev) b.style.removeProperty('--fit');
                 const avail = b.clientWidth, full = b.scrollWidth;
                 return avail > 0 && full > avail ? Math.max(FIT_MIN, Math.floor(avail / (full * 1.05) * 100) / 100) : 1;
             });
-            rows.forEach((p, k) => {
-                const b = p.firstElementChild;
-                if (b && need[k] < 1) b.style.setProperty('--fit', String(need[k]));
-            });
+            nodes.forEach((b, k) => { if (need[k] < 1) b.style.setProperty('--fit', String(need[k])); });
         };
         const fitSoon = () => { if (!fitRaf) fitRaf = requestAnimationFrame(fitLines); };
 
@@ -127,7 +123,9 @@
             state.indexN = n;
             state.indexAt = -2;
             r.index.hidden = n < 4;
-            r.index.innerHTML = n < 4 ? '' : Array.from({ length: n }, (_, k) => `<i data-q="${k}"></i>`).join('');
+            // 悬停一格显示那一段第一句，先看再点
+            const first = (q) => textOf(state.lines[Math.min(state.lines.length - 1, Math.ceil(q * state.lines.length / n))]);
+            r.index.innerHTML = n < 4 ? '' : Array.from({ length: n }, (_, k) => `<i data-q="${k}" title="${esc(first(k))}"></i>`).join('');
         };
         const paintIndex = (k) => {
             const n = state.indexN || 0;
