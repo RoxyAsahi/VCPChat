@@ -1,0 +1,156 @@
+/* Musicmodules/music-stats-view.css — 听歌统计对话框（music-stats-view.js） */
+.dialog-overlay.music-stats-dialog .dialog.glass-panel.mstats {
+    width: min(720px, calc(100vw - 48px));
+    max-height: calc(100vh - 96px);
+    overflow: auto;
+    padding: 20px 24px 22px;
+    --ms-ink: var(--mf-ink, var(--ms-ink));
+    --ms-ink2: var(--mf-ink2, var(--ms-ink2));
+    --ms-hover: var(--mf-hover, var(--ms-hover));
+    text-align: left;
+    box-sizing: border-box;
+}
+.mstats-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.dialog-overlay .mstats .mstats-head h3 { margin: 0; flex: 1; white-space: nowrap; }
+.mstats-range {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 9999px;
+    background: var(--ms-hover);
+}
+.mstats-range button {
+    height: 26px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 9999px;
+    white-space: nowrap;
+    background: transparent;
+    color: var(--ms-ink2);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease;
+}
+.mstats-range button:hover { color: var(--ms-ink); }
+.mstats-range button.active {
+    background: var(--ms-ink);
+    color: var(--mf-fill, #1c1b19);
+}
+.mstats-close {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--ms-ink2);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+.mstats-close:hover { background: var(--ms-hover); color: var(--ms-ink); }
+
+.mstats-totals {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.mstats-total {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: var(--ms-hover);
+}
+.mstats-total strong {
+    color: var(--ms-ink);
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.mstats-total span { color: var(--ms-ink2); font-size: 12px; }
+
+.mstats h4 {
+    margin: 0 0 10px;
+    color: var(--ms-ink2);
+    font-size: 12px;
+    font-weight: 500;
+}
+.mstats-hours { margin-bottom: 20px; }
+.mstats-bars {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    align-items: end;
+    gap: 3px;
+    height: 64px;
+}
+.mstats-bars i {
+    display: block;
+    height: var(--h, 2%);
+    border-radius: 2px 2px 0 0;
+    background: var(--ms-ink2);
+    opacity: .35;
+}
+.mstats-bars i.peak { background: var(--ms-ink); opacity: .9; }
+.mstats-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    color: var(--ms-ink2);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.mstats-tops {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+.mstats-top ol { margin: 0; padding: 0; list-style: none; counter-reset: mstats; }
+.mstats-top li { counter-increment: mstats; }
+.mstats-row {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    grid-template-areas: "n name count" "n sub count";
+    align-items: center;
+    column-gap: 8px;
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ms-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.mstats-row::before {
+    content: counter(mstats);
+    grid-area: n;
+    color: var(--ms-ink2);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.mstats-row:hover { background: var(--ms-hover); }
+.mstats-name { grid-area: name; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mstats-sub { grid-area: sub; color: var(--ms-ink2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mstats-count { grid-area: count; color: var(--ms-ink2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mstats-none, .mstats-empty, .mstats-note { margin: 0; color: var(--ms-ink2); font-size: 12px; }
+.mstats-empty { font-size: 14px; color: var(--ms-ink); margin: 18px 0 6px; }
+.mstats-note { margin-top: 16px; }
+
+@media (max-width: 640px) {
+    .mstats-tops, .mstats-totals { grid-template-columns: 1fr; }
+    .mstats-head { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mstats-range button { transition: none; }
+}

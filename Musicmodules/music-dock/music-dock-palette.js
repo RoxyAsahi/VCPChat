@@ -146,6 +146,7 @@
                 { id: 'mute', group: '音量', icon: v > 0.001 ? 'volume-x' : 'volume-2', title: v > 0.001 ? '静音' : '取消静音', words: 'mute 静音 jingyin', run: () => (toggleMute ? toggleMute() : setVolume(v > 0.001 ? 0 : 0.7)) },
                 ...(app.startRadio && app.playlist?.[app.currentTrackIndex] ? [{ id: 'radio', group: '播放', icon: 'radio', title: '从当前这首开电台', desc: '接着放曲库里相似的歌', words: 'radio station 电台 相似 diantai', run: () => app.startRadio(app.currentTrackIndex) }] : []),
                 ...(app.autoplay ? [{ id: 'autoplay', group: '播放', icon: 'infinity', title: app.autoplay.enabled ? '关闭自动续播' : '打开自动续播', desc: '一组放完接着放相似的歌', words: 'autoplay continue 续播 自动 xubo', run: () => { app.autoplay.enabled = !app.autoplay.enabled; } }] : []),
+                ...(global.MusicStatsView && app.musicStats?.summary ? [{ id: 'stats', group: '播放', icon: 'clock', title: '听歌统计', desc: '听了多久、几点听得最多、最常听的歌和歌手', words: 'stats statistics history 统计 听歌记录 时长 排行 tongji', run: () => global.MusicStatsView.open(app) }] : []),
                 ...(app.desktopLyrics?.available ? [{ id: 'desktop-lyrics', group: '歌词', icon: 'picture-in-picture-2', title: app.desktopLyrics.on ? '关闭桌面歌词' : '打开桌面歌词', desc: '切到别的程序也能看到唱到哪一句', words: 'desktop lyrics floating 桌面歌词 悬浮 zhuomian geci', run: () => app.desktopLyrics.toggle() }] : []),
                 { id: 'stage', group: '舞台', icon: 'captions', title: inStage ? '离开歌词舞台' : '进入歌词舞台', words: 'stage lyrics 舞台 歌词 wutai geci', run: toggleStage },
                 panelCmd('封面', 'image', 'cover 封面 fengmian'),
