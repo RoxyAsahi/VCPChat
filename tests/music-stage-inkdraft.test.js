@@ -1,0 +1,55 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+
+global.window = global;
+window.matchMedia = () => ({ matches: false });
+const stage = path.resolve(__dirname, '..', 'Musicmodules', 'music-stage');
+require(path.join(stage, 'music-stage-runtime.js'));
+require(path.join(stage, 'modes', 'stage-mode-utils.js'));
+require(path.join(stage, 'modes', 'inkdraft-figures.js'));
+require(path.join(stage, 'modes', 'inkdraft-manager.js'));
+const { buildCues, findCue, glyphUnits, viewAt, blobsAt } = window.MusicStageInkdraftManager._test;
+const lines = window.MusicStageRuntime.normalizeLines([
+    { time: 10, original: '清晨的站台还没有人' },
+    { time: 14, original: 'I will follow the light' },
+    { time: 18, original: '……' },
+    { time: 40, original: '长间奏之后' }
+]);
+
+test('cues tile the song without gaps: lines, interludes, a long break split up', () => {
+    const cues = buildCues(lines, 120);
+    assert.equal(cues[0].start, 0);
+    assert.equal(cues[0].kind, 'rest');
+    assert.ok(cues[0].title, 'the first interlude carries the title');
+    for (let i = 1; i < cues.length; i += 1) assert.ok(Math.abs(cues[i].start - cues[i - 1].end) < 1e-9, `gap before cue ${i}`);
+    assert.ok(!cues.some(c => c.kind === 'line' && c.line.fullText === '……'), 'punctuation-only lines are interlude');
+    assert.ok(cues.at(-1).end >= 120);
+    assert.equal(cues[findCue(cues, 15)].line.fullText, 'I will follow the light');
+    assert.equal(findCue(cues, 0), 0);
+});
+
+test('no lyrics: the whole song is interlude parts of about twenty seconds', () => {
+    const cues = buildCues([], 200);
+    assert.ok(cues.length >= 9 && cues.every(c => c.kind === 'rest'));
+    assert.ok(cues.at(-1).end >= 720);
+});
+
+test('words become units; spaces separate latin words', () => {
+    const cue = buildCues(lines, 120).find(c => c.kind === 'line' && c.line.fullText.startsWith('I will'));
+    const units = glyphUnits(cue, '');
+    assert.deepEqual(units.map(u => u.glyphs.map(g => g.text).join('')), ['I', 'will', 'follow', 'the', 'light']);
+    assert.ok(units.every(u => u.end >= u.start));
+});
+
+test('the camera and the ink are pure functions of time', () => {
+    const plan = { shots: [{ start: 0, end: 4, type: 'wide', drift: [0.2, -0.1], roll: 0, neg: false }], closeH: 300, close: [], macro: [], wideH: 900, wideC: [1000, 600], W: 2048, H: 1152 };
+    assert.deepEqual(viewAt(plan, 1.5), viewAt(plan, 1.5));
+    const cue = { cue: { start: 0 }, mass: null, accents: [], collisions: [{ t: 2, x: 500, y: 500, angle: 0.3, dist: 120, r: 20, spin: 1.7, fragments: 7 }] };
+    const out = new Float32Array(96), rings = new Float32Array(8), acc = new Float32Array(12);
+    const before = blobsAt(cue, 1, out, rings, acc, 0);
+    assert.equal(before.blobs, 2, 'two balls approach');
+    const after = blobsAt(cue, 2.4, out, rings, acc, 0);
+    assert.ok(after.blobs > 7 && rings[3] > 0, 'fragments and a shock ring after the hit');
+    assert.equal(blobsAt(cue, 6, out, rings, acc, 0).blobs, 0, 'gone afterwards');
+});

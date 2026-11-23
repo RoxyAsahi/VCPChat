@@ -59,6 +59,8 @@ process.stdin.on('end', () => {
             '隧图': 'tunnel',
             kowloon: 'kowloon',
             '町景': 'kowloon',
+            inkdraft: 'inkdraft',
+            '墨痕': 'inkdraft',
             starborn: 'starborn',
             '星诞': 'starborn'
         };
@@ -71,7 +73,7 @@ process.stdin.on('end', () => {
             stageMode = stageModeAliases[requestedStageMode.trim().toLowerCase()];
             if (!stageMode) {
                 throw new Error(
-                    `Unknown stage mode '${requestedStageMode}'. Supported modes: luminous, partita, cadenza, tempera, sonnet, diorama, fume, tunnel, kowloon, starborn.`
+                    `Unknown stage mode '${requestedStageMode}'. Supported modes: luminous, partita, cadenza, tempera, sonnet, diorama, fume, tunnel, kowloon, inkdraft, starborn.`
                 );
             }
         }

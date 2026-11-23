@@ -2,9 +2,9 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 5;
+    const VERSION = 6;
     // 后来加的模式：旧版本存下的启用列表里没有它们，读到旧版本时补上。
-    const ADDED_IN = Object.freeze({ kowloon: 5 });
+    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6 });
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -23,7 +23,8 @@
         { id: 'cadenza', label: '心象', description: '空间排版与镜头漂移' },
         { id: 'starborn', label: '星诞', description: '按歌词段落自动导演' },
         { id: 'tunnel', label: '隧图', description: '点阵星际穿行、实体化歌词与深空物体演出' },
-        { id: 'kowloon', label: '町景', description: '雨夜叠楼城寨：霓虹招牌、窄巷与广告屏上的歌词' }
+        { id: 'kowloon', label: '町景', description: '雨夜叠楼城寨：霓虹招牌、窄巷与广告屏上的歌词' },
+        { id: 'inkdraft', label: '墨痕', description: '墨团凝成歌词、演算纸线稿、半调网点与踩词硬切' }
     ]);
 
     const PIXI_DEFAULTS = Object.freeze({
@@ -38,7 +39,7 @@
         rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
     });
     const DEFAULTS = Object.freeze({
-        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon'],
+        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft'],
         quality: 'standard',
         animationIntensity: 1,
         edgeSpectrum: true,
@@ -169,6 +170,19 @@
                 vignette: 0.28,
                 showTranslation: true,
                 audioReactivity: 1
+            },
+            inkdraft: {
+                cameraCuts: true,
+                figures: true,
+                collisions: true,
+                inkFlip: false,
+                negativeShots: true,
+                halftone: 0.8,
+                grain: 0.5,
+                fontScale: 1,
+                waitingOpacity: 0.35,
+                showTranslation: true,
+                audioReactivity: 1
             }
         }
     });
@@ -249,6 +263,10 @@
             lightning: fallback.lightning === undefined ? source.lightning : bool(source.lightning, fallback.lightning),
             reflections: fallback.reflections === undefined ? source.reflections : bool(source.reflections, fallback.reflections),
             cameraMode: fallback.cameraMode === undefined ? source.cameraMode : enumValue(source.cameraMode, ['sandbox', 'auto', 'diorama'], fallback.cameraMode),
+            figures: fallback.figures === undefined ? source.figures : bool(source.figures, fallback.figures),
+            collisions: fallback.collisions === undefined ? source.collisions : bool(source.collisions, fallback.collisions),
+            inkFlip: fallback.inkFlip === undefined ? source.inkFlip : bool(source.inkFlip, fallback.inkFlip),
+            negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),

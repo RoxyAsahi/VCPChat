@@ -1884,6 +1884,7 @@
             diorama: ['rain', 'lyricCarrier', 'showTranslation', 'letterbox', 'cameraCuts', 'fireworks'],
             tunnel: ['cameraSpeed', 'showTranslation', 'fontScale', 'starfield', 'showPlanets', 'showShips'],
             kowloon: ['rain', 'cameraMode', 'lightning', 'reflections', 'showTranslation', 'fog'],
+            inkdraft: ['cameraCuts', 'figures', 'collisions', 'halftone', 'inkFlip', 'showTranslation'],
             luminous: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
             partita: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
             cadenza: ['fontScale', 'showTranslation', 'showUpcoming', 'heroEmphasis', 'glow'],

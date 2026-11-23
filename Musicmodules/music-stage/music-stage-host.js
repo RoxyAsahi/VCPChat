@@ -280,6 +280,19 @@
                 { key: 'transitionLock', label: '换场最短间隔', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
                 { key: 'avoidRepeat', label: '不连续用同一舞台', type: 'toggle' }
             ],
+            inkdraft: [
+                { key: 'cameraCuts', label: '踩词硬切（多机位分镜）', type: 'toggle' },
+                { key: 'figures', label: '演算纸线稿', type: 'toggle' },
+                { key: 'collisions', label: '墨团对撞', type: 'toggle' },
+                { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '砂纸颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'inkFlip', label: '画面反相（纸墨对调）', type: 'toggle' },
+                { key: 'negativeShots', label: '反相镜头（偶尔一镜纸墨对调）', type: 'toggle' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
             kowloon: [
                 { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
                 { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
@@ -393,6 +406,8 @@
             const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
+            // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
+            root.classList.toggle('stage-opaque', scene3d || state.modeId === 'inkdraft');
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
