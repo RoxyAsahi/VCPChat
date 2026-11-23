@@ -529,6 +529,15 @@ body.music-reduce-motion .archive-lyrics:not([hidden]) { animation: none; }
 .archive-lyrics-head .archive-lyrics-desk:hover { color: var(--ar-ink); border-color: var(--ar-ink); }
 .archive-lyrics-head .archive-lyrics-desk[aria-pressed="true"] { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 10%, transparent); }
 .archive-lyrics-head .archive-lyrics-desk:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }
+/* 歌词行索引：歌词右边留白里一列短横线，一格一行（或一段），正在唱的那格用强调色 */
+.archive-lyrics-index { position: absolute; right: 18px; top: calc(50% + 20px); transform: translateY(-50%); display: flex; flex-direction: column; gap: 3px; z-index: 1; cursor: pointer; padding: 4px 0; }
+.archive-lyrics-index[hidden] { display: none; }
+.archive-lyrics-index i { display: block; width: 12px; height: 2px; background: color-mix(in srgb, var(--ar-ink) 18%, transparent); transition: background-color .3s, width .3s; }
+.archive-lyrics-index i.past { background: color-mix(in srgb, var(--ar-ink) 46%, transparent); }
+.archive-lyrics-index i.on { width: 18px; background: var(--ar-accent); }
+.archive-lyrics-index i:hover { background: var(--ar-ink); }
+.archive-lyrics.none .archive-lyrics-index { display: none; }
+body.music-reduce-motion .archive-lyrics-index i { transition: none; }
 .archive-lyrics-viewport {
     position: relative; flex: 1; min-height: 0; overflow: hidden; margin-top: 10px;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - var(--lyrics-bottom-fade)), transparent 100%);
