@@ -13,6 +13,7 @@ pub mod server;
 pub mod config;
 pub mod webdav;
 pub mod settings;
+pub mod output_watchdog;
 #[cfg(windows)]
 pub mod wasapi_output;
 

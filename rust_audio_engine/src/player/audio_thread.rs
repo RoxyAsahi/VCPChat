@@ -859,7 +859,8 @@ fn apply_measured_loudness(
 enum ExclusiveOutcome {
     /// Played (or failed in a way that must not fall back); back to the command loop.
     Handled,
-    /// The exclusive device could not be opened: open a shared stream instead.
+    /// The exclusive device could not be opened, or was lost mid-track:
+    /// open a shared stream instead.
     CouldNotOpen,
     /// Shutdown arrived while playing exclusively.
     Shutdown,
@@ -1013,6 +1014,7 @@ fn handle_wasapi_exclusive(
             }
 
             log::info!("WASAPI: Playback started, entering monitoring loop");
+            let mut lost_checks = 0u32;
 
             loop {
                 if let Ok(cmd) = cmd_rx.try_recv() {
@@ -1079,6 +1081,22 @@ fn handle_wasapi_exclusive(
                     log::info!("WASAPI playback finished");
                     let _ = wasapi_player.stop();
                     break;
+                }
+
+                // The device stalled or failed mid-track (the WASAPI thread
+                // already tried restarting the stream). Before this the engine
+                // kept reporting "playing" with no sound until the user
+                // switched tracks. Reopen the output in shared mode instead;
+                // playback continues from the current position.
+                if wasapi_player.output_lost() {
+                    lost_checks += 1;
+                    if lost_checks >= 2 {
+                        log::error!("WASAPI exclusive output lost mid-track; continuing in shared mode");
+                        drop(wasapi_player);
+                        return ExclusiveOutcome::CouldNotOpen;
+                    }
+                } else {
+                    lost_checks = 0;
                 }
 
                 std::thread::sleep(std::time::Duration::from_millis(50));
