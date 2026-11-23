@@ -293,6 +293,16 @@
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
                 { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ],
+            fogpane: [
+                { key: 'fog', label: '雾气浓度', type: 'range', min: 0.5, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'rain', label: '窗外的雨', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
+                { key: 'drops', label: '玻璃上的水珠', type: 'toggle' },
+                { key: 'drips', label: '往下淌的水痕', type: 'toggle' },
+                { key: 'cameraSpeed', label: '车速', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' }
+            ],
             kowloon: [
                 { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
                 { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
@@ -407,7 +417,7 @@
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
-            root.classList.toggle('stage-opaque', scene3d || state.modeId === 'inkdraft');
+            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane'));
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {

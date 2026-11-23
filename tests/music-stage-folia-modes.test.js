@@ -53,3 +53,18 @@ test('the camera and the ink are pure functions of time', () => {
     assert.ok(after.blobs > 7 && rings[3] > 0, 'fragments and a shock ring after the hit');
     assert.equal(blobsAt(cue, 6, out, rings, acc, 0).blobs, 0, 'gone afterwards');
 });
+
+require(path.join(stage, 'modes', 'fogpane-manager.js'));
+test('fogpane: every sung line gets a place on the window, and fogs over before the third line after it', () => {
+    const { planSong } = window.MusicStageFogpaneManager._test;
+    const many = window.MusicStageRuntime.normalizeLines(Array.from({ length: 12 }, (_, i) => ({ time: 5 + i * 4, original: `第${i}句歌词写在车窗上` })));
+    const plan = planSong(many, 960, 540, 1, (text, size) => size * text.length, 'k');
+    assert.equal(plan.length, 12);
+    plan.forEach((p, i) => {
+        assert.ok(p.items.length > 0);
+        assert.ok(p.box[0] >= 0 && p.box[2] <= 960 * 1.05 && p.box[1] >= 0 && p.box[3] <= 540, `line ${i} stays on the window`);
+        assert.ok(p.fogBack >= p.end + 0.3 - 1e-9);
+        if (plan[i + 3]) assert.ok(p.fogBack <= plan[i + 3].start, 'at most three lines on the glass');
+    });
+    assert.deepEqual(planSong(many, 960, 540, 1, (t, s) => s * t.length, 'k').map(p => p.box), plan.map(p => p.box), 'deterministic');
+});
