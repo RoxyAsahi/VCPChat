@@ -48,7 +48,7 @@ body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch
 .context-submenu { padding: 4px; border-radius: 12px; }
 :is(.context-menu-item, .submenu-item) { border-radius: 7px; color: var(--mf-ink); }
 /* 行收紧到和主程序设置页下拉差不多：一行约 28px、小圆角、字号 12.5 */
-.context-menu-item, .submenu-item { min-height: 28px; padding: 5px 10px; gap: 8px; font-size: 12.5px; line-height: 18px; }
+.context-menu-item, .submenu-item { box-sizing: border-box; min-height: 28px; padding: 5px 10px; gap: 8px; font-size: 12.5px; line-height: 18px; }
 .context-menu { min-width: 168px; }
 :is(.context-menu-item, .submenu-item):hover { background: var(--mf-hover); color: var(--mf-ink); }
 .context-menu-item svg { opacity: .62; }
@@ -56,8 +56,8 @@ body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch
 .archive-batch-menu header { padding: 6px 10px 4px; color: var(--mf-ink2); font-weight: 500; }
 .archive-batch-menu hr { margin: 4px 8px; border-top-color: var(--mf-rule); opacity: 1; }
 :is(.archive-batch-menu, .archive-list-sort-menu) button { border-radius: 7px; color: var(--mf-ink); }
-.archive-batch-menu button { padding: 5px 10px; gap: 12px; font-size: 12.5px; line-height: 18px; }
-.archive-list-sort-menu button { padding: 5px 10px 5px 22px; gap: 12px; font-size: 12.5px; line-height: 18px; }
+.archive-batch-menu button { box-sizing: border-box; min-height: 28px; align-items: center; padding: 5px 10px; gap: 12px; font-size: 12.5px; line-height: 18px; }
+.archive-list-sort-menu button { box-sizing: border-box; min-height: 28px; align-items: center; padding: 5px 10px 5px 22px; gap: 12px; font-size: 12.5px; line-height: 18px; }
 .archive-list-sort-menu button[aria-checked="true"]::before { left: 10px; }
 .archive-list-sort-menu { min-width: 150px; }
 :is(.archive-batch-menu, .archive-list-sort-menu) button:is(:hover, :focus-visible) { background: var(--mf-hover); }
@@ -928,6 +928,7 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
   display: flex;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   min-height: 28px;
   padding: 5px 8px 5px 10px;
   border-radius: 7px;
