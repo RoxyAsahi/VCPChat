@@ -15,6 +15,7 @@
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
     const OVERSCAN = 8;
     const SORTS = [['title', '标题', 'TITLE'], ['artist', '歌手', 'ARTIST'], ['duration', '时长', 'LENGTH'], ['added', '添加时间', 'ADDED']];
+    const BRAND_TITLES = { all: '全部曲目', artist: '歌手', album: '专辑', playlist: '歌单', recent: '为你' };
     const KINDS = [['all', '全部', 'ALL'], ['artist', '歌手', 'ARTIST'], ['album', '专辑', 'ALBUM'], ['playlist', '歌单', 'LIST'], ['recent', '为你', 'FOR YOU']];
 
     const pad = (n, w = 2) => String(n).padStart(w, '0');
@@ -26,7 +27,33 @@
     };
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+    // 左上角标题区照原版：上面一行大号粗体是当前在看的那一栏（全部曲目 / 歌手 / …），换栏时上下滚过去；
+    // 下面一行小字，原版的品牌字换成过场动画里的 VCP Music 记号。
+    // 记号：（庞加莱圆盘：七条测地线隔一个点相连，里面再套一层，裁进圆周）+ 字标。
+    // 几何和 music-intro.js 的 buildMark 一样，这里只出静态的 SVG。
+    const brandMark = () => {
+        const cx = 50, cy = 50, R = 46, w = 4.4, D = R * 1.533;
+        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
+        const geo = (r, a, b) => {
+            const h = (b - a) / 2, ar = r * Math.tan(h);
+            const pt = (t) => `${(cx + r * Math.cos(t)).toFixed(2)},${(cy + r * Math.sin(t)).toFixed(2)}`;
+            return `M${pt(a)}A${ar.toFixed(2)},${ar.toFixed(2)} 0 0 0 ${pt(b)}`;
+        };
+        let outer = '', inner = '';
+        for (let k = 0; k < 7; k++) {
+            outer += geo(D, off + k * step, off + (k + 2) * step);
+            inner += geo(D * 0.52, off + (k + 1) * step, off + (k + 3) * step);
+        }
+        return '<svg class="archive-list-brand-mark" viewBox="0 0 100 100" aria-hidden="true">'
+            + '<defs><clipPath id="archive-brand-clip"><circle cx="50" cy="50" r="46"/></clipPath></defs>'
+            + `<g clip-path="url(#archive-brand-clip)" fill="none" stroke="currentColor"><path d="${outer}" stroke-width="${(w * 0.62).toFixed(2)}"/><path d="${inner}" stroke-width="${(w * 0.45).toFixed(2)}" opacity=".6"/></g>`
+            + `<circle cx="50" cy="50" r="${R}" fill="none" stroke="currentColor" stroke-width="${w}"/><circle cx="50" cy="50" r="${(w * 1.5).toFixed(2)}" fill="currentColor"/></svg>`;
+    };
     const TEMPLATE = `
+        <div class="archive-list-brand">
+            <h1 class="archive-list-brand-title" data-l="brandTitle"><span></span></h1>
+            <div class="archive-list-brand-sub">${brandMark()}<span>MUSIC DATABASE</span></div>
+        </div>
         <div class="archive-list-toolbar">
             <label class="archive-list-search">
                 <span class="archive-glyph-search" aria-hidden="true"></span>
@@ -293,6 +320,7 @@
             });
             state.rows = out.rows;
             state.count = out.count;
+            setBrand(state.query.trim() ? '检索结果' : (BRAND_TITLES[state.kind] || '全部曲目'));
             state.offsets = new Array(out.rows.length + 1);
             state.ord = new Array(out.rows.length);
             state.ordWidth = Math.max(2, String(out.count || 0).length);
@@ -581,6 +609,22 @@
             const sel = state.selectedRow;
             setFoot(sel >= 0 ? state.ord[sel] || 0 : 0, state.count);
         };
+        // 标题换字：旧字往上滚走、新字从下面滚上来（降低动态时直接换）
+        function setBrand(text) {
+            const box = r.brandTitle;
+            if (!box) return;
+            const cur = box.lastElementChild;
+            if (cur && cur.textContent === text && !cur.classList.contains('out')) return;
+            const reduce = document.body.classList.contains('music-reduce-motion') || !cur || !cur.textContent;
+            box.querySelectorAll('.out').forEach((n) => n.remove());
+            const next = document.createElement('span');
+            next.textContent = text;
+            if (reduce) { box.replaceChildren(next); return; }
+            cur.classList.add('out');
+            next.classList.add('in');
+            box.appendChild(next);
+            setTimeout(() => cur.remove(), 420);
+        }
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
         // 底部计数：选中了一首是「012 / 120」；没选中时不放「--- / 120」这种占位，直接说「120 首」
         function setFoot(nth, count) {

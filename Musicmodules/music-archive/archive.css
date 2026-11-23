@@ -712,3 +712,21 @@ body.music-dock-beside-lyrics:has(#music-dock-root.md-fl-low) .archive-hud.lyric
 
 /* 抽屉展开时目录变窄：序号列收一点 */
 .archive-hud.beside-drawer.lyrics-open.list-open:not(.tiny) .archive-list { --gutter: 22px; --no-w: calc(var(--no-digits, 3) * 7px + 8px); --text-end-inset: 12px; }
+
+/* ═════════ 目录左上角标题区：照原版，大号粗体栏名 + 一行小字（记号 + MUSIC DATABASE） ═════════
+   原版 1920 画布上：栏名 44px 粗体在 x59，下面 14px 半粗小字，两行之间约 14px。 */
+body.music-archive-on #custom-title-bar .title { visibility: hidden; }
+.archive-list { --brand-room: 108px; }
+.archive-hud:not(.narrow):not(.squeeze):not(.tiny) .archive-list { top: calc(var(--archive-toolbar-top) + var(--brand-room) - 34px); }
+.archive-hud:is(.narrow, .squeeze, .tiny) .archive-list-brand { display: none; }
+.archive-list-brand { position: absolute; left: var(--gutter); right: var(--text-end-inset); bottom: calc(100% + 18px); color: var(--ar-ink); pointer-events: none; white-space: nowrap; }
+.archive-list-brand-title { position: relative; height: 50px; margin: 0; overflow: hidden; font-size: 44px; line-height: 50px; font-weight: 750; letter-spacing: 1.5px; }
+.archive-list-brand-title > span { position: absolute; left: 0; top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.archive-list-brand-title > span.in { animation: archive-brand-in .42s var(--mt-ease, cubic-bezier(.2, .8, .2, 1)) both; }
+.archive-list-brand-title > span.out { animation: archive-brand-out .42s var(--mt-ease, cubic-bezier(.2, .8, .2, 1)) both; }
+@keyframes archive-brand-in { from { transform: translateY(60%); opacity: 0; } }
+@keyframes archive-brand-out { to { transform: translateY(-60%); opacity: 0; } }
+.archive-list-brand-sub { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; line-height: 16px; font-weight: 600; letter-spacing: 1px; }
+.archive-list-brand-mark { display: block; width: 16px; height: 16px; flex-shrink: 0; }
+/* 吸附字母已不显示，分组标题里的字母不能跟着被藏 */
+.archive-list-letter.stuck > span { visibility: visible; }
