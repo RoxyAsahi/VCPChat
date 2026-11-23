@@ -36,6 +36,7 @@
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
+                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
             <div class="archive-empty" role="status">
@@ -850,6 +851,75 @@
             if (selectedIndex() !== i) return;
             playSelected(playback);
         };
+        /*
+         * 随机抽取：选择框先跨列跑过去，再沿列往下走、越走越慢，停在随机的一首上，取出并播放。
+         * 跑的途中用户任何操作（按键、点击、滚轮）都会停下，停在当时那一格，不播放。
+         * 降低动态时直接落到那一首。
+         */
+        const pick = { timers: [], on: false };
+        const pickStop = () => {
+            if (!pick.on) return;
+            pick.on = false;
+            pick.timers.forEach(clearTimeout);
+            pick.timers = [];
+            refs.pickBtn?.classList.remove('running');
+            setCardExpanded(true);
+        };
+        const randomPick = () => {
+            if (pick.on || !state.columns.length) return;
+            const order = libraryOrder();
+            const cur = selectedIndex();
+            const pool = order.length > 1 ? order.filter((i) => i !== cur) : order;
+            if (!pool.length) return;
+            const target = pool[Math.floor(Math.random() * pool.length)];
+            const n = state.columns.length;
+            const at = Model.locate(state.columns, target, Model.wrap(state.lane, n));
+            if (!at) return;
+            const lane1 = at.lane + n * Math.round((state.lane - at.lane) / n);
+            const m = state.columns[at.lane].items.length;
+            // 先算出到那一列时会停在第几行（换列会回到记住的位置），再从那里往目标走
+            const remembered = focusByColumn.get(state.columns[at.lane].id);
+            const startRow = lane1 === state.lane ? state.row
+                : remembered !== undefined ? remembered + m * Math.round((state.row - remembered) / m) : state.row;
+            const row1 = at.row + m * Math.round((startRow - at.row) / m);
+            const steps = [];
+            let t = 0;
+            if (reducedMotion()) {
+                steps.push({ t, lane: lane1, row: row1 });
+            } else {
+                const dl = lane1 - state.lane, hops = Math.min(Math.abs(dl), 8);
+                for (let h = 1; h <= hops; h++) steps.push({ t: t += 110, lane: state.lane + Math.round(dl * h / hops), row: null });
+                const dr = row1 - startRow, N = Math.min(Math.abs(dr), 12);
+                let last = startRow;
+                for (let j = 1; j <= N; j++) {
+                    const r = startRow + Math.round(dr * (1 - Math.pow(1 - j / N, 2))); // 缓出：最后几步最短、最慢
+                    if (r === last) continue;
+                    steps.push({ t: t += 60 + 240 * Math.pow(j / N, 2), lane: lane1, row: r });
+                    last = r;
+                }
+                if (last !== row1 || !steps.length) steps.push({ t: t += 100, lane: lane1, row: row1 });
+            }
+            pick.on = true;
+            refs.pickBtn?.classList.add('running');
+            setCardExpanded(false);
+            for (const s of steps) {
+                pick.timers.push(setTimeout(() => {
+                    if (!pick.on || state.destroyed) return;
+                    if (s.row === null) stepLane(s.lane - state.lane);
+                    else select(s.lane, s.row);
+                    state.scene?.touch?.();
+                }, s.t));
+            }
+            pick.timers.push(setTimeout(() => {
+                if (!pick.on || state.destroyed) return;
+                pick.on = false;
+                pick.timers = [];
+                refs.pickBtn?.classList.remove('running');
+                if (selectedIndex() !== target) select(lane1, row1);
+                setCardExpanded(true);
+                playSelected();
+            }, t + (reducedMotion() ? 0 : 450)));
+        };
         /* 底部显示正在放的这一组（队列）叫什么 */
         const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
@@ -1399,6 +1469,7 @@
                 switch (btn.dataset.act) {
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
+                    case 'pick': randomPick(); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
@@ -1427,6 +1498,7 @@
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
             if (momentum && isShown()) stopMomentum();
+            if (pick.on && isShown()) { pickStop(); if (e.key === 'Escape') { e.preventDefault(); return; } }
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
             // Ctrl+L 定位当前播放（输入框里也能用）
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
@@ -1447,6 +1519,7 @@
                 e.preventDefault(); playSelected({ stage: e.shiftKey }); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+            if (e.shiftKey && e.code === 'KeyR') { e.preventDefault(); randomPick(); return; }
             if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenuForSelected(); return; }
             // 直接打字：打开目录、聚焦检索框并带入这个字（不用先按 /）。
             // 输入法正在组字（isComposing / Process / 229）时不抢，让输入法把字交给它自己的输入框
@@ -1463,6 +1536,14 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        // 随机抽取跑着时，点哪里、滚轮都先停下（抽取按钮自己除外：再点一下不会重来）
+        const onPickInterrupt = (e) => {
+            if (!pick.on) return;
+            if (e.type === 'pointerdown' && e.target && e.target.closest && e.target.closest('[data-act="pick"]')) return;
+            pickStop();
+        };
+        document.addEventListener('pointerdown', onPickInterrupt, true);
+        document.addEventListener('wheel', onPickInterrupt, { capture: true, passive: true });
         // ---------- 外部状态 ----------
         const onResize = () => resize();
         global.addEventListener('resize', onResize);
@@ -1551,6 +1632,9 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            pick.timers.forEach(clearTimeout); pick.on = false;
+            document.removeEventListener('pointerdown', onPickInterrupt, true);
+            document.removeEventListener('wheel', onPickInterrupt, { capture: true });
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();

@@ -74,6 +74,13 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-glyph-search::after { content: ""; position: absolute; width: 42%; height: 2px; left: 9%; top: 82%; background: currentColor; transform: rotate(-45deg); transform-origin: left center; }
 .archive-key { font-size: 11px; border: 1px solid var(--ar-key); display: inline-flex; justify-content: center; align-items: center; min-width: 19px; height: 21px; line-height: 1; opacity: .6; margin-left: 6px; }
 .archive-glyph-now { font-size: 27px; }
+/* 随机抽取：两颗错开的骰点框，抽取进行中框会转 */
+.archive-glyph-pick { width: 15px; height: 15px; display: block; flex-shrink: 0; position: relative; border: 1.5px solid currentColor; border-radius: 3px; box-sizing: border-box; background: radial-gradient(circle, currentColor 1.6px, transparent 2.1px) 25% 25% / 50% 50% no-repeat, radial-gradient(circle, currentColor 1.6px, transparent 2.1px) 75% 75% / 50% 50% no-repeat; transition: transform .3s; }
+.archive-nav > button.running { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-nav > button.running .archive-glyph-pick { animation: archive-pick-roll .44s linear infinite; }
+@keyframes archive-pick-roll { to { transform: rotate(360deg); } }
+body.music-reduce-motion .archive-nav > button.running .archive-glyph-pick { animation: none; }
+.archive-hud.narrow .archive-nav > [data-act="pick"] { font-size: 0; gap: 0; }
 
 
 /* 曲库计数与页脚随播放栏高度上移。 */
