@@ -286,6 +286,27 @@
         };
     };
 
+    /*
+     * 弹簧曲线：按刚度/阻尼把一次 0→1 的弹簧过程算出来，写成 CSS linear() 缓动（Chromium 113+ 支持）。
+     * 入场用偏软、会轻轻回弹一下的；让位用几乎不回弹的。不支持 linear() 时退回普通曲线。
+     */
+    const springEase = (stiffness, damping) => {
+        let x = 0, v = 0, t = 0;
+        const dt = 1 / 240, pts = [0];
+        let settled = 0;
+        while (t < 2) {
+            const a = stiffness * (1 - x) - damping * v;
+            v += a * dt; x += v * dt; t += dt;
+            if (Math.round(t * 240) % 8 === 0) pts.push(+x.toFixed(4));
+            if (Math.abs(1 - x) < 0.002 && Math.abs(v) < 0.02) { if (++settled > 12) break; } else settled = 0;
+        }
+        pts.push(1);
+        return { ease: 'linear(' + pts.join(',') + ')', ms: Math.round(t * 1000) };
+    };
+    const SPRING_ENTER = springEase(360, 24);
+    const SPRING_FLOW = springEase(300, 34);
+    const hueOf = (str) => { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     /*
@@ -311,6 +332,12 @@
         el.hidden = true;
         el.innerHTML = '<div class="aw-world"></div><div class="aw-empty" hidden></div>';
         if (tilt) el.setAttribute('aria-label', '平放');
+        if (global.CSS && CSS.supports && CSS.supports('transition-timing-function', SPRING_ENTER.ease)) {
+            el.style.setProperty('--aw-sp-enter', SPRING_ENTER.ease);
+            el.style.setProperty('--aw-sp-enter-ms', SPRING_ENTER.ms + 'ms');
+            el.style.setProperty('--aw-sp-flow', SPRING_FLOW.ease);
+            el.style.setProperty('--aw-sp-flow-ms', SPRING_FLOW.ms + 'ms');
+        }
         const world = el.firstChild;
         const emptyEl = el.lastChild;
         opts.host.insertBefore(el, opts.before || null);
@@ -383,6 +410,7 @@
             const sig = it.key + '#' + ids.length + '#' + (ids[0] ?? '') + '#' + (ids[ids.length - 1] ?? '');
             if (!force && sig === st.key) return false;
             const firstShow = !st.key;
+            if (!firstShow && !force) leave();
             st.key = sig;
             st.ids = ids;
             st.name = it.name || '';
@@ -394,6 +422,7 @@
             emptyEl.textContent = ids.length ? '' : '这一组还没有曲目';
             st.focus = null;
             st.selIndex = -1;
+            st.revealOk = false;
             syncSelection({ center: true, instant: true });
             if (!st.focus) { st.cam.x = -st.room.width / 2 + st.g.blockW / 2; st.cam.y = -st.room.height / 2 + st.g.blockH / 2; }
             enter(firstShow ? 0 : 1);
@@ -401,8 +430,28 @@
         };
         const enter = () => {
             if (reduced()) return;
-            st.enterUntil = performance.now() + 650;
-            st.enterOrigin = viewCenter();
+            st.enterUntil = performance.now() + 340 + (SPRING_ENTER.ms || 600);
+        };
+        /*
+         * 换一组之前，旧的那面墙先整体抬起、缩小、淡出（同样从左上往右下一波），
+         * 拿一层快照盖在上面跑，底下立刻换成新的一组接着落下来。
+         */
+        const leave = () => {
+            if (reduced() || !st.nodes.size || !st.on) return;
+            const ghost = world.cloneNode(true);
+            ghost.classList.add('aw-ghost');
+            ghost.classList.remove('aw-reflow');
+            ghost.querySelectorAll('.aw-panel').forEach((p) => p.remove());
+            const W = st.room.width || 1, H = st.room.height || 1;
+            for (const t of ghost.children) {
+                const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(t.style.transform || '');
+                const u = m ? Math.max(0, Math.min(1, ((+m[1] - st.cam.x) / W + (+m[2] - st.cam.y) / H) / 2)) : 0;
+                t.classList.remove('aw-entering', 'aw-reveal');
+                t.classList.add('aw-leaving');
+                t.firstChild.style.animationDelay = Math.round(u * 160) + 'ms';
+            }
+            el.insertBefore(ghost, world.nextSibling);
+            setTimeout(() => ghost.remove(), 520);
         };
 
         // ---------- 选中、展开 ----------
@@ -444,7 +493,7 @@
                 if (animate && !reduced()) {
                     world.classList.add('aw-reflow');
                     clearTimeout(st.reflowTimer);
-                    st.reflowTimer = setTimeout(() => world.classList.remove('aw-reflow'), 560);
+                    st.reflowTimer = setTimeout(() => world.classList.remove('aw-reflow'), Math.max(560, SPRING_FLOW.ms + 40));
                 }
                 st.dirty = true;
                 schedule();
@@ -523,18 +572,19 @@
             const t = document.createElement('div');
             t.className = 'aw-tile';
             t.setAttribute('role', 'gridcell');
-            t.innerHTML = '<div class="aw-in"><div class="aw-art"><img alt="" draggable="false" decoding="async"><span class="aw-blank"></span></div><span class="aw-no"></span><div class="aw-cap"><b></b><span></span></div></div>';
+            t.innerHTML = '<div class="aw-in"><div class="aw-art"><img alt="" draggable="false" decoding="async"><span class="aw-blank"></span></div><i class="aw-shade"></i><span class="aw-no"></span><div class="aw-cap"><b></b><span></span></div>'
+                + '<button type="button" class="aw-q" data-wall="quick" tabindex="-1" aria-label="播放"></button></div>';
             const inner = t.firstChild;
             return {
                 el: t, inner, img: inner.querySelector('img'), blank: inner.querySelector('.aw-blank'),
                 no: inner.querySelector('.aw-no'), title: inner.querySelector('.aw-cap b'), sub: inner.querySelector('.aw-cap span'),
-                item: -2, x: NaN, y: NaN, w: NaN, h: NaN, src: null, cls: ''
+                item: -2, x: NaN, y: NaN, w: NaN, h: NaN, src: null, cls: '', code: '', badge: null
             };
         };
         const panel = document.createElement('div');
         panel.className = 'aw-panel';
         panel.innerHTML = '<div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
-            + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary">播放</button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
+            + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
         const fillPanel = (i) => {
             const t = opts.track(i);
             const m = opts.meta(t, i);
@@ -545,7 +595,8 @@
             const p = opts.playing();
             const isNow = p.index === i && p.active;
             const btn = panel.querySelector('[data-wall="play"]');
-            btn.textContent = isNow ? '正在播放' : (p.index === i ? '继续播放' : '播放');
+            btn.lastChild.textContent = isNow ? '正在播放' : (p.index === i ? '继续播放' : '播放');
+            btn.classList.toggle('is-now', isNow);
             btn.disabled = isNow;
         };
 
@@ -558,8 +609,10 @@
                 const m = opts.meta(t, i);
                 node.title.textContent = m.title;
                 node.sub.textContent = m.artist || '';
-                node.no.textContent = m.code || '';
+                node.code = m.code || '';
+                node.badge = null;
                 node.blank.textContent = m.title;
+                node.el.style.setProperty('--aw-h', hueOf(m.title + '|' + (m.album || '')));
                 node.el.setAttribute('aria-label', m.title + (m.artist ? '，' + m.artist : ''));
                 node.src = null;
             }
@@ -620,18 +673,25 @@
                             node.x = node.y = node.w = node.h = NaN;
                             node.el.dataset.id = inst.id;
                             world.appendChild(node.el);
+                            node.el.classList.remove('aw-entering', 'aw-reveal');
                             if (entering) {
-                                const o = st.enterOrigin || viewCenter();
-                                const d = Math.hypot(r.x + r.w / 2 - o.x, r.y + r.h / 2 - o.y);
-                                node.inner.style.animationDelay = Math.min(420, d * 0.32) + 'ms';
+                                // 一波从视野左上角沿对角线往右下走：越靠右下越晚落下
+                                const W = st.room.width || 1, H = st.room.height || 1;
+                                const u = Math.max(0, Math.min(1, ((r.x - st.cam.x) / W + (r.y - st.cam.y) / H) / 2));
+                                node.inner.style.animationDelay = Math.round(u * 340) + 'ms';
                                 node.el.classList.add('aw-entering');
-                            } else node.el.classList.remove('aw-entering');
+                            } else if (st.revealOk) {
+                                // 拖动时新露出来的：原地淡入、轻轻放大，不会一下子整张冒出来
+                                node.inner.style.animationDelay = '';
+                                node.el.classList.add('aw-reveal');
+                            }
                         }
                         if (r.x !== node.x || r.y !== node.y) { node.el.style.transform = `translate(${r.x}px,${r.y}px)`; node.x = r.x; node.y = r.y; }
                         if (r.w !== node.w || r.h !== node.h) { node.el.style.width = r.w + 'px'; node.el.style.height = r.h + 'px'; node.w = r.w; node.h = r.h;
                             // 悬停放大：每条边往外长同样的距离（缝宽的六成），大小卡看起来抬得一样多
                             node.el.style.setProperty('--hx', (1 + 1.2 * st.gap / r.w).toFixed(4));
-                            node.el.style.setProperty('--hy', (1 + 1.2 * st.gap / r.h).toFixed(4)); }
+                            node.el.style.setProperty('--hy', (1 + 1.2 * st.gap / r.h).toFixed(4));
+                            node.el.style.setProperty('--tw', Math.round(r.w) + 'px'); }
                         fillContent(node, inst.item, Math.max(r.w, r.h) * dpr);
                         const size = r.cols >= 4 ? 'aw-l' : r.cols >= 3 ? 'aw-m' : 'aw-s';
                         const cls = size + (inst.id === sel ? ' is-focus' : '') + (inst.id === exp ? ' is-open' : '') + (inst.item === playPos ? (play.active ? ' is-playing' : ' is-current') : '');
@@ -641,6 +701,9 @@
                             node.cls = cls;
                             node.el.setAttribute('aria-selected', inst.id === sel ? 'true' : 'false');
                         }
+                        const isPlay = inst.item === playPos;
+                        const badge = isPlay ? (play.active ? '正在播放' : '暂停') + (node.code ? ' · ' + node.code : '') : node.code;
+                        if (badge !== node.badge) { node.badge = badge; node.no.textContent = badge; }
                         if (inst.id === exp) {
                             if (panel.parentNode !== node.inner) node.inner.appendChild(panel);
                             fillPanel(st.ids[inst.item]);
@@ -652,7 +715,9 @@
                 if (!keep.has(id)) { st.nodes.delete(id); recycle(node); }
             }
             if (!exp && panel.parentNode) panel.remove();
+            world.classList.toggle('aw-has-open', Boolean(exp));
             st.laidAt = { x: st.cam.x, y: st.cam.y };
+            st.revealOk = !reduced();
         };
 
         const applyCamera = () => {
@@ -708,6 +773,7 @@
         const panK = tilt ? { x: 1.15, y: 1 / Math.cos(TILT * Math.PI / 180) } : { x: 1, y: 1 };
         let lastClick = { id: '', t: 0 };
         el.addEventListener('pointerdown', (e) => {
+            st.touchedAt = performance.now();
             if (e.button !== 0 || e.target.closest('button')) return;
             st.aim = null; st.wheelAim = null;
             st.vel.x = st.vel.y = 0;
@@ -753,6 +819,11 @@
             const btn = e.target.closest('[data-wall]');
             if (btn) {
                 e.stopPropagation();
+                if (btn.dataset.wall === 'quick') {
+                    const q = tileOf(btn);
+                    if (q) { if (!st.focus || st.focus.id !== q.id) focusInstance(q); opts.play(st.ids[q.item], {}); }
+                    return;
+                }
                 const i = st.expanded ? st.ids[st.expanded.item] : -1;
                 if (i < 0) return;
                 if (btn.dataset.wall === 'play') opts.play(i, {});
@@ -781,6 +852,7 @@
         el.addEventListener('wheel', (e) => {
             if (!st.g) return;
             e.preventDefault();
+            st.touchedAt = performance.now();
             st.aim = null;
             st.vel.x = st.vel.y = 0;
             let dx = e.deltaX, dy = e.deltaY;
@@ -834,7 +906,23 @@
                 syncSelection();
                 const p = opts.playing();
                 const pk = p.index + ':' + p.active;
-                if (pk !== st.playKey) { st.playKey = pk; st.dirty = true; schedule(); }
+                if (pk !== st.playKey) {
+                    const prevIndex = st.playIndex;
+                    st.playKey = pk;
+                    st.playIndex = p.index;
+                    st.dirty = true;
+                    // 换歌了：用户这几秒没在摆弄墙的话，镜头自己滑到正在播放的那张（不改选中、不展开）
+                    if (p.active && prevIndex !== undefined && prevIndex !== p.index && performance.now() - (st.touchedAt || 0) > 6000) {
+                        const pos = st.ids.indexOf(p.index);
+                        if (pos >= 0 && st.g && !st.expanded) {
+                            const inst = nearestOf(st.g, pos, viewCenter(), st.gap);
+                            const r = rectOf(inst);
+                            const pad = Math.min(st.room.width, st.room.height) * 0.18;
+                            if (r.x < st.cam.x + pad || r.y < st.cam.y + pad || r.x + r.w > st.cam.x + st.room.width - pad || r.y + r.h > st.cam.y + st.room.height - pad) centerOn(inst);
+                        }
+                    }
+                    schedule();
+                }
             },
             coverFound() { st.coverDirty = true; schedule(); },
             step,
@@ -853,5 +941,5 @@
         return api;
     };
 
-    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
 })(typeof window !== 'undefined' ? window : globalThis);

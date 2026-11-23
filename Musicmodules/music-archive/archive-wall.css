@@ -23,6 +23,16 @@
 #music-archive-view.layout-flat .archive-counter { visibility: hidden; }
 
 .aw-world { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+/* 墙底下的光：两团很淡的强调色光（一团偏左上、一团偏右下），让墙不是一张平纸 */
+.archive-wall::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(60% 55% at 18% 12%, color-mix(in srgb, var(--ar-accent) 9%, transparent), transparent 70%),
+        radial-gradient(55% 60% at 88% 92%, color-mix(in srgb, var(--ar-accent) 7%, transparent), transparent 70%);
+}
 .aw-tile {
     position: absolute;
     left: 0;
@@ -30,32 +40,57 @@
     contain: layout style;
 }
 .aw-world.aw-reflow .aw-tile {
-    transition: transform .52s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)), width .52s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)), height .52s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1));
+    transition: transform var(--aw-sp-flow-ms, .52s) var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)), width var(--aw-sp-flow-ms, .52s) var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)), height var(--aw-sp-flow-ms, .52s) var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1));
 }
 .aw-in {
     position: absolute;
     inset: 0;
     overflow: hidden;
-    background: var(--ar-card);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 10%, transparent);
-    transition: transform .2s var(--mt-ease, ease), box-shadow .2s var(--mt-ease, ease);
+    /* 没封面时的底：按曲名算出的色相，左上亮、右下深 */
+    background: linear-gradient(145deg, hsl(var(--aw-h, 200) 44% 62%), hsl(calc(var(--aw-h, 200) + 52) 40% 22%));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 10%, transparent), 0 1px 2px rgba(0, 0, 0, .08);
+    transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter .22s var(--mt-ease, ease);
 }
-.aw-tile:hover .aw-in { transform: scale(var(--hx, 1.025), var(--hy, 1.025)); box-shadow: 0 0 0 1px var(--ar-ink), 0 10px 26px rgba(0, 0, 0, .16); z-index: 1; }
+/* 悬停：每条边往外长同样的距离，颜色稍微提一点，底下多一层抬起的影子 */
+.aw-tile:hover .aw-in {
+    transform: scale(var(--hx, 1.025), var(--hy, 1.025));
+    filter: saturate(1.08) brightness(1.05);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 40%, transparent), 0 12px 32px rgba(0, 0, 0, .24), 0 2px 6px rgba(0, 0, 0, .12);
+}
 .aw-tile:hover, .aw-tile.is-focus, .aw-tile.is-open { z-index: 2; }
-.aw-tile.is-focus .aw-in { box-shadow: 0 0 0 2px var(--ar-accent), 0 10px 26px rgba(0, 0, 0, .14); }
-.aw-tile.is-open .aw-in { transform: none; box-shadow: 0 0 0 1px var(--ar-ink), 0 18px 44px rgba(0, 0, 0, .22); }
+.aw-tile.is-playing, .aw-tile.is-current { z-index: 1; }
+/* 选中：强调色描边外再套一圈细线，顶上一抹高光 */
+.aw-tile.is-focus .aw-in { box-shadow: 0 0 0 2px var(--ar-accent), 0 0 0 5px color-mix(in srgb, var(--ar-accent) 22%, transparent), 0 12px 32px rgba(0, 0, 0, .22); }
+.aw-in::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 42%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0));
+    opacity: 0;
+    transition: opacity .22s var(--mt-ease, ease);
+    pointer-events: none;
+    z-index: 3;
+}
+.aw-tile:hover .aw-in::before, .aw-tile.is-focus .aw-in::before { opacity: 1; }
+.aw-tile.is-open .aw-in::before { opacity: 0; }
+.aw-tile.is-open .aw-in { transform: none; filter: none; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 30%, transparent), 0 42px 110px rgba(0, 0, 0, .34), 0 8px 24px rgba(0, 0, 0, .16); }
+/* 有一张展开时，其余的安静下来：压暗、去一点饱和，悬停的那张恢复 */
+.aw-world.aw-has-open .aw-tile:not(.is-open):not(:hover) .aw-in { filter: brightness(.74) saturate(.82); }
 
 .aw-art { position: absolute; inset: 0; }
 .aw-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
 .aw-tile.has-art .aw-art img { display: block; animation: aw-fade .32s var(--mt-ease, ease) both; }
-/* 没有封面：纸色卡面上印曲名（大卡字大），像档案袋上手写的标签 */
+/* 没有封面：色相底上一道短线 + 曲名（大卡字大），像海报的题头 */
 .aw-blank {
     position: absolute;
     left: 10%;
     right: 10%;
     top: 12%;
-    color: var(--ar-ink);
-    opacity: .78;
+    color: #fff;
+    opacity: .9;
     font-weight: 600;
     font-size: 14px;
     line-height: 1.3;
@@ -68,97 +103,190 @@
 .aw-m .aw-blank { font-size: 17px; }
 .aw-l .aw-blank { font-size: 22px; letter-spacing: .3px; }
 .aw-tile.has-art .aw-blank { display: none; }
+.aw-tile:not(.aw-s) .aw-blank { display: none; }
 .aw-blank::before { content: ""; display: block; width: 22px; height: 2px; margin-bottom: 10px; background: var(--ar-accent); }
 
-/* 档案号：左上角小字，只在中大卡上 */
+/* 底部渐暗：中大卡常驻，标题压在上面；小卡悬停才出现 */
+.aw-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(0deg, rgba(0, 0, 0, .74) 0, rgba(0, 0, 0, .42) 30%, rgba(0, 0, 0, 0) 62%);
+    pointer-events: none;
+    transition: opacity .22s var(--mt-ease, ease);
+}
+.aw-s .aw-shade { opacity: 0; }
+.aw-s:hover .aw-shade, .aw-s.is-focus .aw-shade { opacity: 1; }
+
+/* 编号徽标：左上角，中大卡常驻；正在播放的那张写「正在播放 · 编号」，用强调色 */
 .aw-no {
     position: absolute;
-    left: 8px;
-    top: 7px;
-    font: 500 10px/1 var(--mt-font-mono, ui-monospace, monospace);
+    left: 10px;
+    top: 9px;
+    z-index: 2;
+    max-width: calc(100% - 20px);
+    padding: 3px 6px;
+    font: 600 10px/1 var(--mt-font-mono, ui-monospace, monospace);
     letter-spacing: .6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: #fff;
-    mix-blend-mode: difference;
-    opacity: 0;
-    transition: opacity .2s;
+    background: rgba(0, 0, 0, .42);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
     pointer-events: none;
+    transition: opacity .2s, background-color .2s;
 }
-.aw-tile:not(.aw-s):hover .aw-no, .aw-tile.is-focus:not(.aw-s) .aw-no { opacity: .72; }
-.aw-tile.aw-s:not(.has-art) .aw-no { display: none; }
-.aw-tile:not(.has-art) .aw-no { color: var(--ar-muted); mix-blend-mode: normal; opacity: .9; left: auto; right: 9px; }
+.aw-no:empty { display: none; }
+.aw-s .aw-no { opacity: 0; }
+.aw-s:hover .aw-no, .aw-s.is-focus .aw-no { opacity: 1; }
+.aw-tile.is-playing .aw-no, .aw-tile.is-current .aw-no { opacity: 1; background: var(--ar-accent); color: var(--ar-accent-on, #17130a); }
+.aw-tile.is-open .aw-no { display: none; }
 
-/* 曲名条：悬停或选中时从底边升起 */
+/* 标题：常驻在中大卡底部，字号跟卡宽走、字距收紧、最多三行 */
 .aw-cap {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 22px 10px 8px;
+    z-index: 2;
+    padding: 0 12px 10px;
     display: grid;
-    gap: 2px;
+    gap: 4px;
     color: #fff;
-    background: linear-gradient(0deg, rgba(0, 0, 0, .66), rgba(0, 0, 0, 0));
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity .18s var(--mt-ease, ease), transform .18s var(--mt-ease, ease);
+    text-shadow: 0 1px 12px rgba(0, 0, 0, .35);
     pointer-events: none;
+    transition: opacity .18s var(--mt-ease, ease), transform .18s var(--mt-ease, ease);
 }
-.aw-cap b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aw-cap span { font-size: 11px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aw-l .aw-cap b { font-size: 15px; }
-.aw-tile.has-art:hover .aw-cap, .aw-tile.has-art.is-focus .aw-cap { opacity: 1; transform: none; }
+.aw-cap b {
+    font-size: clamp(13px, calc(var(--tw, 200px) * .085), 34px);
+    font-weight: 700;
+    line-height: 1.04;
+    letter-spacing: -.035em;
+    text-wrap: balance;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+}
+.aw-cap span { font-size: clamp(11px, calc(var(--tw, 200px) * .042), 13px); font-weight: 600; opacity: .82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aw-l .aw-cap { padding: 0 16px 14px; }
+.aw-s .aw-cap { padding: 0 8px 7px; opacity: 0; transform: translateY(6px); }
+.aw-s .aw-cap b { font-size: 12px; -webkit-line-clamp: 2; letter-spacing: -.01em; }
+.aw-s .aw-cap span { display: none; }
+.aw-s:hover .aw-cap, .aw-s.is-focus .aw-cap { opacity: 1; transform: none; }
 .aw-tile.is-open .aw-cap { display: none; }
 
-/* 正在播放：底边一条琥珀短条（和目录里当前行的记号一样）；暂停时变细 */
+/* 正在播放：2px 强调色内描边 + 一圈向里的光；暂停时只留描边 */
 .aw-in::after {
     content: "";
     position: absolute;
-    left: 0;
-    bottom: 0;
-    width: 0;
-    height: 3px;
-    background: var(--ar-accent);
-    transition: width .3s var(--mt-ease, ease);
+    inset: 0;
+    z-index: 3;
+    box-shadow: inset 0 0 0 0 var(--ar-accent);
+    transition: box-shadow .3s var(--mt-ease, ease);
     pointer-events: none;
 }
-.aw-tile.is-playing .aw-in::after { width: 34%; }
-.aw-tile.is-current .aw-in::after { width: 18%; height: 2px; }
+.aw-tile.is-playing .aw-in::after { box-shadow: inset 0 0 0 2px var(--ar-accent), inset 0 0 26px color-mix(in srgb, var(--ar-accent) 45%, transparent); }
+.aw-tile.is-current .aw-in::after { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ar-accent) 70%, transparent); }
+.aw-tile.is-open .aw-in::after { box-shadow: none; }
 
-/* 展开的大卡：封面铺满，下半截一块纸色资料片 */
+/* 悬停快捷播放：右上角圆键（中大卡） */
+#music-archive-view .aw-q {
+    position: absolute;
+    right: 10px;
+    top: 9px;
+    z-index: 4;
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .92);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+    opacity: 0;
+    transform: scale(.8);
+    transition: opacity .16s, transform .2s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)), background-color .15s;
+    cursor: pointer;
+}
+#music-archive-view .aw-q::before { content: ""; position: absolute; left: 12px; top: 9px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent #111; }
+.aw-tile:not(.aw-s):not(.is-open):hover .aw-q { opacity: 1; transform: none; }
+#music-archive-view .aw-q:hover { background: var(--ar-accent); }
+.archive-wall.is-grabbing .aw-q { opacity: 0 !important; }
+
+/* 展开的大卡：封面铺满，左边和底下压暗，超大标题压在上面，控制条稍晚一点升上来 */
+.aw-tile.is-open .aw-shade { background: linear-gradient(90deg, rgba(0, 0, 0, .58) 0, rgba(0, 0, 0, .18) 46%, rgba(0, 0, 0, 0) 70%), linear-gradient(0deg, rgba(0, 0, 0, .82) 0, rgba(0, 0, 0, .44) 34%, rgba(0, 0, 0, 0) 66%); opacity: 1; }
 .aw-panel {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 16px 18px 16px;
+    z-index: 3;
+    padding: 0 clamp(18px, calc(var(--tw, 400px) * .06), 34px) clamp(16px, calc(var(--tw, 400px) * .055), 30px);
     display: grid;
-    gap: 6px;
-    color: var(--ar-ink);
-    background: rgba(var(--ar-paper-rgb), .97);
-    border-top: 1px solid color-mix(in srgb, var(--ar-ink) 12%, transparent);
-    animation: aw-rise .36s .12s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)) both;
+    gap: 8px;
+    color: #fff;
     cursor: default;
 }
-.aw-panel-head { display: flex; justify-content: space-between; font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .6px; color: var(--ar-muted); }
-.aw-panel-title { font-size: 19px; font-weight: 600; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
-.aw-panel-sub { font-size: 13px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aw-panel-acts { display: flex; gap: 18px; margin-top: 6px; align-items: center; }
-#music-archive-view .aw-panel-acts button { font-size: 13px; letter-spacing: .4px; min-height: 26px; color: var(--ar-ink); }
-#music-archive-view .aw-panel-acts button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
-#music-archive-view .aw-panel-acts .aw-primary { padding: 0 14px; border: 1px solid var(--ar-ink); }
-#music-archive-view .aw-panel-acts .aw-primary:hover { background: var(--ar-ink); color: var(--ar-paper); }
-#music-archive-view .aw-panel-acts .aw-primary:disabled { opacity: .55; cursor: default; background: none; color: var(--ar-ink); }
+.aw-panel > * { animation: aw-rise .24s .14s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) both; }
+.aw-panel > .aw-panel-title { animation-delay: .1s; }
+.aw-panel > .aw-panel-sub { animation-delay: .17s; }
+.aw-panel > .aw-panel-acts { animation-delay: .22s; }
+.aw-panel-head { display: flex; gap: 14px; font: 600 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .8px; color: rgba(255, 255, 255, .72); }
+.aw-panel-head .aw-panel-no { color: var(--ar-accent); }
+.aw-panel-title {
+    font-size: clamp(30px, calc(var(--tw, 400px) * .115), 76px);
+    font-weight: 800;
+    line-height: .98;
+    letter-spacing: -.045em;
+    text-wrap: balance;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+    text-shadow: 0 2px 24px rgba(0, 0, 0, .35);
+}
+.aw-panel-sub { font-size: clamp(13px, calc(var(--tw, 400px) * .036), 17px); font-weight: 650; color: rgba(255, 255, 255, .84); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aw-panel-acts { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+#music-archive-view .aw-panel-acts button {
+    font-size: 13px;
+    letter-spacing: .3px;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 17px;
+    color: #fff;
+    background: rgba(255, 255, 255, .14);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    transition: background-color .15s, transform .15s var(--mt-ease, ease);
+}
+#music-archive-view .aw-panel-acts button:hover { background: rgba(255, 255, 255, .26); }
+#music-archive-view .aw-panel-acts button:active { transform: scale(.96); }
+#music-archive-view .aw-panel-acts .aw-primary { display: inline-flex; align-items: center; gap: 9px; padding: 0 18px 0 14px; background: #fff; color: #111; font-weight: 650; }
+#music-archive-view .aw-panel-acts .aw-primary i { width: 0; height: 0; border-style: solid; border-width: 6px 0 6px 10px; border-color: transparent transparent transparent currentColor; }
+#music-archive-view .aw-panel-acts .aw-primary.is-now i { width: 10px; height: 12px; border: 0; background: linear-gradient(90deg, currentColor 0 3px, transparent 3px 7px, currentColor 7px 10px); }
+#music-archive-view .aw-panel-acts .aw-primary:hover { background: var(--ar-accent); color: #111; }
+#music-archive-view .aw-panel-acts .aw-primary:disabled { opacity: 1; cursor: default; background: color-mix(in srgb, var(--ar-accent) 88%, #fff); color: #111; }
 
 .aw-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ar-muted); font-size: 15px; }
 
-/* 切到封面墙、换一组时：封面从上方轻轻落进各自的位置，离中心越远越晚 */
-.aw-tile.aw-entering .aw-in { animation: aw-drop .46s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)) both; }
-@keyframes aw-drop { from { opacity: 0; transform: translateY(-26px) scale(.94); } to { opacity: 1; transform: none; } }
+/* 入场：从上方落下、缩小到 .88，弹簧带一点回弹；从视野左上角沿对角线一张张到 */
+.aw-tile.aw-entering .aw-in { animation: aw-drop var(--aw-sp-enter-ms, .5s) var(--aw-sp-enter, cubic-bezier(.2, .9, .25, 1)) both; }
+@keyframes aw-drop { from { opacity: 0; transform: translateY(-68px) scale(.88); } to { opacity: 1; transform: none; } }
+/* 拖动时新露出来的：原地淡入放大 */
+.aw-tile.aw-reveal .aw-in { animation: aw-pop .34s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) both; }
+@keyframes aw-pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+/* 换一组：旧墙整面抬起淡出 */
+.aw-ghost { pointer-events: none; z-index: 1; }
+.aw-ghost .aw-tile.aw-leaving .aw-in { animation: aw-leave .28s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes aw-leave { to { opacity: 0; transform: translateY(-68px) scale(.88); } }
 @keyframes aw-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes aw-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes aw-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 body.music-reduce-motion .aw-in, body.music-reduce-motion .aw-cap, body.music-reduce-motion .aw-world.aw-reflow .aw-tile { transition: none; }
-body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel, body.music-reduce-motion .aw-art img { animation: none; }
+body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel > *, body.music-reduce-motion .aw-art img { animation: none; }
 
 /* 导航里切换视图：「阵列 / 封面墙 / 网格」，和目录分类同一种斜杠分隔的写法 */
 .archive-nav > .archive-layouts { display: flex; align-items: center; gap: 0; font-size: 14px; letter-spacing: .7px; pointer-events: auto; }
@@ -224,7 +352,9 @@ body.music-reduce-motion .ag-art, body.music-reduce-motion .ag-play { transition
 }
 .aw-table .aw-world { transform-origin: 0 0; transform-style: preserve-3d; }
 .aw-table .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 8%, transparent); }
-.aw-table .aw-tile:hover .aw-in { transform: translateZ(10px); box-shadow: 0 0 0 1px var(--ar-ink), 0 0 0 4px rgba(var(--ar-paper-rgb), .5); }
+.aw-table .aw-tile:hover .aw-in { transform: translateZ(10px); filter: saturate(1.08) brightness(1.06); box-shadow: 0 0 0 1px var(--ar-ink), 0 0 0 4px rgba(var(--ar-paper-rgb), .5); }
+/* 平放：远处的小卡不画字，只留封面和徽标 */
+.aw-table .aw-s .aw-cap { display: none; }
 .aw-table .aw-tile.is-focus .aw-in { box-shadow: 0 0 0 3px var(--ar-accent); }
 /* 选中展开的那张：从后边缘为轴立起来，正对镜头，桌面上留一块影子 */
 .aw-table .aw-tile.is-open { transform-style: preserve-3d; z-index: 5; }
@@ -240,7 +370,8 @@ body.music-reduce-motion .ag-art, body.music-reduce-motion .ag-play { transition
     transform-origin: 50% 100%;
     transform: rotateX(-56deg) scale(.86);
     transition: transform .55s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1));
-    box-shadow: 0 0 0 1px var(--ar-ink), 0 30px 60px rgba(0, 0, 0, .28);
+    box-shadow: 0 0 0 1px var(--ar-ink), 0 42px 90px rgba(0, 0, 0, .34);
+    filter: none;
     animation: aw-stand .6s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)) both;
 }
 @keyframes aw-stand { from { transform: rotateX(0deg) scale(1); } to { transform: rotateX(-56deg) scale(.86); } }
