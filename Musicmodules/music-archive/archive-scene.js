@@ -1297,10 +1297,11 @@ vec3 archiveUntone(vec3 y) {
                     const isTarget = lane === target.lane && row === target.row;
                     if (isTarget) y += lift.v;
                     let backRot = 0;
-                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; } }
+                    let backQ = 0;
+                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; backQ = smooth(r.v / 0.4); } }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
-                    // 选中卡抬起后不再跟着坡度倾斜（× (1 − smoother(lift / 0.4))），取出时可以转着看
-                    dummy.rotation.x = isTarget ? tilt * (1 - smoother(lift.v / 0.4)) : tilt;
+                    // 参考播放器：坡度倾斜 × (1 − quality)，quality = smooth(lift / 0.4)；落回中的卡也一样，抬着时不跟坡度晃
+                    dummy.rotation.x = tilt * (1 - (isTarget ? smooth(lift.v / 0.4) : backQ));
                     dummy.rotation.y = isTarget ? inspect.v : backRot;
                     if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
