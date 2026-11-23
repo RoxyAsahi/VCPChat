@@ -30,7 +30,7 @@
         <div class="archive-atmos" aria-hidden="true"></div>
         <div class="archive-grain" data-ref="grain" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
-        <div class="archive-keys" data-ref="keys" role="dialog" aria-label="快捷键" hidden><div class="archive-keys-head"><span class="archive-tiny">KEYS</span><b>快捷键</b><button type="button" data-act="keys" aria-label="关闭">×</button></div><dl><dt>↑ ↓</dt><dd>上一首 / 下一首</dd><dt>← →</dt><dd>换一组</dd><dt>PgUp PgDn</dt><dd>跳 10 首</dd><dt>Home End</dt><dd>这一组的第一首 / 最后一首</dd><dt>Enter</dt><dd>播放选中（Shift+Enter 直接进舞台）</dd><dt>空格</dt><dd>播放 / 暂停</dd><dt>/ 或直接打字</dt><dd>检索</dd><dt>Ctrl+L</dt><dd>回到正在播放</dd><dt>Shift+R</dt><dd>随机抽取</dd><dt>Shift+F10</dt><dd>选中曲目的菜单</dd><dt>Esc</dt><dd>收起 / 停下</dd></dl><p>再按 ? 或 Esc 关闭</p></div>
+        <div class="archive-keys" data-ref="keys" role="dialog" aria-label="快捷键" hidden><div class="archive-keys-head"><span class="archive-tiny">KEYS</span><b>快捷键</b><button type="button" data-act="keys" aria-label="关闭">×</button></div><dl><dt>↑ ↓</dt><dd>上一首 / 下一首</dd><dt>← →</dt><dd>换一组</dd><dt>PgUp PgDn</dt><dd>跳 10 首</dd><dt>Home End</dt><dd>这一组的第一首 / 最后一首</dd><dt>Enter</dt><dd>播放选中（Shift+Enter 直接进舞台）</dd><dt>空格</dt><dd>播放 / 暂停</dd><dt>/ 或直接打字</dt><dd>检索</dd><dt>Ctrl+L</dt><dd>回到正在播放</dd><dt>Shift+R</dt><dd>随机抽取</dd><dt>Shift+F10</dt><dd>选中曲目的菜单</dd><dt>Esc</dt><dd>收起 / 停下</dd></dl><p class="archive-keys-wall">封面墙 / 网格里：方向键按位置走，单击展开大卡、双击播放，PgUp PgDn 在网格里翻页，拖动或滚轮平移</p><p>再按 ? 或 Esc 关闭</p></div>
         <div class="archive-hud" data-ref="hud">
             <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
@@ -562,6 +562,30 @@
             capped(state.coverCache, url, entry, 64);
         };
         let cardExpanded = true;
+        /*
+         * 借鉴 RhinE「鼠标不动、档案在它下面移动后重新找一次指着的那张」：键盘、标尺、滚轮换了选中后，
+         * 镜头停稳时按鼠标最后的位置重新判一次悬停，高亮不会还挂在原来那张卡上。只改悬停和光标，不弹提示。
+         */
+        let lastPtr = null, rehoverTimer = 0;
+        const rehover = () => {
+            rehoverTimer = 0;
+            const sc = state.scene;
+            if (!lastPtr || !sc || !sc.canvas || wheelBrowsing || turning || (plane && plane.active)) return;
+            const rect = sc.canvas.getBoundingClientRect();
+            const d = sc.detailRect && sc.detailRect();
+            const x = lastPtr.x - rect.left, y = lastPtr.y - rect.top;
+            if (d && x >= d.left && x <= d.right && y >= d.top && y <= d.bottom) return;
+            const c = sc.pick(lastPtr.x, lastPtr.y, rect);
+            sc.setHover(c);
+            const browsing = !cardExpanded && !sc.detail;
+            sc.canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
+            kick();
+        };
+        const rehoverSoon = () => {
+            if (!lastPtr) return;
+            clearTimeout(rehoverTimer);
+            rehoverTimer = setTimeout(rehover, reducedMotion() ? 0 : 420);
+        };
         let wheelBrowsing = false;
         const syncCard = () => {
             if (!state.scene || state.destroyed) return;
@@ -624,6 +648,7 @@
             syncList();
             schedulePlace();
             kick();
+            rehoverSoon();
         };
 
         /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
@@ -1347,6 +1372,7 @@
         };
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
+                lastPtr = { x: e.clientX, y: e.clientY };
                 const rect = canvas.getBoundingClientRect();
                 state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
                 if (plane && (e.buttons & 1)) {
@@ -1411,7 +1437,7 @@
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { lastPtr = null; clearTimeout(rehoverTimer); pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
@@ -1511,6 +1537,7 @@
             if (!wheelBrowsing) return;
             wheelBrowsing = false;
             syncCard();
+            rehoverSoon();
         };
         const stopInertia = () => {
             inertia.stop();
@@ -1848,6 +1875,7 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            clearTimeout(rehoverTimer);
             document.removeEventListener('pointerdown', onKeysOutside, true);
             grainObserver.disconnect();
             modeObserver.disconnect(); modeSweepEl?.remove();
