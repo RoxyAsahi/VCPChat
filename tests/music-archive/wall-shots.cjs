@@ -138,8 +138,29 @@ const FAKE = ({ n, light, covers }) => {
   await shot(tag + '-5-nolist');
   await page.click('.archive-nav [data-act="list"]');
 
+  // 分节网格
+  await page.click('.archive-nav [data-layout="grid"]');
+  await page.waitForTimeout(2500);
+  d = await dbg();
+  check('网格开着、墙关了', d.layout === 'grid' && d.grid && d.grid.on && !d.wall.on && d.allowed === false, JSON.stringify(d.grid));
+  check('网格有格子和分节', d.grid.cells > 8 && d.grid.sections >= 1, 'cells=' + d.grid.cells + ' sections=' + d.grid.sections);
+  await shot(tag + '-7-grid');
+  const g0 = d.selected;
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(900);
+  d = await dbg();
+  check('网格方向键换选中', d.selected !== g0, g0 + ' → ' + d.selected);
+  await page.evaluate(() => document.querySelector('.ag-scroll').scrollBy(0, 900));
+  await page.waitForTimeout(1500);
+  await shot(tag + '-8-grid-scrolled');
+  const cellBox = await page.evaluate(() => { const c = [...document.querySelectorAll('.ag-cell')].map((x) => x.getBoundingClientRect()).find((b) => b.top > 200 && b.bottom < 700); return c ? { x: c.left + c.width / 2, y: c.top + 40 } : null; });
+  if (cellBox) { await page.mouse.click(cellBox.x, cellBox.y); await page.mouse.click(cellBox.x, cellBox.y); }
+  await page.waitForTimeout(1500);
+  const calls2 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'musicLoad').length);
+  check('网格双击播放', calls2 > calls, calls + ' → ' + calls2);
+
   // 切回阵列
-  await page.click('.archive-nav [data-act="layout"]');
+  await page.click('.archive-nav [data-layout="array"]');
   await page.waitForTimeout(2500);
   d = await dbg();
   check('切回阵列', d.layout === 'array' && !d.wall.on && d.allowed === true);

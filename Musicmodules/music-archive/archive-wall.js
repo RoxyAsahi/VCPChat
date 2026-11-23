@@ -832,5 +832,5 @@
         return api;
     };
 
-    global.MusicArchiveWall = Object.freeze({ create, _test: { TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
 })(typeof window !== 'undefined' ? window : globalThis);
