@@ -24,10 +24,15 @@ let fetch;
 
 let musicWindow = null;
 // 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
-const musicThumbar = createMusicThumbar({ nativeImage: electron.nativeImage });
+// （主进程单测会把这几个辅助模块换成空对象，下面三个都留了什么都不做的退路）
+const musicThumbar = typeof createMusicThumbar === 'function'
+    ? createMusicThumbar({ nativeImage: electron.nativeImage })
+    : { update() { return false; }, reset() {} };
 // 曲库文件夹自动同步：记住加过的文件夹，音乐窗口开着时后台对磁盘、监听变化（modules/musicLibraryWatch.js）
 const musicFoldersFile = () => (MUSIC_PLAYLIST_FILE ? path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_folders.json') : null);
-const libraryWatch = createLibraryWatch({
+const libraryWatch = typeof createLibraryWatch !== 'function'
+    ? { start() {}, stop() {}, rememberFolder: async () => {}, noteLibrarySaved: async () => {} }
+    : createLibraryWatch({
     // 用户自己在加文件夹时先等它扫完：两边的结果同时回到窗口会互相打乱「正在扫描」和排序
     scan: async (folderPath, signal) => {
         while (activeUserScans > 0 && !signal.aborted) await new Promise((r) => setTimeout(r, 2000));
@@ -54,10 +59,12 @@ const libraryWatch = createLibraryWatch({
     send: (channel, payload) => { if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send(channel, payload); }
 });
 // 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
-const lyricsTranslator = createLyricsTranslator({
-    getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
-    getCacheDir: () => (LYRIC_DIR ? path.join(LYRIC_DIR, 'translations') : null)
-});
+const lyricsTranslator = typeof createLyricsTranslator !== 'function'
+    ? { translate: async () => ({ status: 'unavailable', message: '歌词翻译模块没有加载' }) }
+    : createLyricsTranslator({
+        getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
+        getCacheDir: () => (LYRIC_DIR ? path.join(LYRIC_DIR, 'translations') : null)
+    });
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
