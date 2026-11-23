@@ -29,3 +29,10 @@ test('durations and hour names read naturally', () => {
     assert.equal(hourName(0), '凌晨 0 点');
     assert.equal(hourName(12), '中午 12 点');
 });
+
+test('coverUrls: embedded cover first, then folder images; remote tracks only use their own art', () => {
+    const { coverUrls } = require(path.join(__dirname, '../Musicmodules/music-stats-view.js'));
+    assert.deepEqual(coverUrls({ path: 'D:\\m\\a b#\\x.flac', albumArt: 'C:\\c\\1.jpg' }).slice(0, 2), ['file:///C:/c/1.jpg', 'file:///D:/m/a%20b%23/cover.jpg']);
+    assert.deepEqual(coverUrls({ path: 'https://dav/x.flac' }), []);
+    assert.deepEqual(coverUrls(null), []);
+});

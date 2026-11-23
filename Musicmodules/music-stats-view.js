@@ -21,6 +21,22 @@
         const h = Math.floor(m / 60);
         return h ? `${h} 小时${m % 60 ? ` ${m % 60} 分` : ''}` : `${m} 分`;
     };
+    // 和 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则断图
+    const fileUrl = (path) => {
+        const p = String(path || '').replace(/\\/g, '/');
+        if (!p) return '';
+        if (/^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p)) return p;
+        return 'file://' + encodeURI(p.startsWith('/') ? p : '/' + p).replace(/[?#']/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    };
+    const coverUrls = (t) => {
+        if (!t) return [];
+        const out = [];
+        if (t.albumArt) out.push(fileUrl(t.albumArt));
+        const p = String(t.path || '').replace(/\\/g, '/');
+        const cut = p.lastIndexOf('/');
+        if (cut > 0 && !/^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p)) for (const name of ['cover.jpg', 'folder.jpg', 'cover.png']) out.push(fileUrl(p.slice(0, cut) + '/' + name));
+        return out;
+    };
     const hourName = (h) => {
         const part = h < 5 ? '凌晨' : h < 9 ? '早上' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜';
         const n = h < 5 ? h : h % 12 === 0 ? 12 : h % 12;
@@ -84,6 +100,25 @@
             else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) e.stopPropagation();
         };
 
+        /*
+         * 排行里每行带一张小封面：曲目自带的封面（扫描时存下的内嵌封面）优先，没有就试同目录的 cover.jpg / folder.jpg；
+         * 都没有时留一块底色。歌手用他最常听那首的封面，裁成圆的。
+         */
+        const cover = (t, round) => {
+            const box = el('span', round ? 'mstats-art round' : 'mstats-art');
+            box.setAttribute('aria-hidden', 'true');
+            const tries = coverUrls(t);
+            if (!tries.length) return box;
+            const img = new Image();
+            img.alt = '';
+            img.decoding = 'async';
+            img.loading = 'lazy';
+            let k = 0;
+            img.onerror = () => { if (++k < tries.length) img.src = tries[k]; else img.remove(); };
+            img.src = tries[0];
+            box.appendChild(img);
+            return box;
+        };
         const list = (heading, rows, render) => {
             const box = el('section', 'mstats-top');
             box.appendChild(el('h4', '', heading));
@@ -93,7 +128,8 @@
                 const li = el('li');
                 const btn = el('button', 'mstats-row');
                 btn.type = 'button';
-                const [main, sub, run] = render(row);
+                const [main, sub, run, art, round] = render(row);
+                btn.appendChild(cover(art, round));
                 btn.appendChild(el('span', 'mstats-name', main));
                 if (sub) btn.appendChild(el('span', 'mstats-sub', sub));
                 btn.appendChild(el('span', 'mstats-count', `${row.plays} 次`));
@@ -153,9 +189,10 @@
 
             const r = rank(s, app.playlist || []);
             const tops = el('div', 'mstats-tops');
-            tops.appendChild(list('最常听的歌', r.songs, (row) => [title(row.track), firstArtist(row.track), () => app.loadTrack?.(row.index)]));
-            tops.appendChild(list('最常听的歌手', r.artists, (row) => [row.name, '', () => app.goToGroup?.(row.index, 'artist')]));
-            tops.appendChild(list('最常听的专辑', r.albums, (row) => [row.name, row.artist, () => app.goToGroup?.(row.index, 'album')]));
+            const lib = app.playlist || [];
+            tops.appendChild(list('最常听的歌', r.songs, (row) => [title(row.track), firstArtist(row.track), () => app.loadTrack?.(row.index), row.track]));
+            tops.appendChild(list('最常听的歌手', r.artists, (row) => [row.name, '', () => app.goToGroup?.(row.index, 'artist'), lib[row.index], true]));
+            tops.appendChild(list('最常听的专辑', r.albums, (row) => [row.name, row.artist, () => app.goToGroup?.(row.index, 'album'), lib[row.index]]));
             body.appendChild(tops);
             if (!range && s.since) body.appendChild(el('p', 'mstats-note', `听歌时长从 ${s.since} 开始记；次数包括更早的记录。`));
         };
@@ -209,7 +246,7 @@
 
     // 命令面板直接调这个：第一次用时才装上
     const open = (app) => { setupMusicStatsView(app); app?.openStatsView?.(); };
-    const exported = { setupMusicStatsView, open, rank, formatDuration, hourName };
+    const exported = { setupMusicStatsView, open, rank, formatDuration, hourName, coverUrls };
     if (typeof module !== 'undefined' && module.exports) module.exports = exported;
     global.setupMusicStatsView = setupMusicStatsView;
     global.MusicStatsView = exported;

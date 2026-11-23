@@ -117,12 +117,12 @@
 .mstats-top li { counter-increment: mstats; }
 .mstats-row {
     display: grid;
-    grid-template-columns: 16px minmax(0, 1fr) auto;
-    grid-template-areas: "n name count" "n sub count";
+    grid-template-columns: 16px 32px minmax(0, 1fr) auto;
+    grid-template-areas: "n art name count" "n art sub count";
     align-items: center;
     column-gap: 8px;
     width: 100%;
-    min-height: 28px;
+    min-height: 40px;
     padding: 4px 6px;
     border: 0;
     border-radius: 10px;
@@ -140,6 +140,16 @@
     font-variant-numeric: tabular-nums;
 }
 .mstats-row:hover { background: var(--ms-hover); }
+.mstats-art {
+    grid-area: art;
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--ms-hover);
+}
+.mstats-art.round { border-radius: 50%; }
+.mstats-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .mstats-name { grid-area: name; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mstats-sub { grid-area: sub; color: var(--ms-ink2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mstats-count { grid-area: count; color: var(--ms-ink2); font-size: 11px; font-variant-numeric: tabular-nums; }
