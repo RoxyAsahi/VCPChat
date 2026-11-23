@@ -92,13 +92,24 @@ body.music-reduce-motion .archive-nav > button.running .archive-glyph-pick { ani
 .archive-counter > div { font-size: 58px; line-height: 1.1; margin-top: 16px; display: flex; gap: 21px; align-items: baseline; }
 .archive-counter i { font-style: normal; font-weight: 300; font-size: 32px; color: var(--ar-slash, var(--ar-muted)); }
 /* 索引标尺：计数下面一排细刻线，当前位置一根高的强调色线；悬停显示曲名，按住拖动选曲 */
+/* 分组切换：计数上方一行「← 组 03 / 12 名称 →」，点名称打开目录 */
+.archive-lanes { position: absolute; bottom: calc(100% + 16px); left: -6px; display: flex; align-items: center; gap: 4px; pointer-events: auto; white-space: nowrap; }
+.archive-lanes[hidden] { display: none; }
+.archive-lanes > button { height: 28px; display: flex; align-items: center; color: var(--ar-muted); }
+.archive-lanes > button:not(.archive-lanes-name) { width: 22px; justify-content: center; font-size: 14px; }
+.archive-lanes > button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-lanes-name { gap: 10px; padding: 0 6px; max-width: 320px; }
+.archive-lanes-name b { font-weight: 500; font-size: 15px; letter-spacing: .4px; color: var(--ar-ink); overflow: hidden; text-overflow: ellipsis; }
+.archive-lanes-name:hover b { color: inherit; }
+.archive-hud.short .archive-lanes { display: none; }
 .archive-ruler { position: absolute; top: calc(100% + 14px); left: -6px; display: flex; align-items: center; gap: 6px; pointer-events: auto; }
 .archive-ruler[hidden] { display: none; }
 .archive-ruler > button { width: 22px; height: 22px; display: grid; place-items: center; font-size: 13px; line-height: 1; color: var(--ar-muted); }
 .archive-ruler > button:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-ruler-track { --ticks: 32; position: relative; width: calc(var(--ticks) * 7px); height: 22px; cursor: ew-resize; touch-action: none;
-  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ar-ink) 42%, transparent) 0 1px, transparent 1px 7px) 3px 50% / calc(100% - 3px) 9px no-repeat; }
-.archive-ruler-track:hover, .archive-ruler-track.drag { background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ar-ink) 70%, transparent) 0 1px, transparent 1px 7px); }
+}
+.archive-ruler-tick { position: absolute; top: 6px; height: 10px; width: 1px; margin-left: -.5px; background: color-mix(in srgb, var(--ar-ink) 42%, transparent); text-decoration: none; pointer-events: none; }
+.archive-ruler-track:hover .archive-ruler-tick, .archive-ruler-track.drag .archive-ruler-tick { background: color-mix(in srgb, var(--ar-ink) 70%, transparent); }
 .archive-ruler-at { --at: 0; position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 2px; margin-left: -1px; background: var(--ar-accent); transition: left .32s var(--mt-ease, ease); pointer-events: none; }
 .archive-ruler-track.drag .archive-ruler-at { transition: none; }
 .archive-ruler-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); padding: 3px 8px; font-size: 11px; font-weight: 400; letter-spacing: .5px; line-height: 16px; white-space: pre; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--ar-paper, #fff); background: var(--ar-ink); opacity: 0; transition: opacity .15s; pointer-events: none; }

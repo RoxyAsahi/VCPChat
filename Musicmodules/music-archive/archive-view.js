@@ -48,7 +48,7 @@
                 <button type="button" data-act="add-cloud">从云端导入 <span aria-hidden="true">→</span></button>
             </div>
             <div class="archive-bottom">
-                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
+                <div class="archive-counter"><div class="archive-lanes" data-ref="lanes"><button type="button" data-act="lane-prev" title="上一组（←）" aria-label="上一组">←</button><button type="button" class="archive-lanes-name" data-act="list" title="打开目录，看全部分组"><span class="archive-tiny" data-ref="laneN"></span><b data-ref="laneName"></b></button><button type="button" data-act="lane-next" title="下一组（→）" aria-label="下一组">→</button></div><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
                 <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
@@ -372,6 +372,7 @@
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
             renderRuler(col, count, r);
+            renderLanes(col);
             syncCard();
         };
 
@@ -380,6 +381,16 @@
          * 多于刻线数时每根代表相等的一段；当前位置是一根高的强调色刻线。
          * 悬停在上面显示那一格的曲名，按住左右拖动一路选过去，松手停下；两头的 ↑ ↓ 逐首走。
          */
+        /* 分组切换（借鉴 RhinE 阵列下方的「← SHELF 04 / 31  名称 →」）：目录收起时也知道自己在哪一组、能换组 */
+        const renderLanes = (col) => {
+            const n = state.columns.length;
+            if (!refs.lanes) return;
+            refs.lanes.hidden = n < 2;
+            if (n < 2) return;
+            const d = Math.max(2, String(n).length);
+            refs.laneN.textContent = `组 ${pad(Model.wrap(state.lane, n) + 1, d)} / ${pad(n, d)}`;
+            refs.laneName.textContent = col.name || '';
+        };
         const RULER_TICKS = 32;
         let rulerKey = '';
         const rulerTicks = (count) => Math.min(count, RULER_TICKS);
@@ -393,6 +404,11 @@
             if (key !== rulerKey) {
                 rulerKey = key;
                 refs.rulerTrack.style.setProperty('--ticks', n);
+                // 刻线用真元素画：HUD 整体缩放后，1px 的重复渐变会有几根被吃掉
+                refs.rulerTrack.querySelectorAll('.archive-ruler-tick').forEach((x) => x.remove());
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < n; i++) { const t = document.createElement('s'); t.className = 'archive-ruler-tick'; t.style.left = ((i + 0.5) / n * 100).toFixed(3) + '%'; frag.appendChild(t); }
+                refs.rulerTrack.insertBefore(frag, refs.rulerAt);
                 refs.rulerTrack.setAttribute('aria-valuemin', '1');
                 refs.rulerTrack.setAttribute('aria-valuemax', String(count));
             }
@@ -1553,6 +1569,8 @@
                     case 'pick': randomPick(); break;
                     case 'row-prev': select(state.lane, state.row - 1); break;
                     case 'row-next': select(state.lane, state.row + 1); break;
+                    case 'lane-prev': stepLane(-1); break;
+                    case 'lane-next': stepLane(1); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
