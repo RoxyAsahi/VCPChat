@@ -41,8 +41,8 @@
      * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', mat: ['#ffffff', 0.5] },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', mat: ['#c9cfcf', 0.18] }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -370,6 +370,49 @@ void main() {
         return geo;
     };
 
+    /*
+     * 选中那张卡才装的小零件（参考播放器同样只给焦点卡画）：左上缺口里一块平嵌的索引片，
+     * 两个圆孔里各一颗平头十字螺钉（头半径 0.06、四周一圈小圆边，比孔小一圈露出孔沿）。
+     * 合成一个几何体一次画完；顶点色分三组（索引片 / 螺钉 / 十字槽），换主题时只改颜色。
+     */
+    const FITTING_INLAY = 0, FITTING_SCREW = 1, FITTING_SLOT = 2;
+    const fittingsGeometry = (THREE) => {
+        const parts = [];
+        const inlay = new THREE.BoxGeometry(0.25, 0.224, 0.004);
+        inlay.translate(-2.159, 3.588, 0.204);
+        parts.push([inlay, FITTING_INLAY]);
+        const profile = [[0, 0.206], [0.05, 0.206], [0.056, 0.204], [0.059, 0.199], [0.06, 0.192], [0.058, 0.186]]
+            .map(([r, z]) => new THREE.Vector2(r, z));
+        for (const [cx, cy] of [[2.389, 3.526], [-2.335, 0.14]]) {
+            const head = new THREE.LatheGeometry(profile, 28);
+            head.rotateX(Math.PI / 2);         // 车床绕 y 轴转，转到朝 +z
+            head.translate(cx, cy, 0);
+            parts.push([head, FITTING_SCREW]);
+            for (const a of [0.23, 0.23 + Math.PI / 2]) {   // 十字槽：两条细长的深色条，略斜
+                const slot = new THREE.PlaneGeometry(0.07, 0.013);
+                slot.rotateZ(a);
+                slot.translate(cx, cy, 0.2065);
+                parts.push([slot, FITTING_SLOT]);
+            }
+        }
+        const flat = parts.map(([g, k]) => [g.index ? g.toNonIndexed() : g, k]);
+        const count = flat.reduce((n, [g]) => n + g.attributes.position.count, 0);
+        const pos = new Float32Array(count * 3), kind = new Uint8Array(count);
+        let o = 0;
+        for (const [g, k] of flat) {
+            pos.set(g.attributes.position.array, o * 3);
+            kind.fill(k, o, o + g.attributes.position.count);
+            o += g.attributes.position.count;
+        }
+        for (const [g] of parts) g.dispose();
+        for (const [g] of flat) g.dispose();
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+        geo.userData.kind = kind;
+        return geo;
+    };
+
     const create = (options) => {
         const THREE = global.THREE;
         if (!THREE) throw new Error('THREE is not loaded');
@@ -690,6 +733,7 @@ vec3 archiveUntone(vec3 y) {
             labelInk.muted = colors.labelMuted || (dark ? 'rgba(166,176,177,.55)' : 'rgba(98,95,88,.6)');
             labelEpoch++;
             drawEtch();
+            paintFittings();
             frameMat.color.set(lighting.mat[0]);
             const to = lookOf(lighting);
             accentIdx = -1;
@@ -789,6 +833,20 @@ vec3 archiveUntone(vec3 y) {
         coverGroup.add(frameMesh, artMesh, captionMesh, etchMesh);
         coverGroup.visible = false;
         scene.add(coverGroup);
+        // 选中卡的索引片和螺钉（颜色按参考播放器截图里和卡面的明暗比例取）
+        const fittingsGeo = fittingsGeometry(THREE);
+        const fittingsMat = keepColors(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }));
+        const fittings = new THREE.Mesh(fittingsGeo, fittingsMat);
+        fittings.matrixAutoUpdate = false;
+        fittings.visible = false;
+        scene.add(fittings);
+        const paintFittings = () => {
+            const c = [new THREE.Color(lighting.fit[0]), new THREE.Color(lighting.fit[1]), new THREE.Color(lighting.fit[1]).multiplyScalar(0.62)];
+            const kind = fittingsGeo.userData.kind, col = fittingsGeo.attributes.color.array;
+            for (let i = 0; i < kind.length; i++) { const k = c[kind[i]]; col[i * 3] = k.r; col[i * 3 + 1] = k.g; col[i * 3 + 2] = k.b; }
+            fittingsGeo.attributes.color.needsUpdate = true;
+        };
+        paintFittings();
         let coverKey = '';
         const freeCoverTex = () => {
             artMat.map?.dispose();
@@ -1081,7 +1139,7 @@ vec3 archiveUntone(vec3 y) {
             white.needsUpdate = true;
             const borrowMap = !artMat.map;
             if (borrowMap) { artMat.map = white; artMat.needsUpdate = true; }
-            const shown = [coverGroup, labels[0]?.mesh].filter(Boolean);
+            const shown = [coverGroup, fittings, labels[0]?.mesh].filter(Boolean);
             const was = shown.map((o) => o.visible);
             shown.forEach((o) => { o.visible = true; });
             const jobs = [renderer.compileAsync(scene, camera)];
@@ -1216,6 +1274,7 @@ vec3 archiveUntone(vec3 y) {
                         }
                     }
                     dummy.updateMatrix();
+                    if (isTarget) { fittings.matrix.copy(dummy.matrix); fittings.matrixWorldNeedsUpdate = true; }
                     for (const layer of layers) layer.setMatrixAt(i, dummy.matrix);
                     if (tinting) {
                         for (const [mesh, part] of TINTED) mesh.setColorAt(i, colorAt(part, lane, row, T, waves.length - 1, tmpC));
@@ -1258,6 +1317,7 @@ vec3 archiveUntone(vec3 y) {
             } else if (!detailOn && detailK < 0.001) { pointer.x = pointerAim.x; pointer.y = pointerAim.y; }
             placeCamera(reduced);
             placeCover(targetVisible);
+            fittings.visible = targetVisible;
             placeLabels();
             // 选中卡的暖光跟着卡走；看不到选中卡时关掉
             if (targetVisible) {
@@ -1378,7 +1438,7 @@ vec3 archiveUntone(vec3 y) {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
             for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat]) m.dispose();
             if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); host.classList.remove('archive-post-atmos'); }
-            freeCoverTex(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose();
+            freeCoverTex(); fittingsGeo.dispose(); fittingsMat.dispose(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             renderer.dispose();
