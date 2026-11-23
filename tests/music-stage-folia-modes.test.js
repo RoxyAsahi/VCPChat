@@ -87,3 +87,27 @@ test('lumiere: cues tile the song, every four sung lines share one light rig, be
         assert.ok(n >= 1 && n <= 5, rig);
     }
 });
+
+require(path.join(stage, 'modes', 'hanabi-manager.js'));
+test('hanabi: every sung line launches a shell at its start, the show is deterministic and the active list stays bounded', () => {
+    const H = window.MusicStageHanabiManager._test;
+    const many = window.MusicStageRuntime.normalizeLines(Array.from({ length: 12 }, (_, i) => ({ time: 6 + i * 3, original: `第${i + 1}句歌词慢慢唱` })));
+    const cues = H.buildCues(many, 90);
+    const show = H.planShow(cues, 'k', 1);
+    for (let i = 1; i < show.length; i += 1) assert.ok(show[i].t >= show[i - 1].t, 'sorted');
+    cues.filter(c => c.kind === 'line').forEach((cue) => {
+        assert.ok(show.some(b => Math.abs(b.t - cue.line.startTime) < 0.05 && b.launch > 0), `shell for line at ${cue.line.startTime}`);
+    });
+    assert.ok(show.some(b => b.t > 45), 'the closing interlude has a barrage');
+    assert.deepEqual(H.planShow(cues, 'k', 1), show, 'deterministic');
+    assert.ok(H.planShow(cues, 'k', 0.4).length < show.length, 'density thins the show');
+    const out = new Int32Array(24);
+    for (let t = 0; t < 90; t += 0.25) {
+        const n = H.activeAt(show, t, out);
+        assert.ok(n <= 24);
+        for (let i = 0; i < n; i += 1) {
+            const b = show[out[i]];
+            assert.ok(t >= b.t - b.launch - 0.06 && t <= b.t + H.LIFE[b.kind], `burst ${out[i]} active at ${t}`);
+        }
+    }
+});

@@ -504,6 +504,7 @@ async function handleMusicControl(args) {
         'inkdraft',
         'fogpane',
         'lumiere',
+        'hanabi',
         'starborn'
     ]);
     const normalizedStageMode = typeof stageMode === 'string' && stageMode.trim()

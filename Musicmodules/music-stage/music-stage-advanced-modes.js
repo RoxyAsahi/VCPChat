@@ -10,7 +10,8 @@
         kowloon: global.MusicStageKowloonManager,
         inkdraft: global.MusicStageInkdraftManager,
         fogpane: global.MusicStageFogpaneManager,
-        lumiere: global.MusicStageLumiereManager
+        lumiere: global.MusicStageLumiereManager,
+        hanabi: global.MusicStageHanabiManager
     };
 
     const definitions = [
@@ -22,7 +23,8 @@
         { id: 'kowloon', label: '町景', manager: managers.kowloon },
         { id: 'inkdraft', label: '墨痕', manager: managers.inkdraft },
         { id: 'fogpane', label: '雾笺', manager: managers.fogpane },
-        { id: 'lumiere', label: '绘光', manager: managers.lumiere }
+        { id: 'lumiere', label: '绘光', manager: managers.lumiere },
+        { id: 'hanabi', label: '花火', manager: managers.hanabi }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({
