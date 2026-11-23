@@ -569,6 +569,11 @@ body.music-reduce-motion .archive-lyrics-track p.on b.ww .w.singing { transition
 .archive-lyrics.browsing .archive-lyrics-track b { opacity: .8; }
 .archive-lyrics-track p.on em { color: var(--ar-ink); opacity: .8; }
 .archive-lyrics-track p.on::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--ar-square); }
+/* 逐句进度：正在唱那一行上方的细线按这一句的进度填成强调色（盖在细线上，起点和细线对齐） */
+@property --lp { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+.archive-lyrics-track p.on.lp { transition: --lp .22s linear; }
+.archive-lyrics-track p.on.lp::after { background: linear-gradient(90deg, var(--ar-accent) var(--lp), var(--ar-rule) var(--lp)); }
+body.music-reduce-motion .archive-lyrics-track p.on.lp { transition: none; }
 .archive-lyrics-track p.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 9.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
 /* 没有歌词：只留栏头和一行说明，不占右侧版面 */
 .archive-lyrics-none { display: none; margin-right: var(--lyrics-end); padding: 18px 0 0 var(--lyrics-start); }

@@ -210,11 +210,30 @@
         });
 
         /* 正在唱的那一行逐字填色：唱过的填满，正在唱的那个字用 CSS 过渡按剩余时长填，暂停时停在当前比例 */
+        /*
+         * 没有逐字时间的歌：正在唱那一行上方的细线跟着这一句的进度从左往右填成强调色，到下一句开始时填满
+         * （借鉴 RhinE 歌词条「一根细线填到下一句」）。每次刷新（200ms）只改一个变量，过渡补成连续的。
+         */
+        let lpNode = null;
+        const paintLineProgress = (t, hasWords) => {
+            const k = state.index;
+            const node = !hasWords && k >= 0 ? r.track.children[k] : null;
+            if (lpNode && lpNode !== node) { lpNode.style.removeProperty('--lp'); lpNode.classList.remove('lp'); }
+            lpNode = node;
+            if (!node) return;
+            const start = Number(state.lines[k].time) || 0;
+            const next = state.lines[k + 1];
+            const end = next ? Number(next.time) || 0 : start + 6;
+            const f = end > start ? Math.min(1, Math.max(0, (t - start) / (end - start))) : 1;
+            node.classList.add('lp');
+            node.style.setProperty('--lp', (f * 100).toFixed(1) + '%');
+        };
         const paintWords = (t) => {
             const k = state.index;
             const line = k >= 0 ? state.lines[k] : null;
             const words = line && wordsOf(line);
             const node = words ? r.track.children[k]?.querySelector('b.ww') : null;
+            paintLineProgress(t, Boolean(node));
             if (!node) { state.words = null; return; }
             const spans = node.children;
             const playing = Boolean(app.isPlaying);
