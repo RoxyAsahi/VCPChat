@@ -718,11 +718,11 @@ body.music-dock-beside-lyrics:has(#music-dock-root.md-fl-low) .archive-hud.lyric
 body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 .archive-list { --brand-room: 108px; }
 .archive-hud:not(.narrow):not(.squeeze):not(.tiny) .archive-list { top: calc(var(--archive-toolbar-top) + var(--brand-room) - 34px); }
-.archive-hud:is(.squeeze, .tiny) .archive-list-brand { display: none; }
+.archive-hud.tiny .archive-list-brand { display: none; }
 /* 窄窗口：目录顶上只有一行导航的高度，栏名缩小、不放小字 */
-.archive-hud.narrow .archive-list-brand { bottom: calc(100% + 12px); }
-.archive-hud.narrow .archive-list-brand-title { height: 36px; font-size: 30px; line-height: 36px; }
-.archive-hud.narrow .archive-list-brand-sub { display: none; }
+.archive-hud:is(.narrow, .squeeze) .archive-list-brand { bottom: calc(100% + 12px); }
+.archive-hud:is(.narrow, .squeeze) .archive-list-brand-title { height: 36px; font-size: 30px; line-height: 36px; }
+.archive-hud:is(.narrow, .squeeze) .archive-list-brand-sub { display: none; }
 .archive-list-brand { position: absolute; left: var(--gutter); right: var(--text-end-inset); bottom: calc(100% + 18px); color: var(--ar-ink); pointer-events: none; white-space: nowrap; }
 .archive-list-brand-title { position: relative; height: 50px; margin: 0; overflow: hidden; font-size: 44px; line-height: 50px; font-weight: 750; letter-spacing: 1.5px; }
 .archive-list-brand-title > span { position: absolute; left: 0; top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
