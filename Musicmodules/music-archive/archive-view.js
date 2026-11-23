@@ -1176,7 +1176,7 @@
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
                 const rect = canvas.getBoundingClientRect();
-                state.scene?.setPointer((e.clientX - rect.left) / rect.width * 2 - 1, (e.clientY - rect.top) / rect.height * 2 - 1);
+                state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
                 if (plane && (e.buttons & 1)) {
                     const dx = e.clientX - plane.x0, dy = e.clientY - plane.y0;
                     if (!plane.active && Math.hypot(dx, dy) < 10) return;
