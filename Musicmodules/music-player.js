@@ -293,6 +293,21 @@ function setupPlayer(app) {
             failureToast({ message: `无法播放「${name}」：${detail}` });
             return;
         }
+        // 曲库里还有同一首的另一份文件（别的格式、别的文件夹）：直接换那份接着放，不跳到下一首
+        const alt = typeof app.alternateCopy === 'function' ? app.alternateCopy(track) : null;
+        const altIndex = alt ? (app.playlist || []).indexOf(alt) : -1;
+        if (altIndex >= 0 && requestId === app.pendingLoadRequestId) {
+            app.cancelFailureSkip();
+            const queue = app.currentFilteredTracks;
+            if (Array.isArray(queue) && queue !== app.playlist) {
+                const at = queue.indexOf(track);
+                if (at >= 0 && !queue.includes(alt)) queue[at] = alt;
+            }
+            const ext = (t) => String(t.path || '').split('.').pop().toUpperCase();
+            failureToast({ message: `「${name}」这份文件放不了（${detail}），换成了同一首的 ${ext(alt)} 版本` });
+            app.loadTrack(altIndex, true);
+            return;
+        }
         app.failureStreak += 1;
         if (app.failureStreak >= FAILURE_STOP_AFTER) {
             const count = app.failureStreak;

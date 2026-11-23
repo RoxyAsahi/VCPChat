@@ -150,3 +150,16 @@ test('recentBatches keeps at most three earlier batches from the last seven days
     assert.deepEqual(out.map((x) => x.id), ['2026-11-23#0', '2026-11-22#0', '2026-11-20#0']);
     assert.deepEqual(recentBatches([b('2026-11-10#0'), b('2026-11-30#0')], '2026-11-23#0', '2026-11-23'), []);
 });
+
+test('alternateCopy picks the best other file of the same song that has not failed', () => {
+    const { app } = setup();
+    const a = { path: '/x/a.mp3', title: 'Song.mp3', artist: 'Z', bitrate: 320000 };
+    const b = { path: '/y/a.flac', title: 'Song', artist: 'Z', lossless: true };
+    const c = { path: '/z/a.wav', title: 'Song', artist: 'Z' };
+    app.playlist = [...lib, a, b, c];
+    app.failedTracks = new Map([[c, 'gone']]);
+    assert.equal(app.alternateCopy(a), b);
+    assert.equal(app.alternateCopy(b), a);
+    assert.equal(app.alternateCopy({ path: '/q.flac', title: 'Other', artist: 'Z' }), null);
+    assert.equal(app.alternateCopy({ path: '/q.flac', title: '01' }), null, 'no artist, no guess');
+});

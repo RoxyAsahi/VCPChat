@@ -171,6 +171,18 @@
             try { app.refreshPreload?.(); } catch (e) { /* 还没在放 */ }
         };
 
+        // ---- 同一首的另一份文件（这份放不了时顶上）：同录音里挑 versionRank 最高、这次没放失败过的 ----
+        app.alternateCopy = (track) => {
+            const key = recordingKey(track);
+            if (!key) return null;
+            let best = null;
+            for (const t of app.playlist || []) {
+                if (!t || t === track || !t.path || t.path === track.path || !playable(t) || recordingKey(t) !== key) continue;
+                if (!best || versionRank(t) > versionRank(best)) best = t;
+            }
+            return best;
+        };
+
         // ---- 从一首歌开电台 ----
         app.startRadio = (ref) => {
             const track = typeof ref === 'number' ? app.playlist?.[ref] : ref;

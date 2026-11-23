@@ -847,3 +847,33 @@ test('with the push connection up, a stopped engine at the end is left to the pu
     await app.pollState();
     assert.deepEqual(app.calls.filter(c => c.startsWith('load:')), []);
 });
+
+test('a file that will not load is replaced by another copy of the same song', async t => {
+    const app = setup({
+        getMusicState: async () => app.lastLoadedPath === 'D:/backup/a.mp3'
+            ? readyState({ file_path: 'D:/backup/a.mp3' })
+            : ({ status: 'success', state: { is_loading: false } })
+    });
+    app.playModes = ['repeat'];
+    app.currentPlayMode = 0;
+    t.after(() => { app.cancelFailureSkip(); app.stopStatePolling?.(); });
+    app.failureSkipDelayMs = 60000;
+    const copy = { path: 'D:/backup/a.mp3', title: 'a', artist: 'x' };
+    app.playlist.push(copy);
+    const queue = [app.playlist[0], app.playlist[1]];
+    app.currentFilteredTracks = queue;
+    let altCalls = 0;
+    app.alternateCopy = (t) => { altCalls++; return t === app.playlist[0] ? copy : null; };
+    const loading = app.loadTrack(0, true);
+    await tick(20);
+    app.handleEngineLoadEvent({ type: 'load_error', error: 'file locked' });
+    await loading;
+    for (let i = 0; i < 50 && app.calls.filter((c) => c === 'load:a').length < 2; i++) await tick(20);
+    assert.equal(altCalls, 1);
+    assert.equal(app.calls.filter((c) => c === 'load:a').length, 2, 'loaded the other copy');
+    assert.equal(app.lastLoadedPath, 'D:/backup/a.mp3');
+    assert.equal(queue[0], copy, 'queue now points at the working copy');
+    assert.equal(app.failedTracks.has(app.playlist[0]), true);
+    for (let i = 0; i < 50 && app.isTrackLoading; i++) await tick(20);
+    assert.equal(app.isTrackLoading, false);
+});
