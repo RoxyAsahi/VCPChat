@@ -28,6 +28,7 @@
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
+        <div class="archive-grain" data-ref="grain" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
         <div class="archive-hud" data-ref="hud">
             <nav class="archive-nav" data-ref="nav">
@@ -1628,7 +1629,7 @@
         document.addEventListener('pointerdown', onPickInterrupt, true);
         document.addEventListener('wheel', onPickInterrupt, { capture: true, passive: true });
         // ---------- 外部状态 ----------
-        const onResize = () => resize();
+        const onResize = () => { resize(); syncGrain(); };
         global.addEventListener('resize', onResize);
         /*
          * 浅色/深色切换时的扫描带（借鉴 RhinE 换色时横扫整窗的那一道扫描线）：颜色先换好，
@@ -1666,6 +1667,47 @@
             modeSweep();
         });
         modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        /*
+         * 颗粒质感（借鉴 RhinE 的 grain）：一块无缝噪点小图平铺在场景上、HUD 下面，按设备像素 1:1。
+         * 深色时是白色噪点（只把黑底提亮），浅色时是黑色噪点（只把纸面压暗），平均只差两三级灰，
+         * 让大面积的纸色和黑底不那么像塑料。图只生成一次，静止不动，不占每帧开销。
+         */
+        const GRAIN_TILE = 160;
+        const grainTiles = {};
+        const grainTile = (light) => {
+            const k = light ? 'light' : 'dark';
+            if (grainTiles[k] !== undefined) return grainTiles[k];
+            let url = '';
+            try {
+                const c = document.createElement('canvas');
+                c.width = c.height = GRAIN_TILE;
+                const g = c.getContext('2d');
+                const img = g.createImageData(GRAIN_TILE, GRAIN_TILE);
+                const v = light ? 0 : 255;
+                // 固定种子：每次打开颗粒一样，不会一闪
+                let seed = 0x2f6b1d;
+                const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return ((seed >>> 0) % 100000) / 100000; };
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const r = rnd();
+                    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+                    img.data[i + 3] = Math.round(r * r * r * (light ? 13 : 11));
+                }
+                g.putImageData(img, 0, 0);
+                url = c.toDataURL('image/png');
+            } catch (e) { url = ''; }
+            grainTiles[k] = url;
+            return url;
+        };
+        const syncGrain = () => {
+            const el = refs.grain;
+            if (!el) return;
+            const url = grainTile(document.body.classList.contains('light-theme'));
+            el.style.backgroundImage = url ? `url("${url}")` : 'none';
+            el.style.backgroundSize = (GRAIN_TILE / (global.devicePixelRatio || 1)) + 'px';
+        };
+        syncGrain();
+        const grainObserver = new MutationObserver(syncGrain);
+        grainObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
@@ -1751,6 +1793,7 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            grainObserver.disconnect();
             modeObserver.disconnect(); modeSweepEl?.remove();
             pick.timers.forEach(clearTimeout); pick.on = false;
             document.removeEventListener('pointerdown', onPickInterrupt, true);
