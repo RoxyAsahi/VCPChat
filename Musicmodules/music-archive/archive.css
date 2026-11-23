@@ -815,3 +815,15 @@ body.music-archive-on #custom-title-bar .title { visibility: hidden; }
   -webkit-mask: repeating-linear-gradient(180deg, #000 0 1px, transparent 1px 4px), linear-gradient(#000, #000) right / 2px 100% no-repeat;
   -webkit-mask-composite: source-over; }
 body.music-reduce-motion .archive-mode-sweep { display: none; }
+
+/* 快捷键卡（按 ?）：一张纸面小卡，左边强调色竖线，和悬停提示同一套 */
+.archive-keys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: calc(var(--mt-z-archive-hud, 5) + 2); min-width: 340px; padding: 14px 18px 12px; background: rgba(var(--ar-paper-rgb), .96); border-left: 2px solid var(--ar-accent); box-shadow: 0 10px 30px rgba(0, 0, 0, .16); color: var(--ar-ink); font-size: 13px; }
+.archive-keys[hidden] { display: none; }
+.archive-keys-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ar-rule); }
+.archive-keys-head b { font-size: 15px; font-weight: 600; }
+.archive-keys-head button { margin-left: auto; border: 0; background: none; color: var(--ar-muted); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.archive-keys-head button:hover { color: var(--ar-ink); }
+.archive-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.archive-keys dt { font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .4px; color: var(--ar-accent-text, var(--ar-accent)); white-space: nowrap; }
+.archive-keys dd { margin: 0; color: var(--ar-ink); }
+.archive-keys p { margin: 10px 0 0; font-size: 11px; color: var(--ar-muted); }
