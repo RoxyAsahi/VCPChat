@@ -95,3 +95,30 @@ test('daily mix is stable within a day and leans on unplayed songs; never-played
     assert.equal(fresh.length, 10);
     assert.ok(fresh.every((t) => !played.has(t)));
 });
+
+test('pickSimilar plays one file per song, picks the best copy and pushes instrumentals back', () => {
+    const { recordingKey, isInstrumental } = require(path.join(__dirname, '../Musicmodules/music-radio.js'));
+    const seed = { path: '/m/X/seed.flac', title: 'Seed', artist: 'X', album: 'S' };
+    const mp3 = { path: '/m/X/song.mp3', title: 'Song.mp3', artist: 'X', album: 'Best Of', lossless: false, bitrate: 320000 };
+    const flac = { path: '/m/X/song.flac', title: 'Song', artist: 'X', album: 'Album', lossless: true, bitsPerSample: 24, sampleRate: 96000 };
+    const remote = { path: 'https://nas/X/song.flac', title: 'Song', artist: 'X', album: 'Album', lossless: true, bitsPerSample: 24, sampleRate: 192000 };
+    const seedCopy = { path: '/m/X/seed-copy.mp3', title: 'Seed', artist: 'X', album: 'Best Of' };
+    const inst = { path: '/m/X/song-inst.flac', title: 'Song (Instrumental)', artist: 'X', album: 'Album' };
+    const other = { path: '/m/X/other.flac', title: 'Other', artist: 'X', album: 'Album' };
+    const broken = { path: '/m/X/broken.flac', title: 'Broken', artist: 'X', album: 'Album' };
+    const untagged = [{ path: '/a/01.flac', title: '01.flac' }, { path: '/b/01.flac', title: '01.flac' }];
+    const lib = [seed, mp3, remote, flac, seedCopy, inst, other, broken, ...untagged];
+    assert.equal(recordingKey(mp3), recordingKey(flac));
+    assert.equal(recordingKey(untagged[0]), '', 'no artist: never merged');
+    assert.ok(isInstrumental(inst) && isInstrumental({ title: '夜に駆ける (Inst.)' }) && isInstrumental({ title: 'Song - Off Vocal' }));
+    assert.ok(!isInstrumental({ title: 'Instinct' }) && !isInstrumental(seed));
+    const out = pickSimilar(lib, [seed], { size: 10, exclude: new Set([seed]), random: () => 0.5, playable: (t) => t !== broken });
+    assert.ok(out.includes(flac), 'local 24-bit flac wins');
+    assert.ok(!out.includes(mp3) && !out.includes(remote), 'other copies of the same song are dropped');
+    assert.ok(!out.includes(seedCopy), 'another file of the seed song is not queued right after it');
+    assert.ok(!out.includes(broken), 'unplayable tracks are skipped');
+    assert.ok(untagged.every((t) => out.includes(t)), 'untagged tracks with the same file name both stay');
+    assert.ok(out.indexOf(inst) > out.indexOf(other), 'instrumental goes after the vocal tracks');
+    const fromInst = pickSimilar(lib, [inst], { size: 10, exclude: new Set([inst]), random: () => 0.5 });
+    assert.ok(fromInst.includes(flac) || fromInst.length > 0);
+});
