@@ -1564,6 +1564,26 @@
             inertiaTimer = setTimeout(releaseWheel, 160);
         }, { passive: false });
 
+        // 借鉴 RhinE「在排名上滚轮换排」：滚轮停在分组名上换组、停在标尺上逐首走，不必先挪到场景里
+        const wheelLaneName = Model.createWheel(60);
+        const wheelRuler = Model.createWheel(60);
+        const onHudWheel = (e) => {
+            const onLanes = refs.lanes && refs.lanes.contains(e.target);
+            const onRuler = !onLanes && refs.ruler && refs.ruler.contains(e.target);
+            if (!onLanes && !onRuler) return;
+            const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta) return;
+            e.preventDefault();
+            const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            const n = Model.isWheelNotch(e, global.devicePixelRatio)
+                ? Math.sign(delta)
+                : (onLanes ? wheelLaneName : wheelRuler)(delta * unit, e.timeStamp);
+            if (!n) return;
+            if (onLanes) stepLane(Math.sign(n));
+            else select(state.lane, state.row + n);
+        };
+        root.addEventListener('wheel', onHudWheel, { passive: false });
+
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
