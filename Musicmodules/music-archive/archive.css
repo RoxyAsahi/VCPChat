@@ -817,3 +817,12 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 .archive-list-group .rail { flex: none; align-self: center; width: calc(10px + var(--rail, 0) * 64px); height: 2px; margin-top: 2px; background: color-mix(in srgb, var(--ar-ink) 30%, transparent); }
 .archive-list-group.has-playing .rail { background: var(--ar-accent); }
 .archive-list-group:is(:hover, :focus-within) .rail { opacity: 0; }
+/* 多选：用深色细条 + 稍深的底，不和「正在放」的琥珀短条混在一起 */
+.archive-list-row.picked { --row-wash: color-mix(in srgb, var(--ar-ink) 10%, transparent); }
+.archive-list-row.picked::before { background: var(--ar-ink); }
+.archive-list-row.picked.current::before { background: var(--ar-accent); }
+/* 键盘在目录里上下走时，选中行加一圈细框，看得出焦点在哪 */
+.archive-list-viewport:focus-visible .archive-list-row.on .tx::before { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-ink) 45%, transparent); }
+/* 无法播放：照原版写成状态字，不画框 */
+.archive-list-row.bad .tx b::after { content: "／ 无法播放"; padding: 0; border: 0; font-size: 11px; letter-spacing: .6px; vertical-align: 1px; }
+.archive-list-row.picked { --row-wash: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
