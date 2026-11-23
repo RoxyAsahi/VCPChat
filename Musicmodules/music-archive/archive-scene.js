@@ -1171,7 +1171,7 @@ vec3 archiveUntone(vec3 y) {
                         const dd = Math.abs(row - playing.row);
                         if (dd < 8) f += 0.06 * Math.abs(Math.sin(T * 6.1 + row * 1.3)) * (1 - dd / 8);
                     }
-                    const hl = hoverLifts.get(lane + ':' + row) || 0;
+                    const hl = hoverLifts.size ? hoverLifts.get(lane + ':' + row) || 0 : 0;   // 没有悬停的卡时不为每张卡拼字符串
                     let y = BASE_Y + f + hl;
                     const isTarget = lane === target.lane && row === target.row;
                     if (isTarget) y += lift.v;
