@@ -79,7 +79,12 @@ void main() {
     float vignette = smoothstep(0.52,1.08,radius)*uVignette*0.6;
     finalColor = mix(color,vec4(uPaper,1.0),vignette);
 }`;
-    const createPostProcess = (PIXI, stage) => {
+    // Whether a stage created with this config draws through the print filter.
+    // The directors leave the canvas without multisampling when it does.
+    const lensOn = (config, mode) => config?.quality !== 'energy-saving'
+        && config?.modes?.[mode]?.postProcess !== false;
+    const createPostProcess = (PIXI, stage, options = {}) => {
+        const canvasAntialias = options.canvasAntialias !== false;
         const descriptors = {};
         ['Distortion', 'Dispersion', 'Rgb', 'Grain', 'Contrast', 'Halftone', 'Vignette', 'Time']
             .forEach(key => { descriptors[`u${key}`] = { value: 0, type: 'f32' }; });
@@ -90,6 +95,22 @@ void main() {
             resources: { opticalUniforms: uniforms },
             antialias: 'on'
         });
+        // With the print filter on, the stage is drawn into the filter's own
+        // multisampled target and the canvas only receives one full-screen
+        // quad, so a canvas created for that case has no multisampling of its
+        // own (a second multisampled buffer and resolve every frame, for
+        // nothing). If the filter is switched off later on such a canvas, a
+        // pass that copies the stage unchanged keeps the edges smoothed.
+        const copy = canvasAntialias ? null : new PIXI.AlphaFilter({ alpha: 1, antialias: 'on' });
+        let applied = null;
+        const apply = (next, width, height) => {
+            if (applied !== next) { stage.filters = next ? [next] : null; applied = next; }
+            if (!next) return;
+            if (!stage.filterArea) stage.filterArea = new PIXI.Rectangle();
+            stage.filterArea.x = stage.filterArea.y = 0;
+            stage.filterArea.width = width;
+            stage.filterArea.height = height;
+        };
         return {
             update(frame, tuning, width, height) {
                 const kick = motionScale(tuning) * amount(tuning.opticalImpact, 0.65, 1) * clamp(tuning.performance?.impact || 0);
@@ -104,19 +125,15 @@ void main() {
                 };
                 const enabled = tuning.postProcess !== false && tuning.quality !== 'energy-saving'
                     && Object.values(values).some(value => value > 0);
-                stage.filters = enabled ? [filter] : null;
+                apply(enabled ? filter : copy, width, height);
                 if (!enabled) return;
-                if (!stage.filterArea) stage.filterArea = new PIXI.Rectangle();
-                stage.filterArea.x = stage.filterArea.y = 0;
-                stage.filterArea.width = width;
-                stage.filterArea.height = height;
                 Object.entries(values).forEach(([key, value]) => { uniforms.uniforms[`u${key}`] = value; });
                 uniforms.uniforms.uTime = frame.playbackTime || 0;
                 const paper = tuning.palette?.background || '#171a1d';
                 const n = parseInt(paper.slice(1), 16);
                 uniforms.uniforms.uPaper.set([(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]);
             },
-            destroy() { stage.filters = null; filter.destroy(); }
+            destroy() { stage.filters = null; applied = null; filter.destroy(); copy?.destroy(); }
         };
     };
 
@@ -1345,8 +1362,83 @@ void main() {
         };
     };
 
+    // Renderers kept for a moment after their stage goes away. Starborn mounts
+    // a new Tempera or Sonnet on many line cuts, and a new WebGL context has to
+    // compile every shader again on its first frame, which shows as a hitch
+    // right at the cut. A director that is torn down parks its application
+    // here instead; the next one created with the same canvas settings takes
+    // it with an empty stage. Anything left unclaimed is destroyed shortly.
+    const PARK_LIMIT = 2;
+    const PARK_MS = 45000;
+    const parked = [];
+    const applicationKey = options => `${options.antialias ? 1 : 0}:${options.resolution}:${options.preference || ''}`;
+    const takeApplication = (PIXI, options) => {
+        const key = applicationKey(options);
+        const index = parked.findIndex(entry => entry.PIXI === PIXI && entry.key === key);
+        if (index < 0) return null;
+        const [entry] = parked.splice(index, 1);
+        clearTimeout(entry.timer);
+        return entry.app;
+    };
+    const dispose = app => {
+        try { app.destroy(true, { children: true }); } catch (error) { console.warn('[MusicStage] PIXI cleanup failed:', error); }
+    };
+    const createApplication = async (PIXI, options) => {
+        const reused = takeApplication(PIXI, options);
+        if (reused) return reused;
+        const app = new PIXI.Application();
+        app.__stageParkKey = applicationKey(options);
+        app.__stagePixi = PIXI;
+        try {
+            await app.init(options);
+        } catch (error) {
+            dispose(app);
+            throw error;
+        }
+        return app;
+    };
+    // Returns false when the application was destroyed instead of parked.
+    const releaseApplication = app => {
+        if (!app) return false;
+        const key = app.__stageParkKey;
+        if (!key || !app.renderer || !app.stage || parked.length >= PARK_LIMIT || global.document?.hidden) {
+            dispose(app);
+            return false;
+        }
+        try {
+            app.stop();
+            for (const child of app.stage.removeChildren()) child.destroy({ children: true });
+            const stage = app.stage;
+            stage.filters = null;
+            stage.filterArea = null;
+            stage.mask = null;
+            stage.alpha = 1;
+            stage.visible = true;
+            stage.rotation = 0;
+            stage.position.set(0, 0);
+            stage.pivot.set(0, 0);
+            stage.scale.set(1, 1);
+            // Leave the canvas transparent so it shows nothing stale when it
+            // is attached again before the next stage has drawn.
+            app.render();
+            app.canvas.remove();
+        } catch (error) {
+            dispose(app);
+            return false;
+        }
+        const entry = { app, key, PIXI: app.__stagePixi };
+        entry.timer = setTimeout(() => {
+            const index = parked.indexOf(entry);
+            if (index >= 0) parked.splice(index, 1);
+            dispose(app);
+        }, PARK_MS);
+        parked.push(entry);
+        return true;
+    };
+
     global.MusicStagePixiEffects = Object.freeze({
-        createRetirement, createEditorialTrack,
+        createApplication, releaseApplication,
+        createRetirement, createEditorialTrack, lensOn,
         createPerformance, buildPhraseStage, animatePhraseStage, createAccentChoreography,
         amount, ease, expo, clear, camera, shotKind, glyphTiming, buildLyrics, animateLyrics, motionScale, createPostProcess,
         applyQuality, transition, buildMotif, compilePhrases

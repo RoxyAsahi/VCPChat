@@ -81,6 +81,7 @@
             mode: 'archive',
             scene: null,
             raf: 0,
+            wait: 0,                 // 低帧率时两帧之间用定时器等，不每个显示帧都醒一次
             lastDraw: 0,
             activity: { animated: true, idle: false },
             destroyed: false,
@@ -1083,9 +1084,16 @@
                 state.lastDraw = now;
                 state.activity = state.scene.step(now);
             }
-            if (state.activity.animated || state.scene.dirty) state.raf = requestAnimationFrame(frame);
+            if (!state.activity.animated && !state.scene.dirty) return;
+            // 12 帧待机（或 30 帧档）时，下一帧还早就先睡到快到点再要显示帧，
+            // 免得 60/144Hz 屏上每个显示帧都把页面叫醒一次只为了判断「还没到」。
+            const wait = aim ? aim - (now - state.lastDraw) : 0;
+            if (!state.scene.dirty && wait > 20) state.wait = setTimeout(wake, wait - 8);
+            else state.raf = requestAnimationFrame(frame);
         };
+        const wake = () => { state.wait = 0; kick(); };
         const kick = () => {
+            if (state.wait) { clearTimeout(state.wait); state.wait = 0; }
             if (!state.raf && shouldRender()) state.raf = requestAnimationFrame(frame);
         };
 
@@ -1106,15 +1114,106 @@
         };
         let turned = false;
         let canvasPlayIndex = -1;
+        /*
+         * 按住空白处拖动整片档案，松手后带惯性滑行、再吸附到最近的一张卡。
+         * 照参考播放器 SceneDrag.cpp：移动超过 10 像素才算拖；释放速度取最近 120 毫秒的采样，
+         * 反向移动时重新取样，松手前 80 毫秒没动就不带速度；滑行摩擦 2.4，速度低于 0.6 格/秒
+         * 时按「当前位置 + 速度/摩擦」取最近的格子，用 10 的弹簧吸过去；起手速度低于 0.75 直接吸附。
+         */
+        let plane = null;        // 按住中：{ x0, y0, lane0, row0, inv, active, samples, dir, lastMove, pointerId }
+        let momentum = null;     // 松手后：{ lane: {v, vel, phase, target}, row: {...}, t }
+        let momentumRaf = 0;
+        const nearestCell = (lane, row) => [Math.floor(lane + 0.5), Math.floor(row + 0.5)];
+        const followPlane = (lane, row, vl = 0, vr = 0) => {
+            state.scene?.hold(lane, row, vl, vr);
+            const [l, r] = nearestCell(lane, row);
+            if (l !== state.lane || r !== state.row) select(l, r, { pulse: false });
+            kick();
+        };
+        const stopMomentum = () => {
+            if (momentumRaf) cancelAnimationFrame(momentumRaf);
+            momentumRaf = 0;
+            if (!momentum) return;
+            momentum = null;
+            state.scene?.unhold();
+            kick();
+        };
+        const axisStart = (v, vel) => ({ v, vel, phase: Math.abs(vel) >= 0.75 ? 'coast' : 'snap', target: Math.floor(v + 0.5) });
+        const axisStep = (a, dt, coasting) => {
+            const FRICTION = 2.4;
+            if (coasting) {
+                const decay = Math.exp(-FRICTION * dt);
+                a.v += a.vel * (1 - decay) / FRICTION;
+                a.vel *= decay;
+                if (Math.abs(a.vel) < 0.6) { a.target = Math.floor(a.v + a.vel / FRICTION + 0.5); a.phase = 'snap'; }
+            } else if (a.phase === 'snap') {
+                const rate = 10, d = a.v - a.target, imp = a.vel + rate * d, dec = Math.exp(-rate * dt);
+                a.v = a.target + (d + imp * dt) * dec;
+                a.vel = (a.vel - rate * imp * dt) * dec;
+                if (Math.abs(a.v - a.target) < 0.0001 && Math.abs(a.vel) < 0.005) { a.v = a.target; a.vel = 0; a.phase = 'idle'; }
+            }
+        };
+        const coast = (now) => {
+            momentumRaf = 0;
+            if (!momentum || state.destroyed || !isShown()) { stopMomentum(); return; }
+            const dt = Math.min(0.25, Math.max(0, (now - momentum.t) / 1000));
+            momentum.t = now;
+            const coasting = momentum.lane.phase === 'coast' || momentum.row.phase === 'coast';
+            axisStep(momentum.lane, dt, coasting);
+            axisStep(momentum.row, dt, coasting);
+            followPlane(momentum.lane.v, momentum.row.v, momentum.lane.vel, momentum.row.vel);
+            if (momentum.lane.phase === 'idle' && momentum.row.phase === 'idle') { stopMomentum(); return; }
+            momentumRaf = requestAnimationFrame(coast);
+        };
+        const releaseVelocity = (p, t) => {
+            const S = p.samples;
+            if (reducedMotion() || !S.length || t - p.lastMove > 80) return [0, 0];
+            const a = S[0], b = S[S.length - 1];
+            if (b.t - a.t < 8) return [0, 0];
+            const k = 1000 / (b.t - a.t);
+            return [(b.lane - a.lane) * k, (b.row - a.row) * k];
+        };
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
                 const rect = canvas.getBoundingClientRect();
-                state.scene?.setPointer((e.clientX - rect.left) / rect.width * 2 - 1, (e.clientY - rect.top) / rect.height * 2 - 1);
+                state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
+                if (plane && (e.buttons & 1)) {
+                    const dx = e.clientX - plane.x0, dy = e.clientY - plane.y0;
+                    if (!plane.active && Math.hypot(dx, dy) < 10) return;
+                    if (!plane.active) {
+                        if (!plane.inv) { plane = null; return; }
+                        plane.active = true;
+                        turned = true;   // 拖过就不再当成点击
+                        pendingPick = null;
+                        state.scene?.setHover(null);
+                        showTip(null);
+                        try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
+                        canvas.style.cursor = 'grabbing';
+                    }
+                    const k = plane.scale;
+                    const px = dx * k, py = dy * k;
+                    // 卡片跟着指针走，镜头往反方向退
+                    const lane = plane.lane0 - (px * plane.inv.a + py * plane.inv.b);
+                    const row = plane.row0 - (px * plane.inv.c + py * plane.inv.d);
+                    const t = e.timeStamp;
+                    const mx = e.clientX - plane.px, my = e.clientY - plane.py;
+                    if (Math.hypot(mx, my) > 1e-9) {
+                        if (mx * plane.dir[0] + my * plane.dir[1] < 0) plane.samples = plane.samples.slice(-1);
+                        plane.dir = [mx, my];
+                        plane.lastMove = t;
+                    }
+                    plane.px = e.clientX; plane.py = e.clientY;
+                    const last = plane.samples[plane.samples.length - 1];
+                    if (last && last.t === t) { last.lane = lane; last.row = row; } else plane.samples.push({ lane, row, t });
+                    plane.samples = plane.samples.filter((p) => t - p.t <= 120).slice(-32);
+                    followPlane(lane, row);
+                    return;
+                }
                 if (turning) {
                     const dx = e.clientX - turning.x;
                     turning.x = e.clientX;
                     if (Math.abs(e.clientX - turning.x0) > 4) turned = true;
-                    state.scene?.turn(dx * 0.006);
+                    state.scene?.turn(dx * 0.004);   // 参考播放器每像素 0.004 弧度
                     kick();
                     return;
                 }
@@ -1133,7 +1232,9 @@
                         const c = state.scene.pick(pendingPick.x, pendingPick.y, pendingPick.rect);
                         state.scene.setHover(c);
                         showTip(c, pendingPick);
-                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : '';
+                        // 卡上是手指；卡已放回时空白处显示「可抓」，提示能按住拖动整片档案（参考播放器 m_cursor = "grab"）
+                        const browsing = !cardExpanded && !state.scene.detail;
+                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
                     });
                 }
                 kick();
@@ -1147,6 +1248,26 @@
             };
             canvas.addEventListener('pointerdown', (e) => {
                 turned = false;
+                if (e.button === 0 && !onDetailCard(e)) {
+                    // 滑行中按下：停住（这次按下不算点击），并从停住的位置开始新一次拖动
+                    if (momentum) { turned = true; stopMomentum(); }
+                    plane = null;
+                    if (cardExpanded || wheelBrowsing || !state.scene || state.scene.detail) return;
+                    const ax = state.scene.dragAxes();
+                    const det = ax.lane.x * ax.row.y - ax.row.x * ax.lane.y;
+                    const area = Math.hypot(ax.lane.x, ax.lane.y) * Math.hypot(ax.row.x, ax.row.y);
+                    const cam = state.scene.camAt();
+                    const rect = canvas.getBoundingClientRect();
+                    plane = {
+                        x0: e.clientX, y0: e.clientY, px: e.clientX, py: e.clientY,
+                        lane0: cam.lane, row0: cam.row, active: false,
+                        scale: rect.width ? canvas.clientWidth / rect.width : 1,
+                        inv: Number.isFinite(area) && area > 0 && Math.abs(det) > area * 0.001
+                            ? { a: ax.row.y / det, b: -ax.row.x / det, c: -ax.lane.y / det, d: ax.lane.x / det } : null,
+                        samples: [{ lane: cam.lane, row: cam.row, t: e.timeStamp }], dir: [0, 0], lastMove: -1e9
+                    };
+                    return;
+                }
                 if (e.button !== 0 || !onDetailCard(e)) return;
                 turning = { x: e.clientX, x0: e.clientX };
                 try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
@@ -1159,8 +1280,19 @@
                 canvas.style.cursor = '';
                 kick();
             };
-            canvas.addEventListener('pointerup', endTurn);
-            canvas.addEventListener('pointercancel', endTurn);
+            const endPlane = (e, cancelled) => {
+                if (!plane) return;
+                const p = plane;
+                plane = null;
+                canvas.style.cursor = '';
+                if (!p.active) return;
+                const last = p.samples[p.samples.length - 1];
+                const [vl, vr] = cancelled ? [0, 0] : releaseVelocity(p, e.timeStamp);
+                momentum = { lane: axisStart(last.lane, vl), row: axisStart(last.row, vr), t: performance.now() };
+                if (!momentumRaf) momentumRaf = requestAnimationFrame(coast);
+            };
+            canvas.addEventListener('pointerup', (e) => { endPlane(e, false); endTurn(); });
+            canvas.addEventListener('pointercancel', (e) => { endPlane(e, true); endTurn(); });
             // 点卡取出，点空白收回；两种构图都留在同一个曲库页面。
             canvas.addEventListener('click', (e) => {
                 if (e.detail > 1) return;
@@ -1236,6 +1368,7 @@
         root.addEventListener('wheel', (e) => {
             if (e.target !== state.scene?.canvas || (!e.deltaX && !e.deltaY)) return;
             e.preventDefault();
+            if (momentum) stopMomentum();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
             const delta = horizontal && !e.shiftKey ? e.deltaX : e.deltaY;
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
@@ -1293,6 +1426,7 @@
 
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
+            if (momentum && isShown()) stopMomentum();
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
             // Ctrl+L 定位当前播放（输入框里也能用）
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
@@ -1414,6 +1548,8 @@
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
+            clearTimeout(state.wait);
+            state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
@@ -1516,7 +1652,7 @@
             get mode() { return state.mode; },
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null,
+                selected: selectedIndex(), rendering: Boolean(state.raf || state.wait), allowed: renderAllowed(), scene: state.scene?.debug() || null,
                 lyrics: lyrics ? lyrics.debug() : null, lyricsOn: Boolean(state.lyricsOn)
             })
         };
