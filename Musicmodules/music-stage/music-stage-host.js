@@ -285,6 +285,7 @@
                 { key: 'figures', label: '演算纸线稿', type: 'toggle' },
                 { key: 'collisions', label: '墨团对撞', type: 'toggle' },
                 { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'cloud', label: '墨云浓度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'grain', label: '砂纸颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

@@ -23,7 +23,8 @@
     const { resolveSupplementalText, buildGlyphTimeline, readableText } = Runtime;
 
     const ID_SCALE = 0.5;
-    const MAX_BLOBS = 24;
+    const MAX_BLOBS = 48;
+    const MAX_RINGS = 4;
     const MAX_ACCENT = 3;
     const MAX_GLYPHS = 255;
     const TAU = Math.PI * 2;
@@ -403,6 +404,21 @@
             pen.note(cue.kind === 'line' ? `L.${String(cue.number).padStart(2, '0')}` : 'INTERLUDE', 0, 0, 0.018, 'left');
             pen.place(x1, y1 + H * 0.045, H, 0);
             pen.note(formatTime(cue.start), 0, 0, 0.016, 'right');
+            // 时间轴括号：字块左边一道竖括号，每个词开唱的位置一格刻度，括号顶上记段号
+            if (cue.kind === 'line' && unitBoxes.length > 1 && random() < 0.6) {
+                const bx = x0 - pad * 0.9;
+                const hook = pad * 0.5;
+                pen.place(0, 0, 1, 0);
+                pen.line([[bx + hook, y0], [bx, y0], [bx, y1], [bx + hook, y1]]);
+                const span = Math.max(0.1, cue.end - cue.start);
+                pen.segments(unitBoxes.map((u) => {
+                    const y = y0 + (y1 - y0) * clamp((u.unit.start - cue.start) / span, 0, 1);
+                    return [[bx - hook * 0.5, y], [bx + hook * 0.35, y]];
+                }));
+                pen.dot(bx, y0 + (y1 - y0) * (0.15 + random() * 0.5), pad * 0.32);
+                pen.place(bx - hook * 0.6, y0 - H * 0.018, H, 0);
+                pen.note(`${String(cue.number).padStart(2, '0')} / ${formatTime(cue.start).slice(0, 5)}`, 0, 0, 0.016, 'right');
+            }
         }
         const figures = [];
         if (settings.figures) {
@@ -466,7 +482,14 @@
         return {
             index, cue, glyphData, shots, mass, collisions, accents,
             strokeStart: cue.start + 0.12, strokeStep,
-            transition: index > 0 && random() < 0.42 ? 'ink' : 'cut',
+            transition: index > 0 ? pickWeighted(random, [['ink', 0.3], ['flood', 0.22], ['smash', 0.16], ['cut', 0.32]]) : 'cut',
+            flood: [0.2 + random() * 0.6, 0.25 + random() * 0.5],
+            sparks: placed.slice(0, MAX_GLYPHS).map((p, i) => ({
+                t: p.g.start, x: (p.box[0] + p.box[2]) / 2, y: (p.box[1] + p.box[3]) / 2, s: p.size,
+                a: random() * TAU, spin: (i % 2 ? 1 : -1) * (2.2 + random() * 1.4)
+            })),
+            beats: unitBoxes.map(u => ({ t: u.unit.start, x: (u.box[0] + u.box[2]) / 2, y: (u.box[1] + u.box[3]) / 2,
+                r: Math.max(u.box[2] - u.box[0], u.box[3] - u.box[1]) * 0.62 })),
             style: composed.style, backdrop
         };
     };
@@ -599,7 +622,7 @@
     };
 
     // 某一刻的墨团（世界像素：x, y, 半径, 强度）和冲击环。
-    const blobsAt = (cue, t, out, rings, accentsOut, bass) => {
+    const blobsAt = (cue, t, out, rings, accentsOut, bass, beatAge = Infinity) => {
         let n = 0;
         const push = (x, y, r, s = 1) => { if (n < MAX_BLOBS && r > 0.5) { out[n * 4] = x; out[n * 4 + 1] = y; out[n * 4 + 2] = r; out[n * 4 + 3] = s; n += 1; } };
         const local = t - cue.cue.start;
@@ -626,7 +649,7 @@
                 return;
             }
             if (tau < 0.9) push(c.x, c.y, c.r * 1.5 * (1 - tau / 0.9));
-            if (ringCount < 2 && tau < 1.6) {
+            if (ringCount < MAX_RINGS && tau < 1.6) {
                 rings[ringCount * 4] = c.x; rings[ringCount * 4 + 1] = c.y;
                 rings[ringCount * 4 + 2] = c.dist * 1.05 * (1 - Math.exp(-tau * 2.4));
                 rings[ringCount * 4 + 3] = c.r * 0.22 * (1 - tau / 1.6);
@@ -641,6 +664,37 @@
                 const back = 1 - Math.exp(-Math.max(0, tau - 0.2) * 1.8);
                 const ab = c.angle + k * TAU / c.fragments + c.spin * back;
                 push(c.x + Math.cos(ab) * c.dist * 1.15 * back, c.y + Math.sin(ab) * c.dist * 1.15 * back, c.r * 0.14 * fade);
+            }
+        });
+        // 词开唱：字块外扩一道细墨环
+        (cue.beats || []).forEach((b) => {
+            const tau = t - b.t;
+            if (ringCount >= MAX_RINGS || tau < 0 || tau > 0.9) return;
+            rings[ringCount * 4] = b.x; rings[ringCount * 4 + 1] = b.y;
+            rings[ringCount * 4 + 2] = b.r * (0.9 + 0.55 * (1 - Math.exp(-tau * 4)));
+            rings[ringCount * 4 + 3] = b.r * 0.018 * (1 - tau / 0.9);
+            ringCount += 1;
+        });
+        // 鼓点：墨团外一圈冲击环
+        if (cue.mass && beatAge < 0.7 && ringCount < MAX_RINGS) {
+            const m = cue.mass;
+            rings[ringCount * 4] = m.x; rings[ringCount * 4 + 1] = m.y;
+            rings[ringCount * 4 + 2] = m.r * (1.05 + beatAge * 1.6);
+            rings[ringCount * 4 + 3] = m.r * 0.06 * (1 - beatAge / 0.7);
+            ringCount += 1;
+        }
+        // 唱到的字甩出一对螺旋墨点，后面拖两颗小点
+        (cue.sparks || []).forEach((sp) => {
+            const tau = t - sp.t;
+            if (tau < 0 || tau > 1.5 || n >= MAX_BLOBS - 6) return;
+            for (let side = 0; side < 2; side += 1) {
+                for (let k = 0; k < 3; k += 1) {
+                    const tk = Math.max(0, tau - k * 0.07);
+                    const reach = sp.s * (0.45 + 1.5 * (1 - Math.exp(-tk * 2.2)));
+                    const ang = sp.a + side * Math.PI + sp.spin * tk;
+                    const r = sp.s * (k ? 0.022 : 0.04) * (1 - tau / 1.5);
+                    push(sp.x + Math.cos(ang) * reach, sp.y + Math.sin(ang) * reach * 0.8, r, 1.4);
+                }
             }
         });
         let a = 0;
@@ -684,7 +738,10 @@ uniform vec4 uBlobs[${MAX_BLOBS}];
 uniform int uBlobCount;
 uniform vec4 uAccent[${MAX_ACCENT}];
 uniform int uAccentCount;
-uniform vec4 uRings[2];
+uniform vec4 uRings[${MAX_RINGS}];
+uniform vec4 uFlood;     // 屏幕 x, y, 半径, 0 = 不漫
+uniform float uSmash;    // 0..1 上一段碎开
+uniform float uCloud;    // 墨云浓度
 uniform float uFlow;
 uniform float uGrainStep;
 uniform vec3 uPaper;
@@ -738,9 +795,15 @@ void main() {
 
     float reveal = 0.0;
     float ghost = 0.0;
+    float pre = 0.0;
+    float swell = 0.0;
     if (gid > 0) {
         vec2 se = texelFetch(uGlyph, ivec2(gid, 0), 0).xy;
         reveal = smoothstep(se.x - 0.2, se.x + 0.1, uTime);
+        // 开唱前 0.6 秒，字先以半调影子浮出来；唱到时字胀一下再收回
+        pre = smoothstep(se.x - 0.7, se.x - 0.1, uTime) * (1.0 - reveal);
+        float ds = uTime - se.x - 0.08;
+        swell = exp(-ds * ds / 0.018);
     }
     float glyphInk = m.r * reveal;
     ghost = m.r * (1.0 - reveal) * uGhost;
@@ -755,7 +818,7 @@ void main() {
         field += b.z * b.z / (dot(d, d) + 1.0) * b.w;
     }
     float ring = 0.0;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < ${MAX_RINGS}; i++) {
         vec4 r = uRings[i];
         if (r.w <= 0.0) continue;
         float d = (length(wp - r.xy) - r.z) / r.w;
@@ -771,15 +834,23 @@ void main() {
 
     float k = uWorld.y;
     float rough = (vnoise(wp / (k * 0.006) + uFlow * 1.7) - 0.5) * 0.3 + (hash12(floor(gl_FragCoord.xy / 2.0) + uFlow * 7.0) - 0.5) * 0.08;
-    float F = glyphInk * 1.25 + halo * reveal * uHalo + lineInk * 1.1 + field * 0.5 + ring;
+    float F = glyphInk * (1.25 + swell * 0.35) + halo * reveal * (uHalo + swell * 0.9) + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
     float a = smoothstep(thr - 0.05, thr + 0.05, F);
     float aA = smoothstep(0.42 + rough * 0.6, 0.52 + rough * 0.6, accent * 0.5);
 
     // 半调：网点格在世界里（跟着镜头放大），网点大小随浓淡
+    vec2 sp = gl_FragCoord.xy / uRes - 0.5;
+    // 墨云：大尺度的浓淡，每秒跳 8 格地翻涌；四角压暗；字周围的晕、墨团的场也算进浓淡
+    float cl = vnoise(wp / (k * 0.42) + uFlow * 0.08) * 0.62 + vnoise(wp / (k * 0.17) - uFlow * 0.11) * 0.38;
+    float cloud = smoothstep(0.5, 0.95, cl) * uCloud;
+    float vig = smoothstep(0.4, 0.85, length(sp * vec2(1.0, 0.8)));
     float T = m.b * uTone + clamp(field * 0.18, 0.0, 0.35) * smoothstep(0.2, 0.0, a);
+    T = max(T, max(cloud * 0.72, vig * 0.6 * uCloud));
+    T = max(T, (halo * 1.5 + m.r * 0.5) * pre * uGhost / max(uGhost, 0.001) * 0.9);
+    T = max(T, halo * reveal * 0.55 * uCloud);
     float ca = 0.2588, sa = 0.9659;
-    vec2 g = vec2(wp.x * sa + wp.y * ca, -wp.x * ca + wp.y * sa) / (k / 150.0);
+    vec2 g = vec2(wp.x * sa + wp.y * ca, -wp.x * ca + wp.y * sa) / (k / mix(150.0, 96.0, uCloud));
     float dist = length(fract(g) - 0.5);
     float radius = sqrt(clamp(T, 0.0, 1.0)) * 0.62;
     float dots = (1.0 - smoothstep(radius - 0.09, radius + 0.09, dist)) * uHalftone * step(0.01, T);
@@ -795,18 +866,34 @@ void main() {
 
     if (uPrevFade > 0.0) {
         vec2 wq = flowed(worldAt(uPrevView));
+        // 碎开：屏幕切成不规则的块，每块沿自己的方向飞散，一块块消失
+        vec2 cell = floor(gl_FragCoord.xy / uRes.y * 5.0 + vnoise(gl_FragCoord.xy / uRes.y * 3.0) * 1.6);
+        float h = hash12(cell);
+        if (uSmash > 0.0) {
+            vec2 dir = normalize(vec2(hash12(cell + 7.1), hash12(cell + 3.3)) - 0.5 + sp * 1.5);
+            wq -= dir * uSmash * uSmash * k * (0.25 + h * 0.5);
+        }
         vec2 uq = wq / uWorld;
         if (all(greaterThanEqual(uq, vec2(0.0))) && all(lessThanEqual(uq, vec2(1.0)))) {
             vec4 pm = texture(uPrev, uq);
             float ph = textureLod(uPrev, uq, 4.0).r;
             float Fp = pm.r * 1.25 + ph * uHalo + pm.g * 1.1;
             float breakUp = (vnoise(wq / (k * 0.05)) - 0.5) * 0.9;
-            float tp = 0.5 + rough + uPrevFade * 1.1 + breakUp * uPrevFade;
+            float tp = uSmash > 0.0 ? 0.5 + rough + step(1.0 - uSmash * 1.15, h) * 9.0
+                                    : 0.5 + rough + uPrevFade * 1.1 + breakUp * uPrevFade;
             float ap = smoothstep(tp - 0.05, tp + 0.05, Fp);
             col = mix(col, ink, ap * (1.0 - a));
         }
     }
 
+    if (uFlood.w > 0.0) {
+        // 墨漫：整屏是墨，从一点开一个毛边的口子，口子里是新的一段；口子边上一圈网点
+        vec2 fp = (gl_FragCoord.xy / uRes - uFlood.xy) * vec2(uAspect, 1.0);
+        float edge = length(fp) - uFlood.z + (vnoise(fp * 9.0 + uFlow) - 0.5) * 0.12 + (vnoise(fp * 40.0) - 0.5) * 0.03;
+        float inked = smoothstep(-0.004, 0.004, edge);
+        float band = (1.0 - smoothstep(0.0, 0.09, abs(edge + 0.05))) * (1.0 - inked);
+        col = mix(col, ink, max(inked, band * dots));
+    }
     float gr = hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 17.0) - 0.5;
     float fibre = vnoise(gl_FragCoord.xy / 3.0 + uGrainStep * 5.0) - 0.5;
     col += (gr * 0.07 + fibre * 0.04) * uGrain;
@@ -889,7 +976,9 @@ void main() {
         const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const still = Utils.createStillGate();
         const blobBuffer = new Float32Array(MAX_BLOBS * 4);
-        const ringBuffer = new Float32Array(8);
+        const ringBuffer = new Float32Array(MAX_RINGS * 4);
+        let lastOnsets = -1;
+        let beatTime = -Infinity;
         const accentBuffer = new Float32Array(MAX_ACCENT * 4);
         let cues = [];
         let cuesFor = null;
@@ -916,6 +1005,7 @@ void main() {
                 negativeShots: tuning.negativeShots !== false,
                 halftone: clamp(tuning.halftone ?? 0.8, 0, 1),
                 grain: clamp(tuning.grain ?? 0.5, 0, 1),
+                cloud: clamp(tuning.cloud ?? 0.75, 0, 1),
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -1037,18 +1127,28 @@ void main() {
             const s = settings();
             const audio = frame.audio || {};
             const bass = clamp((audio.bass || 0) * s.audioReactivity, 0, 1.5);
-            const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass);
+            if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {
+                if (lastOnsets >= 0 && frame.isPlaying && s.audioReactivity > 0) beatTime = t;
+                lastOnsets = audio.onsets;
+            }
+            const beatAge = t >= beatTime ? t - beatTime : Infinity;
+            const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass, s.reducedMotion ? Infinity : beatAge);
 
             let prevFade = 0;
             let prevSlot = null;
             let prevView = null;
-            if (data.transition === 'ink' && t - data.cue.start < 0.5 && index > 0) {
+            const since = t - data.cue.start;
+            let smash = 0;
+            if ((data.transition === 'ink' || data.transition === 'smash') && since < 0.5 && index > 0) {
                 prevSlot = slotFor(index - 1, false);
                 if (prevSlot) {
-                    prevFade = smooth(0, 0.5, t - data.cue.start) * 0.999 + 0.001;
+                    prevFade = smooth(0, 0.5, since) * 0.999 + 0.001;
                     prevView = viewAt(prevSlot.data.shots, data.cue.start - 0.001);
+                    if (data.transition === 'smash') smash = clamp(since / 0.5, 0.001, 1);
                 }
             }
+            const flooding = data.transition === 'flood' && since >= 0 && since < 0.6 && !s.reducedMotion;
+            const floodR = flooding ? 1.9 * (1 - Math.pow(1 - since / 0.6, 2.4)) : 0;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(program);
@@ -1074,6 +1174,9 @@ void main() {
             gl.uniform4fv(u.uAccent, accentBuffer);
             gl.uniform1i(u.uAccentCount, counts.accents);
             gl.uniform4fv(u.uRings, ringBuffer);
+            gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
+            gl.uniform1f(u.uSmash, smash);
+            gl.uniform1f(u.uCloud, s.cloud);
             // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
             const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
             gl.uniform1f(u.uFlow, flowStep * 0.13);
