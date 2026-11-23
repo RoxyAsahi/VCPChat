@@ -882,12 +882,18 @@ vec3 archiveUntone(vec3 y) {
         const view = new THREE.Vector3(-Math.sin(YAW) * Math.cos(ELEV), Math.sin(ELEV), Math.cos(YAW) * Math.cos(ELEV));
         const aim = new THREE.Vector3(AIM[0], AIM[1], AIM[2]);
         let W = 1, H = 1;
-        let pxPerUnit = 200;
-        let liftRate = 8;           // 对焦处一个世界单位在屏幕上多少物理像素（判断「还看得出在动」用）
+        let pxPerUnit = 200;           // 对焦处一个世界单位在屏幕上多少物理像素（判断「还看得出在动」用）
+        let liftRate = 8;
         let dirty = true;
         const invalidate = () => { dirty = true; };
 
+        let sized = '';
         const resize = (width, height) => {
+            // 页面 class 一变视图就会重排一次，尺寸多半没变：这时不再重设画布宽高
+            // （给 canvas.width 赋值，哪怕同一个数，也会让浏览器丢掉并重建整块绘图缓冲）
+            const key = Math.max(1, width) + 'x' + Math.max(1, height) + '@' + Math.min(global.devicePixelRatio || 1, tier.maxDpr);
+            if (key === sized) { invalidate(); return; }
+            sized = key;
             W = Math.max(1, width); H = Math.max(1, height);
             renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, tier.maxDpr));
             renderer.setSize(W, H, false);
