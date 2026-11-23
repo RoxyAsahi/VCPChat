@@ -41,8 +41,8 @@
      * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', etchHi: 'rgba(255,253,249,.85)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', etchHi: 'rgba(0,0,0,.35)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -811,15 +811,32 @@ vec3 archiveUntone(vec3 y) {
             g.fillStyle = lighting.etch;
             g.lineWidth = 2.6;
             g.lineJoin = 'round';
-            const path = (pts) => { g.beginPath(); pts.forEach(([u, v], i) => (i ? g.lineTo(X(u), Y(v)) : g.moveTo(X(u), Y(v)))); g.stroke(); };
+            // 压在面板下面的刻线（参考播放器 Case_Engraving + Highlight）：一道细槽配一道错开的亮边，看着是压出来的，不是印上去的
+            const trace = (pts) => { g.beginPath(); pts.forEach(([u, v], i) => (i ? g.lineTo(X(u), Y(v)) : g.moveTo(X(u), Y(v)))); g.stroke(); };
+            const path = (pts) => {
+                g.save(); g.translate(1.6, 1.6); g.strokeStyle = lighting.etchHi; trace(pts); g.restore();
+                trace(pts);
+            };
+            const arc = (u, v, r, a0, a1) => {
+                for (const [dx, col] of [[1.6, lighting.etchHi], [0, lighting.etch]]) {
+                    g.strokeStyle = col; g.beginPath(); g.arc(X(u) + dx, Y(v) + dx, r * S, a0, a1); g.stroke();
+                }
+            };
             // 外圈：四角斜切，上边和左边各有一处台阶
-            path([[-2.2, 3.5], [-0.4, 3.5], [-0.3, 3.4], [0.5, 3.4], [0.6, 3.5], [2.2, 3.5], [2.32, 3.38], [2.32, 0.32], [2.2, 0.2], [-2.2, 0.2], [-2.32, 0.32], [-2.32, 1.2], [-2.24, 1.28], [-2.24, 2.6], [-2.32, 2.68], [-2.32, 3.38], [-2.2, 3.5]]);
+            path([[-2.2, 3.5], [-0.4, 3.5], [-0.3, 3.4], [0.5, 3.4], [0.6, 3.5], [2.22, 3.5]]);   // 右上角让出螺钉外的环
+            path([[2.32, 3.35], [2.32, 0.32], [2.2, 0.2], [-2.2, 0.2], [-2.32, 0.32], [-2.32, 1.2], [-2.24, 1.28], [-2.24, 2.6], [-2.32, 2.68], [-2.32, 3.38], [-2.2, 3.5]]);
             // 内圈的半截走线：从左上沿左边下来，转到底边
             path([[-1.98, 3.26], [-2.1, 3.14], [-2.1, 0.55], [-1.95, 0.4], [-1.2, 0.4]]);
             path([[1.6, 3.26], [2.1, 3.26], [2.1, 2.7]]);
+            // 两颗螺钉外面各绕一圈压出来的环（右上两道，左下一道 C 形）
+            arc(2.389, 3.526, 0.115, 0, Math.PI * 2);
+            arc(2.389, 3.526, 0.15, Math.PI * 0.55, Math.PI * 1.95);
+            arc(-2.335, 0.14, 0.125, -Math.PI * 0.45, Math.PI * 0.95);
+            g.strokeStyle = lighting.etch;
             const cross = (u, v) => { path([[u - 0.07, v], [u + 0.07, v]]); path([[u, v - 0.07], [u, v + 0.07]]); };
             cross(2.05, 3.05); cross(-1.95, 3.05); cross(2.05, 0.42); cross(-1.75, 0.6);
             // 右下的小地球和短横
+            g.strokeStyle = lighting.etch;
             const cx = X(1.98), cy = Y(0.92), r = 0.15 * S;
             g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
             g.beginPath(); g.ellipse(cx, cy, r * 0.45, r, 0, 0, Math.PI * 2); g.stroke();
@@ -830,7 +847,7 @@ vec3 archiveUntone(vec3 y) {
             g.fillText('MUSIC ARCHIVE', X(-1.15), Y(0.27));
             etchMap.needsUpdate = true;
         };
-        coverGroup.add(frameMesh, artMesh, captionMesh, etchMesh);
+        coverGroup.add(frameMesh, artMesh, captionMesh);
         coverGroup.visible = false;
         scene.add(coverGroup);
         // 选中卡的索引片和螺钉（颜色按参考播放器截图里和卡面的明暗比例取）
@@ -840,6 +857,9 @@ vec3 archiveUntone(vec3 y) {
         fittings.matrixAutoUpdate = false;
         fittings.visible = false;
         scene.add(fittings);
+        // 刻线跟着选中卡一直在（参考播放器只给焦点卡画 Case_Engraving，浏览时也画），不再等取出才淡入
+        etchMat.opacity = 1;
+        fittings.add(etchMesh);
         const paintFittings = () => {
             const c = [new THREE.Color(lighting.fit[0]), new THREE.Color(lighting.fit[1]), new THREE.Color(lighting.fit[1]).multiplyScalar(0.62)];
             const kind = fittingsGeo.userData.kind, col = fittingsGeo.attributes.color.array;
@@ -1093,7 +1113,6 @@ vec3 archiveUntone(vec3 y) {
             frameMat.opacity = lighting.mat[1] * appear;
             artMat.opacity = appear;
             captionMat.opacity = appear;
-            etchMat.opacity = appear;
         };
         const setDetailRoom = (bounds) => {
             if (targetRoom && Object.keys(bounds).every((edge) => Math.abs(bounds[edge] - targetRoom[edge]) < 0.5)) return;
