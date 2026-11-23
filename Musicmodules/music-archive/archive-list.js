@@ -655,7 +655,13 @@
             if (key === thumbKey) return;
             thumbKey = key;
             r.thumb.hidden = !g;
-            if (g) { r.thumb.style.height = Math.round(g.size) + 'px'; r.thumb.style.transform = `translateY(${y}px)`; }
+            if (g) {
+                r.thumb.style.height = Math.round(g.size) + 'px';
+                r.thumb.style.transform = `translateY(${y}px)`;
+                // 淡轨道画在滑块的 ::before 上：从轨道顶端到底端，跟着滑块位置反向偏移
+                r.thumb.style.setProperty('--thumb-top', (y - Math.round((r.viewport.offsetTop || 0) + THUMB_PAD[0])) + 'px');
+                r.thumb.style.setProperty('--thumb-track', Math.round(g.track) + 'px');
+            }
         };
         let thumbDrag = null;
         const onThumbMove = (e) => {

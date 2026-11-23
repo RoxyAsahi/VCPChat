@@ -757,3 +757,8 @@ body.music-archive-on #custom-title-bar .title { visibility: hidden; }
 .archive-list-row .tx em, .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 64%, transparent); }
 .archive-list-cols, .archive-list-letter > i { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); }
 .archive-list-group i { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); }
+/* 滚动条：原版右侧一直留着一条很淡的 3px 轨道（10%），滑块 45%；悬停时照旧变粗变深 */
+.archive-list-thumb { opacity: 1; }
+.archive-list-thumb::after { opacity: .2; }
+.archive-list-thumb::before { content: ""; position: absolute; left: 5px; width: 3px; top: calc(-1 * var(--thumb-top, 0px)); height: var(--thumb-track, 0px); background: var(--ar-ink); opacity: .08; }
+.archive-list:hover .archive-list-thumb::after { opacity: .45; }
