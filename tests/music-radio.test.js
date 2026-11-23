@@ -122,3 +122,31 @@ test('pickSimilar plays one file per song, picks the best copy and pushes instru
     const fromInst = pickSimilar(lib, [inst], { size: 10, exclude: new Set([inst]), random: () => 0.5 });
     assert.ok(fromInst.includes(flac) || fromInst.length > 0);
 });
+
+test('daily mix: reshuffle gives a fresh batch, recent batches are pushed back, and the day is local', () => {
+    const { app, store } = setup();
+    const first = app.dailyMix();
+    assert.ok(first.length > 0);
+    const id1 = app.dailyMixKey();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    assert.ok(id1.startsWith(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}#`), id1);
+    const second = app.dailyMix.reshuffle();
+    assert.notEqual(app.dailyMixKey(), id1);
+    const overlap = second.filter((t) => first.includes(t)).length;
+    assert.ok(overlap < first.length / 2, 'second batch mostly new: overlap ' + overlap + '/' + first.length);
+    const seen = JSON.parse(store.get('musicDailyMixSeen'));
+    assert.equal(seen.b.length, 2);
+    assert.equal(seen.b[0].id, app.dailyMixKey());
+    // 同一批再算一次不变，也不重复记
+    assert.deepEqual(app.dailyMix(), second);
+    assert.equal(JSON.parse(store.get('musicDailyMixSeen')).b.length, 2);
+});
+
+test('recentBatches keeps at most three earlier batches from the last seven days', () => {
+    const { recentBatches } = require(path.join(__dirname, '../Musicmodules/music-radio.js'));
+    const b = (id) => ({ id, p: [] });
+    const out = recentBatches([b('2026-11-23#1'), b('2026-11-23#0'), b('2026-11-22#0'), b('2026-11-20#0'), b('2026-11-10#0')], '2026-11-23#1', '2026-11-23');
+    assert.deepEqual(out.map((x) => x.id), ['2026-11-23#0', '2026-11-22#0', '2026-11-20#0']);
+    assert.deepEqual(recentBatches([b('2026-11-10#0'), b('2026-11-30#0')], '2026-11-23#0', '2026-11-23'), []);
+});

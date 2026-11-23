@@ -15,6 +15,23 @@
     const KEY = 'musicAutoplay';
     const BATCH = 25;     // 一次续多少首
     const REFILL_AT = 4;  // 剩这么多首时再续
+    const SHUFFLE_KEY = 'musicDailyMixShuffle';
+    const SEEN_KEY = 'musicDailyMixSeen';
+    const SEEN_BATCHES = 4;              // 存当前这批 + 之前 3 批
+    const SEEN_DAMP = [0.15, 0.35, 0.6]; // 上一批、上上批、再往前一批
+    const SEEN_DAYS = 7;
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const localDay = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    // 之前推过的批次：去掉当前这批，只留 7 天内的前 3 批
+    const recentBatches = (batches, id, day) => {
+        const dayMs = Date.parse(day + 'T00:00:00');
+        return batches.filter((b) => {
+            if (b.id === id) return false;
+            const at = Date.parse(String(b.id).slice(0, 10) + 'T00:00:00');
+            return Number.isFinite(at) && dayMs - at <= SEEN_DAYS * 86400000 && dayMs >= at;
+        }).slice(0, SEEN_DAMP.length);
+    };
 
     const norm = (s) => String(s || '').trim().toLowerCase();
     const artistsOf = (t) => norm(t && t.artist).split(/\s*(?:\/|,|，|、|&|;|feat\.?|ft\.)\s*/).filter(Boolean);
@@ -45,7 +62,7 @@
      * 同一首歌的几个文件只出一份（挑 versionRank 最高的），种子和 exclude 里那首的其他文件也不出；
      * 伴奏版分数打到四分之一；playable(t) 为 false 的（放不了的）不出。
      */
-    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, novelty = () => 0, random = Math.random, playable = () => true } = {}) {
+    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, novelty = () => 0, random = Math.random, playable = () => true, damp = () => 1 } = {}) {
         const seedArtists = new Map();
         const seedAlbums = new Set();
         const seedGenres = new Set();
@@ -84,6 +101,7 @@
             s += novelty(t); // 每日推荐里给没听过的歌一点加分，让曲库里沉着的歌浮上来
             s += 1.2 * random();
             if (!instrumentalOk && isInstrumental(t)) s *= 0.25;
+            s *= damp(t); // 每日推荐：前几批刚推过的往后放
             scored.push([s, t]);
         }
         scored.sort((a, b) => b[0] - a[0]);
@@ -177,12 +195,36 @@
             const want = new Map((app.playlist || []).map((t) => [norm(String(t.path).replace(/\\/g, '/')), t]));
             return paths.map((p) => want.get(norm(String(p).replace(/\\/g, '/')))).filter(Boolean);
         };
+        // 「今天」按本机时区算（以前按 UTC，东八区要到早上 8 点才换）
+        const today = () => localDay(new Date());
+        // 换一批：同一天里第几批（存本机，跨天归零）
+        const readShuffle = () => {
+            try {
+                const v = JSON.parse(storage?.getItem(SHUFFLE_KEY) || 'null');
+                return v && v.day === today() ? Math.max(0, Number(v.n) || 0) : 0;
+            } catch (e) { return 0; }
+        };
+        // 推过的批次（最新在前，最多 3 批、7 天内）：再挑时依次 ×0.15 / ×0.35 / ×0.6，
+        // 让每日推荐每天、每换一批都真的不一样，又不至于把喜欢的歌永远挡在外面
+        const readSeen = () => {
+            try {
+                const v = JSON.parse(storage?.getItem(SEEN_KEY) || 'null');
+                return v && v.v === 1 && Array.isArray(v.b) ? v.b.filter((b) => b && typeof b.id === 'string' && Array.isArray(b.p)) : [];
+            } catch (e) { return []; }
+        };
+        const writeSeen = (batches) => { try { storage?.setItem(SEEN_KEY, JSON.stringify({ v: 1, b: batches })); } catch (e) { /* 存不下就算了 */ } };
+        const pathKey = (t) => norm(String(t && t.path || '').replace(/\\/g, '/'));
         let mixCache = { key: '', list: [] };
+        app.dailyMixKey = () => today() + '#' + readShuffle();
         app.dailyMix = ({ size = 30 } = {}) => {
             const lib = app.playlist || [];
-            const day = new Date().toISOString().slice(0, 10);
-            const key = day + '|' + lib.length + '|' + size;
+            const day = today();
+            const id = app.dailyMixKey();
+            const key = id + '|' + lib.length + '|' + size;
             if (mixCache.key === key) return mixCache.list;
+            const earlier = recentBatches(readSeen(), id, day);
+            const damping = new Map();
+            earlier.forEach((b, k) => { for (const p of b.p) if (!damping.has(p)) damping.set(p, SEEN_DAMP[k]); });
             const stats = app.musicStats;
             let seeds = byPaths(stats ? stats.top(8, { minPlays: 1 }) : []);
             if (seeds.length < 3) {
@@ -190,7 +232,8 @@
                 try { recent = JSON.parse(global.localStorage?.getItem('musicArchiveRecent') || '[]'); } catch (e) { recent = []; }
                 seeds = seeds.concat(byPaths(recent.slice(0, 8)).filter((t) => !seeds.includes(t)));
             }
-            const random = seeded(day + '|' + lib.length);
+            const shuffle = readShuffle();
+            const random = seeded(day + '|' + lib.length + (shuffle ? '|' + shuffle : ''));
             const list = pickSimilar(lib, seeds, {
                 size,
                 exclude: new Set(byPaths(stats ? stats.lastPlayed(15) : [])),
@@ -198,16 +241,29 @@
                 liked: (t) => Boolean(app.isLiked?.(t)),
                 novelty: (t) => (stats && !stats.get(t) ? 1.6 : 0),
                 random,
-                playable
+                playable,
+                damp: (t) => damping.get(pathKey(t)) || 1
             });
             mixCache = { key, list };
+            if (list.length) writeSeen([{ id, p: list.map(pathKey) }, ...earlier].slice(0, SEEN_BATCHES));
+            return list;
+        };
+        // 换一批：今天的批号加一，目录和阵列重排
+        app.dailyMix.reshuffle = () => {
+            const n = readShuffle() + 1;
+            try { storage?.setItem(SHUFFLE_KEY, JSON.stringify({ day: today(), n })); } catch (e) { /* 只是偏好 */ }
+            mixCache = { key: '', list: [] };
+            try { app.archiveView?.refresh?.(); } catch (e) { /* 档案页还没起来 */ }
+            try { doc?.dispatchEvent?.(new CustomEvent('music-daily-mix-change', { detail: { id: app.dailyMixKey() } })); } catch (e) { /* 旧内核 */ }
+            const list = app.dailyMix();
+            toast(list.length ? `每日推荐换了一批：${list.length} 首` : '曲库里没有能推荐的歌');
             return list;
         };
         // 还没听过的歌：随机一批（同一天不变），按歌手打散
         app.neverPlayed = ({ size = 30 } = {}) => {
             const stats = app.musicStats;
             const lib = (app.playlist || []).filter((t) => t && t.path && !(stats && stats.get(t)));
-            const random = seeded('never|' + new Date().toISOString().slice(0, 10));
+            const random = seeded('never|' + today());
             return pickSimilar(lib, [], { size, random, playable });
         };
 
@@ -291,7 +347,7 @@
         }
     }
 
-    const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental };
+    const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };
     if (typeof module !== 'undefined' && module.exports) module.exports = exported;
     global.setupMusicRadio = setupMusicRadio;
     global.MusicRadioUtils = exported; // 整理重复的歌（music-dupes.js）也用同一套「同一首」判断
