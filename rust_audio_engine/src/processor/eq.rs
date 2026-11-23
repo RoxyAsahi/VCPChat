@@ -157,10 +157,17 @@ pub struct Equalizer {
     smooth_counter: Vec<u32>,              // samples remaining in crossfade per band
     channels: usize,
     enabled: bool,
+    /// Automatic pre-gain (linear) that keeps the summed boost from clipping:
+    /// the peak of the target response, pulled down to 0 dB. `headroom` glides
+    /// toward `headroom_target` so a slider move never steps the level.
+    headroom: f64,
+    headroom_target: f64,
 }
 
 const EQ_SMOOTH_SAMPLES: u32 = 1024; // ~23ms @ 44100Hz
 const INV_EQ_SMOOTH: f64 = 1.0 / EQ_SMOOTH_SAMPLES as f64;
+/// Boost the automatic pre-gain lets through untouched, in dB.
+const HEADROOM_SLACK_DB: f64 = 0.5;
 
 impl Equalizer {
     const FREQUENCIES: [f64; EQ_BANDS] = [
@@ -188,6 +195,8 @@ impl Equalizer {
             smooth_counter: vec![0u32; EQ_BANDS],
             channels,
             enabled: false,
+            headroom: 1.0,
+            headroom_target: 1.0,
         }
     }
 
@@ -287,6 +296,74 @@ impl Equalizer {
             }
             self.smooth_counter[idx] = EQ_SMOOTH_SAMPLES;
         }
+        // The band-overlap compensation leaves a few tenths of a dB of ripple
+        // even on cut-only settings; the final limiter covers that much, so
+        // only the part of the peak above HEADROOM_SLACK_DB is taken back.
+        let peak = self.target_peak_db(sample_rate);
+        self.headroom_target = 10.0_f64.powf(-(peak - HEADROOM_SLACK_DB).max(0.0) / 20.0);
+    }
+
+    /// Highest point of the summed target response between 20 Hz and 20 kHz
+    /// (or just under Nyquist), in dB. Design-time only.
+    fn target_peak_db(&self, sample_rate: f64) -> f64 {
+        let Some(bank) = self.target_bands.first() else {
+            return 0.0;
+        };
+        if !(sample_rate.is_finite() && sample_rate > 0.0) {
+            return 0.0;
+        }
+        const POINTS: usize = 240;
+        let lo: f64 = 20.0;
+        let hi = 20_000.0_f64.min(sample_rate * 0.49);
+        if hi <= lo {
+            return 0.0;
+        }
+        let ratio = (hi / lo).ln();
+        let mut peak = f64::NEG_INFINITY;
+        for k in 0..=POINTS {
+            let f = lo * (ratio * k as f64 / POINTS as f64).exp();
+            let db: f64 = bank.iter().map(|b| b.magnitude_db(f, sample_rate)).sum();
+            if db.is_finite() && db > peak {
+                peak = db;
+            }
+        }
+        if peak.is_finite() { peak } else { 0.0 }
+    }
+
+    /// The automatic pre-gain currently being steered to, in dB (0 or negative).
+    pub fn headroom_db(&self) -> f64 {
+        20.0 * self.headroom_target.log10()
+    }
+
+    /// Scale complete frames by the automatic pre-gain, gliding toward the target.
+    #[inline]
+    fn apply_headroom(&mut self, buffer: &mut [f64]) {
+        let channels = self.channels;
+        if channels == 0 {
+            return;
+        }
+        if self.headroom == self.headroom_target {
+            if self.headroom != 1.0 {
+                let g = self.headroom;
+                let whole = buffer.len() / channels * channels;
+                for sample in &mut buffer[..whole] {
+                    *sample *= g;
+                }
+            }
+            return;
+        }
+        for frame in buffer.chunks_exact_mut(channels) {
+            let diff = self.headroom_target - self.headroom;
+            if diff.abs() < 1e-7 {
+                self.headroom = self.headroom_target;
+            } else {
+                self.headroom += diff * INV_EQ_SMOOTH * 4.0;
+            }
+            let g = self.headroom;
+            for sample in frame {
+                *sample *= g;
+            }
+        }
     }
 
     /// Section gains whose summed response equals `user` at each band center.
@@ -358,6 +435,7 @@ impl Equalizer {
 
         if self.channels == 2 && self.smooth_counter.iter().all(|&counter| counter == 0) {
             self.process_settled_stereo(buffer);
+            self.apply_headroom(buffer);
             return;
         }
 
@@ -382,6 +460,7 @@ impl Equalizer {
                 }
             }
         }
+        self.apply_headroom(buffer);
     }
 
     fn process_settled_stereo(&mut self, buffer: &mut [f64]) {
@@ -460,6 +539,7 @@ impl Equalizer {
             }
         }
         self.smooth_counter.fill(0);
+        self.headroom = self.headroom_target;
         self.reset();
     }
 }
@@ -972,6 +1052,64 @@ mod tests {
                     buffer[idx] = self.process_sample_no_counter_update(buffer[idx], ch);
                 }
             }
+            self.apply_headroom(buffer);
         }
+    }
+
+    fn settle(eq: &mut Equalizer) {
+        let mut silence = vec![0.0; eq.channels * 8192];
+        eq.process(&mut silence);
+    }
+
+    fn sine_peak(eq: &mut Equalizer, freq: f64, sample_rate: f64) -> f64 {
+        let frames = 16_384;
+        let mut buf: Vec<f64> = (0..frames * 2)
+            .map(|i| (2.0 * std::f64::consts::PI * freq * (i / 2) as f64 / sample_rate).sin() * 0.1)
+            .collect();
+        eq.process(&mut buf);
+        buf[frames..].iter().fold(0.0f64, |m, v| m.max(v.abs())) / 0.1
+    }
+
+    #[test]
+    fn boosts_are_pulled_down_so_the_peak_sits_at_zero_db() {
+        let mut eq = Equalizer::new(2, 48_000.0);
+        eq.set_enabled(true);
+        let mut gains = [0.0; EQ_BANDS];
+        gains[1] = 9.0; // 62 Hz
+        eq.set_all_bands(&gains, 48_000.0).unwrap();
+        assert!((eq.headroom_db() + 8.5).abs() < 0.3, "headroom {}", eq.headroom_db());
+        settle(&mut eq);
+        let at_boost = sine_peak(&mut eq, 62.0, 48_000.0);
+        assert!(at_boost > 0.97 && at_boost < 1.1, "boosted band lands near unity: {at_boost}");
+        let elsewhere = sine_peak(&mut eq, 4_000.0, 48_000.0);
+        assert!(elsewhere < 0.4, "the rest drops by the boost: {elsewhere}");
+    }
+
+    #[test]
+    fn cuts_only_leave_the_level_alone() {
+        let mut eq = Equalizer::new(2, 44_100.0);
+        eq.set_enabled(true);
+        eq.set_all_bands(&[-6.0, -3.0, 0.0, 0.0, -2.0, 0.0, 0.0, -4.0, 0.0, 0.0], 44_100.0).unwrap();
+        assert_eq!(eq.headroom_db(), 0.0);
+        settle(&mut eq);
+        let mid = sine_peak(&mut eq, 2_000.0, 44_100.0);
+        assert!((mid - 1.0).abs() < 0.02, "{mid}");
+    }
+
+    #[test]
+    fn moving_back_to_flat_restores_unity_gradually() {
+        let mut eq = Equalizer::new(2, 48_000.0);
+        eq.set_enabled(true);
+        let mut gains = [0.0; EQ_BANDS];
+        gains[5] = 12.0;
+        eq.set_all_bands(&gains, 48_000.0).unwrap();
+        settle(&mut eq);
+        eq.set_all_bands(&[0.0; EQ_BANDS], 48_000.0).unwrap();
+        assert_eq!(eq.headroom_db(), 0.0);
+        let mut one = vec![1.0, 1.0];
+        eq.process(&mut one);
+        assert!(one[0] < 0.5, "no step back to full level on the first frame: {}", one[0]);
+        settle(&mut eq);
+        assert_eq!(eq.headroom, 1.0);
     }
 }
