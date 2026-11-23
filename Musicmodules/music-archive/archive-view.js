@@ -567,6 +567,7 @@
          * 镜头停稳时按鼠标最后的位置重新判一次悬停，高亮不会还挂在原来那张卡上。只改悬停和光标，不弹提示。
          */
         let lastPtr = null, rehoverTimer = 0;
+        let picking = false;   // 随机抽取正在跑（pick 在后面才声明，select 里用这个）
         const rehover = () => {
             rehoverTimer = 0;
             const sc = state.scene;
@@ -645,7 +646,9 @@
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
-            syncList();
+            // 随机抽取跑着时左侧目录先不跟（借鉴 RhinE：抽取途中资料面板不动，落定才显示）：
+            // 每一跳都换分组、滚列表又费又晃，停下或被打断时再一次对齐
+            if (!picking) syncList();
             schedulePlace();
             kick();
             rehoverSoon();
@@ -987,10 +990,12 @@
         const pickStop = () => {
             if (!pick.on) return;
             pick.on = false;
+            picking = false;
             pick.timers.forEach(clearTimeout);
             pick.timers = [];
             refs.pickBtn?.classList.remove('running');
             setCardExpanded(true);
+            syncList();
         };
         const randomPick = () => {
             if (pick.on || !state.columns.length) return;
@@ -1027,6 +1032,7 @@
                 if (last !== row1 || !steps.length) steps.push({ t: t += 100, lane: lane1, row: row1 });
             }
             pick.on = true;
+            picking = true;
             refs.pickBtn?.classList.add('running');
             setCardExpanded(false);
             for (const s of steps) {
@@ -1040,9 +1046,11 @@
             pick.timers.push(setTimeout(() => {
                 if (!pick.on || state.destroyed) return;
                 pick.on = false;
+                picking = false;
                 pick.timers = [];
                 refs.pickBtn?.classList.remove('running');
                 if (selectedIndex() !== target) select(lane1, row1);
+                syncList();
                 setCardExpanded(true);
                 playSelected();
             }, t + (reducedMotion() ? 0 : 450)));
