@@ -546,7 +546,7 @@ body.music-reduce-motion .archive-lyrics-index i { transition: none; }
 .archive-lyrics-track { padding-top: 40px; transition: transform .6s var(--mt-ease, cubic-bezier(.32, .72, 0, 1)); will-change: transform; }
 .archive-lyrics-track p { position: relative; height: 52px; margin: 0 var(--lyrics-end) 0 0; padding-left: var(--lyrics-start); display: flex; flex-direction: column; justify-content: center; gap: 4px; cursor: pointer; }
 .archive-lyrics-track p.tr { height: 74px; }
-.archive-lyrics-track b { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .62; transition: color .3s, opacity .3s; }
+.archive-lyrics-track b { font-size: calc(18px * var(--fit, 1)); line-height: 24px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .62; transition: color .3s, opacity .3s; }
 .archive-lyrics-track em { font-style: normal; font-size: 12px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
 .archive-lyrics-track p:hover b { opacity: .9; }
 /* 正在唱：目录选中行同款记号（小方块 + 延伸到行尾的细线），字变成墨色加粗 */

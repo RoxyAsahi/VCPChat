@@ -84,6 +84,7 @@
                 return `<p data-k="${k}"${tr ? ' class="tr"' : ''}><b${words ? ' class="ww"' : ''}>${body}</b>${tr ? `<em>${esc(tr)}</em>` : ''}</p>`;
             }).join('');
             buildIndex();
+            fitSoon();
             state.index = -2;
             state.words = null;
             const t = current();
@@ -95,6 +96,31 @@
          * 歌词行索引（借鉴 RhinE 歌词页右侧的行索引）：一行歌词一格（太长的歌按相等的几行一格，最多 48 格），
          * 唱过的偏实、正在唱的一格用强调色，没唱到的很淡；点一格跳到那一段的第一行。
          */
+        /*
+         * 长句缩字（借鉴 RhinE「长句缩小到放得下，不截断」）：放不下的一行先把字号缩到放得下，
+         * 最多缩到 72%，再长才用省略号。按正在唱时的粗字重留 5% 余量，换歌、改窗口宽度时重算；
+         * 先统一读宽度、再统一写，不来回触发排版。
+         */
+        const FIT_MIN = 0.72;
+        let fitRaf = 0;
+        const fitLines = () => {
+            fitRaf = 0;
+            const rows = [...r.track.children];
+            const need = rows.map((p) => {
+                const b = p.firstElementChild;
+                if (!b) return 1;
+                const prev = b.style.getPropertyValue('--fit');
+                if (prev) b.style.removeProperty('--fit');
+                const avail = b.clientWidth, full = b.scrollWidth;
+                return avail > 0 && full > avail ? Math.max(FIT_MIN, Math.floor(avail / (full * 1.05) * 100) / 100) : 1;
+            });
+            rows.forEach((p, k) => {
+                const b = p.firstElementChild;
+                if (b && need[k] < 1) b.style.setProperty('--fit', String(need[k]));
+            });
+        };
+        const fitSoon = () => { if (!fitRaf) fitRaf = requestAnimationFrame(fitLines); };
+
         const INDEX_MAX = 48;
         const buildIndex = () => {
             const n = Math.min(state.lines.length, INDEX_MAX);
@@ -235,7 +261,10 @@
             paintWords(t);
         };
 
+        let fitWidth = 0;
         const resizeObserver = new ResizeObserver(() => {
+            const w = r.viewport.clientWidth;
+            if (w && w !== fitWidth) { fitWidth = w; fitSoon(); }
             if (!state.shown) return;
             const previousShift = state.shift;
             updateShift();
@@ -294,7 +323,7 @@
             tick,
             setAllowed: (on) => { state.allowed = Boolean(on); sync(); },
             get shown() { return state.shown; },
-            destroy: () => { resizeObserver.disconnect(); if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.manualTimer); el.remove(); },
+            destroy: () => { resizeObserver.disconnect(); cancelAnimationFrame(fitRaf); if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.manualTimer); el.remove(); },
             debug: () => ({ shown: state.shown, none: state.none, lines: state.lines.length, index: state.index, ticking: Boolean(state.timer) })
         };
     };
