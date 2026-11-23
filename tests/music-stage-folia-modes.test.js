@@ -127,3 +127,24 @@ test('clockwork: the wheel turns one step per sung line, settles with a small ov
     assert.equal(C.escapement(3.5), 4);
     assert.ok(C.escapement(3.02) > 3 && C.escapement(3.02) < 4.15);
 });
+
+require(path.join(stage, 'modes', 'orbit-manager.js'));
+test('orbit: glyphs keep reading order round the ring, the sung glyph turns to the front, the back half is farther', () => {
+    const O = window.MusicStageOrbitManager._test;
+    const { centres } = O.arcLayout([90, 90, 40, 90, 90]);
+    for (let i = 1; i < centres.length; i += 1) assert.ok(centres[i] > centres[i - 1]);
+    const table = new Float32Array(O.TABLE + 1);
+    const perimeter = O.ellipseTable(0.5, 0.15, table);
+    assert.ok(Math.abs(O.thetaAlong(table, perimeter, 0) + Math.PI / 2) < 1e-6, 'zero is the front');
+    assert.ok(Math.abs(O.thetaAlong(table, perimeter, perimeter / 2) - Math.PI / 2) < 0.02, 'half way round is the back');
+    assert.ok(O.thetaAlong(table, perimeter, 0.05) > -Math.PI / 2, 'forward is to the right of the front');
+    const glyphs = [{ start: 1, end: 1.4 }, { start: 1.4, end: 1.8 }, { start: 2, end: 2.5 }];
+    assert.ok(O.singingPosition(glyphs, 0.8) < 0);
+    assert.equal(O.singingPosition(glyphs, 1.2), 0.5);
+    assert.equal(O.singingPosition(glyphs, 1.9), 2);
+    assert.equal(O.singingPosition(glyphs, 9), 3);
+    assert.equal(O.arcAt(centres, 2), centres[2]);
+    const front = O.project(-Math.PI / 2, 0.5, 0.15, 0);
+    const back = O.project(Math.PI / 2, 0.5, 0.15, 0);
+    assert.ok(front.s > back.s && front.z < back.z && front.y < back.y);
+});
