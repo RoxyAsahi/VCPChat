@@ -42,6 +42,7 @@
     const TEMPLATE = `
         <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
+        <div class="archive-lyrics-index" data-y="index" title="歌词行索引：点一格跳到那一段"></div>
         <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
     /*
@@ -82,12 +83,42 @@
                 const body = words ? words.map((w) => `<span class="w">${esc(w.text)}</span>`).join('') : esc(textOf(l));
                 return `<p data-k="${k}"${tr ? ' class="tr"' : ''}><b${words ? ' class="ww"' : ''}>${body}</b>${tr ? `<em>${esc(tr)}</em>` : ''}</p>`;
             }).join('');
+            buildIndex();
             state.index = -2;
             state.words = null;
             const t = current();
             state.path = t ? t.path : null;
             r.title.textContent = t ? String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') : '';
         };
+
+        /*
+         * 歌词行索引（借鉴 RhinE 歌词页右侧的行索引）：一行歌词一格（太长的歌按相等的几行一格，最多 48 格），
+         * 唱过的偏实、正在唱的一格用强调色，没唱到的很淡；点一格跳到那一段的第一行。
+         */
+        const INDEX_MAX = 48;
+        const buildIndex = () => {
+            const n = Math.min(state.lines.length, INDEX_MAX);
+            state.indexN = n;
+            state.indexAt = -2;
+            r.index.hidden = n < 4;
+            r.index.innerHTML = n < 4 ? '' : Array.from({ length: n }, (_, k) => `<i data-q="${k}"></i>`).join('');
+        };
+        const paintIndex = (k) => {
+            const n = state.indexN || 0;
+            if (n < 4) return;
+            const q = k < 0 ? -1 : Math.min(n - 1, Math.floor(k * n / state.lines.length));
+            if (q === state.indexAt) return;
+            state.indexAt = q;
+            const marks = r.index.children;
+            for (let j = 0; j < marks.length; j++) marks[j].className = j === q ? 'on' : j < q ? 'past' : '';
+        };
+        r.index.addEventListener('click', (e) => {
+            const m = e.target.closest('i[data-q]');
+            const n = state.indexN || 0;
+            if (!m || !n) return;
+            const k = Math.min(state.lines.length - 1, Math.ceil(Number(m.dataset.q) * state.lines.length / n));
+            r.track.children[k]?.click();
+        });
 
         const show = (on) => {
             if (on === state.shown) return;
@@ -197,6 +228,7 @@
                 state.index = k;
                 const node = k >= 0 ? r.track.children[k] : null;
                 node?.classList.add('on');
+                paintIndex(k);
                 updateShift();
                 if (!state.manualTimer) place();
             }
