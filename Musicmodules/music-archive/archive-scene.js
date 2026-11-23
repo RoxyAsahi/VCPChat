@@ -876,6 +876,7 @@ vec3 archiveUntone(vec3 y) {
         const view = new THREE.Vector3(-Math.sin(YAW) * Math.cos(ELEV), Math.sin(ELEV), Math.cos(YAW) * Math.cos(ELEV));
         const aim = new THREE.Vector3(AIM[0], AIM[1], AIM[2]);
         let W = 1, H = 1;
+        let pxPerUnit = 200;           // 对焦处一个世界单位在屏幕上多少物理像素（判断「还看得出在动」用）
         let dirty = true;
         const invalidate = () => { dirty = true; };
 
@@ -968,6 +969,7 @@ vec3 archiveUntone(vec3 y) {
             const browseSpan = Math.max(7.33, 7.33 * (16 / 9) / aspect);
             const detailSpan = Math.max(6.8, CARD_W * 1.14 * H / roomWidth, CARD_H * 1.24 * H / roomHeight);
             const viewSpan = lerp(browseSpan, detailSpan, k);
+            pxPerUnit = H * renderer.getPixelRatio() / viewSpan;
             const distance = lerp(DIST, 72, k);
             camDir.copy(view).lerp(DETAIL_DIR, k).normalize();
             camAim.copy(aim);
@@ -1260,10 +1262,13 @@ vec3 archiveUntone(vec3 y) {
             // 播放时的缓慢起伏、轻跳让选中卡一直在小幅移动，镜头瞄准点永远差一点点；
             // 差得很少（不到 0.05）就算到位，不然静止画面会一直按满帧画。
             const aimMoving = detailK > 0.001 && targetVisible && cardAim.distanceToSquared(targetPos) > 0.0025;
-            const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && Math.abs(camRow.v - target.row) < 0.001
+            // 行方向按屏幕像素算：剩下没走完的距离（位置差 + 速度/速率）不到半个像素就停。原来按 0.001 行、
+            // 速度 0.001 行/秒判，最后约半秒都在画一帧挪零点几像素的画面（参考播放器也是位移不变才休眠）。
+            const rowRest = (Math.abs(camRow.v - target.row) + Math.abs(camRow.vel) / 3.7) * ROW_SPACING * pxPerUnit;
+            const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
                 && Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) < 0.001 && !returning.size
                 && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
-                && !themeBusy() && Math.abs(camLane.vel) + Math.abs(camRow.vel) < 0.001
+                && !themeBusy() && Math.abs(camLane.vel) < 0.001
                 && !pulses.length && hoverLifts.size <= (hovered ? 1 : 0) && !labelsPending;
             return {
                 moving: !settled,
