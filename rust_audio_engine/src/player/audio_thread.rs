@@ -142,6 +142,15 @@ pub fn audio_thread_main(
                 }
                 #[cfg(windows)]
                 if use_exclusive {
+                    // Exclusive mode opens by position, or the system default.
+                    let names = super::AudioPlayer::output_device_names();
+                    let id = shared_state.device_id.load(Ordering::Relaxed);
+                    let opened = if id >= 0 {
+                        names.get(id as usize).cloned()
+                    } else {
+                        cpal::default_host().default_output_device().and_then(|d| d.name().ok())
+                    };
+                    *shared_state.opened_device_name.write() = opened;
                     match handle_wasapi_exclusive(
                         &cmd_rx,
                         &shared_state,
@@ -196,6 +205,7 @@ pub fn audio_thread_main(
                     Some(d) => {
                         let name = d.name().unwrap_or_else(|_| "Unknown".to_string());
                         log::info!("Using audio device: {}", name);
+                        *shared_state.opened_device_name.write() = Some(name);
                         d
                     }
                     None => {

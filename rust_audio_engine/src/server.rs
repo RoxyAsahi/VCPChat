@@ -368,6 +368,8 @@ pub struct StateResponse {
     file_path: Option<String>,
     volume: f32,
     device_id: Option<usize>,
+    /// Name of the device the output is open on (the default device included).
+    output_device: Option<String>,
     exclusive_mode: bool,
     /// What the output had to fall back from when it was last opened:
     /// "exclusive" (playing shared) and/or "device" (playing on the default device).
@@ -721,6 +723,7 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
     // Get real values from SharedState
     let volume = shared.volume.load(std::sync::atomic::Ordering::Relaxed) as f32 / 1_000_000.0;
     let device_id = shared.device_id.load(std::sync::atomic::Ordering::Relaxed);
+    let output_device = shared.opened_device_name.read().clone();
     let file_path = shared.file_path.read().clone();
     let eq_type = shared.eq_type.read().clone();
     let fir_taps = player.get_fir_taps();
@@ -784,6 +787,7 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
         file_path,
         volume,
         device_id: if device_id >= 0 { Some(device_id as usize) } else { None },
+        output_device,
         exclusive_mode: player.exclusive_mode,
         output_fallback: crate::player::output_fallback_names(
             shared.output_fallback.load(std::sync::atomic::Ordering::Relaxed),
