@@ -551,6 +551,42 @@
     // 没加载到时退回系统黑体。字体按 unicode-range 分片，用到哪些字才下载哪片，
     // 所以要拿整首歌的字去 load；load 完后舞台要把画好的字图作废重画。
     const STAGE_FONT = '"Noto Sans SC Variable","Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif';
+    // 一句歌词按词分主次：虚词、标点小一号，最长的实词（一样长取靠后的）大一号，
+    // 其余在小范围里浮动；词还上下错开一点（重点词不动，小字错得多）。按种子确定。
+    // glyphs 是逐字的数组（每项有 text），返回 [{ from, to, scale, jag, blank }]，from/to 是字下标。
+    const FUNCTION_CHARS = new Set(Array.from('的了在把是我你他她它们和与也就都着过吗呢吧啊呀哦被让给从向到这那之而又很'));
+    const MINOR_WORDS = new Set(['a', 'an', 'the', 'of', 'to', 'in', 'on', 'at', 'me', 'my', 'with', 'and', 'or', 'is', 'i', 'you', 'it', 'by', 'for']);
+    const segmenter = (() => { try { return new Intl.Segmenter('zh', { granularity: 'word' }); } catch (_) { return null; } })();
+    const wordPlan = (glyphs, seed) => {
+        const texts = glyphs.map(g => String(g.text ?? ''));
+        const starts = [];
+        let offset = 0;
+        texts.forEach((t) => { starts.push(offset); offset += t.length; });
+        const joined = texts.join('');
+        const pieces = segmenter ? [...segmenter.segment(joined)].map(p => ({ at: p.index, len: p.segment.length, word: p.isWordLike }))
+            : texts.map((t, i) => ({ at: starts[i], len: t.length, word: /[\p{L}\p{N}]/u.test(t) }));
+        const words = [];
+        let gi = 0;
+        for (const piece of pieces) {
+            const from = gi;
+            while (gi < texts.length && starts[gi] < piece.at + piece.len) gi += 1;
+            if (gi > from) words.push({ from, to: gi, blank: !piece.word, text: texts.slice(from, gi).join('') });
+        }
+        if (gi < texts.length) words.push({ from: gi, to: texts.length, blank: false, text: texts.slice(gi).join('') });
+        const random = seededRandom(`${seed}:words`);
+        const minor = w => w.blank || (w.to - w.from === 1 && FUNCTION_CHARS.has(w.text)) || MINOR_WORDS.has(w.text.toLowerCase());
+        let key = -1;
+        words.forEach((w, i) => { if (!minor(w) && (key < 0 || w.to - w.from >= words[key].to - words[key].from)) key = i; });
+        words.forEach((w, i) => {
+            const r = random();
+            w.scale = w.blank && !w.text.trim() ? 1 : i === key && words.length > 1 ? 1.45 : minor(w) ? 0.62 : 0.85 + r * 0.35;
+            w.key = i === key && words.length > 1;
+        });
+        const jr = seededRandom(`${seed}:jags`);
+        words.forEach((w) => { const o = (jr() - 0.5) * 2; w.jag = w.key ? 0 : o * (w.scale < 0.7 ? 0.32 : 0.2); });
+        return words;
+    };
+
     const fontLoads = new Map();
     const loadLyricFont = (lines, weights, onLoaded, extra = '') => {
         const fonts = global.document?.fonts;
@@ -811,6 +847,7 @@ float vnoise(vec2 p) {
         lyricFont,
         STAGE_FONT,
         loadLyricFont,
+        wordPlan,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, createStillGate, durationChanged,

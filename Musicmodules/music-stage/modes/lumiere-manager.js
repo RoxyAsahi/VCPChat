@@ -212,9 +212,11 @@ vec3 lightAt(vec2 p, float aspect, out float total) {
         if (along <= 0.0) continue;
         float perp = d.x * v.y - d.y * v.x;
         float ang = abs(atan(perp, along));
-        float cone = smoothstep(b.w, b.w * 0.35, ang);
+        // 锥边软一些（舞台灯打在烟里不是硬边），中心不爆白
+        float cone = smoothstep(b.w * 1.35, 0.0, ang);
+        cone *= cone;
         float fall = 1.0 / (1.0 + along * along * 0.35);
-        float k = cone * fall;
+        float k = cone * fall * 0.75;
         if (uRig == 1) {
             // 百叶：沿光束横向切成条，条随距离变宽
             float stripes = smoothstep(0.35, 0.55, fract(perp / (along * 0.06 + 0.02) + uSeed));
@@ -256,7 +258,7 @@ void main() {
     // 烟：慢慢翻滚的两层噪点，只有被光照到才看得见
     vec2 sp = p * 2.2 + vec2(uTime * 0.03, -uTime * 0.012);
     float smoke = vnoise(sp) * 0.65 + vnoise(sp * 2.7 + 5.0) * 0.35;
-    vec3 air = light * (0.18 + smoke * 0.55 * uSmoke);
+    vec3 air = light * (0.12 + smoke * 0.42 * uSmoke);
     // 浮尘：一格一粒，慢慢飘，只在光里亮
     vec2 grid = vec2(aspect * 44.0, 44.0);
     vec2 dp = uv + vec2(uTime * 0.004, uTime * 0.007);
@@ -267,7 +269,9 @@ void main() {
     float mote = smoothstep(0.08 + h.y * 0.06, 0.0, dist) * step(0.7, h.x);
     air += light * mote * 1.6 * uDust;
 
-    vec3 col = uField + air;
+    // 底色里也有一层慢慢翻的烟，中间亮四角暗
+    float vig = 1.12 - length((uv - 0.5) * vec2(1.0, 1.25)) * 0.75;
+    vec3 col = uField * (0.78 + smoke * 0.5) * vig + air;
 
     // 背景层：上一句的空心大字、下一句的小字，只在光里隐约看得见
     {
@@ -288,8 +292,10 @@ void main() {
         float reveal = glyphReveal(gid);
         float singing = glyphSinging(gid);
         float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.8 + lit * 0.5));
-        vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.45), clamp(lit, 0.0, 1.0));
-        col = mix(col, ink * (0.74 + lit * 0.6), clamp(body, 0.0, 1.0));
+        vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.3), clamp(lit, 0.0, 1.0));
+        // 字压在光上要读得清：字周围的光和烟压暗一圈（光越亮压得越多），字本身比光亮
+        col *= 1.0 - clamp(halo * (0.25 + lit * 0.35), 0.0, 0.6);
+        col = mix(col, ink * (0.82 + lit * 0.75), clamp(body, 0.0, 1.0));
         col += uAccent * tx.r * singing * 0.35;
         col += (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55;
         // 唱过的字自己也发一点白光（光外也看得出字在亮），正在唱的那个字光晕更大
@@ -473,7 +479,7 @@ void main() {
             const secondary = hexRgb(p.secondary, [0.46, 0.75, 0.68]);
             const light = Boolean(p.light);
             colours = {
-                field: light ? mixRgb(bg, [0.06, 0.06, 0.07], 0.86) : mixRgb(bg, [0.02, 0.02, 0.03], 0.6),
+                field: light ? mixRgb(bg, [0.1, 0.095, 0.09], 0.86) : mixRgb(bg, [0.115, 0.108, 0.098], 0.8),   // 暗棕灰的放映厅，不是纯黑
                 ink: [0.96, 0.94, 0.9],
                 accent,
                 warm: [1.0, 0.9, 0.74],
@@ -554,80 +560,77 @@ void main() {
             if (glyphs.length) {
                 const visible = glyphs.filter(g => g.text.trim()).length;
                 const cjk = glyphs.filter(g => CJK.test(g.text)).length > visible / 2;
-                const style = cue.kind === 'rest' ? 'row'
-                    : (cjk && visible <= 14 ? ['row', 'stagger', 'stagger', 'diagonal', 'column'] : ['row', 'stagger', 'diagonal'])[Math.floor(random() * (cjk && visible <= 14 ? 5 : 3))];
-                cue.layout = style;
-                // 词块：CJK 每 1~3 字一块，其他按空格
-                const chunks = [];
-                let chunk = [];
-                glyphs.forEach((g, i) => {
-                    if (!g.text.trim()) { if (chunk.length) chunks.push(chunk); chunk = []; return; }
-                    chunk.push(g);
-                    if (cjk && chunk.length >= 1 + Math.floor(random() * 3)) { chunks.push(chunk); chunk = []; }
-                });
-                if (chunk.length) chunks.push(chunk);
-                ctx.font = font(100, cjk);
-                const width100 = list => ctx.measureText(list.map(g => g.text).join('')).width;
+                // 按词分主次：重点词大一号，虚词小一号，词与词上下错开一点；整句收在画面中间。
+                // 基准字高 0.085 屏高，字距 0.04 字号；放不下先整体缩到 0.8，再折成两行（中文短句也可竖排两列）。
+                const words = Utils.wordPlan(glyphs, `lumiere:${cuesFor?.key}:${index}`);
+                const hero = H * 0.085 * s.fontScale * (cue.kind === 'rest' ? 0.8 : 1);
+                const track = 0.04;
+                const advance = (g, size) => { ctx.font = font(size); return ctx.measureText(g.text).width + size * track; };
+                const wordWidth = (w, size) => glyphs.slice(w.from, w.to).reduce((sum, g) => sum + advance(g, size * w.scale), 0);
+                const band = { w: W * 0.74, h: H * 0.56 };
+                const vertical = cjk && cue.kind === 'line' && visible <= 12 && random() < 0.3;
+                cue.layout = vertical ? 'column' : 'row';
+                const solid = words.filter(w => w.text.trim());
+                // 把词分成 1 或 2 组（行 / 列），两组长度尽量接近
+                const split = (measure, limit) => {
+                    const total = words.reduce((sum, w) => sum + measure(w), 0);
+                    if (total <= limit || solid.length < 2) return { groups: [words], fit: Math.min(1, limit / total) };
+                    if (total * 0.8 <= limit) return { groups: [words], fit: limit / total };
+                    let best = null, acc = 0;
+                    words.forEach((w, i) => {
+                        acc += measure(w);
+                        if (i === words.length - 1) return;
+                        const diff = Math.abs(total - 2 * acc);
+                        if (!best || diff < best.diff) best = { at: i + 1, diff };
+                    });
+                    const groups = [words.slice(0, best.at), words.slice(best.at)].map(g => g.filter((w, k, arr) => w.text.trim() || (k > 0 && k < arr.length - 1)));
+                    const widest = Math.max(...groups.map(g => g.reduce((sum, w) => sum + measure(w), 0)));
+                    return { groups, fit: Math.min(1, limit / widest) };
+                };
                 const items = [];
-                if (style === 'column') {
-                    const perCol = visible > 9 ? Math.ceil(visible / 2) : visible;
-                    const cols = Math.ceil(visible / perCol);
-                    const size = clamp(H * 0.56 / perCol, H * 0.05, H * 0.12) * s.fontScale;
-                    let k = 0;
-                    glyphs.filter(g => g.text.trim()).forEach((g) => {
-                        const col = Math.floor(k / perCol), row = k % perCol;
-                        const x = W / 2 + (cols / 2 - col - 0.5) * size * 1.5 - size / 2 + (col % 2 ? size * 0.2 : 0);
-                        items.push({ g, x, baseline: H * 0.46 - perCol * size * 1.08 / 2 + (row + 0.88) * size * 1.08 + col * size * 0.6, size });
-                        k += 1;
-                    });
-                } else if (style === 'row') {
-                    const rows = [];
-                    const perRow = cjk ? 10 : 22;
-                    let row = [];
-                    glyphs.forEach((g, i) => {
-                        row.push(g);
-                        const filled = row.filter(x => x.text.trim()).length;
-                        const target = Math.ceil(visible / Math.ceil(visible / perRow));
-                        if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
-                    });
-                    if (row.length) rows.push(row);
-                    const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
-                    const size = clamp(W * 0.64 / widest * 100, H * 0.05, H * (cue.kind === 'rest' ? 0.1 : 0.12)) * s.fontScale;
-                    ctx.font = font(size, cjk);
-                    const lineH = size * 1.32;
-                    const top = H * 0.5 - rows.length * lineH / 2 + size * 0.95;
-                    rows.forEach((r, ri) => {
-                        const trimmed = r.map(g => g.text).join('').replace(/\s+$/, '');
-                        let x = (W - ctx.measureText(trimmed).width) / 2;
-                        r.forEach((g) => {
-                            const w = ctx.measureText(g.text).width;
-                            if (g.text.trim()) items.push({ g, x, baseline: top + ri * lineH, size });
-                            x += w;
+                if (vertical) {
+                    // 竖排：一列一列从右往左，每个字居中在列心；词之间留半个字
+                    const colHeight = w => (w.to - w.from) * hero * w.scale * (1 + track) + hero * 0.12;
+                    const { groups, fit } = split(colHeight, band.h);
+                    const size0 = hero * fit;
+                    const pitch = size0 * 1.6;
+                    groups.forEach((group, ci) => {
+                        const height = group.reduce((sum, w) => sum + colHeight(w) * fit, 0);
+                        let y = H * 0.46 - height / 2;
+                        const cx = W / 2 + ((groups.length - 1) / 2 - ci) * pitch;
+                        group.forEach((w) => {
+                            const size = size0 * w.scale;
+                            glyphs.slice(w.from, w.to).forEach((g) => {
+                                if (!g.text.trim()) { y += size * 0.5; return; }
+                                ctx.font = font(size);
+                                const gw = ctx.measureText(g.text).width;
+                                items.push({ g, x: cx - gw / 2 + w.jag * size0, baseline: y + size * 0.88, size });
+                                y += size * (1 + track);
+                            });
+                            y += size0 * 0.12;
                         });
                     });
                 } else {
-                    // 错落：词块大小不一、基线上下错开；斜排：整句沿一条斜线往下走
-                    const scales = chunks.map(() => 0.55 + random() * 0.6);
-                    chunks.forEach((c, i) => { if (c.length >= 2 && random() < 0.5) scales[i] = Math.max(scales[i], 1.05); });
-                    const total100 = chunks.reduce((sum, c, i) => sum + width100(c) * scales[i] + 30, 0);
-                    const base = clamp(W * 0.66 / total100 * 100, H * 0.05, H * 0.14) * s.fontScale;
-                    const slope = style === 'diagonal' ? (0.18 + random() * 0.16) * (random() < 0.7 ? 1 : -1) : 0;
-                    let x = (W - total100 * base / 100) / 2;
-                    const mid = H * 0.5 + base * 0.35;
-                    chunks.forEach((c, i) => {
-                        const size = base * scales[i];
-                        const jitter = style === 'stagger' ? (random() - 0.5) * base * 0.9 : 0;
-                        ctx.font = font(size, cjk);
-                        c.forEach((g) => {
-                            const w = ctx.measureText(g.text).width;
-                            items.push({ g, x, baseline: mid + jitter + (x - W / 2) * slope + (size - base) * 0.2, size });
-                            x += w;
+                    const { groups, fit } = split(w => wordWidth(w, hero), band.w);
+                    const size0 = hero * fit;
+                    const pitch = size0 * 1.6;
+                    groups.forEach((group, ri) => {
+                        const width = group.reduce((sum, w) => sum + wordWidth(w, size0), 0);
+                        let x = (W - width) / 2;
+                        // 同一行的字按字身中线对齐（大字小字都居中在一条线上），再加各自的错落
+                        const mid = H * 0.46 + (ri - (groups.length - 1) / 2) * pitch;
+                        group.forEach((w) => {
+                            const size = size0 * w.scale;
+                            glyphs.slice(w.from, w.to).forEach((g) => {
+                                const adv = advance(g, size);
+                                if (g.text.trim()) items.push({ g, x, baseline: mid + size * 0.36 + w.jag * size0, size });
+                                x += adv;
+                            });
                         });
-                        x += base * 0.3;
                     });
                 }
                 // 句子整体略斜，像打在墙上的投影
-                const tilt = style === 'row' || style === 'column' ? 0 : (random() - 0.5) * 0.12;
+                const tilt = 0;
                 const cos = Math.cos(tilt), sin = Math.sin(tilt);
                 ctx.save();
                 ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.translate(-W / 2, -H / 2);
