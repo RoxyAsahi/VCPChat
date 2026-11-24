@@ -1603,6 +1603,7 @@ uniform sampler2D uWarp;
 uniform sampler2D uPaperTex;
 uniform float uPaperGrain;
 uniform float uBeat;
+uniform float uPress;    // 压印的深浅：浅色纸 1，深色 0.5，关了纸纹 0
 void main() {
     vec2 suv = gl_FragCoord.xy / uRes + (texture(uWarp, gl_FragCoord.xy / uRes).rg - 0.5) * 0.1;
     vec2 w = worldAt(uView, suv);
@@ -1631,7 +1632,7 @@ void main() {
     // 阈值被噪点搅过：墨边是纸上洇出来的毛边，按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳。
     // 只用连续的噪声（两层），不用逐像素的散列——那种是一圈椒盐点，放大看像数码噪点，不像墨
     vec2 px = gl_FragCoord.xy / max(uRes.y / 900.0, 0.5);
-    float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (vnoise(px * 1.7 + 11.0) - 0.5) * 0.07) * (0.5 + uGrain);
+    float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (vnoise(px * 0.7 + 11.0) - 0.5) * 0.08) * (0.5 + uGrain);
     float F = gInk + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
     // 段尾硬切之前，字从边上一块块散掉，散的方向朝外
@@ -1679,6 +1680,17 @@ void main() {
     float body = smoothstep(0.15, 0.6, F - thr);
     vec3 inkPooled = clamp(inkK + (inkK - paper) * 0.14 * pool - (inkK - paper) * 0.07 * body, 0.0, 1.0);
     col = mix(col, inkPooled, a);
+    // 压印（Folia 没有）：字像是压进纸里的——右下边的纸上一线阴影，左上边一线亮
+    if (uPress > 0.0 && gInk + gf.g > 0.01) {
+        vec2 po = vec2(2.0, -2.0) * max(uDotPx, 0.5) / uRes;
+        vec4 gA = texture(uGlyphF, suv - po);
+        vec4 gB = texture(uGlyphF, suv + po);
+        float sh = smoothstep(0.25, 0.75, gA.r + gA.b) * (1.0 - smoothstep(0.25, 0.75, gInk));
+        float hi = smoothstep(0.25, 0.75, gB.r + gB.b) * (1.0 - smoothstep(0.25, 0.75, gInk));
+        float outside = 1.0 - a;
+        col *= 1.0 - sh * outside * 0.2 * uPress;
+        col += hi * outside * 0.07 * uPress;
+    }
 
     if (uPrevFade > 0.0) {
         vec2 wq = worldAt(uPrevView, suv);
@@ -1966,10 +1978,12 @@ void main() {
             const accent = hexRgb(p.accent, [0.95, 0.66, 0]);
             if (settings().inkFlip) [paper, ink] = [ink, paper];
             // 网点：纸和墨之间偏纸的一档，和墨分得开
-            const dot = paper.map((v, i) => v + (ink[i] - v) * 0.42);
+            // 浅色纸上同样的比例看着淡得多（亮处眼睛不敏感）：浅色主题网点和墨团都再往墨那边挪一点
+            const paperLight = paper.reduce((a, v) => a + v, 0) / 3 > 0.5;
+            const dot = paper.map((v, i) => v + (ink[i] - v) * (paperLight ? 0.52 : 0.42));
             // 漂在字上的墨团：纸和墨之间的一档灰（像印刷压的第二道专色）
-            const blob = paper.map((v, i) => v + (ink[i] - v) * 0.36);
-            palette = { paper, ink, accent, dot, blob };
+            const blob = paper.map((v, i) => v + (ink[i] - v) * (paperLight ? 0.47 : 0.36));
+            palette = { paper, ink, accent, dot, blob, paperLight };
             const css = (rgb, alpha = 1) => `rgba(${rgb.map(v => Math.round(v * 255)).join(',')},${alpha})`;
             mode.root.style.setProperty('--inkdraft-paper', css(paper));
             mode.root.style.setProperty('--inkdraft-mark', css(ink, 0.62));
@@ -2232,6 +2246,7 @@ void main() {
             gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
             gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, glState.paper); gl.uniform1i(u.uPaperTex, 7);
             gl.uniform1f(u.uPaperGrain, s.paper);
+            gl.uniform1f(u.uPress, s.paper ? (palette.paperLight ? 1 : 0.5) : 0);
             const burstKick = data.transition === 'burst' && since >= 0 && since < 0.9 ? Math.sin(Math.PI * since / 0.9) : 0;
             gl.uniform1f(u.uBeat, s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0) + burstKick));
             gl.drawArrays(gl.TRIANGLES, 0, 3);
