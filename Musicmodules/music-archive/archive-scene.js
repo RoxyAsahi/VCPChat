@@ -1033,7 +1033,7 @@ vec3 archiveUntone(vec3 y) {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
             // 旧卡从当时的高度落回去，不瞬间掉下（参考播放器 NativeScene::select：抬起高于 0.0001 就进归位队列）
-            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v, hold: detailOn });
+            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v, hold: detailOn, lane: target.lane, row: target.row });
             // 选回一张还在落的卡：从它当时的高度和角度接着走，不先掉到底再升起
             const back = returning.get(lane + ':' + row);
             returning.delete(lane + ':' + row);
@@ -1232,7 +1232,12 @@ vec3 archiveUntone(vec3 y) {
             if (reveal < 1) { reveal += (1 - reveal) * (reduced ? 1 : 1 - Math.exp(-dt * 2.8)); if (1 - reveal < 0.0005) reveal = 1; }
             // 放回时卡若还转着：先在原高度转回正面再落下（参考播放器 returnY：m_rotation 回到 0 之前 lift 不动）
             if (!detailOn && inspect.v !== 0 && lift.v > liftGoal) lift.vel = 0;
-            else damp(lift, detailOn ? DETAIL_LIFT : liftGoal * reveal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
+            else {
+                // 浏览时旁边（同列 5 行内）还有一张转着、等着转正的旧卡，新卡先不升，免得两张卡在半空叠在一起（参考播放器同一规则）
+                let aligning = false;
+                for (const r of returning.values()) if (r.hold && r.rot && r.lane === target.lane && Math.abs(r.row - target.row) < 5) { aligning = true; break; }
+                damp(lift, detailOn ? DETAIL_LIFT : aligning ? 0 : liftGoal * reveal, liftRate, dt);
+            }   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
                 // 取出时换下的、还转着的卡：先转回正面再落（参考播放器 returning actor 的 returnY）
