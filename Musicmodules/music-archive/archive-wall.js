@@ -536,8 +536,8 @@
             const target = { x: r.x + r.w / 2 - st.room.width / 2, y: r.y + r.h / 2 - st.room.height / 2 };
             st.vel.x = st.vel.y = 0;
             st.wheelAim = null;
-            if (instant || reduced()) { st.cam.x = target.x; st.cam.y = target.y; st.aim = null; st.dirty = true; }
-            else st.aim = target;
+            if (instant || reduced()) { st.cam.x = target.x; st.cam.y = target.y; st.aim = null; st.aimVel = null; st.dirty = true; }
+            else { if (!st.aim) st.aimVel = null; st.aim = target; }
             schedule();
         };
         const focusInstance = (inst, { expand = false, center = false } = {}) => {
@@ -865,10 +865,14 @@
             st.last = now;
             let moving = false;
             if (st.aim) {
-                const k = 1 - Math.exp(-dt / 0.16);
-                st.cam.x += (st.aim.x - st.cam.x) * k;
-                st.cam.y += (st.aim.y - st.cam.y) * k;
-                if (Math.abs(st.aim.x - st.cam.x) < 0.5 && Math.abs(st.aim.y - st.cam.y) < 0.5) { st.cam.x = st.aim.x; st.cam.y = st.aim.y; st.aim = null; }
+                // 镜头用和卡片让位同一组弹簧参数（300/34）走过去，展开时卡和镜头一起到位
+                const av = st.aimVel || (st.aimVel = { x: 0, y: 0 });
+                for (const ax of ['x', 'y']) {
+                    const acc = 300 * (st.aim[ax] - st.cam[ax]) - 34 * av[ax];
+                    av[ax] += acc * dt;
+                    st.cam[ax] += av[ax] * dt;
+                }
+                if (Math.abs(st.aim.x - st.cam.x) < 0.5 && Math.abs(st.aim.y - st.cam.y) < 0.5 && Math.hypot(av.x, av.y) < 20) { st.cam.x = st.aim.x; st.cam.y = st.aim.y; st.aim = null; av.x = av.y = 0; }
                 else moving = true;
             } else if (st.wheelAim) {
                 const k = 1 - Math.exp(-dt / 0.085);
@@ -903,7 +907,7 @@
         el.addEventListener('pointerdown', (e) => {
             wake();
             if (e.button !== 0 || e.target.closest('button')) return;
-            st.aim = null; st.wheelAim = null;
+            st.aim = null; st.wheelAim = null; st.aimVel = null;
             st.vel.x = st.vel.y = 0;
             st.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, samples: [[performance.now(), e.clientX, e.clientY]] };
         });

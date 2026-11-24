@@ -28,6 +28,15 @@
         const content = el.querySelector('.ag-content');
         const sticky = el.querySelector('.ag-sticky');
         const emptyEl = el.querySelector('.ag-empty');
+        // 定位正在播放：和封面墙同一个右下角圆键（样式在 archive-wall.css 的 .aw-locate）
+        const locateBtn = document.createElement('button');
+        locateBtn.type = 'button';
+        locateBtn.className = 'aw-locate ag-locate';
+        locateBtn.title = '找到正在播放的那首';
+        locateBtn.setAttribute('aria-label', '找到正在播放的那首');
+        locateBtn.hidden = true;
+        locateBtn.innerHTML = '<i></i>';
+        el.appendChild(locateBtn);
         // 入场和封面墙用同一条弹簧曲线
         const SP = global.MusicArchiveWall && global.MusicArchiveWall._test && global.MusicArchiveWall._test.SPRING_ENTER;
         if (SP && global.CSS && CSS.supports && CSS.supports('transition-timing-function', SP.ease)) el.style.setProperty('--aw-sp-enter', SP.ease);
@@ -127,7 +136,7 @@
 
         const render = () => {
             st.raf = 0;
-            if (!st.on || !st.rows.length) { sticky.hidden = true; return; }
+            if (!st.on || !st.rows.length) { sticky.hidden = true; locateBtn.hidden = true; return; }
             const top = scroller.scrollTop;
             const view0 = top - st.rowH, view1 = top + st.room.height + st.rowH;
             const keep = new Set(), keepHeads = new Set();
@@ -229,6 +238,9 @@
                 }
             } else sticky.hidden = true;
             st.revealOk = !reduced();
+            const pr = play.index >= 0 ? rectOf(play.index) : null;
+            locateBtn.hidden = !pr;
+            if (pr) locateBtn.classList.toggle('is-away', pr.y + pr.h < top + 10 || pr.y > top + st.room.height - 10);
         };
         const schedule = () => { if (st.on && !st.raf) st.raf = requestAnimationFrame(render); };
         scroller.addEventListener('scroll', schedule, { passive: true });
@@ -301,6 +313,14 @@
             return sec ? sec.ids[k] : -1;
         };
         let last = { i: -1, t: 0 };
+        locateBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const p = opts.playing();
+            if (p.index >= 0 && st.where.has(p.index)) { opts.pick(p.index); reveal(p.index, { center: true }); }
+            locateBtn.classList.remove('is-ping');
+            void locateBtn.offsetWidth;
+            locateBtn.classList.add('is-ping');
+        });
         el.addEventListener('click', (e) => {
             const i = cellOf(e.target);
             if (i < 0) return;

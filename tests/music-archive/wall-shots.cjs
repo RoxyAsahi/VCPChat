@@ -194,6 +194,16 @@ const FAKE = ({ n, light, covers }) => {
   await page.evaluate(() => document.querySelector('.ag-scroll').scrollBy(0, 900));
   await page.waitForTimeout(1500);
   await shot(tag + '-8-grid-scrolled');
+  {
+    const g0 = await page.evaluate(() => { const b = document.querySelector('.ag-locate'); return b ? { hidden: b.hidden, away: b.classList.contains('is-away') } : null; });
+    await page.evaluate(() => { const sc = document.querySelector('.ag-scroll'); sc.scrollTop = sc.scrollHeight; });
+    await page.waitForTimeout(500);
+    const g1 = await page.evaluate(() => document.querySelector('.ag-locate').classList.contains('is-away'));
+    await page.click('.ag-locate');
+    await page.waitForTimeout(1200);
+    const g2 = await page.evaluate(() => ({ away: document.querySelector('.ag-locate').classList.contains('is-away'), focusPlaying: Boolean(document.querySelector('.ag-cell.is-focus.is-playing, .ag-cell.is-focus.is-current')) }));
+    check('网格定位键', g0 && !g0.hidden && g1 && !g2.away && g2.focusPlaying, JSON.stringify({ g0, g1, g2 }));
+  }
   const cellBox = await page.evaluate(() => { const c = [...document.querySelectorAll('.ag-cell')].map((x) => x.getBoundingClientRect()).find((b) => b.top > 200 && b.bottom < 700); return c ? { x: c.left + c.width / 2, y: c.top + 40 } : null; });
   if (cellBox) { await page.mouse.click(cellBox.x, cellBox.y); await page.mouse.click(cellBox.x, cellBox.y); }
   await page.waitForTimeout(1500);
@@ -240,7 +250,10 @@ const FAKE = ({ n, light, covers }) => {
   const tb = await page.evaluate(() => {
     const el = document.querySelector('.aw-table');
     const r = el.getBoundingClientRect();
-    const t = [...el.querySelectorAll('.aw-tile')].map((x) => x.getBoundingClientRect()).find((b) => b.left > r.left + r.width * 0.35 && b.right < r.right - r.width * 0.35 && b.top > r.top + r.height * 0.5 && b.bottom < r.bottom - 30);
+    // 离视野中下部最近、整张都在画面里的那张
+    const cx = r.left + r.width / 2, cy = r.top + r.height * 0.62;
+    const t = [...el.querySelectorAll('.aw-tile')].map((x) => x.getBoundingClientRect()).filter((b) => b.left > r.left && b.right < r.right && b.top > r.top && b.bottom < r.bottom - 20 && b.width > 20)
+      .sort((a, b) => Math.hypot(a.left + a.width / 2 - cx, a.top + a.height / 2 - cy) - Math.hypot(b.left + b.width / 2 - cx, b.top + b.height / 2 - cy))[0];
     return t ? { x: t.left + t.width / 2, y: t.top + t.height / 2 } : null;
   });
   if (tb) await page.mouse.click(tb.x, tb.y);

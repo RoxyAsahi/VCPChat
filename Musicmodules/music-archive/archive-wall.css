@@ -514,3 +514,4 @@ body.music-reduce-motion .aw-tile.aw-flip .aw-in, body.music-reduce-motion .ag-c
 @keyframes aw-ping { from { transform: scale(1); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
 .aw-table .aw-locate { right: 48px; }
 body.music-reduce-motion .aw-locate.is-away::before, body.music-reduce-motion .aw-locate.is-ping::after { animation: none; }
+.ag-locate { right: 30px !important; bottom: 30px !important; }
