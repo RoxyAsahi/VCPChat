@@ -362,12 +362,61 @@ vec3 glowAt(vec2 p, float aspect, out float total) {
     return col;
 }
 
-// 对岸：低矮的山脊，上面一排房子，零星亮灯
-float ridge(float x) {
-    float hill = 0.035 + vnoise(vec2(x * 2.2 + uSeed, 0.0)) * 0.045;
-    float cell = floor(x * 70.0);
-    float house = step(0.45, hash12(vec2(cell, 3.0))) * (0.008 + hash12(vec2(cell, 7.0)) * 0.016);
-    return WATER + hill + house;
+// 对岸：远处一层发灰的楼影，近处一排高低不齐的楼：楼顶有水箱、天线（顶上一颗红灯慢慢闪），
+// 每栋楼按自己的格子开窗，窗有暖黄、日光灯白两种，少数在换着亮灭。返回颜色和覆盖（a）。
+// rim：烟花闪光照亮楼顶边和朝天的面
+vec4 skyline(vec2 uv, vec3 glow, float rim) {
+    float x = uv.x;
+    float y = uv.y - WATER;
+    float hill = 0.018 + vnoise(vec2(x * 2.2 + uSeed, 0.0)) * 0.03;
+    // 远楼：比天色暗一点，糊在雾里
+    float fc = floor(x * 28.0 + uSeed * 3.0);
+    float far = hill + 0.03 + hash12(vec2(fc, 21.0)) * 0.05;
+    vec4 o = vec4(0.0);
+    if (y < far) o = vec4(mix(uSkyLow, uSkyTop, 0.3) * 0.62 + glow * 0.05, 0.92);
+    // 近楼
+    float cx = x * 46.0 + uSeed * 7.0;
+    float cell = floor(cx), lx = fract(cx);
+    float hb = hash12(vec2(cell, 3.0));
+    float h = hill + (hb < 0.15 ? 0.0 : 0.012 + hash12(vec2(cell, 7.0)) * 0.04 + step(0.9, hb) * 0.035);
+    // 楼和楼之间留一条缝，楼宽不一
+    float inset = hash12(vec2(cell, 5.0)) * 0.18;
+    float body = step(inset, lx) * step(lx, 1.0 - inset * 0.5);
+    float top = h;
+    // 楼顶：水箱或机房
+    float hasBox = step(0.55, hash12(vec2(cell, 13.0)));
+    float bx = 0.25 + hash12(vec2(cell, 17.0)) * 0.4;
+    float box = hasBox * step(bx, lx) * step(lx, bx + 0.2) * step(y, h + 0.005);
+    // 天线
+    float hasAnt = step(0.82, hash12(vec2(cell, 19.0)));
+    float ax = 0.3 + hash12(vec2(cell, 23.0)) * 0.4;
+    float antW = 0.03;
+    float ant = hasAnt * step(abs(lx - ax), antW) * step(y, h + 0.02);
+    if ((y < h && body > 0.5 && hb >= 0.15) || box > 0.5 || ant > 0.5 || y < hill) {
+        vec3 c = mix(uSkyLow * 0.3, vec3(0.0), 0.6);
+        // 朝上的面和楼顶边被烟花照到
+        float edge = 1.0 - smoothstep(0.0, 0.004, (box > 0.5 ? h + 0.005 : h) - y);
+        c += glow * (0.04 + edge * 0.5 * rim);
+        c += glow * 0.03 * smoothstep(hill, h, y);
+        // 窗：每栋 4 列，层高约 0.0045
+        if (y < h - 0.004 && y > hill + 0.004 && body > 0.5 && hb >= 0.15) {
+            float wx = (lx - inset) / max(1.0 - inset * 1.5, 0.1) * 4.0;
+            float wy = (y - hill) / 0.0045;
+            vec2 wid = vec2(floor(wx), floor(wy));
+            float inWin = step(0.22, fract(wx)) * step(fract(wx), 0.78) * step(0.28, fract(wy)) * step(fract(wy), 0.78);
+            float hw = hash12(wid + vec2(cell * 4.0, 31.0));
+            float on = step(0.7, hw);
+            // 少数窗过一阵换一次亮灭
+            on = mix(on, step(0.5, fract(hw * 13.0 + floor(uTime * 0.07 + hw * 9.0) * 0.37)), step(0.94, hash12(wid + cell)));
+            vec3 wc = hw > 0.9 ? vec3(0.78, 0.9, 1.0) : vec3(1.0, 0.76, 0.42);
+            c += wc * inWin * on * (0.28 + 0.12 * hash12(wid * 1.7 + cell));
+        }
+        // 天线顶的红灯
+        float lamp = hasAnt * smoothstep(0.006, 0.0, length(vec2((lx - ax) / 46.0 * 1.78, y - h - 0.02))) * (0.5 + 0.5 * sin(uTime * 2.2 + cell));
+        c += vec3(1.0, 0.18, 0.12) * lamp * 1.2;
+        o = vec4(c, 1.0);
+    }
+    return o;
 }
 
 void main() {
@@ -406,12 +455,9 @@ void main() {
     col += glow * (0.08 + smoke * 0.45 * uSmoke);
 
     // 对岸和河面
-    float r = ridge(uv.x);
-    if (uv.y < r) {
-        col = mix(uSkyLow * 0.35, vec3(0.0), 0.55) + glow * 0.03;
-        float cell = floor(uv.x * 70.0);
-        float win = step(0.86, hash12(floor(gl_FragCoord.xy / vec2(3.0, 4.0)))) * step(uv.y, r - 0.004) * step(WATER + 0.03, uv.y);
-        col += vec3(1.0, 0.78, 0.45) * win * 0.35 * step(0.5, hash12(vec2(cell, 11.0)));
+    if (uv.y < WATER + 0.16 && uv.y >= WATER) {
+        vec4 sk = skyline(uv, glow, 1.0);
+        col = mix(col, sk.rgb, sk.a);
     }
     if (uv.y < WATER) {
         float depth = (WATER - uv.y) / WATER;
@@ -420,6 +466,11 @@ void main() {
         float mt;
         vec3 mg = glowAt(m, aspect, mt);
         col = mix(uSkyLow, uSkyTop, 0.25) * 0.35 + mg * (0.18 + 0.08 * ripple) * (1.0 - depth * 0.6);
+        // 对岸的倒影：楼影和亮窗在水里拉成竖条，越往近处越碎、越暗
+        vec2 ru = vec2(uv.x + ripple * 0.003 * (0.3 + depth), WATER + (WATER - uv.y) * 0.4);
+        vec4 rk = skyline(ru, mg, 0.0);
+        col = mix(col, col * 0.55, rk.a * (1.0 - depth) * 0.7);
+        col += max(rk.rgb - mix(uSkyLow * 0.3, vec3(0.0), 0.6), 0.0) * rk.a * (0.75 - depth * 0.6) * (0.75 + 0.25 * ripple);
         col += vec3(1.0, 0.78, 0.45) * step(0.985, hash12(floor(gl_FragCoord.xy / vec2(3.0, 2.0)) + floor(uTime * 3.0))) * 0.04 * (1.0 - depth);
     }
 
