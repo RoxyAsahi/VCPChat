@@ -916,6 +916,8 @@ vec2 home(vec2 t) {
 
         const family = () => global.getComputedStyle?.(mode.root).fontFamily || 'system-ui, sans-serif';
 
+        // 荧光笔：浅纸上是黄色记号笔，深色卡和夜空上用主题色，淡一些
+        const markerColour = slot => (slot.dark ? [1.0, 0.86, 0.3, 0.62] : [...(colours?.accent || [0.95, 0.66, 0]), 0.42]);
         // 字排好后，把这一句跟着字开的小花挪到那个字的正上方（屏幕坐标，y 朝上）
         const anchorPops = (index, placed) => {
             let moved = false;
@@ -1199,7 +1201,7 @@ vec2 home(vec2 t) {
                         const dx = x + w / 2 - own[0], dy = baseline - size * 0.35 - own[1];
                         c = [(own[0] + dx * Math.cos(rot) - dy * Math.sin(rot)) / W, (own[1] + dx * Math.sin(rot) + dy * Math.cos(rot)) / H];
                     } else c = toTex(x + w / 2, baseline - size * 0.35);
-                    placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end, id, box: gbox, px: size });
+                    placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end, id, box: gbox, px: size, ang: own ? rot : tilt, hw: w / 2 });
                 });
                 ctx.restore();
                 // 导火索：沿着字走一条波浪线，按唱到的位置烧过去
@@ -1234,6 +1236,8 @@ vec2 home(vec2 t) {
             slot.sing = ['bounce', 'swell', 'nod', 'flash'][Math.floor(pick() * 4)];
             // 退场：碎成火星（原来的做法）、像柳火一样落下、散成星屑、往上飘走
             slot.exit = ['dissolve', 'fall', 'scatter', 'ascend'][Math.floor(pick() * 4)];
+            // 横排的句子里约四成用荧光笔：唱到哪个字，字底就擦出一道色带
+            slot.marker = cue.kind === 'line' && cue.layout !== 'tanzaku' && pick() < 0.4;
             slot.glyphs = placed;
             anchorPops(index, placed);
             slot.fuse = fuse;
@@ -1418,6 +1422,7 @@ vec2 home(vec2 t) {
                     data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
                     data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
                     data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = prev.rim || 0; data[o + 15] = 0;
+                    data[o + 16] = prev.marker ? 1 : 0; data[o + 17] = 1; data[o + 18] = g.ang || 0; data[o + 19] = g.hw || 0;
                     n += 1;
                 });
                 const pz = s.reducedMotion ? 1 : 1.03;
@@ -1430,6 +1435,7 @@ vec2 home(vec2 t) {
                     // 退场的字飞到新卡片前面、夜空里，原位的颜色（卡片色）不再合适：用这句自己的墨色
                     const ink = prev.dark ? [0.8, 0.42, 0.62] : colours.ink.map(v => v * 0.92);
                     gl.uniform4f(c.uFill, ink[0], ink[1], ink[2], 1);
+                    gl.uniform4fv(c.uBlockCol, markerColour(prev));
                     gl.uniform1f(c.uZoom, pz);
                     // 上一句的取样带一点往上的位移（见 COVERAGE 里的 t0）：借进场的平移参数表达
                     gl.uniform4f(c.uEnter, (1 - prevFade) * 0.02 * pz, 0, 0, 0.5);
@@ -1452,6 +1458,9 @@ vec2 home(vec2 t) {
                     data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
                     data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
                     data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = slot.rim || 0; data[o + 15] = 0;
+                    data[o + 16] = slot.marker ? 1 : 0;
+                    data[o + 17] = clamp((t - g.start + 0.04) / Math.max(0.14, (g.end - g.start) * 0.6), 0, 1);
+                    data[o + 18] = g.ang || 0; data[o + 19] = g.hw || 0;
                     n += 1;
                 });
                 glState.glyphs.draw(data, n, (c) => {
@@ -1461,6 +1470,7 @@ vec2 home(vec2 t) {
                     gl.uniform1f(c.uLod, enter[2] > 0.01 ? enter[2] + lodBias : -1);
                     gl.uniform1f(c.uFade, enter[3]);
                     gl.uniform4f(c.uFill, 0, 0, 0, 0);
+                    gl.uniform4fv(c.uBlockCol, markerColour(slot));
                     gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
                     gl.uniform4fv(c.uEnter, enter);
                     gl.uniform2fv(c.uEnter2, enter2);

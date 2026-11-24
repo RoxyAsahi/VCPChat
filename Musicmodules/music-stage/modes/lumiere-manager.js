@@ -845,6 +845,7 @@ vec2 home(vec2 t) {
                     data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
                     data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
                     data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = 0; data[o + 15] = 0;
+                    data[o + 16] = 0; data[o + 17] = 0; data[o + 18] = 0; data[o + 19] = 0;
                     n += 1;
                 });
                 glState.glyphs.draw(data, n, (c) => {

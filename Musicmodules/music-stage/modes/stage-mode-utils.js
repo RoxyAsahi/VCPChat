@@ -1084,10 +1084,11 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     // 位移、淡入（入场、唱到时的动作都由播放时间算出，拖进度、暂停都对）。字的颜色取自 createSharpText
     // 低分辨率那一遍的「被字盖住的颜色」，在字原来的位置取，所以光照、唱到的颜色和整句画法一致。
     // 舞台给出 home(t) 的 GLSL：字图坐标（y 朝下）→ 屏幕 uv（y 朝上），和它要用的 uniform。
-    // 每个字 16 个浮点：
+    // 每个字 20 个浮点：
     //   box（字图 uv 的外框 x0 y0 x1 y1）、centre（字心 uv、字编号、字号像素）、
-    //   xf（位移 x y 像素、缩放、旋转）、look（不透明度、闪白、描边样式 0 无 1 深色硬边 2 浅纸压痕、0）
-    const GLYPH_FLOATS = 16;
+    //   xf（位移 x y 像素、缩放、旋转）、look（不透明度、闪白、描边样式 0 无 1 深色硬边 2 浅纸压痕、0）、
+    //   block（字底色块 0 无 1 荧光笔、擦出进度 0..1、这一行的倾角、字宽一半的像素）
+    const GLYPH_FLOATS = 20;
     const createGlyphLayer = (gl, { home, label = 'stage' }) => {
         const vert = `#version 300 es
 precision highp float;
@@ -1095,12 +1096,14 @@ layout(location = 0) in vec4 aBox;
 layout(location = 1) in vec4 aCtr;
 layout(location = 2) in vec4 aXf;
 layout(location = 3) in vec4 aLook;
+layout(location = 4) in vec4 aBlock;
 uniform vec2 uTextSize;
 ${home}
 out vec2 vTex;
 out vec2 vHome;
 flat out vec4 vCtr;
 flat out vec4 vLook;
+flat out vec4 vBlock;
 void main() {
     vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
     vec2 t = mix(aBox.xy, aBox.zw, corner);
@@ -1113,6 +1116,7 @@ void main() {
     vHome = home(t);
     vCtr = aCtr;
     vLook = aLook;
+    vBlock = aBlock;
 }`;
         const frag = `#version 300 es
 precision highp float;
@@ -1123,10 +1127,12 @@ uniform vec2 uTextSize;
 uniform float uLod;      // 段落进场时整句是虚的（mip 级），< 0 不虚
 uniform float uFade;
 uniform vec4 uFill;      // a > 0 时字用这个颜色（rgb）而不是原位的颜色
+uniform vec4 uBlockCol;  // 荧光笔的颜色和不透明度
 in vec2 vTex;
 in vec2 vHome;
 flat in vec4 vCtr;
 flat in vec4 vLook;
+flat in vec4 vBlock;
 out vec4 outColor;
 // 只取自己这个字的笔画（字框按编号写在 G 通道），邻字伸进外框的笔画不跟着动
 float cov(vec2 uv) {
@@ -1157,6 +1163,21 @@ void main() {
         float hl = cov(vTex - vec2(0.03, 0.04) * px) * 0.5;
         o = vec4(vec3(hl), hl);
     }
+    if (vBlock.x > 0.5 && vBlock.y > 0.0) {
+        // 荧光笔：字的下半截一道色带，按唱的进度从左往右擦出来；相邻的字接成一条
+        vec2 d = (vTex - vCtr.xy) * uTextSize;
+        float ca = cos(vBlock.z), sa = sin(vBlock.z);
+        d = vec2(ca * d.x + sa * d.y, -sa * d.x + ca * d.y) / vCtr.w;
+        float hw = vBlock.w / vCtr.w;
+        float along = (d.x + hw) / (2.0 * hw);
+        float aa = 1.5 / vCtr.w;
+        float band = smoothstep(-0.12 - aa, -0.12, d.y) * (1.0 - smoothstep(0.34, 0.34 + aa, d.y))
+            * step(-hw - 0.03, d.x) * step(d.x, hw + 0.03) * (1.0 - smoothstep(vBlock.y - 0.02, vBlock.y, along));
+        // 笔触的边不是一刀切：上下沿按位置起伏一点
+        band *= 0.85 + 0.15 * sin(d.x * 9.0 + vCtr.z);
+        vec4 bc = vec4(uBlockCol.rgb, 1.0) * uBlockCol.a * band;
+        o = o + bc * (1.0 - o.a);
+    }
     vec3 fill = mix(texture(uTextLayer, vHome).rgb, uFill.rgb, uFill.a) + vec3(1.0, 0.97, 0.92) * vLook.y;
     o = vec4(fill * r, r) + o * (1.0 - r);
     outColor = o * vLook.x * uFade;
@@ -1166,7 +1187,7 @@ void main() {
         const buffer = gl.createBuffer();
         gl.bindVertexArray(vao);
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        for (let i = 0; i < 4; i += 1) {
+        for (let i = 0; i < GLYPH_FLOATS / 4; i += 1) {
             gl.enableVertexAttribArray(i);
             gl.vertexAttribPointer(i, 4, gl.FLOAT, false, GLYPH_FLOATS * 4, i * 16);
             gl.vertexAttribDivisor(i, 1);
