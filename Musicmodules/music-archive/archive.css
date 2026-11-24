@@ -852,3 +852,9 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
 /* 分组名太长时先让「组 n / N」退场，名字最后才省略（借鉴 RhinE 标题栏「名字始终显示，旁边的数字先让位」） */
 .archive-lanes-name > span { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
 .archive-lanes-name > b { flex: 0 1 auto; min-width: 3em; }
+/* 矮一点的窗口（如 1280×800）左下角其实空着：分组切换和位置标尺照样显示；真的很矮（<640）才收起 */
+.archive-hud.short .archive-lanes:not([hidden]) { display: flex; }
+.archive-hud.short .archive-ruler:not([hidden]) { display: flex; }
+@media (max-height: 640px) {
+    .archive-hud.short .archive-lanes, .archive-hud.short .archive-ruler { display: none; }
+}
