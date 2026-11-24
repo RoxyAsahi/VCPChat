@@ -333,6 +333,7 @@
                 { key: 'trails', label: '尾迹长度', type: 'range', min: 0, max: 1.6, step: 0.05, unit: 'x' },
                 { key: 'smoke', label: '火药烟', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'bloom', label: '副歌泛光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'collage', label: '副歌拼贴（重复的句子拆成大小不一的词块）', type: 'toggle' },
                 { key: 'reflection', label: '河面倒影（节能档关闭）', type: 'toggle' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

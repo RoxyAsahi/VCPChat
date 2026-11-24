@@ -223,6 +223,7 @@
                 audioReactivity: 1,
                 grain: 0.3,
                 bloom: 1,
+                collage: true,
                 showTranslation: true
             },
             clockwork: {
@@ -332,6 +333,7 @@
             negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
             drops: fallback.drops === undefined ? source.drops : bool(source.drops, fallback.drops),
             drips: fallback.drips === undefined ? source.drips : bool(source.drips, fallback.drips),
+            collage: fallback.collage === undefined ? source.collage : bool(source.collage, fallback.collage),
             view: fallback.view === undefined ? source.view : enumValue(source.view, ['street', 'aquarium', 'alternate'], fallback.view),
             fireflies: fallback.fireflies === undefined ? source.fireflies : clamp(source.fireflies, 0, 2, fallback.fireflies),
             nebula: fallback.nebula === undefined ? source.nebula : clamp(source.nebula, 0, 2, fallback.nebula),

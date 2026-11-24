@@ -67,6 +67,11 @@
             } else cues.push({ kind: 'line', start: line.startTime, end: nextStart, line, number: i + 1 });
         });
         cues[0].start = 0;
+        // 副歌：整句歌词在歌里出现两次以上
+        const norm = line => String(line.fullText || '').replace(/[\s，。、,.!?！？…~～'"“”‘’()（）-]/g, '').toLowerCase();
+        const counts = new Map();
+        sung.forEach((line) => { const k = norm(line); if (k) counts.set(k, (counts.get(k) || 0) + 1); });
+        cues.forEach((cue) => { if (cue.kind === 'line') cue.chorus = (counts.get(norm(cue.line)) || 0) >= 2; });
         return cues;
     };
     const findCue = (cues, t) => {
@@ -303,7 +308,16 @@ void main() {
         float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.7 + lit * 0.4));
         vec3 ink = mix(uInk, uInk * mix(vec3(1.0), tint, 0.5), clamp(lit, 0.0, 1.0)) * (0.8 + lit * 0.45);
         // 纸签：块里第一个字开唱前 0.15 秒从下往上刷出来
-        int sid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).b * 255.0 + 0.5);
+        ivec2 tp = clamp(ivec2(t1 * uTextSize), ivec2(2), ivec2(uTextSize) - 3);
+        int sid = int(texelFetch(uText, tp, 0).b * 255.0 + 0.5);
+        // 斜着画的纸签边缘有抗锯齿的过渡值，会被当成别的编号：四周都一样才算纸签里面
+        if (sid > 0) {
+            int s1 = int(texelFetch(uText, tp + ivec2(2, 0), 0).b * 255.0 + 0.5);
+            int s2 = int(texelFetch(uText, tp - ivec2(2, 0), 0).b * 255.0 + 0.5);
+            int s3 = int(texelFetch(uText, tp + ivec2(0, 2), 0).b * 255.0 + 0.5);
+            int s4 = int(texelFetch(uText, tp - ivec2(0, 2), 0).b * 255.0 + 0.5);
+            if (s1 != sid || s2 != sid || s3 != sid || s4 != sid) sid = 0;
+        }
         if (sid > 0) {
             float st = texelFetch(uGlyph, ivec2(sid, 0), 0).x;
             float on = smoothstep(st - 0.2, st, uTime);
@@ -597,6 +611,7 @@ void main() {
                 density: clamp(tuning.density ?? 1, 0.4, 1.6),
                 trails: clamp(tuning.trails ?? 1, 0, 1.6),
                 bloom: clamp(tuning.bloom ?? 1, 0, 2),
+                collage: tuning.collage !== false,
                 smoke: clamp(tuning.smoke ?? 1, 0, 2),
                 reflection: tuning.reflection !== false,
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.25, 0, 1),
@@ -672,7 +687,7 @@ void main() {
         const slotFor = (index, build = true) => {
             if (!glState || index < 0 || index >= cues.length) return null;
             const s = settings();
-            const key = `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}`;
+            const key = `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.collage}`;
             const hit = glState.slots.find(slot => slot.key === key);
             if (hit) { hit.used = performance.now(); return hit; }
             if (!build) return null;
@@ -698,11 +713,70 @@ void main() {
                 const cjk = glyphs.filter(g => CJK.test(g.text)).length > visible / 2;
                 const font = size => `${cjk ? 500 : 400} ${size.toFixed(1)}px ${family()}`;
                 // 两种排法：河岸上方一两行；或者竖着斜挂在天上，每个词块左边贴一条彩色纸签
-                const vertical = cue.kind === 'line' && cjk && visible <= 16 && random() < 0.5;
-                cue.layout = vertical ? 'tanzaku' : 'row';
+                // 副歌改成拼贴：词块大小不一、各自歪一点，像剪下来贴在夜空上，一两块垫着彩纸
+                const collage = cue.kind === 'line' && cue.chorus && s.collage && visible >= 3 && visible <= 28;
+                const vertical = !collage && cue.kind === 'line' && cjk && visible <= 16 && random() < 0.5;
+                cue.layout = collage ? 'collage' : vertical ? 'tanzaku' : 'row';
                 const items = [];
+                const tagged = [];
                 let tilt = 0;
-                if (vertical) {
+                if (collage) {
+                    const chunks = [];
+                    let cur = [];
+                    let left = 0;
+                    glyphs.forEach((g) => {
+                        if (!g.text.trim()) { if (cur.length) chunks.push(cur); cur = []; left = 0; return; }
+                        if (cjk && left <= 0 && cur.length) { chunks.push(cur); cur = []; }
+                        if (cjk && left <= 0) left = 1 + Math.floor(random() * 3);
+                        cur.push(g);
+                        left -= 1;
+                    });
+                    if (cur.length) chunks.push(cur);
+                    const hero = chunks.reduce((best, c, i) => (c.length > chunks[best].length ? i : best), Math.floor(random() * chunks.length));
+                    const boxes = chunks.map((c, ci) => {
+                        const text = c.map(g => g.text).join('');
+                        let size = H * (ci === hero ? 0.15 + random() * 0.04 : 0.065 + random() * 0.05) * s.fontScale;
+                        ctx.font = font(size);
+                        let w = ctx.measureText(text).width;
+                        if (w > W * 0.62) { size *= W * 0.62 / w; ctx.font = font(size); w = ctx.measureText(text).width; }
+                        const rot = (random() - 0.5) * (ci === hero ? 0.12 : 0.26);
+                        return { c, size, w, rot, dy: (random() - 0.5) * size * 0.5 };
+                    });
+                    // 从左往右排，满了换行；整块放在河岸上方的夜空里
+                    const maxW = W * 0.82;
+                    const rowsC = [];
+                    let rowC = [], rowW = 0;
+                    boxes.forEach((b) => {
+                        const gap = b.size * 0.28;
+                        if (rowC.length && rowW + gap + b.w > maxW) { rowsC.push(rowC); rowC = []; rowW = 0; }
+                        rowW += (rowC.length ? gap : 0) + b.w;
+                        rowC.push(b);
+                    });
+                    if (rowC.length) rowsC.push(rowC);
+                    const rowH = rowsC.map(r => Math.max(...r.map(b => b.size)) * 1.18);
+                    let y = H * 0.4 - rowH.reduce((a, v) => a + v, 0) / 2;
+                    y = Math.max(H * 0.1, y);
+                    rowsC.forEach((r, ri) => {
+                        const total = r.reduce((a, b, i) => a + b.w + (i ? b.size * 0.28 : 0), 0);
+                        let x = (W - total) / 2 + (random() - 0.5) * W * 0.06;
+                        const base = y + rowH[ri] * 0.82;
+                        r.forEach((b, i) => {
+                            if (i) x += b.size * 0.28;
+                            const bl = base + b.dy;
+                            const pivot = [x + b.w / 2, bl - b.size * 0.35];
+                            const first = items.length + 1;
+                            let gx = x;
+                            b.c.forEach((g) => {
+                                ctx.font = font(b.size);
+                                items.push({ g, x: gx, baseline: bl, size: b.size, chunk: chunks.indexOf(b.c), rot: b.rot, pivot });
+                                gx += ctx.measureText(g.text).width;
+                            });
+                            if (b.c === chunks[hero] || random() < 0.22) tagged.push({ x0: x, x1: x + b.w, bl, size: b.size, rot: b.rot, pivot, first: Math.min(255, first) });
+                            x += b.w;
+                        });
+                        y += rowH[ri];
+                    });
+                } else if (vertical) {
                     const size = clamp(H * 0.48 / visible, H * 0.04, H * 0.08) * s.fontScale;
                     tilt = (0.32 + random() * 0.18) * (random() < 0.7 ? 1 : -1);
                     const ox = W * (tilt > 0 ? 0.62 + random() * 0.08 : 0.32 + random() * 0.08);
@@ -776,12 +850,28 @@ void main() {
                     const dx = x - pivot[0], dy = y - pivot[1];
                     return [(pivot[0] + dx * cos - dy * sin) / W, (pivot[1] + dx * sin + dy * cos) / H];
                 };
+                // 拼贴的彩纸：B 通道存这块第一个字的编号，开唱时刷出颜色
+                tagged.forEach((tg) => {
+                    ctx.save();
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.translate(tg.pivot[0], tg.pivot[1]); ctx.rotate(tg.rot * 1.4); ctx.translate(-tg.pivot[0], -tg.pivot[1]);
+                    ctx.globalCompositeOperation = 'lighten';
+                    ctx.fillStyle = `rgb(0,0,${tg.first})`;
+                    const pad = tg.size * 0.14;
+                    ctx.fillRect(Math.floor(tg.x0 - pad), Math.floor(tg.bl - tg.size * 0.92 - pad * 0.5), Math.ceil(tg.x1 - tg.x0 + pad * 2), Math.ceil(tg.size * 1.12 + pad));
+                    ctx.restore();
+                });
                 let id = 0;
                 let chunkFirst = 0, lastChunk = -1;
-                items.forEach(({ g, x, baseline, size, chunk }) => {
+                items.forEach(({ g, x, baseline, size, chunk, rot, pivot: own }) => {
                     ctx.font = font(size);
                     const w = ctx.measureText(g.text).width;
                     id = Math.min(255, id + 1);
+                    if (own) {
+                        ctx.save();
+                        ctx.setTransform(1, 0, 0, 1, 0, 0);
+                        ctx.translate(own[0], own[1]); ctx.rotate(rot); ctx.translate(-own[0], -own[1]);
+                    }
                     if (vertical && chunk !== lastChunk) { chunkFirst = id; lastChunk = chunk; }
                     if (vertical) {
                         // 纸签（B 通道存这一块第一个字的编号，着色器按它开唱的时刻点亮）
@@ -797,12 +887,17 @@ void main() {
                     ctx.fillText(g.text, x, baseline);
                     data[id * 4] = g.start;
                     data[id * 4 + 1] = g.end;
-                    const c = toTex(x + w / 2, baseline - size * 0.35);
+                    if (own) ctx.restore();
+                    let c;
+                    if (own) {
+                        const dx = x + w / 2 - own[0], dy = baseline - size * 0.35 - own[1];
+                        c = [(own[0] + dx * Math.cos(rot) - dy * Math.sin(rot)) / W, (own[1] + dx * Math.sin(rot) + dy * Math.cos(rot)) / H];
+                    } else c = toTex(x + w / 2, baseline - size * 0.35);
                     placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end });
                 });
                 ctx.restore();
                 // 导火索：沿着字走一条波浪线，按唱到的位置烧过去
-                if (placed.length > 1 && cue.kind === 'line' && (vertical || Math.abs(placed[0].y - placed[placed.length - 1].y) < 0.01)) {
+                if (placed.length > 1 && cue.kind === 'line' && !collage && (vertical || Math.abs(placed[0].y - placed[placed.length - 1].y) < 0.01)) {
                     const a = placed[0], b = placed[placed.length - 1];
                     const off = vertical ? [cos * a.size * 0.55 * H / W, sin * a.size * 0.55] : [0, a.size * 0.62];
                     const back = vertical ? [-sin * a.size * 0.6 * H / W, cos * a.size * 0.6] : [-a.w * 0.6, 0];
@@ -810,7 +905,7 @@ void main() {
                 }
             }
             const { gl } = glState;
-            const busy = new Set([stats.cue, stats.cue - 1].map(i => `${cuesFor?.key}|${i}|${world.W}x${world.H}|${s.fontScale}`));
+            const busy = new Set([stats.cue, stats.cue - 1].map(i => `${cuesFor?.key}|${i}|${world.W}x${world.H}|${s.fontScale}|${s.collage}`));
             const slot = glState.slots.filter(sl => !busy.has(sl.key)).sort((a, b) => a.used - b.used)[0] || glState.slots[0];
             gl.bindTexture(gl.TEXTURE_2D, slot.text);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textCanvas);
