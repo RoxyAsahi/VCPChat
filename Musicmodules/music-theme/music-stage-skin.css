@@ -891,3 +891,91 @@ body.music-reduce-motion .music-stage-mode-menu {
 .music-stage-mode-menu-item.is-active .music-stage-mode-menu-item-check {
     visibility: visible;
 }
+
+/* ---------- 左上角：字标兼「返回首页」 ----------
+ * 平时和原来的字标一样安静；悬停时后面浮出一块和右上角舞台下拉同规格的底（30 高、圆角 8），
+ * 箭头往左挪 2px、字变亮。镜台/隧图和窄窗口里字标藏起来，只留箭头那一小块。 */
+.music-stage-top-chrome .music-stage-home {
+    grid-column: 1;
+    justify-self: start;
+    pointer-events: auto;
+    height: 30px;
+    box-sizing: border-box;
+    margin: 0 0 0 -8px;
+    padding: 0 12px 0 6px;
+    gap: 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    font-family: var(--mt-font-label);
+    cursor: pointer;
+    transition: color var(--mt-dur-1, .15s) ease, background-color var(--mt-dur-1, .15s) ease,
+        border-color var(--mt-dur-1, .15s) ease;
+}
+
+.music-stage-home-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: -2px;
+    transition: transform .2s ease;
+}
+
+.music-stage-top-chrome .music-stage-home:hover {
+    color: var(--ms-ink);
+    background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
+    border-color: var(--ms-glass-edge);
+}
+
+.music-stage-home:hover .music-stage-home-icon {
+    transform: translateX(-2px);
+}
+
+.music-stage-home:active .music-stage-home-icon {
+    transform: translateX(-3px);
+}
+
+.music-stage-home:focus-visible {
+    outline: 2px solid var(--ms-ink);
+    outline-offset: 2px;
+}
+
+.music-stage:has(.music-stage-mode-diorama, .music-stage-mode-tunnel) .music-stage-top-chrome .music-stage-home {
+    visibility: visible;
+    padding: 0;
+    width: 30px;
+    justify-content: center;
+    margin-left: 0;
+    background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
+    border-color: var(--ms-glass-edge);
+    color: var(--ms-ink);
+}
+
+.music-stage:has(.music-stage-mode-diorama, .music-stage-mode-tunnel) .music-stage-home > :not(.music-stage-home-icon) {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .music-stage-top-chrome .music-stage-home {
+        display: inline-flex;
+        width: 30px;
+        padding: 0;
+        margin-left: 0;
+        justify-content: center;
+        background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
+        border-color: var(--ms-glass-edge);
+        color: var(--ms-ink);
+    }
+
+    .music-stage-home > :not(.music-stage-home-icon) {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .music-stage-home-icon {
+        transition: none;
+    }
+}

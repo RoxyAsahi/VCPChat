@@ -72,6 +72,7 @@
             edgeCanvas: root.querySelector('.music-stage-edge-spectrum-canvas'),
             modeRoot: root.querySelector('.music-stage-mode-root'),
             modeSwitcher: root.querySelector('.music-stage-mode-picker, .music-stage-mode-switcher'),
+            homeButton: root.querySelector('.music-stage-home'),
             settings: root.querySelector('.music-stage-settings'),
             settingsToggle: root.querySelector('.music-stage-settings-toggle'),
             settingsCard: root.querySelector('.music-stage-settings-card'),
@@ -1796,6 +1797,8 @@
             setVolume(current > 0.001 ? 0 : state.lastNonZeroVolume);
         });
         scope.listen(elements.volumeSlider, 'input', (event) => setVolume(event.target.value));
+        // 左上角字标就是「返回首页」：和 Esc、底栏舞台按钮走同一条退出路径
+        scope.listen(elements.homeButton, 'click', () => exit());
         scope.listen(elements.modeSwitcher, 'click', (event) => {
             if (picker.built && event.target.closest('.music-stage-mode-picker-toggle')) {
                 // 鼠标点开时不抢焦点到列表（免得出现键盘焦点框），键盘打开时直接落到当前舞台上
