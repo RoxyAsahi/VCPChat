@@ -59,3 +59,24 @@ test('adversarial: calendar and streak survive empty, null and junk daily data',
     assert.equal(longestStreak(null), 0);
     assert.equal(longestStreak({ junk: 999, '2026-11-20': 100, '2026-11-21': 90, '2026-11-22': 'x' }), 2);
 });
+
+test('empty range with older history offers a jump to all records', () => {
+    const { JSDOM } = require('jsdom');
+    const dom = new JSDOM('<body></body>');
+    const g = globalThis;
+    g.window = dom.window; g.document = dom.window.document; g.requestAnimationFrame = () => 0;
+    const MOD = path.join(__dirname, '../Musicmodules/music-stats-view.js');
+    delete require.cache[MOD];
+    const { open } = require(MOD);
+    const empty = { seconds: 0, plays: 0 };
+    const full = { seconds: 3600, plays: 12, activeDays: 3, hours: new Array(24).fill(0), songs: [], artists: [], albums: [], daily: {} };
+    const app = { playlist: [], musicStats: { summary: ({ days }) => (days ? empty : full), get: () => null } };
+    open(app);
+    const more = document.querySelector('.mstats-more');
+    assert.ok(more, 'button shown');
+    assert.match(more.textContent, /12 次/);
+    more.click();
+    assert.equal(document.querySelector('.mstats-more'), null);
+    assert.equal(document.querySelector('.mstats-range button[data-days="0"]').getAttribute('aria-pressed'), 'true');
+    delete g.window; delete g.document; delete g.requestAnimationFrame;
+});

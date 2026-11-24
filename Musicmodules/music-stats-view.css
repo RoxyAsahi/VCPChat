@@ -156,6 +156,7 @@
 .mstats-none, .mstats-empty, .mstats-note { margin: 0; color: var(--ms-ink2); font-size: 12px; }
 .mstats-empty { font-size: 14px; color: var(--ms-ink); margin: 18px 0 6px; }
 .mstats-note { margin-top: 16px; }
+.mstats-more { margin-top: 6px; }
 
 /* 整理重复的歌（music-dupes.js）沿用同一个对话框 */
 .mdupes-lead { margin: 0 0 14px; color: var(--ms-ink2); font-size: 12px; line-height: 1.6; }

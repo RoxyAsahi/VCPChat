@@ -192,6 +192,14 @@
             const s = stats && typeof stats.summary === 'function' ? stats.summary({ days: range }) : null;
             if (!s || (!s.seconds && !s.plays)) {
                 body.appendChild(el('p', 'mstats-empty', range ? '这段时间还没有听歌记录。' : '还没有听歌记录。'));
+                // 这段时间没有、但以前有：给个直达「全部」的按钮，别让人以为记录丢了
+                const all = range ? stats?.summary?.({ days: 0 }) : null;
+                if (all && (all.seconds || all.plays)) {
+                    const more = el('button', 'minfo-btn mstats-more', `看全部记录（${all.plays} 次）`);
+                    more.type = 'button';
+                    more.addEventListener('click', () => { const b = overlay?.querySelector('.mstats-range button[data-days="0"]'); if (b) b.click(); else { range = 0; render(); } });
+                    body.appendChild(more);
+                }
                 body.appendChild(el('p', 'mstats-note', '一首歌放到一半（或满 4 分钟）算听了一次；记录只存在这台电脑上。'));
                 return;
             }
