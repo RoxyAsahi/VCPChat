@@ -12,7 +12,8 @@
     'use strict';
 
     const TAU = Math.PI * 2;
-    const NOTE_FONT = '"Times New Roman", "Noto Serif", "Source Han Serif SC", "Songti SC", serif';
+    // 注记：演算纸上的衬线斜体（数学字体优先），和歌词的黑体分开
+    const NOTE_FONT = '"Cambria Math", "STIX Two Math", Cambria, Georgia, "Times New Roman", "Noto Serif", "Source Han Serif SC", "Songti SC", serif';
 
     /*
      * 一支笔：main 是主画布（R 字、G 线稿、B 半调），ids 是编号画布（缩小 idScale 倍，
@@ -152,6 +153,12 @@
                 if (tone) return;
                 const [px, py] = map(x, y);
                 const px2 = Math.max(9, size * radius);
+                // 交给逐字层：注记的字和歌词一样按屏幕像素画（推近也不糊），这里只记下位置和笔序
+                if (options.notes) {
+                    options.notes.push({ text: String(text), x: px, y: py, size: px2, align, order, rot: Math.atan2(sin, cos) });
+                    order = Math.min(255, order + 1);
+                    return;
+                }
                 main.save();
                 main.globalCompositeOperation = 'lighter';
                 main.fillStyle = 'rgb(0,255,0)';
@@ -444,6 +451,53 @@
             pen.note('u, c, t', 0, -0.56, 0.09); pen.note('W', -0.62, 0, 0.11); pen.note('W', 0.62, 0, 0.11);
             pen.note(meson, -1.25, 0, 0.12);
             pen.note(pick(random, ['Δm', 'ΔF = 2', 'ε ≈ 2.2×10⁻³']), -0.3, 1, 0.1);
+        },
+        // 配线图（歌词里有车、站、轨道时优先用）：上下行两股道、一组渡线道岔、一座站台、公里标和信号机
+        rail(pen, random) {
+            const y1 = -0.16, y2 = 0.16;
+            pen.line([[-1.05, y1], [1.05, y1]]);
+            pen.line([[-1.05, y2], [1.05, y2]]);
+            const sx = -0.55 + random() * 0.3;
+            pen.line([[sx, y2], [sx + 0.42, y1]]);
+            pen.line([[sx + 0.5, y1], [sx + 0.92, y2]]);
+            const px = 0.15 + random() * 0.3;
+            pen.line([[px, y1 - 0.12], [px + 0.62, y1 - 0.12], [px + 0.62, y1 - 0.34], [px, y1 - 0.34]], true);
+            for (let i = 0; i < 3; i += 1) pen.line([[px + 0.1 + i * 0.2, y1 - 0.34], [px + 0.2 + i * 0.2, y1 - 0.12]]);
+            const k = 10 + Math.floor(random() * 30);
+            [-0.9, -0.3, 0.3, 0.9].forEach((x, i) => {
+                pen.line([[x, y2 + 0.04], [x, y2 + 0.14]]);
+                pen.note(`K${k + i}+${pick(random, ['000', '200', '400', '600', '800'])}`, x, y2 + 0.24, 0.07);
+            });
+            const gx = sx - 0.25;
+            pen.line([[gx, y2], [gx, y2 + 0.36]]);
+            pen.circle(gx + 0.07, y2 + 0.36, 0.06);
+            pen.note(pick(random, ['上行', '下行', 'Up', 'Down']), -1.0, y1 - 0.1, 0.08, 'left');
+            pen.note(pick(random, ['第 1 站台', '1 番線', 'Pl. 2']), px + 0.31, y1 - 0.47, 0.08);
+            pen.note(pick(random, ['R = 400 m', 'i = 2.5‰', 'v ≤ 45 km/h']), 0.4, 0.75, 0.09);
+        },
+        // 潮汐曲线（歌词里有海、浪、潮时优先用）：两个半日潮，高低潮标时刻和潮高，平均海面虚线，角上一个月相
+        tide(pen, random) {
+            pen.line([[-1, 0.62], [1, 0.62]]);
+            pen.line([[-1, 0.62], [-1, -0.7]]);
+            const phase = random() * TAU, amp = 0.38 + random() * 0.1;
+            const at = x => -Math.sin((x + 1) * Math.PI * 2 + phase) * amp;
+            const pts = [];
+            for (let i = 0; i <= 80; i += 1) { const x = -1 + i / 40; pts.push([x, at(x)]); }
+            pen.line(pts);
+            pen.dashed([-1, 0], [1, 0], 0.05);
+            pen.note('MSL', 1.02, -0.06, 0.07, 'left');
+            for (let i = 0; i < 4; i += 1) {
+                const x = -1 + ((i / 2 + 0.25 - phase / TAU) % 1 + 1) % 1 * 2;
+                const high = Math.sin((x + 1) * Math.PI * 2 + phase) < 0;
+                const y = at(x);
+                pen.dot(x, y, 0.025);
+                const h = (high ? 1.6 + random() * 0.8 : 0.2 + random() * 0.4).toFixed(1);
+                const hh = String(Math.floor(random() * 24)).padStart(2, '0'), mm = String(Math.floor(random() * 60)).padStart(2, '0');
+                pen.note(`${high ? 'HW' : 'LW'} ${hh}:${mm}  ${h} m`, x, y + (high ? -0.12 : 0.12), 0.065);
+            }
+            [-1, -0.5, 0, 0.5, 1].forEach((x, i) => { pen.line([[x, 0.62], [x, 0.68]]); pen.note(`${i * 6}h`, x, 0.76, 0.06); });
+            pen.circle(0.82, -0.78, 0.09);
+            pen.ellipse(0.82, -0.78, 0.045, 0.09, 0, -Math.PI / 2, Math.PI / 2);
         }
     };
 

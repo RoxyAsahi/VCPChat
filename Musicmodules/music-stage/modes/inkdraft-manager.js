@@ -305,6 +305,20 @@
         return { style: 'rows', placed };
     };
 
+    // 歌词里的意象 → 线稿：有对应的就让这一句的第一张图用它
+    const THEMES = [
+        [/[车站轨铁列票]|远方|月台/u, ['rail']],
+        [/[海浪潮岸船帆]|水天/u, ['tide']],
+        [/[星光夜月天]/u, ['starmap', 'orbit']],
+        [/[梦忆旧昨]|回不去/u, ['paths']],
+        [/[信写字]|名字/u, ['draft']],
+        [/[花开落]/u, ['shower']]
+    ];
+    const themedFigure = (text, random) => {
+        const hit = THEMES.find(([re]) => re.test(text));
+        return hit ? hit[1][Math.floor(random() * hit[1].length)] : null;
+    };
+
     /* ───────────────────────── 逐字图集 ───────────────────────── */
 
     // 每个字在 2D 画布上单独画一次，取透明度做两遍模糊，存成一格两个通道：
@@ -324,6 +338,8 @@
     // 字重：细的一档。墨切出来比字形胖一圈，细字切完正好；粗字一胖，密的笔画就糊成一团
     const INK_WEIGHT = 300;
     const GLYPH_FLOATS = 12;
+    // 图集里注记的字前面带这个（同一个字，歌词和注记是两种字体）
+    const NOTE_PREFIX = '\u0001';
 
     const blurLines = (src, dst, r, step, lineStep) => {
         const win = r * 2 + 1;
@@ -356,11 +372,13 @@
         return {
             clear() { cells.clear(); },
             cell(char, family) {
-                const key = `${family}|${char}`;
+                const note = char.startsWith(NOTE_PREFIX);
+                if (note) char = char.slice(NOTE_PREFIX.length);
+                const key = `${note ? 'note' : family}|${char}`;
                 const hit = cells.get(key);
                 if (hit) return hit;
                 ctx.clearRect(0, 0, GLYPH_CELL, GLYPH_CELL);
-                ctx.font = `${INK_WEIGHT} ${GLYPH_EM}px ${family}`;
+                ctx.font = note ? `italic 500 ${GLYPH_EM}px ${Figures.NOTE_FONT}` : `${INK_WEIGHT} ${GLYPH_EM}px ${family}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillStyle = '#fff';
@@ -369,7 +387,7 @@
                 for (let i = 0; i < n; i += 1) { tight[i] = px[i * 4 + 3] / 255; wide[i] = tight[i]; }
                 boxBlur(tight, tmp, TIGHT_R);
                 boxBlur(wide, tmp, WIDE_R);
-                const gain = CJK.test(char) ? WIDE_GAIN * DENSE_WIDE : WIDE_GAIN;
+                const gain = !note && CJK.test(char) ? WIDE_GAIN * DENSE_WIDE : WIDE_GAIN;
                 const out = new Uint8Array(n * 2);
                 for (let i = 0; i < n; i += 1) {
                     out[i * 2] = Math.round(Math.min(1, tight[i]) * 255);
@@ -455,24 +473,19 @@
         main.fillStyle = 'rgb(255,0,0)';
         main.globalCompositeOperation = 'lighter';
         const keys = new Set(cue.keys || []);
-        const atlas = buildAtlas(placed.map(p => p.g.text), family);
-        const glyphInst = new Float32Array(placed.length * GLYPH_FLOATS);
-        placed.forEach((p, i) => {
+        // 逐字层的实例先记下（世界里那一格的中心、边长、转角；开唱、唱完、关键词、是不是注记；图集里的字），注记排好以后一起建图集
+        const glyphEntries = [];
+        placed.forEach((p) => {
             main.font = fontFor(p.size);
             main.filter = `blur(${Math.max(0.8, p.size * 0.02).toFixed(2)}px)`;
             main.fillText(p.g.text, p.x, p.baseline);
             main.filter = 'none';
             const s = p.size / GLYPH_EM;
-            const rect = atlas.rects.get(p.g.text);
-            const o = i * GLYPH_FLOATS;
-            glyphInst[o] = p.x + p.w / 2;
-            glyphInst[o + 1] = p.baseline - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * s + GLYPH_CELL * s / 2;
-            glyphInst[o + 2] = GLYPH_CELL * s;
-            glyphInst[o + 3] = random();
-            glyphInst[o + 4] = p.g.start;
-            glyphInst[o + 5] = p.g.end;
-            glyphInst[o + 6] = keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0;
-            glyphInst.set(rect, o + 8);
+            glyphEntries.push({
+                key: p.g.text, cx: p.x + p.w / 2, cy: p.baseline - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * s + GLYPH_CELL * s / 2,
+                cell: GLYPH_CELL * s, rot: 0, start: p.g.start, end: p.g.end,
+                kw: keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0, note: 0
+            });
         });
         main.globalCompositeOperation = 'source-over';
 
@@ -556,7 +569,8 @@
         }
 
         // 版面零件（规线、裁切标记、行号、时间码）和线稿，一笔一笔冒出来。
-        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: Math.max(2, H * 0.0068), soft: H * 0.002, fringe: H * 0.018, startOrder: 1 });
+        const notes = [];
+        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: Math.max(2, H * 0.0068), soft: H * 0.002, fringe: H * 0.018, startOrder: 1, notes });
         if (textBox) {
             const pad = H * 0.035;
             const [x0, y0, x1, y1] = [textBox[0] - pad, textBox[1] - pad, textBox[2] + pad, textBox[3] + pad];
@@ -586,11 +600,15 @@
             }
         }
         const figures = [];
+        const lineText = units.map(u => u.glyphs.map(g => g.text).join('')).join('');
+        const themed = cue.kind === 'line' ? themedFigure(lineText, random) : null;
         if (settings.figures) {
             const want = cue.kind === 'rest' ? 4 + Math.floor(random() * 3) : Math.min(4, Math.max(1, Math.round(cells.length * (0.35 + random() * 0.2))));
             cells.slice(0, want).forEach((rect) => {
                 const r = Math.min(rect[2] - rect[0], rect[3] - rect[1]) * (0.3 + random() * 0.08) * settings.figureScale;
-                const kind = Figures.KINDS[Math.floor(random() * Figures.KINDS.length)];
+                // 第一张图跟着歌词走（Folia 是随机挑）：唱到车站就是配线图，唱到海就是潮汐曲线……
+                const pickRandom = Figures.KINDS[Math.floor(random() * Figures.KINDS.length)];
+                const kind = (figures.length === 0 && themed) || pickRandom;
                 const fx = (rect[0] + rect[2]) / 2 + (random() - 0.5) * (rect[2] - rect[0]) * 0.15;
                 const fy = (rect[1] + rect[3]) / 2 + (random() - 0.5) * (rect[3] - rect[1]) * 0.15;
                 Figures.drawFigure(pen, kind, fx, fy, r, (random() - 0.5) * 0.35, random);
@@ -600,6 +618,38 @@
         const strokes = Math.max(1, pen.order - 1);
         const length = cue.end - cue.start;
         const strokeStep = clamp(length * 0.6 / strokes, 0.04, 0.2);
+        const strokeStart = cue.start + 0.12;
+
+        // 注记一个字一个字排开，到它那一笔的时刻出现（和线稿同一支笔）
+        main.save();
+        notes.forEach((n) => {
+            main.font = `italic 500 ${n.size.toFixed(1)}px ${Figures.NOTE_FONT}`;
+            const chars = Array.from(n.text);
+            const widths = chars.map(c => main.measureText(c).width);
+            const total = widths.reduce((sum, w) => sum + w, 0);
+            let x = n.align === 'left' ? 0 : n.align === 'right' ? -total : -total / 2;
+            const c = Math.cos(n.rot), sn = Math.sin(n.rot);
+            const sc = n.size / GLYPH_EM;
+            // 竖直方向锚点是字的中线：基线在中线下面 0.35 字高
+            const dy = n.size * 0.35 - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * sc + GLYPH_CELL * sc / 2;
+            chars.forEach((ch, i) => {
+                const lx = x + widths[i] / 2;
+                x += widths[i];
+                if (!ch.trim()) return;
+                glyphEntries.push({
+                    key: NOTE_PREFIX + ch, cx: n.x + lx * c - dy * sn, cy: n.y + lx * sn + dy * c, cell: GLYPH_CELL * sc, rot: n.rot,
+                    start: strokeStart + (n.order - 1) * strokeStep, end: cue.end, kw: 0, note: 1
+                });
+            });
+        });
+        main.restore();
+        const atlas = buildAtlas(glyphEntries.map(e => e.key), family);
+        const glyphInst = new Float32Array(glyphEntries.length * GLYPH_FLOATS);
+        glyphEntries.forEach((e, i) => {
+            const o = i * GLYPH_FLOATS;
+            glyphInst.set([e.cx, e.cy, e.cell, e.rot, e.start, e.end, e.kw, e.note], o);
+            glyphInst.set(atlas.rects.get(e.key), o + 8);
+        });
 
         // 墨团：一个大墨团带几颗小墨滴，摆在空格里（线稿没占的那些）；对撞；压在词上的强调色墨团。
         const freeCells = cells.slice(figures.length);
@@ -691,8 +741,8 @@
             : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]) : 'cut';
         const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect }, random, settings, transition);
         return {
-            index, cue, atlas, glyphInst, glyphCount: placed.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
-            strokeStart: cue.start + 0.12, strokeStep,
+            index, cue, atlas, glyphInst, glyphCount: glyphEntries.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
+            strokeStart, strokeStep,
             transition,
             flood: [0.2 + random() * 0.6, 0.25 + random() * 0.5],
             sparks: placed.slice(0, MAX_GLYPHS).map((p, i) => ({
@@ -1008,38 +1058,52 @@ void main() {
     // 墨场 R 是字的墨、G 是网点的浓淡、B 是关键词的墨。
     const GLYPH_VERT = `#version 300 es
 precision highp float;
-layout(location = 0) in vec4 iA;  // 那一格的中心 x, y（世界像素），边长，种子
-layout(location = 1) in vec4 iB;  // 开唱、唱完、关键词
+layout(location = 0) in vec4 iA;  // 那一格的中心 x, y（世界像素），边长，转角
+layout(location = 1) in vec4 iB;  // 开唱、唱完、关键词、是不是注记
 layout(location = 2) in vec4 iR;  // 图集 uv 框：左、上、右、下
 uniform vec4 uView;
 uniform float uAspect;
 uniform float uTime;
 uniform float uPop;
 out vec2 vUv;
-out vec3 vT;
+out vec4 vT;
 void main() {
     vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
     float dt = uTime - iB.x;
     float on = step(0.0, dt);
     // 开唱的一下鼓起来、慢慢收回；还没唱到的略小一点
     float scale = mix(0.94, 1.0 + uPop * 0.18 * exp(-max(dt, 0.0) * 2.2), on);
-    vec2 w = iA.xy + (corner - 0.5) * iA.z * scale;
+    vec2 off = (corner - 0.5) * iA.z * scale;
+    float rc = cos(iA.w), rs = sin(iA.w);
+    vec2 w = iA.xy + vec2(off.x * rc - off.y * rs, off.x * rs + off.y * rc);
     vec2 d = w - uView.xy;
     float c = cos(uView.w), s = sin(uView.w);
     vec2 q = vec2(d.x * c + d.y * s, -d.x * s + d.y * c);
     vec2 p = vec2(q.x / (uAspect * uView.z), -q.y / uView.z);
     gl_Position = vec4(p * 2.0, 0.0, 1.0);
     vUv = vec2(mix(iR.x, iR.z, corner.x), mix(iR.y, iR.w, corner.y));
-    vT = iB.xyz;
+    vT = iB;
 }`;
     const GLYPH_FRAG = `#version 300 es
 precision highp float;
 uniform sampler2D uAtlas;
 uniform float uTime;
 uniform float uReveal;
+uniform float uCss;      // 一个 CSS 像素是多少个屏幕像素
+uniform float uBleed;    // 洇墨的强度（0 = 关）
 in vec2 vUv;
-in vec3 vT;
+in vec4 vT;
 out vec4 outColor;
+float h21(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+}
+float vn(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 void main() {
     vec2 g = texture(uAtlas, vUv).rg;
     float dt = uTime - vT.x;
@@ -1049,8 +1113,20 @@ void main() {
     float set = on * (1.0 - exp(-age * 4.5));
     float bulge = on * exp(-age * 1.5);
     float ink = g.r * set + g.g * (bulge * 1.25 + 0.3 * set);
+    // 洇墨（Folia 没有）：唱过的字在纸上慢慢洇开——墨顺着纸的纤维往外渗，纤维是一个方向拉长的噪声，
+    // 所以渗出去的是一丝一丝的毛刺，不是均匀变胖；只在字边那一圈（宽通道里）发生，两三秒后停住
+    vec2 cp = gl_FragCoord.xy / uCss;
+    vec2 fp = vec2(cp.x * 0.94 + cp.y * 0.34, -cp.x * 0.34 + cp.y * 0.94);
+    float fibre = vn(fp * vec2(0.05, 0.55)) * 0.65 + vn(fp * vec2(0.11, 1.3) + 17.0) * 0.35;
+    float bleed = uBleed * on * smoothstep(0.3, 3.2, age) * smoothstep(0.42, 0.95, fibre);
+    ink += g.g * bleed * 0.55 * (1.0 - g.r);
     // 没唱到的字只是一层网点的影子；唱过的字周围留一圈网点
     float tone = (g.r * (1.0 - set) * 0.85 + g.g * (0.3 + 0.45 * set)) * uReveal;
+    // 注记到时候直接出现：细的墨字，没有那一团；周围一圈淡网点，和线两边的毛边一样
+    if (vT.w > 0.5) {
+        ink = g.r * on * 1.12;
+        tone = min(0.55, g.g * 1.6) * on;
+    }
     outColor = vec4(ink * (1.0 - vT.z), tone, ink * vT.z, 0.0);
 }`;
     // 低分辨率那一遍：墨团的场、冲击环、强调色墨团、网点云（都平滑，放大不糊）。存的时候缩一下，八位的图也装得下
@@ -1431,7 +1507,7 @@ void main() {
                 gl.vertexAttribDivisor(a, 1);
             }
             gl.bindVertexArray(null);
-            return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR), glyphVao, glyphBuf, key: null, data: null, used: 0 };
+            return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR, true), glyphVao, glyphBuf, key: null, data: null, used: 0 };
         });
         return { gl, program, uniforms, glyphProgram, glyphUniforms, smoothProgram, smoothUniforms, field, smooth, vao, slots };
     };
@@ -1496,6 +1572,7 @@ void main() {
                 grain: clamp(tuning.grain ?? 0.5, 0, 1),
                 cloud: clamp(tuning.cloud ?? 0.75, 0, 1),
                 keywords: tuning.keywords !== false,
+                bleed: tuning.inkBleed !== false,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -1593,6 +1670,8 @@ void main() {
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, idsCanvas);
             gl.bindTexture(gl.TEXTURE_2D, slot.atlas);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, data.atlas.width, data.atlas.height, 0, gl.RG, gl.UNSIGNED_BYTE, data.atlas.data);
+            // 注记和远景里的小字会缩得比图集小很多：要 mip，不然闪烁、断笔
+            gl.generateMipmap(gl.TEXTURE_2D);
             gl.bindBuffer(gl.ARRAY_BUFFER, slot.glyphBuf);
             gl.bufferData(gl.ARRAY_BUFFER, data.glyphInst, gl.STATIC_DRAW);
             data.atlas = { width: data.atlas.width, height: data.atlas.height };
@@ -1677,6 +1756,8 @@ void main() {
                 gl.uniform1f(gu.uPop, s.reducedMotion ? 0 : 1);
                 const local0 = t - data.cue.start;
                 gl.uniform1f(gu.uReveal, Math.min(1, s.waitingOpacity / 0.35) * smooth(0, 0.35, local0));
+                gl.uniform1f(gu.uCss, canvas.height / Math.max(1, size.h));
+                gl.uniform1f(gu.uBleed, s.bleed ? 1 : 0);
                 gl.bindVertexArray(slot.glyphVao);
                 gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.glyphCount);
                 gl.disable(gl.BLEND);
