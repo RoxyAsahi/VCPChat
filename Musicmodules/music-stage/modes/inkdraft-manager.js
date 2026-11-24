@@ -754,7 +754,8 @@
 
         // 版面零件（规线、裁切标记、行号、时间码）和线稿，一笔一笔冒出来。
         const notes = [];
-        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: Math.max(2, H * 0.0068), soft: H * 0.002, fringe: H * 0.018, startOrder: 1, notes });
+        const penWidth = Math.max(2, H * 0.0068);
+        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: penWidth, soft: H * 0.002, fringe: H * 0.018, startOrder: 1, notes });
         if (textBox) {
             const pad = H * 0.035;
             const [x0, y0, x1, y1] = [textBox[0] - pad, textBox[1] - pad, textBox[2] + pad, textBox[3] + pad];
@@ -795,6 +796,8 @@
                 usedKinds.push(kind);
                 const fx = (rect[0] + rect[2]) / 2 + (random() - 0.5) * (rect[2] - rect[0]) * 0.15;
                 const fy = (rect[1] + rect[3]) / 2 + (random() - 0.5) * (rect[3] - rect[1]) * 0.15;
+                // 笔宽跟着图的大小：大图用原来的笔，小图细一些（常见的图 r≈0.1H，笔宽约原来的七成）
+                pen.setWidth(clamp(r * 0.045, penWidth * 0.55, penWidth) * (cue.kind === 'rest' ? 0.72 : 1));
                 Figures.drawFigure(pen, kind, fx, fy, r, (random() - 0.5) * 0.35, random);
                 figures.push({ x: fx, y: fy, r });
             });
@@ -1512,6 +1515,7 @@ vec2 warped() {
 uniform sampler2D uWarp;
 uniform sampler2D uPaperTex;
 uniform float uPaperGrain;
+uniform float uBeat;
 void main() {
     vec2 suv = gl_FragCoord.xy / uRes + (texture(uWarp, gl_FragCoord.xy / uRes).rg - 0.5) * 0.1;
     vec2 w = worldAt(uView, suv);
@@ -1568,7 +1572,8 @@ void main() {
     vec2 g = vec2(sf.x * ca - sf.y * sa, sf.x * sa + sf.y * ca) / 7.0;
     float dist = length(fract(g) - 0.5);
     // 最浓的地方圆点也只是刚好相连，留着格子间的纸
-    float radius = sqrt(clamp(T, 0.0, 1.0)) * 0.6;
+    // 网点跟着低音呼吸：鼓点上来时圆点胀一点（Folia 的网点不动）
+    float radius = sqrt(clamp(T, 0.0, 1.0)) * 0.6 * (1.0 + uBeat * 0.14);
     float dots = (1.0 - smoothstep(radius - 0.13, radius + 0.13, dist)) * uHalftone * step(0.012, T);
 
     vec3 paper = mix(uPaper, uInk, uNeg);
@@ -2095,6 +2100,7 @@ void main() {
             gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
             gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, glState.paper); gl.uniform1i(u.uPaperTex, 7);
             gl.uniform1f(u.uPaperGrain, s.paper);
+            gl.uniform1f(u.uBeat, s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0)));
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);

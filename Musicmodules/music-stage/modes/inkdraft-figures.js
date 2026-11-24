@@ -23,7 +23,7 @@
         const tone = Boolean(options.tone);
         let order = options.startOrder || 1;
         let x0 = 0, y0 = 0, radius = 1, cos = 1, sin = 0;
-        const width = options.lineWidth || 2;
+        let width = options.lineWidth || 2;
         const toneLevel = options.toneLevel ?? 0.32;
         // 线的边是一道缓坡（不是一刀切）：着色器切阈值时被噪点搅过，切出来的边才是毛的
         const soft = options.soft || 0;
@@ -98,6 +98,8 @@
 
         const pen = {
             get order() { return order; },
+            // 换笔宽（小图用细一点的笔，不然细节多的图在特写里糊成一团）
+            setWidth(w) { width = w; },
             place(x, y, r, rot = 0) { x0 = x; y0 = y; radius = r; cos = Math.cos(rot); sin = Math.sin(rot); },
             line(points, closed = false) { begin(); path(points, closed); end(); },
             segments(pairs) { if (!pairs.length) return; begin(); segments(pairs); end(); },
