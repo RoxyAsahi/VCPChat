@@ -851,7 +851,9 @@
                 // 笔宽跟着图的大小：大图用原来的笔，小图细一些（常见的图 r≈0.1H，笔宽约原来的七成）
                 pen.setWidth(clamp(r * 0.045, penWidth * 0.55, penWidth) * (cue.kind === 'rest' ? 0.72 : 1));
                 const frot = (random() - 0.5) * 0.35;
+                const order0 = pen.order;
                 Figures.drawFigure(pen, kind, fx, fy, r, frot, random);
+                const order1 = pen.order;
                 // 细节层（Folia 没有）：很细的辅助线——一段虚线构造圆、一个对位十字。
                 // 线细到远景里被图的 mip 平均掉、切不过阈值，自己就淡没了；推近才看得清（不用另算远近）
                 if (settings.figureDetail !== false) {
@@ -868,13 +870,15 @@
                     const cxr = (random() < 0.5 ? -1 : 1) * 1.05, cyr = (random() < 0.5 ? -1 : 1) * 0.95;
                     pen.segments([[[cxr - 0.18, cyr], [cxr + 0.18, cyr]], [[cxr, cyr - 0.18], [cxr, cyr + 0.18]]]);
                 }
-                figures.push({ x: fx, y: fy, r });
+                figures.push({ x: fx, y: fy, r, o0: order0, o1: order1 });
             });
         }
         const strokes = Math.max(1, pen.order - 1);
         const length = cue.end - cue.start;
         const strokeStep = clamp(length * 0.6 / strokes, 0.04, 0.2);
         const strokeStart = cue.start + 0.12;
+        // 每张线稿从哪一刻开始画、哪一刻画完（间奏的镜头跟着笔走）
+        figures.forEach((f) => { f.t0 = strokeStart + (f.o0 - 1) * strokeStep; f.t1 = strokeStart + (f.o1 - 1) * strokeStep; });
 
         // 注记一个字一个字排开，到它那一笔的时刻出现（和线稿同一支笔）
         main.save();
@@ -1111,7 +1115,37 @@
             previous = type;
             return shot;
         };
-        if (cue.kind === 'rest') {
+        const sketchable = cue.kind === 'rest' && !cue.title && cuts && figures.length >= 2;
+        if (sketchable) {
+            // 间奏是一场写生（Folia 的间奏只是停在全景上）：镜头跟着笔，一张图开画时推到它跟前，
+            // 看它一笔一笔画出来、慢慢推近；每画完两张拉回全景交代一次；都画完以后在细节和全景之间换，
+            // 最后一个镜头留给全景，等下一句进来
+            const order = figures.slice().sort((x, y) => x.t0 - y.t0);
+            let t = cue.start;
+            push(t, 'wide', true);
+            t = Math.max(t + 1.6, order[0].t0 - 0.25);
+            order.forEach((f, i) => {
+                if (t >= cue.end - 2) return;
+                const shot = push(t, 'figure', false);
+                shot.fig = f;
+                shot.push = [3.3, 2.3];
+                const next = order[i + 1];
+                const done = Math.max(f.t1 + 0.6, t + 2.2);
+                t = next ? Math.max(done, Math.min(next.t0 - 0.25, t + 4.5)) : done;
+                if (i % 2 === 1 && next && t < cue.end - 4) { push(t, 'wide', false); t += 2.2; }
+            });
+            let k = 0;
+            while (t < cue.end - 3.5) {
+                if (k % 2 === 0) {
+                    const shot = push(t, 'figure', false);
+                    shot.fig = figures[Math.floor(random() * figures.length)];
+                    shot.push = [1.6, 1.15];   // 推得很近：细辅助线、注记这时候才看得清
+                } else push(t, k % 4 === 3 ? 'far' : 'wide', false);
+                t += 2.6 + random() * 1.6;
+                k += 1;
+            }
+            if (t < cue.end - 0.8) push(t, 'wide', false);
+        } else if (cue.kind === 'rest') {
             let t = cue.start;
             let k = 0;
             while (t < cue.end - 0.5) {
@@ -1199,7 +1233,12 @@
                 h = wideH * 2.6 + (closeH - wideH * 2.6) * k;
                 break;
             }
-            case 'figure': if (shot.fig) { c = [shot.fig.x, shot.fig.y]; h = shot.fig.r * 2.6; } break;
+            case 'figure': if (shot.fig) {
+                c = [shot.fig.x, shot.fig.y];
+                // 间奏跟笔的镜头：整个镜头里慢慢推近，滚转也一点点转
+                if (shot.push) { h = shot.fig.r * (shot.push[0] + (shot.push[1] - shot.push[0]) * smooth(0, 1, u)); roll += 0.05 * (u - 0.5); }
+                else h = shot.fig.r * 2.6;
+            } break;
             case 'reveal': {
                 // 先在线稿上停一下，再匀加速、匀减速地滑到字上，滚转一路收平
                 const to = closeFrame ? closeFrame.c : wideC;
