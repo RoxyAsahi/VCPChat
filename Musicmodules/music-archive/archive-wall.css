@@ -457,6 +457,9 @@ body.music-reduce-motion .aw-table .aw-tile.is-open .aw-in { animation: none; }
     border-left: 2px solid var(--ar-accent);
     will-change: transform;
 }
+/* 盖上那一段：扫描头在面板右缘（往右推进的前缘），身后不拖细线 */
+.archive-layout-sweep.is-covering > i { border-left: 0; box-shadow: 2px 0 0 var(--ar-accent); }
+.archive-layout-sweep.is-covering > i::before { display: none; }
 /* 扫描头身后（已经露出来的那边）拖一段每 4px 一根的细线，越远越淡 */
 .archive-layout-sweep > i::before {
     content: "";
@@ -511,7 +514,8 @@ body.music-reduce-motion .archive-wall.aw-table::after { display: none; }
 
 /* 换视图：扫描线扫过时，封面从侧面翻过来（左边先、右边后，时间由脚本按位置给） */
 .aw-tile.aw-flip .aw-in { transform-origin: 0 50%; animation: aw-flip .56s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)) backwards; }
-@keyframes aw-flip { from { opacity: 0; transform: perspective(900px) rotateY(-88deg); filter: brightness(1.6); } 60% { opacity: 1; } to { opacity: 1; transform: perspective(900px) rotateY(0deg); filter: none; } }
+/* 只动 transform 和 opacity（合成线程能独自跑）；以前带的 brightness 滤镜在平放几百张一起翻时太重，去掉 */
+@keyframes aw-flip { from { opacity: 0; transform: perspective(900px) rotateY(-88deg); } 60% { opacity: 1; } to { opacity: 1; transform: perspective(900px) rotateY(0deg); } }
 .ag-cell.ag-flip > .ag-art { transform-origin: 0 50%; animation: aw-flip .56s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)) var(--ag-d, 0ms) backwards; }
 .ag-cell.ag-flip > .ag-t, .ag-cell.ag-flip > .ag-a { animation: ag-pop .34s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) calc(var(--ag-d, 0ms) + 120ms) backwards; }
 body.music-reduce-motion .aw-tile.aw-flip .aw-in, body.music-reduce-motion .ag-cell.ag-flip > * { animation: none; }
@@ -608,3 +612,11 @@ body.light-theme .aw-tile.is-open .aw-in { box-shadow: 0 0 0 1px color-mix(in sr
 /* 大卡进度条可以 Tab 到：焦点时进度条外描一圈虚线 */
 #music-archive-view .aw-seek:focus:not(#_) { outline: none; }
 #music-archive-view .aw-seek:focus-visible .aw-seek-bar { outline: 1px dashed var(--ar-accent); outline-offset: 5px; }
+
+/* ---------- 换视图过场的配合（archive-view.js sweepToLayout） ---------- */
+/* 纸盖着：新视图的入场动画先停在第一帧，揭开时一起放 */
+#music-archive-view.layout-holding :is(.aw-tile.aw-flip .aw-in, .aw-tile.aw-entering .aw-in, .ag-cell.ag-flip > .ag-art, .ag-cell.ag-entering > *, .ag-head.ag-entering > *) { animation-play-state: paused; }
+/* 揭开的这半秒里平放的景深模糊先关掉（几百张一起翻时它每帧都要重算），扫完再淡回来 */
+.archive-wall.aw-table::after { transition: opacity .4s var(--mt-ease, ease); }
+#music-archive-view.layout-revealing .archive-wall.aw-table::after { opacity: 0; transition: none; }
+

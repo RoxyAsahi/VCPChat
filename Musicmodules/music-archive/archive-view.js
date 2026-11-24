@@ -1115,8 +1115,10 @@
         // 进播放页的过场里（music-stage-entering，最多 1.1 秒）舞台还没盖上来，继续画让选中卡的上浮看得见；
         // 开场动画（music-intro-playing）是一层不透明全屏层，期间不画
         let enteringSince = 0;
+        let layoutJob = null;     // 换视图过场里「盖上」那一段：{ layout }，盖满时换成它（见 sweepToLayout）
         const renderAllowed = () => {
-            if (!isShown() || state.destroyed || document.hidden || state.layout !== 'array') return false;
+            // 换视图的纸正在盖上来时，3D 阵列停在最后一帧不再画，把这几帧让给过场
+            if (!isShown() || state.destroyed || document.hidden || state.layout !== 'array' || layoutJob) return false;
             const body = document.body.classList;
             if (body.contains('music-intro-playing')) return false;
             if (!body.contains('music-stage-active')) return true;
@@ -2097,27 +2099,54 @@
             fl.setRoom({ left, top, width: right - left, height: bottom - top });
         }
         /*
-         * 换视图的过场：一块纸色面板盖住画面，从左往右滑开，左缘一道 2px 的扫描头、身后拖一段细扫描线，
-         * 新视图从左到右露出来（和浅深色切换的扫描带同一路）。降低动态、窗口在后台时直接换。
+         * 换视图的过场，分两段：
+         *   盖上：纸色面板从左边推进来把画面盖满（前缘一道强调色扫描头），旧视图一点点被遮住；
+         *   换：盖满的那一刻才真正换视图——3D 阵列重新开画、封面墙/网格建格子解封面，最重的这一两帧都在纸后面，看不到卡顿；
+         *   揭开：等两帧画完，面板往右滑走，左缘扫描头身后拖一段细扫描线，新视图从左到右露出来（封面墙/网格的格子跟着扫描线翻过来）。
+         * 盖的过程只动 transform，跑在合成线程上，主线程忙也不掉帧。连点：还没盖满就只改目标，盖满后换成最后点的那个。
+         * 降低动态、窗口在后台时直接换。
          */
         let layoutSweepEl = null;
-        const layoutSweep = () => {
-            if (reducedMotion() || document.hidden || !isShown()) return;
+        const markLayoutButtons = (layout) => refs.layouts.querySelectorAll('[data-layout]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.layout === layout ? 'true' : 'false'));
+        const revealSweep = (el, w) => {
+            el.classList.remove('is-covering');
+            // 纸盖着时新视图的翻入动画是暂停的（layout-holding），揭开这一刻一起放，和扫描线对得上
+            root.classList.remove('layout-holding');
+            root.classList.add('layout-revealing');
+            const anim = el.firstChild.animate?.([{ transform: 'translateX(0)' }, { transform: `translateX(${w + 90}px)` }],
+                { duration: Math.round(Math.min(720, 380 + w * 0.16)), easing: 'cubic-bezier(.5, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (layoutSweepEl === el) { layoutSweepEl = null; root.classList.remove('layout-revealing'); } el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else done();
+        };
+        const sweepToLayout = (layout) => {
+            if (reducedMotion() || document.hidden || !isShown() || !refs.hud) { applyLayout(layout, true); return; }
+            markLayoutButtons(layout);
+            if (layoutJob) { layoutJob.layout = layout; return; }
             layoutSweepEl?.remove();
+            root.classList.remove('layout-revealing');
             const el = document.createElement('div');
-            el.className = 'archive-layout-sweep';
+            el.className = 'archive-layout-sweep is-covering';
             el.setAttribute('aria-hidden', 'true');
             el.innerHTML = '<i></i>';
             root.insertBefore(el, refs.hud);
             layoutSweepEl = el;
             const w = root.clientWidth || global.innerWidth || 1600;
-            const anim = el.firstChild.animate?.([{ transform: 'translateX(0)' }, { transform: `translateX(${w + 90}px)` }],
-                { duration: Math.round(Math.min(720, 380 + w * 0.16)), easing: 'cubic-bezier(.5, 0, .2, 1)', fill: 'forwards' });
-            const done = () => { if (layoutSweepEl === el) layoutSweepEl = null; el.remove(); };
-            if (anim) anim.onfinish = anim.oncancel = done; else done();
+            const job = layoutJob = { layout };
+            const swap = () => {
+                if (layoutJob !== job) return;
+                layoutJob = null;
+                if (layoutSweepEl !== el || !el.isConnected) { root.classList.remove('layout-holding'); applyLayout(job.layout, true); return; }
+                el.dataset.full = '1';
+                root.classList.add('layout-holding');
+                applyLayout(job.layout, true);
+                // 盖着等两帧：新视图第一帧（最重的那帧）画完再揭开
+                requestAnimationFrame(() => requestAnimationFrame(() => { if (layoutSweepEl === el) revealSweep(el, w); }));
+            };
+            const anim = el.firstChild.animate?.([{ transform: `translateX(${-w - 4}px)` }, { transform: 'translateX(0)' }],
+                { duration: Math.round(Math.min(300, 170 + w * 0.06)), easing: 'cubic-bezier(.6, 0, .4, 1)', fill: 'forwards' });
+            if (anim) { anim.onfinish = swap; anim.oncancel = swap; } else swap();
         };
-        const setLayout = (layout, { persist = true } = {}) => {
-            const before = state.layout;
+        const applyLayout = (layout, persist) => {
             if (!LAYOUTS.includes(layout) || (layout === 'wall' && !wall) || (layout === 'table' && !table) || (layout === 'grid' && !grid)) layout = 'array';
             state.layout = layout;
             const flatOn = layout !== 'array';
@@ -2125,13 +2154,17 @@
             root.classList.toggle('layout-table', layout === 'table');
             root.classList.toggle('layout-grid', layout === 'grid');
             root.classList.toggle('layout-flat', flatOn);
-            refs.layouts.querySelectorAll('[data-layout]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.layout === layout ? 'true' : 'false'));
+            markLayoutButtons(layout);
             if (persist) { try { localStorage.setItem(LAYOUT_KEY, state.layout); } catch (e) { /* 只是记住 */ } }
             wall?.show(layout === 'wall' && isShown());
             table?.show(layout === 'table' && isShown());
             grid?.show(layout === 'grid' && isShown());
             if (flatOn) { syncWallRoom(); flat()?.sync(); } else { state.lastDraw = 0; kick(); }
-            if (persist && before !== layout) layoutSweep();
+        };
+        const setLayout = (layout, { persist = true } = {}) => {
+            const target = layoutJob ? layoutJob.layout : state.layout;
+            if (persist && target !== layout && LAYOUTS.includes(layout)) sweepToLayout(layout);
+            else if (!layoutJob) applyLayout(layout, persist);
         };
         try { const l = localStorage.getItem(LAYOUT_KEY); state.layout = LAYOUTS.includes(l) ? l : 'array'; } catch (e) { /* 默认档案阵列 */ }
 

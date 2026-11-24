@@ -273,7 +273,12 @@ const FAKE = ({ n, light, covers }) => {
 
   // 平放
   await page.click('.archive-nav [data-layout="table"]');
-  await page.waitForTimeout(280);
+  // 过场先盖上（纸后面换视图），揭开时格子跟着扫描线翻
+  await page.waitForTimeout(120);
+  const covering = await page.evaluate(() => Boolean(document.querySelector('.archive-layout-sweep.is-covering')));
+  check('换视图先用纸盖上', covering);
+  await page.waitForFunction(() => { const s = document.querySelector('.archive-layout-sweep'); return s && !s.classList.contains('is-covering'); }, null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(160);
   const flips = await page.evaluate(() => document.querySelectorAll('.aw-table .aw-tile.aw-flip').length);
   await shot(tag + '-9a-flip');
   check('换到平放时封面跟着扫描线翻过来', flips > 20, 'flips=' + flips);
