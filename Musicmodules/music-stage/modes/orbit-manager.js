@@ -140,6 +140,7 @@ uniform float uBeat;
 uniform float uChorus;
 uniform float uTime;
 uniform float uNebula;
+uniform float uChange;
 out vec4 outColor;
 
 float hash12(vec2 p) {
@@ -193,9 +194,9 @@ void main() {
         float dist = abs(e - 1.0) * uAxes.y * scale;
         float w = (k == 0 ? 0.0014 : 0.0008) * (0.6 + front * 0.8);
         float line = 1.0 - smoothstep(w, w + aa, dist);
-        float glow = exp(-dist * dist / (0.0004 + uGlow * 0.0006));
+        float glow = exp(-dist * dist / (0.0004 + uGlow * 0.0006 + uChange * 0.0012));
         float strength = (k == 0 ? 1.0 : 0.45) * (0.18 + front * 0.6);
-        col = mix(col, uInk, line * strength * 0.7);
+        col = mix(col, uInk, line * strength * (0.7 + uChange * 0.3));
         col += uAccent * glow * strength * (0.06 + uGlow * 0.12) * (1.0 - uLight * 0.5);
         // 轨道上几颗慢慢转的点
         if (k == 0) {
@@ -560,7 +561,10 @@ void main() {
             gl.uniform2f(u.uCentre, geo.cx, geo.cy);
             gl.uniform2f(u.uAxes, geo.A, geo.B);
             gl.uniform1f(u.uRoll, geo.roll);
-            gl.uniform1f(u.uSpin, s.reducedMotion ? 0 : t * 0.12);
+            // 换句时轨道上的点快转一段再慢下来，轨道亮一下
+            const change = index >= 0 ? Math.exp(-since * 3) : 0;
+            gl.uniform1f(u.uSpin, s.reducedMotion ? 0 : t * 0.12 + 0.8 * (Math.max(index, 0) + 1 - change));
+            gl.uniform1f(u.uChange, s.reducedMotion ? 0 : change);
             gl.uniform1f(u.uAxis, s.axisLine ? 1 : 0);
             gl.uniform1f(u.uGlow, glow);
             if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {

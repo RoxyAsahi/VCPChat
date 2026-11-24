@@ -317,7 +317,13 @@ void main() {
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, uPrevFade * 0.0 - (1.0 - uPrevFade) * 0.02);
         float r0 = texture(uPrevText, t0).r;
-        col = mix(col, uInk * (0.8 + lit * 0.45), r0 * uPrevFade * 0.75);
+        // 上一句碎成火星：笔画先按噪点一点点熄掉，熄的边上闪一下
+        float n0 = hash12(floor(gl_FragCoord.xy / 2.0));
+        float keep = smoothstep(1.0 - uPrevFade, 1.0 - uPrevFade + 0.08, n0);
+        float ember = (1.0 - keep) * step(1.0 - uPrevFade - 0.12, n0);
+        float strong = step(0.4, r0);   // 背景大字（很淡）只淡出，不碎
+        col = mix(col, uInk * (0.8 + lit * 0.45), r0 * mix(uPrevFade, keep, strong) * 0.8);
+        col += vec3(1.0, 0.7, 0.35) * r0 * ember * strong * uPrevFade * 1.4;
     }
 
     // 鼓点：天上随手炸开一朵小花（一圈小星，往外散、往下坠、变暗）
@@ -859,8 +865,8 @@ void main() {
             uploadBursts();
             stats.cue = index;
             const local = t - cue.start;
-            const prev = index > 0 && local < 0.35 ? slotFor(index - 1, false) : null;
-            const prevFade = prev ? 1 - smooth(0, 0.35, local) : 0;
+            const prev = index > 0 && local < 0.6 ? slotFor(index - 1, false) : null;
+            const prevFade = prev ? 1 - smooth(0, 0.6, local) : 0;
             const zoom = 1 + clamp(local / Math.max(1, cue.end - cue.start), 0, 1) * 0.03;
             const audio = frame.audio || {};
             const power = clamp(((audio.power || 0) * 0.6 + (audio.bass || 0) * 0.4) * s.audioReactivity, 0, 1.5);
