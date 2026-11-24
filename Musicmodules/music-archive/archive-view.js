@@ -1986,6 +1986,7 @@
             onMotion: (fn) => { motionListeners.add(fn); return () => motionListeners.delete(fn); },
             raise,
             setThemeWave: () => applyTheme({ wave: true }),
+            locatePlaying,
             get list() { return list; },
             destroy,
             get mode() { return state.mode; },

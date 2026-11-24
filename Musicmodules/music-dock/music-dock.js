@@ -738,6 +738,15 @@
                 renderProgress();
             });
         }
+        // 右键胶囊（按钮以外）：档案页里飞到正在播放的那首、目录滚到那一行；舞台里或经典视图里不拦，照旧。
+        listen(el.cap, 'contextmenu', (event) => {
+            if (event.target.closest('button') || stageActive() || el.cap.classList.contains('md-notrack')) return;
+            const view = app.archiveView;
+            if (!view || view.mode !== 'archive' || typeof view.locatePlaying !== 'function') return;
+            event.preventDefault();
+            event.stopPropagation();
+            view.locatePlaying();
+        });
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button')) return;
             // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
@@ -969,7 +978,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '进入歌词舞台';
-            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
+            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度，右键在档案页里找到这首';
             syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
@@ -2213,7 +2222,7 @@
             ['M', '静音 / 恢复（档案页里是打字检索）'],
             ['L', '喜欢 / 取消喜欢当前这首（档案页里是打字检索）'],
             ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
-            ['Ctrl + L', '档案页里定位当前播放'],
+            ['Ctrl + L', '档案页里定位当前播放（右键底栏胶囊也行）'],
             ['Alt + ↑ / ↓', '档案页歌单里把选中的歌上移 / 下移一位'],
             ['Delete', '档案页歌单里移除选中的歌（可撤销）'],
             ['Ctrl + Enter', '档案页里把选中的歌插到下一首播放'],
