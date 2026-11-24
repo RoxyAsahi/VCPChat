@@ -798,7 +798,24 @@
                 const fy = (rect[1] + rect[3]) / 2 + (random() - 0.5) * (rect[3] - rect[1]) * 0.15;
                 // 笔宽跟着图的大小：大图用原来的笔，小图细一些（常见的图 r≈0.1H，笔宽约原来的七成）
                 pen.setWidth(clamp(r * 0.045, penWidth * 0.55, penWidth) * (cue.kind === 'rest' ? 0.72 : 1));
-                Figures.drawFigure(pen, kind, fx, fy, r, (random() - 0.5) * 0.35, random);
+                const frot = (random() - 0.5) * 0.35;
+                Figures.drawFigure(pen, kind, fx, fy, r, frot, random);
+                // 细节层（Folia 没有）：很细的辅助线——一段虚线构造圆、一个对位十字。
+                // 线细到远景里被图的 mip 平均掉、切不过阈值，自己就淡没了；推近才看得清（不用另算远近）
+                if (settings.figureDetail !== false) {
+                    pen.setWidth(Math.max(1, penWidth * 0.32));
+                    pen.place(fx, fy, r, frot);
+                    const a0 = random() * TAU, span = 1.2 + random() * 1.6;
+                    const arc = [];
+                    for (let k = 0; k < 18; k += 2) {
+                        const t0 = a0 + span * k / 18, t1 = a0 + span * (k + 1) / 18;
+                        arc.push([[Math.cos(t0) * 1.14, Math.sin(t0) * 1.14], [Math.cos(t1) * 1.14, Math.sin(t1) * 1.14]]);
+                    }
+                    pen.segments(arc);
+                    // 对位十字：只两道细线（带小圈、排线的版本在远景里会糊成白点，不要）
+                    const cxr = (random() < 0.5 ? -1 : 1) * 1.05, cyr = (random() < 0.5 ? -1 : 1) * 0.95;
+                    pen.segments([[[cxr - 0.18, cyr], [cxr + 0.18, cyr]], [[cxr, cyr - 0.18], [cxr, cyr + 0.18]]]);
+                }
                 figures.push({ x: fx, y: fy, r });
             });
         }
