@@ -162,24 +162,43 @@ vec3 gear(vec2 q, float R, float teeth, float spokes, float ang, float aa) {
     return vec3(cover, bevel, r);
 }
 
-vec3 metal(vec3 base, vec2 q, vec3 g, float ang) {
-    float a = atan(q.y, q.x);
-    // 车削刷纹 + 斜上方来的高光（随角度变）
-    // 车削纹很细，比一个像素还密的部分淡掉（不然会混叠成一圈圈木纹）
-    float fw = fwidth(g.z * 900.0);
-    float brushed = 1.0 + 0.06 * (sin(g.z * 900.0 + hash12(vec2(floor(g.z * 900.0), 1.0)) * 6.0) * (1.0 - smoothstep(0.6, 1.6, fw)) - 0.5 * smoothstep(0.6, 1.6, fw));
-    float aniso = 0.55 + 0.45 * pow(abs(cos(a - 2.3)), 6.0);
-    vec3 c = base * brushed * (0.55 + aniso * 0.6);
-    c += vec3(1.0, 0.95, 0.85) * g.y * 0.22 * (0.4 + 0.6 * max(0.0, cos(a - 2.3)));
-    c -= base * g.y * 0.25 * max(0.0, cos(a + 0.8));
-    return c;
+// 摄影棚：金属看起来是什么样，几乎全看它反射出什么。暗的房间（上面略亮）、左上一面大柔光箱、
+// 右边一根竖的细灯条、地上一点暖的反光。r 是反射方向（z 朝着看的人）。
+float studio(vec3 r) {
+    // 浅色主题是一间亮的房间：暗处也不黑
+    float room = mix(0.07, 0.3, uLight) + mix(0.07, 0.12, uLight) * smoothstep(-0.6, 0.9, r.y);
+    float box = smoothstep(0.6, 0.93, dot(r, vec3(-0.5, 0.55, 0.67)));
+    float strip = exp(-((r.x - 0.58) * (r.x - 0.58)) / 0.004) * smoothstep(-0.5, 0.3, r.y) * step(0.0, r.z);
+    float floorWarm = smoothstep(0.1, -0.7, r.y) * 0.05;
+    return room + box * 1.9 + strip * 0.85 + floorWarm;
 }
 
-// 齿轮按立体的板子打光：边上一圈倒角（法线由覆盖率的梯度算），左上来的光打亮朝光的倒角、背光的压暗，倒角上有一道高光。
-// 齿、辐条、轮缘、轴心的每条边都有。梯度只在倒角那一圈里差分（里面、外面都是平的，不多算）。返回 (颜色, 覆盖)
-vec4 gearLit(vec3 base, vec2 q, float R, float teeth, float spokes, float ang, float aa) {
+// 金属：F0 是金属自己的颜色（黄铜偏金、钢偏冷灰），n 是法线，sp 是屏幕上离画面中心多远（看的方向跟着变）。
+// 车削纹（径向的细沟）让反射沿切向抹开：顺着切向取三下平均，高光就成了一道道放射的亮带，齿轮转起来亮带不跟着转。
+vec3 shadeMetal(vec3 F0, vec3 n, vec2 radial, vec2 sp, float spread) {
+    vec3 V = normalize(vec3(-sp * 0.5, 1.0));
+    vec3 Rf = reflect(-V, n);
+    vec3 t = vec3(-radial.y, radial.x, 0.0);
+    float e = (studio(normalize(Rf - t * spread)) + studio(Rf) + studio(normalize(Rf + t * spread))) / 3.0;
+    float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
+    return (F0 + (1.0 - F0) * fres) * e;
+}
+
+// 同上，但不抹开（抛光的小件：宝石金套、秒针），只取一下
+vec3 shadePolished(vec3 F0, vec3 n, vec2 sp) {
+    vec3 V = normalize(vec3(-sp * 0.5, 1.0));
+    float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
+    return (F0 + (1.0 - F0) * fres) * studio(reflect(-V, n));
+}
+
+// 齿轮是一块有厚度的金属板：顶面（略微拱起、车削纹、倒角）＋往右下露出来的一条侧壁。
+// 倒角的法线由覆盖率的梯度算，只在倒角那一圈里差分。返回 (颜色, 覆盖)
+vec4 gearLit(vec3 F0, vec2 q, float R, float teeth, float spokes, float ang, float aa, vec2 sp, float thick) {
+    vec2 side = vec2(0.42, -0.9) * thick;
     vec3 g = gear(q, R, teeth, spokes, ang, aa);
-    if (g.x <= 0.0) return vec4(0.0);
+    float wall = 0.0;
+    if (g.x < 1.0) wall = gear(q + side, R, teeth, spokes, ang, aa).x * (1.0 - g.x);
+    if (g.x <= 0.0 && wall <= 0.0) return vec4(0.0);
     const float W = 0.0055;      // 倒角宽
     const float E = 0.0025;
     float c0 = 1.0;
@@ -189,16 +208,21 @@ vec4 gearLit(vec3 base, vec2 q, float R, float teeth, float spokes, float ang, f
         grad = vec2(gear(q + vec2(E, 0.0), R, teeth, spokes, ang, W).x - c0,
                     gear(q + vec2(0.0, E), R, teeth, spokes, ang, W).x - c0) / E;
     }
-    vec3 n = normalize(vec3(-grad * 0.007, 1.0));
-    float slope = smoothstep(0.02, 0.2, 1.0 - n.z);
-    const vec3 L = vec3(-0.5, 0.62, 0.6);
-    vec3 l = normalize(L);
-    float diff = dot(n, l);
-    float spec = pow(max(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0), 36.0);
-    vec3 c = metal(base, q, vec3(g.x, 0.0, g.z), ang);
-    c *= mix(1.0, 0.45 + max(diff, 0.0) * 0.95, slope);
-    c += vec3(1.0, 0.95, 0.86) * spec * slope * 1.0;
-    return vec4(c, g.x);
+    float r = max(g.z, 1e-4);
+    vec2 radial = q / r;
+    // 顶面微微拱起（中间高）：反射在面上慢慢挪，不是一块平的色
+    vec3 n = normalize(vec3(-grad * 0.009 + radial * (r / R) * 0.16, 1.0));
+    // 车削纹：一圈圈的细沟，每圈的深浅不一样；比一个像素还密的部分淡掉（不然会混叠成木纹）
+    float fw = fwidth(r * 900.0);
+    float rings = (hash12(vec2(floor(r * 900.0), 3.0)) - 0.5) * (1.0 - smoothstep(0.6, 1.6, fw));
+    vec3 top = shadeMetal(F0, n, radial, sp, 0.28) * (1.0 + rings * 0.3);
+    // 倒角上一道窄的高光（抛光的边比面亮）
+    float slope = smoothstep(0.02, 0.2, 1.0 - n.z + length(grad) * 0.0);
+    top += F0 * pow(max(dot(n, normalize(vec3(-0.45, 0.55, 1.0))), 0.0), 60.0) * slope * 1.4;
+    // 侧壁：朝右下，反射的是暗的地面和房间，上沿贴着顶面的地方亮一线
+    vec3 wallCol = F0 * (0.06 + 0.1 * studio(normalize(vec3(0.4, -0.75, 0.55))));
+    vec3 c = mix(wallCol, top, g.x);
+    return vec4(c, max(g.x, wall));
 }
 
 // 底板上的鱼鳞纹（一圈圈压出来的小圆，后压的盖住先压的），只在齿轮底下那块板上，很淡
@@ -324,26 +348,53 @@ void main() {
     // 每层浮在表盘上方不同的高度：表盘一倾斜，层和层、层和落影就错开（主齿轮最高）
     vec2 lift = vec2(sin(uTilt.x), -sin(uTilt.y)) * uParallax;
     vec2 L1 = lift * 0.075, L2 = lift * 0.05, L3 = lift * 0.032;
-    vec4 g3 = gearLit(uSteel, p + L3 - c3, 0.095, 20.0, 3.0, a3, aa);
+    vec2 sp = p - vec2(aspect * 0.5, 0.5);
+    vec4 g3 = gearLit(uSteel, p + L3 - c3, 0.095, 20.0, 3.0, a3, aa, sp, 0.004);
     col = mix(col, g3.rgb, g3.a);
-    vec4 g2 = gearLit(uBrass * 0.92, p + L2 - c2, 0.17, 37.0, 4.0, a2, aa);
+    vec4 g2 = gearLit(uBrass * vec3(0.97, 0.95, 0.92), p + L2 - c2, 0.17, 37.0, 4.0, a2, aa, sp, 0.005);
     col = mix(col, g2.rgb, g2.a);
-    vec4 g1 = gearLit(uBrass, p + L1 - hubC, 0.33, 72.0, 5.0, uGear, aa);
+    vec4 g1 = gearLit(uBrass, p + L1 - hubC, 0.33, 72.0, 5.0, uGear, aa, sp, 0.007);
     col = mix(col, g1.rgb, g1.a);
 
-    // 轴心宝石：低音时亮
+    // 轴心宝石：嵌在一圈抛光的金套（chaton）里的红宝石轴承，中间一个穿轴的小孔。
+    // 宝石是一颗低的圆顶：左上来的光在顶上一点白的高光，光穿过去在右下那边透出来（里面亮），边上暗。低音时亮。
     for (int i = 0; i < 3; i++) {
         vec2 c = i == 0 ? hubC - L1 - lift * 0.012 : (i == 1 ? c2 - L2 : c3 - L3);
-        float rr = i == 0 ? 0.03 : 0.017;
-        float d = length(p - c);
-        vec3 ruby = vec3(0.62, 0.06, 0.1);
+        float rr = i == 0 ? 0.026 : 0.015;
+        vec2 dv = p - c;
+        float d = length(dv);
+        if (d > rr * 2.4) continue;
+        vec2 dir = dv / max(d, 1e-5);
+        // 金套：一圈拱起的抛光环，里沿压一道暗线
+        float rc = rr * 1.6;
+        float chaton = (1.0 - smoothstep(rc - aa, rc, d)) * smoothstep(rr - aa, rr, d);
+        float u = (d - (rr + rc) * 0.5) / ((rc - rr) * 0.5);
+        vec3 nc = normalize(vec3(dir * u * 0.9, 1.0));
+        vec3 gold = shadePolished(uBrass, nc, sp);
+        gold *= 1.0 - (1.0 - smoothstep(0.0, aa * 2.0, d - rr)) * 0.6;
+        col = mix(col, gold, chaton);
+        // 宝石
+        vec2 dq = dv / rr;
         float body = 1.0 - smoothstep(rr - aa, rr, d);
-        col = mix(col, ruby * (0.7 + 0.6 * (1.0 - d / rr)) + vec3(1.0, 0.75, 0.7) * smoothstep(rr * 0.5, 0.0, length(p - c - vec2(-0.3, 0.35) * rr)) * 0.6, body);
-        col += vec3(1.0, 0.25, 0.25) * uGlow * exp(-d * d / (rr * rr * 6.0)) * 0.35;
+        if (body > 0.0) {
+            float z = sqrt(max(0.0, 1.0 - dot(dq, dq)));
+            vec3 nj = normalize(vec3(dq * 0.75, z + 0.35));
+            vec3 V = normalize(vec3(-sp * 0.5, 1.0));
+            float fres = 0.05 + 0.95 * pow(1.0 - max(dot(nj, V), 0.0), 5.0);
+            float glow = smoothstep(-0.3, 0.9, dot(dq, vec2(0.55, -0.6)));
+            vec3 ruby = vec3(0.55, 0.03, 0.07) * (0.22 + 1.1 * glow) + vec3(0.9, 0.12, 0.12) * glow * glow * 0.35;
+            ruby *= 1.0 - smoothstep(0.7, 1.0, length(dq)) * 0.55;
+            vec3 jc = mix(ruby, vec3(1.0, 0.92, 0.9) * studio(reflect(-V, nj)), fres);
+            // 穿轴的小孔：钢的轴尖从孔里露出来
+            float hole = 1.0 - smoothstep(0.17 - aa / rr, 0.17, length(dq));
+            jc = mix(jc, uSteel * (0.35 + 0.5 * smoothstep(0.17, -0.1, length(dq + vec2(0.06, -0.06)))), hole);
+            col = mix(col, jc, body);
+        }
+        col += vec3(1.0, 0.25, 0.25) * uGlow * exp(-d * d / (rr * rr * 6.0)) * 0.3;
         if (i == 0 && uBeat > 0.01) {
-            vec2 dq = (p - c) / rr;
-            float star = exp(-abs(dq.x) * 3.0) * exp(-abs(dq.y) * 0.18) + exp(-abs(dq.y) * 3.0) * exp(-abs(dq.x) * 0.18);
-            col += vec3(1.0, 0.55, 0.5) * (star * 0.5 + exp(-dot(dq, dq) * 0.4) * 0.8) * uBeat;
+            vec2 sq = dv / rr;
+            float star = exp(-abs(sq.x) * 3.0) * exp(-abs(sq.y) * 0.18) + exp(-abs(sq.y) * 3.0) * exp(-abs(sq.x) * 0.18);
+            col += vec3(1.0, 0.55, 0.5) * (star * 0.5 + exp(-dot(sq, sq) * 0.4) * 0.8) * uBeat;
         }
     }
 
@@ -367,7 +418,8 @@ void main() {
             float spring = (1.0 - smoothstep(0.0009, 0.0009 + aa, abs(r - sr))) * step(r, R * 0.72) * step(0.008, r);
             // 摆轮边上的螺钉
             float screws = (1.0 - smoothstep(0.0045, 0.0045 + aa, length(vec2(abs(fract(a * 8.0 / (2.0 * PI) + 0.5) - 0.5) * 2.0 * PI / 8.0 * R, r - R - 0.006)))) * step(R - 0.004, r);
-            vec3 steel = metal(uSteel, q, vec3(1.0, 0.0, r), swing);
+            vec2 rq = q / max(r, 1e-4);
+            vec3 steel = shadeMetal(uSteel, normalize(vec3(rq * 0.35 * (r - R) / 0.01 * ring, 1.0)), rq, p - vec2(aspect * 0.5, 0.5), 0.2);
             col = mix(col, steel, clamp(ring + spoke * 0.9 + screws, 0.0, 1.0));
             col = mix(col, mix(uSteel, uAccent, 0.35) * 1.2, spring * 0.8);
             float jewel = 1.0 - smoothstep(0.006, 0.006 + aa, r);
@@ -375,14 +427,27 @@ void main() {
         }
     }
 
-    // 秒针：从轴心伸到刻度环，跟播放时间走
+    // 秒针：从轴心伸到刻度环，跟播放时间走。一根细长的抛光针：根部粗、往针尖收细，尾巴上一个配重圆，
+    // 中间一道棱（一侧亮一侧暗），底下压一道淡的落影
     if (uSecondHand > 0.5) {
         vec2 q = p + L1 + lift * 0.012 - hubC;   // 秒针装在宝石上面，跟着最高那层错开
         vec2 dir = vec2(cos(uSecond), sin(uSecond));
-        float along = dot(q, dir);
-        float perp = abs(dir.x * q.y - dir.y * q.x);
-        float hand = (1.0 - smoothstep(0.0016, 0.0016 + aa, perp)) * step(-0.04, along) * step(along, 0.36);
-        col = mix(col, uAccent, hand * 0.9);
+        vec2 shadowQ = q - vec2(0.006, -0.009);
+        for (int pass = 0; pass < 2; pass++) {
+            vec2 hq = pass == 0 ? shadowQ : q;
+            float along = dot(hq, dir);
+            float signed = dir.x * hq.y - dir.y * hq.x;
+            float wHalf = mix(0.0034, 0.0009, clamp(along / 0.36, 0.0, 1.0));
+            float hand = (1.0 - smoothstep(wHalf, wHalf + aa, abs(signed))) * step(-0.05, along) * step(along, 0.36);
+            float tail = 1.0 - smoothstep(0.0075 - aa, 0.0075, length(hq + dir * 0.05));
+            float m = max(hand, tail);
+            if (pass == 0) { col *= 1.0 - m * mix(0.4, 0.2, uLight); continue; }
+            if (m <= 0.0) break;
+            float ridge = clamp(signed / max(wHalf, 1e-4), -1.0, 1.0);
+            vec3 nh = normalize(vec3(-dir.y * ridge * 0.7, dir.x * ridge * 0.7, 1.0));
+            vec3 hc = shadePolished(uAccent, nh, sp) * 1.25 + uAccent * 0.12;
+            col = mix(col, hc, m);
+        }
     }
 
     // 歌词扇面：每句一根，从 R0 向外；当前句在三点钟方向
@@ -571,8 +636,8 @@ void main() {
                 field: light ? mixRgb(bg, [0.93, 0.9, 0.83], 0.5) : mixRgb(bg, [0.05, 0.045, 0.04], 0.55),
                 ink: hexRgb(p.ink, light ? [0.1, 0.12, 0.12] : [0.95, 0.94, 0.9]),
                 accent: hexRgb(p.accent, [0.95, 0.66, 0]),
-                brass: light ? [0.72, 0.55, 0.3] : [0.66, 0.5, 0.28],
-                steel: light ? [0.6, 0.62, 0.64] : [0.5, 0.52, 0.55]
+                brass: [0.94, 0.75, 0.4],
+                steel: [0.62, 0.64, 0.67]
             };
             mode.root.style.setProperty('--clockwork-field', `rgb(${colours.field.map(v => Math.round(v * 255)).join(',')})`);
         };
