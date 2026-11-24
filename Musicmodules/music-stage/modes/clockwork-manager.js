@@ -54,6 +54,7 @@
         return 1 + (c + 1) * y * y * y + c * y * y;
     };
     // 连续的「转到第几句」：整数部分是当前句，换句后 TURN 秒内从上一句转过来
+    const smooth01 = (x) => { const k = clamp(x, 0, 1); return k * k * (3 - 2 * k); };
     const wheelAt = (sung, t) => {
         const index = lineIndexAt(sung, t);
         if (index < 0) return { index, turned: -1 };
@@ -99,6 +100,7 @@ uniform vec2 uShake;
 uniform float uDrift;     // 视差：转过的句数
 uniform vec2 uTilt;       // 表盘透视：绕竖轴、横轴的倾角
 uniform sampler2D uSmokeTex;
+uniform float uGap;      // 当前句下面让出来给翻译的角度
 out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -332,8 +334,13 @@ void main() {
         vec2 q = p - hubC;
         float r = length(q);
         float a = atan(q.y, q.x) - uTurn;
+        // 翻译要贴在当前句下面：当前句以下的几根整体往下多转 uGap，让出一条缝（缝里不画字）。
+        float aRaw = atan(q.y, q.x);
+        float cut = -STEP * 0.42;
+        float gapZone = step(cut - uGap, aRaw) * step(aRaw, cut);
+        a += uGap * step(aRaw, cut - uGap);
         float k = floor(-a / STEP + 0.5);
-        if (abs(k) <= 3.0 && r > R0 - 0.02) {
+        if (abs(k) <= 3.0 && r > R0 - 0.02 && (uGap <= 0.0 || gapZone < 0.5)) {
             float la = a + k * STEP;
             float along = r * cos(la) - R0;
             float perp = r * sin(la);
@@ -672,16 +679,46 @@ void main() {
             gl.uniform1f(u.uDrift, turned);
             // 镜头随歌慢慢换角度：每句转一格时表盘的倾角也跟着漂
             gl.uniform2f(u.uTilt, tiltX, tiltY);
+            // 转动时缝先合上，停稳后再慢慢让开
+            const since = index >= 0 ? t - sung[index].startTime : 0;
+            const open = s.reducedMotion ? 1 : (1 - smooth01(since / 0.12)) + smooth01((since - TURN * 0.8) / (TURN * 0.35));
+            const openK = clamp(open, 0, 1);
+            gl.uniform1f(u.uGap, translation.hidden ? 0 : STEP * 0.38 * openK);
+            const op = (Math.round(smooth01((since - TURN * 0.8) / (TURN * 0.35)) * 10) / 10).toString();
+            if (translation.style.opacity !== op) translation.style.opacity = op;
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
+            placeTranslation(tiltX, tiltY, s.fontScale);
             scheduleNext(index);
+        };
+
+        // 翻译贴在当前句下面（跟着表盘的透视走），只在位置变了半个像素以上时才写样式
+        let placed = '';
+        const placeTranslation = (tiltX, tiltY, fontScale) => {
+            const W = mode.root.clientWidth || 0, H = mode.root.clientHeight || 0;
+            if (!W || !H || translation.hidden) return;
+            const aspect = W / H, D = 1.6;
+            const hubX = Math.min(0.3, aspect * 0.16);
+            // 表盘平面上的点 → 屏幕（dialPoint 的逆）
+            const toScreen = (px, py) => {
+                const X2 = px - aspect / 2, Y2 = py - 0.5;
+                const cx = Math.cos(tiltY), sx = Math.sin(tiltY), cy = Math.cos(tiltX), sy = Math.sin(tiltX);
+                const Y = Y2 * D * cx / (D + Y2 * sx);
+                const X = X2 * D / (D + Y2 * sx);
+                return [(X * D * cy / (D + X * sy) + aspect / 2) * H, (1 - (Y * D / (D + X * sy) + 0.5)) * H];
+            };
+            const [x, y] = toScreen(hubX + 0.425, 0.5 - 0.052 * fontScale * 0.62);
+            const key = `${Math.round(x * 2)}|${Math.round(y * 2)}`;
+            if (key === placed) return;
+            placed = key;
+            translation.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
         };
 
         const updateOverlay = (frame) => {
             const next = `时计 · ${Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
             const text = settings().showTranslation ? resolveSupplementalText(frame.activeLine) : '';
-            if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; }
+            if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; placed = ''; }
         };
 
         mode.updateFrame = (frame) => {

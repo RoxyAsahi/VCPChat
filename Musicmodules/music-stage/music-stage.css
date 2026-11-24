@@ -3742,17 +3742,19 @@ body.music-stage-active #custom-title-bar,
     pointer-events: none;
 }
 .music-stage-mode-clockwork > .clockwork-translation {
+    /* 位置由脚本按当前句算好（transform），贴在那句下面 */
     position: absolute;
-    left: 50%;
-    bottom: max(calc(16% + 12px), 122px);
+    left: 0;
+    top: 0;
     z-index: 2;
-    max-width: min(76%, 1000px);
+    max-width: min(46%, 640px);
     margin: 0;
-    transform: translateX(-50%);
-    color: color-mix(in srgb, var(--stage-ink) 66%, transparent);
-    font-size: 15px;
-    line-height: 1.5;
-    text-align: center;
+    transform: translate(-200vw, 0);
+    color: color-mix(in srgb, var(--stage-ink) 52%, transparent);
+    font-size: clamp(12px, 1.05vw, 15px);
+    letter-spacing: 0.02em;
+    line-height: 1.45;
+    text-align: left;
     white-space: pre-line;
     text-shadow: none;
     pointer-events: none;
