@@ -726,6 +726,24 @@
         const scene = Figures.SCENES[ctx.scene] || Figures.SCENES.notebook;
         const backdrop = pickWeighted(random, scene.backdrops);
         main.globalCompositeOperation = 'lighter';
+        // 纸底：一层很淡的格子（信笺、乐谱是横线），压在所有纹样下面，画面暗处不再是空的。
+        // 单独一串随机数：加这一层不改别的东西的位置
+        if (backdrop !== 'graph' && backdrop !== 'ruled') {
+            const g = seededRandom(`inkdraft:ground:${trackKey}:${index}`);
+            const lined = ctx.scene === 'letters' || ctx.scene === 'score';
+            const step = H / (lined ? 14 : 16 + Math.floor(g() * 6));
+            main.save();
+            main.translate(W / 2, H / 2);
+            main.rotate((g() - 0.5) * 0.08);
+            // 线要比网点格宽，网点才连成一道虚线格；太细会被网点漏掉
+            main.strokeStyle = 'rgb(0,0,68)';
+            main.lineWidth = Math.max(2, H * 0.0036);
+            main.beginPath();
+            for (let y = -H; y < H; y += step) { main.moveTo(-W, y); main.lineTo(W, y); }
+            if (!lined) for (let x = -W; x < W; x += step) { main.moveTo(x, -H); main.lineTo(x, H); }
+            main.stroke();
+            main.restore();
+        }
         if (backdrop === 'band') {
             const y = (textBox ? (textBox[1] + textBox[3]) / 2 : H / 2) + (random() - 0.5) * H * 0.2;
             // 色带：一道边是直的、略斜的网点带（版面里压的那一道灰），不是渐变的雾
@@ -860,8 +878,8 @@
             const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.026, toneLevel: 0.64, soft: H * 0.004 });
             Figures.drawFigure(tonePen, scene.tone[Math.floor(random() * scene.tone.length)],
                 wideC[0], wideC[1], H * (0.36 + random() * 0.1), (random() - 0.5) * 0.4, random);
-            // 一半的段再垫一张小一点的，偏到一边、露一半在画外
-            if (random() < 0.5) {
+            // 多数段再垫一张小一点的，偏到一边、露一半在画外
+            if (random() < 0.75) {
                 const side = random() < 0.5 ? -1 : 1;
                 Figures.drawFigure(tonePen, scene.tone[Math.floor(random() * scene.tone.length)],
                     wideC[0] + side * W * (0.3 + random() * 0.12), wideC[1] + (random() - 0.5) * H * 0.4, H * (0.22 + random() * 0.08), random() * TAU, random);
