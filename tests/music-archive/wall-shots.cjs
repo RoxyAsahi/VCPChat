@@ -81,6 +81,15 @@ const FAKE = ({ n, light, covers }) => {
   check('有封面格', d.wall.tiles > 20, 'tiles=' + d.wall.tiles);
   await page.waitForTimeout(1500);
   await shot(tag + '-1-wall');
+  {
+    // 悬停一张中大卡：快捷「播放」「更多」两个键出现
+    const hv = await page.evaluate(() => { const t = [...document.querySelectorAll('.archive-wall:not(.aw-table) .aw-tile.aw-l, .archive-wall:not(.aw-table) .aw-tile.aw-m')].map((x) => x.getBoundingClientRect()).find((b) => b.left > 420 && b.top > 120 && b.bottom < 700); return t ? { x: t.left + t.width / 2, y: t.top + t.height / 2 } : null; });
+    if (hv) { await page.mouse.move(hv.x, hv.y); await page.waitForTimeout(400); }
+    const qa = await page.evaluate(() => { const t = document.querySelector('.archive-wall:not(.aw-table) .aw-tile:hover'); if (!t) return null; return { cls: t.className, q: getComputedStyle(t.querySelector('.aw-q')).opacity, m: getComputedStyle(t.querySelector('.aw-qm')).opacity }; });
+    await shot(tag + '-1b-hover');
+    check('悬停快捷动作', qa && +qa.q > 0.9 && +qa.m > 0.9, JSON.stringify(qa));
+    await page.mouse.move(5, 5);
+  }
 
   // 点一张封面：展开
   const box = await page.evaluate(() => {

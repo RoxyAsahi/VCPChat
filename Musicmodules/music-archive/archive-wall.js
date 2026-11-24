@@ -604,7 +604,7 @@
             t.className = 'aw-tile';
             t.setAttribute('role', 'gridcell');
             t.innerHTML = '<div class="aw-in"><div class="aw-art"><img alt="" draggable="false" decoding="async"><span class="aw-blank"></span></div><i class="aw-shade"></i><span class="aw-no"></span><div class="aw-cap"><b></b><span></span></div>'
-                + '<button type="button" class="aw-q" data-wall="quick" tabindex="-1" aria-label="播放"></button></div>';
+                + '<button type="button" class="aw-q" data-wall="quick" tabindex="-1" aria-label="播放"></button><button type="button" class="aw-qm" data-wall="quickmenu" tabindex="-1" aria-label="更多操作"></button></div>';
             const inner = t.firstChild;
             return {
                 el: t, inner, img: inner.querySelector('img'), blank: inner.querySelector('.aw-blank'),
@@ -967,6 +967,11 @@
                     locateBtn.classList.remove('is-ping');
                     void locateBtn.offsetWidth;
                     locateBtn.classList.add('is-ping');
+                    return;
+                }
+                if (btn.dataset.wall === 'quickmenu') {
+                    const q = tileOf(btn);
+                    if (q) { if (!st.focus || st.focus.id !== q.id) focusInstance(q); const r = btn.getBoundingClientRect(); opts.menu(st.ids[q.item], r.left, r.bottom + 6, btn); }
                     return;
                 }
                 if (btn.dataset.wall === 'quick') {

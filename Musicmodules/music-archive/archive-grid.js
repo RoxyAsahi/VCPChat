@@ -121,7 +121,7 @@
             const t = document.createElement('div');
             t.className = 'ag-cell';
             t.setAttribute('role', 'gridcell');
-            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><span class="ag-no"></span><button type="button" class="ag-play" data-grid="play" title="播放" aria-label="播放"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
+            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><span class="ag-no"></span><button type="button" class="ag-play" data-grid="play" title="播放" aria-label="播放"></button><button type="button" class="ag-more" data-grid="more" title="更多操作" aria-label="更多操作"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
             return { el: t, img: t.querySelector('img'), blank: t.querySelector('.ag-blank'), no: t.querySelector('.ag-no'), title: t.querySelector('.ag-t'), sub: t.querySelector('.ag-a'), idx: -1, src: null, cls: '' };
         };
         const headNode = (s) => {
@@ -325,6 +325,8 @@
             const i = cellOf(e.target);
             if (i < 0) return;
             if (e.target.closest('[data-grid="play"]')) { e.stopPropagation(); opts.play(i, {}); return; }
+            const more = e.target.closest('[data-grid="more"]');
+            if (more) { e.stopPropagation(); opts.pick(i); const r = more.getBoundingClientRect(); opts.menu(i, r.left, r.bottom + 6, more); return; }
             const now = performance.now();
             if (last.i === i && now - last.t < 380) { opts.play(i, {}); last = { i: -1, t: 0 }; return; }
             last = { i, t: now };

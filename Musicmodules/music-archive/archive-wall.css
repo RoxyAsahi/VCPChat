@@ -210,9 +210,9 @@
     cursor: pointer;
 }
 #music-archive-view .aw-q::before { content: ""; position: absolute; left: 12px; top: 9px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent #111; }
-.aw-tile:not(.aw-s):not(.is-open):hover .aw-q { opacity: 1; transform: none; }
+#music-archive-view .aw-tile:not(.aw-s):not(.is-open):hover .aw-q { opacity: 1; transform: none; }
 #music-archive-view .aw-q:hover { background: var(--ar-accent); }
-.archive-wall.is-grabbing .aw-q { opacity: 0 !important; }
+#music-archive-view .archive-wall.is-grabbing .aw-q { opacity: 0 !important; }
 
 /* 展开的大卡：封面铺满，左边和底下压暗，超大标题压在上面，控制条稍晚一点升上来 */
 .aw-tile.is-open .aw-shade { background: linear-gradient(90deg, rgba(0, 0, 0, .58) 0, rgba(0, 0, 0, .18) 46%, rgba(0, 0, 0, 0) 70%), linear-gradient(0deg, rgba(0, 0, 0, .82) 0, rgba(0, 0, 0, .44) 34%, rgba(0, 0, 0, 0) 66%); opacity: 1; }
@@ -367,7 +367,7 @@ body.music-reduce-motion .ag-cell > *, body.music-reduce-motion .ag-head > * { a
 /* 悬停时右下角圆形播放键 */
 #music-archive-view .ag-play { position: absolute; right: 9px; bottom: 9px; width: 34px; height: 34px; border-radius: 50%; background: rgba(var(--ar-paper-rgb), .94); box-shadow: 0 4px 14px rgba(0, 0, 0, .22); opacity: 0; transform: translateY(6px); transition: opacity .16s, transform .16s var(--mt-ease, ease); pointer-events: auto; }
 #music-archive-view .ag-play::before { content: ""; position: absolute; left: 13px; top: 10px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent var(--ar-ink); }
-.ag-cell:hover .ag-play, .ag-cell.is-focus .ag-play { opacity: 1; transform: none; }
+#music-archive-view .ag-cell:hover .ag-play, #music-archive-view .ag-cell.is-focus .ag-play { opacity: 1; transform: none; }
 #music-archive-view .ag-play:hover { background: var(--ar-ink); }
 #music-archive-view .ag-play:hover::before { border-left-color: var(--ar-paper); }
 .ag-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ar-muted); font-size: 15px; }
@@ -533,3 +533,26 @@ body.light-theme .archive-wall .aw-in { transition: transform .22s var(--mt-ease
 body.light-theme .aw-world.aw-has-open .aw-tile:not(.is-open):not(:hover) .aw-in { filter: saturate(.72) brightness(1.04); opacity: .5; }
 body.light-theme .archive-wall.aw-dim .aw-tile:not(.is-playing) .aw-in { filter: saturate(.45) brightness(1.08); opacity: .24; transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter 1.6s ease, opacity 1.6s ease; }
 body.light-theme .aw-tile.is-open .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 18%, transparent), 0 36px 90px rgba(60, 40, 20, .26), 0 6px 18px rgba(60, 40, 20, .12); }
+
+/* 悬停快捷动作第二个键：「更多」（三个点），在播放键左边；网格同样 */
+#music-archive-view .aw-qm, #music-archive-view .ag-more {
+    position: absolute;
+    z-index: 4;
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, .46);
+    background-image: radial-gradient(circle at calc(50% - 7px) 50%, #fff 0 1.7px, transparent 2.2px), radial-gradient(circle at 50% 50%, #fff 0 1.7px, transparent 2.2px), radial-gradient(circle at calc(50% + 7px) 50%, #fff 0 1.7px, transparent 2.2px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .24);
+    opacity: 0;
+    transform: scale(.8);
+    transition: opacity .16s, transform .2s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)), background-color .15s;
+    cursor: pointer;
+}
+#music-archive-view .aw-qm { right: 48px; top: 9px; }
+#music-archive-view .ag-more { right: 49px; bottom: 9px; width: 34px; height: 34px; }
+#music-archive-view .aw-tile:not(.aw-s):not(.is-open):hover .aw-qm, #music-archive-view .ag-cell:hover .ag-more { opacity: 1; transform: none; }
+#music-archive-view .aw-qm:hover, #music-archive-view .ag-more:hover { background-color: rgba(0, 0, 0, .72); }
+#music-archive-view .archive-wall.is-grabbing .aw-qm { opacity: 0 !important; }
