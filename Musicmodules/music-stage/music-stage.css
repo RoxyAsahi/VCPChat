@@ -4471,8 +4471,9 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
     z-index: 2;
     left: 58%;
     right: max(5%, 40px);
-    top: 16%;
-    bottom: 24%;
+    top: 14%;
+    /* 留出下面的展签卡，歌词不压在卡上 */
+    bottom: max(calc(12% + 112px), 216px);
     overflow: hidden;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 72%, transparent 100%);
     mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 72%, transparent 100%);
@@ -4484,14 +4485,14 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
     gap: 1.1em;
     transition: transform 0.75s cubic-bezier(0.25, 0.8, 0.25, 1);
     font-weight: 600;
-    font-size: calc(clamp(17px, 1.35vw, 24px) * var(--impression-scale, 1));
+    font-size: calc(clamp(19px, 1.7vw, 30px) * var(--impression-scale, 1));
     color: var(--stage-ink);
 }
 .impression-line {
     --d: 3;
     /* 还没唱的：近处 0.62，往远每句淡 0.12；糊得也越来越多 */
     opacity: max(0.2, calc(0.74 - var(--d) * 0.12));
-    font-size: 0.92em;
+    font-size: 0.82em;
     transition: opacity 0.6s ease, font-size 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.6s ease;
     filter: blur(calc((var(--d) - 1) * 0.55px));
 }
@@ -4502,7 +4503,7 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
 }
 .impression-line.is-current {
     opacity: 1;
-    font-size: 1.36em;
+    font-size: 1.26em;
     filter: none;
 }
 .impression-text {
@@ -4527,12 +4528,18 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
     color: color-mix(in srgb, var(--stage-accent) 55%, var(--stage-ink));
 }
 .impression-tr {
-    margin-top: 0.3em;
-    font-size: 0.62em;
+    /* 只有当前句带翻译（每句都带太碎）；收起时高度过渡，整列不跳 */
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.5s ease, margin-top 0.6s ease;
+    margin-top: 0;
+    font-size: 0.6em;
     font-style: italic;
     letter-spacing: 0.02em;
     color: color-mix(in srgb, var(--stage-ink) 60%, transparent);
 }
+.impression-line.is-current .impression-tr { max-height: 4.5em; opacity: 1; margin-top: 0.45em; }
 .impression-label {
     position: absolute;
     z-index: 2;
