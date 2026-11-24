@@ -18,7 +18,6 @@
 
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
-    const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const MAX_BEAMS = 5;
     const MAX_SPARKS = 6;
     const RIGS = Object.freeze(['zenith', 'lattice', 'prism', 'stage', 'caustic', 'motes']);
@@ -176,15 +175,14 @@ uniform vec3 uField;
 uniform vec3 uInk;
 uniform vec3 uAccent;
 uniform float uWaiting;
-uniform float uGrain;
-uniform float uGrainStep;
 uniform vec4 uSpark[${MAX_SPARKS}];  // 屏幕 uv、大小、强度：唱到的字边上闪一颗星芒
 uniform int uSparkCount;
 uniform vec4 uFlare;     // 光源屏幕位置、强度、闪白
 uniform float uBokeh;
 uniform float uFocus;     // 焦点拉：新句从虚到实（0 = 实）
 uniform float uStarfall;  // 片头星落
-out vec4 outColor;
+uniform float uLodBias;   // 字形纹理按屏幕像素，比原来 1600 宽多出来的 mip 级数
+${Utils.SPLIT_OUT_GLSL}
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -280,37 +278,39 @@ void main() {
         col += (uInk * 0.05 + light * 0.5) * bg;
     }
 
-    // 字：纹理坐标（y 朝下），整句慢慢推近
+    // 字：纹理坐标（y 朝下），整句慢慢推近。这一遍按低分辨率算三种颜色：没有字、被这一句的字盖住、
+    // 被上一句的字盖住；字的覆盖率在合成那一遍按屏幕像素重新取样
     vec2 tc = vec2(uv.x, 1.0 - uv.y);
     vec2 t1 = (tc - 0.5) / uZoom + 0.5;
     float lit = clamp(total, 0.0, 1.6);
+    vec3 cText, cPrev;
     {
-        vec4 tx = textureLod(uText, t1, uFocus * 4.5);
-        tx.r *= 1.0 - uFocus * 0.7;
-        float halo = textureLod(uText, t1, 3.5 + uFocus).r;
+        float halo = textureLod(uText, t1, 3.5 + uFocus + uLodBias).r;
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         float reveal = glyphReveal(gid);
         // 虚着的时候字框里没有清楚的笔画，按字框上色会糊成一块金色方块：对焦完成前不上唱到的颜色
         float singing = glyphSinging(gid) * (1.0 - uFocus) * (1.0 - uFocus);
-        float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.8 + lit * 0.5));
+        float body = uWaiting * (1.0 - reveal) + reveal * (0.8 + lit * 0.5);
         vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.3), clamp(lit, 0.0, 1.0));
         // 字压在光上要读得清：字周围的光和烟压暗一圈（光越亮压得越多），字本身比光亮
         col *= 1.0 - clamp(halo * (0.25 + lit * 0.35), 0.0, 0.6);
-        col = mix(col, ink * (0.82 + lit * 0.75), clamp(body, 0.0, 1.0));
-        col += uAccent * tx.r * singing * 0.35;
-        col += (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55;
         // 唱过的字自己也发一点白光（光外也看得出字在亮），正在唱的那个字光晕更大
-        col += uInk * halo * reveal * 0.16 + uAccent * textureLod(uText, t1, 4.5).r * singing * 0.5;
+        vec3 glowAdd = (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55
+            + uInk * halo * reveal * 0.16 + uAccent * textureLod(uText, t1, 4.5 + uLodBias).r * singing * 0.5;
+        cText = mix(col, ink * (0.82 + lit * 0.75), clamp(body, 0.0, 1.0)) + uAccent * singing * 0.35 + glowAdd;
+        col += glowAdd;
     }
+    cPrev = col;
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5;
-        float r0 = textureLod(uPrevText, t0, (1.0 - uPrevFade) * 4.0 * step(0.001, uFocus)).r;
-        float h0 = textureLod(uPrevText, t0, 3.5).r;
+        float h0 = textureLod(uPrevText, t0, 3.5 + uLodBias).r;
         vec3 ink = uInk * (0.6 + lit * 0.7);
         // 旧句化成光散开：往上飘一点、变淡
-        col = mix(col, ink, r0 * uPrevFade * (0.42 + lit * 0.75));
-        col += light * h0 * uPrevFade * 0.8;
+        cPrev = mix(col, ink, uPrevFade * (0.42 + lit * 0.75));
+        vec3 haze = light * h0 * uPrevFade * 0.8;
+        col += haze; cText += haze; cPrev += haze;
     }
+    vec3 extra = vec3(0.0);
     // 星芒：十字细芒 + 一点核
     for (int i = 0; i < ${MAX_SPARKS}; i++) {
         if (i >= uSparkCount) break;
@@ -321,7 +321,7 @@ void main() {
         float core = exp(-dot(d, d) * 60.0);
         float cross = exp(-abs(d.x) * 70.0) * exp(-abs(d.y) * 3.5) + exp(-abs(d.y) * 70.0) * exp(-abs(d.x) * 3.5);
         float diag = (exp(-abs(d.x - d.y) * 90.0) + exp(-abs(d.x + d.y) * 90.0)) * exp(-length(d) * 9.0) * 0.4;
-        col += mix(uInk, uAccent, 0.25) * (core * 1.4 + cross * 0.55 + diag) * s.w;
+        extra += mix(uInk, uAccent, 0.25) * (core * 1.4 + cross * 0.55 + diag) * s.w;
     }
     // 光源：亮核、横向拉长的光条、十字芒，对面一圈鬼影
     if (uFlare.z > 0.0) {
@@ -333,7 +333,7 @@ void main() {
         float star = (exp(-abs(fd.x) * 400.0) * exp(-abs(fd.y) * 14.0) + exp(-abs(fd.y) * 400.0) * exp(-abs(fd.x) * 14.0)) * 0.6;
         vec2 gp = (vec2(1.0) - uFlare.xy - uv) * vec2(aspect, 1.0);
         float ghost = smoothstep(0.012, 0.0, abs(length(gp) - 0.07)) * 0.12 + exp(-dot(gp, gp) * 400.0) * 0.08;
-        col += fc * (glow + streak + star + ghost) * uFlare.z;
+        extra += fc * (glow + streak + star + ghost) * uFlare.z;
     }
     // 前景散景：几团很大、很虚的光斑从镜头前飘过
     if (uBokeh > 0.0) {
@@ -344,10 +344,10 @@ void main() {
             float rad = 0.06 + fract(fi * 0.618) * 0.07;
             float disc = smoothstep(rad, rad * 0.82, length(d));
             float rim = smoothstep(rad * 0.75, rad, length(d)) * disc;
-            col += (light * 0.12 + uInk * 0.012) * (disc + rim * 0.8) * uBokeh;
+            extra += (light * 0.12 + uInk * 0.012) * (disc + rim * 0.8) * uBokeh;
         }
     }
-    col += vec3(1.0, 0.95, 0.88) * uFlare.w;
+    extra += vec3(1.0, 0.95, 0.88) * uFlare.w;
     // 片头：几十颗星拖着光尾从上往下落
     if (uStarfall > 0.0) {
         for (int i = 0; i < 24; i++) {
@@ -359,13 +359,34 @@ void main() {
             float along = d.y;
             float tail = smoothstep(0.18, 0.0, along) * step(0.0, along) * exp(-abs(d.x) * 900.0);
             float core = exp(-dot(d, d) * 9000.0);
-            col += mix(uInk, uAccent, h1 * 0.5) * (tail * 0.35 + core * 1.2) * uStarfall;
+            extra += mix(uInk, uAccent, h1 * 0.5) * (tail * 0.35 + core * 1.2) * uStarfall;
         }
     }
     vec2 v = uv - 0.5;
-    col *= 1.0 - dot(v, v) * 0.8;
-    col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
-    outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+    float edge = 1.0 - dot(v, v) * 0.8;
+    outBase = vec4(clamp((col + extra) * edge, 0.0, 1.0), 1.0);
+    outText = vec4(clamp((cText + extra) * edge, 0.0, 1.0), 1.0);
+    outPrev = vec4(clamp((cPrev + extra) * edge, 0.0, 1.0), 1.0);
+}`;
+
+    // 合成那一遍：按屏幕像素重新取样字形，和低分辨率那一遍用同样的推近、对焦虚化
+    const COVERAGE = `
+uniform sampler2D uText;
+uniform sampler2D uPrevText;
+uniform float uZoom;
+uniform float uPrevZoom;
+uniform float uFocus;
+uniform float uPrevFade;
+uniform float uLodBias;
+vec2 coverage(vec2 uv) {
+    vec2 tc = vec2(uv.x, 1.0 - uv.y);
+    float r = textureLod(uText, (tc - 0.5) / uZoom + 0.5, uFocus * (4.5 + uLodBias)).r * (1.0 - uFocus * 0.7);
+    float r0 = 0.0;
+    if (uPrevFade > 0.0) {
+        float lod = (1.0 - uPrevFade) * (4.0 + uLodBias) * step(0.001, uFocus);
+        r0 = textureLod(uPrevText, (tc - 0.5) / uPrevZoom + 0.5, lod).r;
+    }
+    return vec2(r, r0);
 }`;
 
     const createGl = (canvas) => {
@@ -404,7 +425,8 @@ void main() {
             return t;
         };
         const slots = Array.from({ length: 3 }, () => ({ text: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
-        return { gl, program, uniforms, vao: gl.createVertexArray(), slots };
+        const sharp = Utils.createSharpText(gl, { label: 'lumiere', coverage: COVERAGE });
+        return { gl, program, uniforms, vao: gl.createVertexArray(), slots, sharp };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -446,6 +468,7 @@ void main() {
         let cues = [];
         let cuesFor = null;
         let world = { W: 0, H: 0 };
+        let low = [1, 1];
         let paused = false;
         let latestFrame = null;
         let lastDraw = -Infinity;
@@ -493,14 +516,14 @@ void main() {
             const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
-            const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            const scale = Math.min(dpr, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
-            const bw = Math.max(1, Math.round(w * scale)), bh = Math.max(1, Math.round(h * scale));
-            if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
-            const W = 1600;
-            const H = Math.round(W * h / w);
-            if (Math.abs(H - world.H) > 8) {
-                world = { W, H: Math.min(2048, H) };
+            // 画布和字形纹理按屏幕原生像素，光和烟按像素预算的低分辨率算（见 Utils.createSharpText）
+            const size = Utils.sharpSizes(w, h, PIXELS[quality] || PIXELS.standard);
+            low = [size.lw, size.lh];
+            if (canvas.width !== size.nw || canvas.height !== size.nh) { canvas.width = size.nw; canvas.height = size.nh; still.invalidate(); }
+            const W = Math.min(4096, size.nw);
+            const H = Math.min(4096, size.nh);
+            if (W !== world.W || H !== world.H) {
+                world = { W, H };
                 textCanvas.width = world.W; textCanvas.height = world.H;
                 glState?.slots.forEach((slot) => { slot.key = null; });
             }
@@ -739,15 +762,18 @@ void main() {
             // 段首闪光切：一半的段落从一片白里亮起来，另一半熄灯再亮
             const flash = cue.sectionStart && cue.flash && !s.reducedMotion ? Math.pow(1 - smooth(0, 0.35, local), 2) * 0.85 : 0;
 
-            gl.viewport(0, 0, canvas.width, canvas.height);
+            const { sharp } = glState;
+            sharp.begin(low[0], low[1]);
             gl.useProgram(program);
             gl.bindVertexArray(vao);
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(u.uText, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 1);
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(u.uPrevText, 2);
             Utils.bindNoise(gl, u.uNoise, 3);
-            gl.uniform2f(u.uRes, canvas.width, canvas.height);
+            gl.uniform2f(u.uRes, low[0], low[1]);
             gl.uniform2f(u.uTextSize, world.W, world.H);
+            const lodBias = Math.log2(world.W / 1600);
+            gl.uniform1f(u.uLodBias, lodBias);
             gl.uniform1f(u.uTime, t);
             gl.uniform1f(u.uLocal, local);
             gl.uniform1f(u.uPrevFade, prevFade);
@@ -766,8 +792,6 @@ void main() {
             gl.uniform3fv(u.uInk, colours.ink);
             gl.uniform3fv(u.uAccent, colours.accent);
             gl.uniform1f(u.uWaiting, s.waitingOpacity);
-            gl.uniform1f(u.uGrain, s.grain);
-            gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.uniform4fv(u.uSpark, sparkBuffer);
             gl.uniform1i(u.uSparkCount, sparks);
             gl.uniform4f(u.uFlare, flare[0], flare[1], flare[2], flash);
@@ -777,6 +801,15 @@ void main() {
             gl.uniform1f(u.uFocus, focus);
             gl.uniform1f(u.uStarfall, !s.reducedMotion && cue.kind === 'rest' && cue.title ? smooth(0, 1.2, local) * (1 - smooth(cue.end - 1.5, cue.end, t)) : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
+            sharp.finish(canvas.width, canvas.height, { grain: s.grain, grainStep: s.reducedMotion ? 0 : Math.floor(t * 6) % 64 }, (c, unit) => {
+                gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(c.uText, unit);
+                gl.activeTexture(gl.TEXTURE0 + unit + 1); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(c.uPrevText, unit + 1);
+                gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
+                gl.uniform1f(c.uPrevZoom, s.reducedMotion ? 1 : prevZoom);
+                gl.uniform1f(c.uFocus, focus);
+                gl.uniform1f(c.uPrevFade, prevFade);
+                gl.uniform1f(c.uLodBias, lodBias);
+            });
             stats.draws += 1;
             scheduleNext(index);
         };
@@ -824,7 +857,7 @@ void main() {
         mode.updateTheme = () => { readColours(); redraw(); };
         mode.getDebugSnapshot = () => ({
             initialized: Boolean(glState), cues: cues.length, cue: stats.cue, rig: stats.rig,
-            builds: stats.builds, buildMs: stats.buildMs, draws: stats.draws, buffer: `${canvas.width}x${canvas.height}`
+            builds: stats.builds, buildMs: stats.buildMs, draws: stats.draws, buffer: `${canvas.width}x${canvas.height}`, effects: `${low[0]}x${low[1]}`
         });
 
         const onLost = (event) => { event.preventDefault(); lostContext = true; };

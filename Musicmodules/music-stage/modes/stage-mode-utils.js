@@ -839,8 +839,132 @@ float vnoise(vec2 p) {
         gl.uniform1i(location, unit);
     };
 
+    // 字按原生分辨率画，光、烟、粒子这些贵的效果照旧按像素预算的低分辨率算。
+    // 低分辨率那一遍一次写三张图：没有字时的颜色、被这一句的字整个盖住时的颜色、
+    // 被上一句的字整个盖住时的颜色。三者都是平滑的，放大不会糊；真正锐利的只有字的覆盖率，
+    // 合成那一遍按屏幕原生像素重新采样字形纹理，在三张图之间插值：
+    //   col = base + r * (text - base) + r0 * (prev - base)
+    // 舞台给出 coverage(uv) 的 GLSL（返回当前句、上一句在这一点的覆盖率），以及它要用的 uniform。
+    const SPLIT_OUT_GLSL = `
+layout(location = 0) out vec4 outBase;
+layout(location = 1) out vec4 outText;
+layout(location = 2) out vec4 outPrev;`;
+    const SPLIT_VERT = `#version 300 es
+void main() {
+    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+    const compileProgram = (gl, vert, frag, label) => {
+        const compile = (type, source) => {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(`[${label}] shader: ${gl.getShaderInfoLog(shader)}`);
+            return shader;
+        };
+        const program = gl.createProgram();
+        gl.attachShader(program, compile(gl.VERTEX_SHADER, vert));
+        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, frag));
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`[${label}] link: ${gl.getProgramInfoLog(program)}`);
+        const uniforms = {};
+        const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+        for (let i = 0; i < count; i += 1) {
+            const info = gl.getActiveUniform(program, i);
+            uniforms[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(program, info.name);
+        }
+        return { program, uniforms };
+    };
+    const createSharpText = (gl, { coverage, label = 'stage' }) => {
+        const frag = `#version 300 es
+precision highp float;
+precision highp int;
+uniform sampler2D uBase;
+uniform sampler2D uTextLayer;
+uniform sampler2D uPrevLayer;
+uniform vec2 uRes;
+uniform float uGrain;
+uniform float uGrainStep;
+out vec4 outColor;
+float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+${coverage}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uRes;
+    vec2 c = coverage(uv);
+    vec3 base = texture(uBase, uv).rgb;
+    vec3 col = base;
+    if (c.x > 0.002) col += c.x * (texture(uTextLayer, uv).rgb - base);
+    if (c.y > 0.002) col += c.y * (texture(uPrevLayer, uv).rgb - base);
+    col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
+    outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+        const { program, uniforms } = compileProgram(gl, SPLIT_VERT, frag, `${label}:sharp`);
+        const fbo = gl.createFramebuffer();
+        const layers = Array.from({ length: 3 }, () => {
+            const t = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, t);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            return t;
+        });
+        const vao = gl.createVertexArray();
+        let size = [0, 0];
+        return {
+            program, uniforms,
+            get size() { return size; },
+            // 低分辨率那一遍：绑到三张图上
+            begin(w, h) {
+                if (w !== size[0] || h !== size[1]) {
+                    size = [w, h];
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+                    layers.forEach((t, i) => {
+                        gl.bindTexture(gl.TEXTURE_2D, t);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, t, 0);
+                    });
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+                gl.viewport(0, 0, w, h);
+            },
+            // 合成那一遍：按屏幕像素画到画布上。bind(uniforms, firstFreeUnit) 绑舞台自己的纹理和参数
+            finish(w, h, { grain = 0, grainStep = 0 } = {}, bind = null) {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.viewport(0, 0, w, h);
+                gl.useProgram(program);
+                gl.bindVertexArray(vao);
+                layers.forEach((t, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); });
+                gl.uniform1i(uniforms.uBase, 0);
+                gl.uniform1i(uniforms.uTextLayer, 1);
+                gl.uniform1i(uniforms.uPrevLayer, 2);
+                gl.uniform2f(uniforms.uRes, w, h);
+                gl.uniform1f(uniforms.uGrain, grain);
+                gl.uniform1f(uniforms.uGrainStep, grainStep);
+                bind?.(uniforms, 3);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+            }
+        };
+    };
+    // 字形纹理和画布都按屏幕原生像素；效果层按像素预算缩小。返回两者尺寸
+    const sharpSizes = (w, h, pixels, ratioCap = 2) => {
+        const native = Math.min(ratioCap, global.devicePixelRatio || 1);
+        const low = Math.min(native, Math.sqrt(pixels / (w * h)));
+        return {
+            native, low,
+            nw: Math.max(1, Math.round(w * native)), nh: Math.max(1, Math.round(h * native)),
+            lw: Math.max(1, Math.round(w * low)), lh: Math.max(1, Math.round(h * low))
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         NOISE_GLSL, noiseTexture, bindNoise,
+        SPLIT_OUT_GLSL, compileProgram, createSharpText, sharpSizes,
         lineCounter, withPlainLyrics,
         watchOverlay, watchCardInset, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,

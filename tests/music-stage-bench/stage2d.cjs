@@ -34,7 +34,7 @@ const KINDS = {
 const KIND_OF = new Map(Object.entries(KINDS).flatMap(([k, ns]) => ns.map(n => [n, k])));
 
 const run = async (browser, origin, mode, config) => {
-    const page = await browser.newPage({ viewport: { width: W, height: H } });
+    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: Number(process.env.DPR || 1) });
     await page.goto(`${origin}/blank.html`);
     await page.evaluate(([m, c]) => {
         localStorage.clear();
@@ -84,7 +84,7 @@ const run = async (browser, origin, mode, config) => {
 
 const shots = async (browser, origin, mode, dir, times, config) => {
     fs.mkdirSync(dir, { recursive: true });
-    const page = await browser.newPage({ viewport: { width: W, height: H } });
+    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: Number(process.env.DPR || 1) });
     if (process.env.STAGE_LOG) { page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.error('[page]', m.text().slice(0, 1500)); }); page.on('pageerror', e => console.error('[pageerror]', String(e).slice(0, 1500))); }
     await page.goto(`${origin}/blank.html`);
     await page.evaluate(([m, c]) => { localStorage.clear(); localStorage.setItem('musicStageMode', m); if (c) localStorage.setItem('musicStageConfig', JSON.stringify(c)); }, [mode, config || null]);
