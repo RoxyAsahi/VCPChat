@@ -41,158 +41,120 @@
     ]);
     const STICKER_GAP = 9;
 
-    // 群唱头像和表情：每个人一张自己画的日系动画风小像（SVG）——尖一点的下巴、偏下的大眼睛
-    // （上睫毛线、虹膜上深下浅、两颗高光）、细描线、一缕缕带尖的刘海、头发上一圈天使环高光；
-    // 发型、发色、瞳色各不同，老周戴眼镜、我戴耳机。表情换眼睛、嘴和小道具
+    // 群唱头像和表情：每个人一张自己画的简约二次元小像（SVG）。照贴图式 Q 版头像的画法：
+    // 一种描线色、平涂色块、不加渐变；圆脸软下巴，眼睛是偏下、分得开的深色竖椭圆，只点一颗大高光；
+    // 头发是几大块（后发 + 三四撮刘海）加一道月牙高光；不画鼻子。发型、发色、瞳色各不同，
+    // 老周戴眼镜、我戴耳机。表情换眼睛、嘴和小道具
     const LOOKS = Object.freeze({
-        '阿澈': { hair: 'messy', hairCol: '#2b3550', skin: '#fbe3d4', eye: '#3f78c4', bg: 205, ahoge: true },
-        '小满': { hair: 'long', hairCol: '#5e2f3c', skin: '#fde6da', eye: '#c25277', bg: 340 },
-        '栗子': { hair: 'bun', hairCol: '#8a4f2a', skin: '#fbe0cf', eye: '#d08a2c', bg: 28 },
-        '七七': { hair: 'twin', hairCol: '#1f2b2a', skin: '#fde8dc', eye: '#2f9a8e', bg: 150 },
-        '老周': { hair: 'part', hairCol: '#3a3a42', skin: '#f3d6c2', eye: '#6e4a36', bg: 262, glasses: true, calm: true },
-        '我': { hair: 'short', hairCol: '#2a2a30', skin: '#fbe1d2', eye: '#5b5f96', bg: -1, phones: true }
+        '阿澈': { hair: 'messy', hairCol: '#33405e', skin: '#ffe6d8', eye: '#3a6fb8', bg: 205, ahoge: true },
+        '小满': { hair: 'long', hairCol: '#6b3646', skin: '#ffe9de', eye: '#b44a6c', bg: 340 },
+        '栗子': { hair: 'bun', hairCol: '#9a5a30', skin: '#ffe4d2', eye: '#a8641e', bg: 28 },
+        '七七': { hair: 'twin', hairCol: '#24312f', skin: '#ffeae0', eye: '#2a8b80', bg: 150 },
+        '老周': { hair: 'part', hairCol: '#45454e', skin: '#f6dcc9', eye: '#5b4032', bg: 262, glasses: true },
+        '我': { hair: 'short', hairCol: '#2e2e36', skin: '#ffe5d6', eye: '#4d5390', bg: -1, phones: true }
     });
-    const LINE = '#3a2530';
-    // 颜色往白 / 往黑拉
     const tint = (hex, t) => {
         const n = parseInt(hex.slice(1), 16);
         const ch = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(t >= 0 ? v + (255 - v) * t : v * (1 + t)));
         return `rgb(${ch.join(',')})`;
     };
-    // 刘海：从左鬓角起，一缕一缕带尖往右排。tips = [[尖的 x, 尖的 y], ...]，缕根在 rootY
-    const bangs = (tips, rootY, left = 11.2, right = 36.8, sideY = 28) => {
-        let d = `M${left} ${sideY} C${left - 1.6} 15 16.5 8 24 8 C31.5 8 ${right + 1.6} 15 ${right} ${sideY}`;
-        // 沿刘海下缘从右往左走回去
+    const LINE = '#4a3038';
+    const SW = 0.75;
+    // 刘海：从左鬓角起，几撮圆一点的发束往右排，tips = [[尖 x, 尖 y], ...]，发根在 rootY
+    const bangs = (tips, rootY, left = 11.2, right = 36.8, sideY = 27) => {
+        let d = `M${left} ${sideY} C${left - 1.4} 14.5 16.8 8.6 24 8.6 C31.2 8.6 ${right + 1.4} 14.5 ${right} ${sideY}`;
         const pts = tips.slice().sort((a, b) => b[0] - a[0]);
-        let x0 = right, y0 = sideY - 2;
+        let x0 = right;
         pts.forEach(([x, y], i) => {
             const next = pts[i + 1];
             const rx = next ? (x + next[0]) / 2 : left;
-            d += ` Q${((x0 + x) / 2 + 0.6).toFixed(1)} ${((y0 + y) / 2).toFixed(1)} ${x} ${y}`;
-            d += ` Q${(x - 0.4).toFixed(1)} ${((y + rootY) / 2).toFixed(1)} ${rx.toFixed(1)} ${next ? rootY : sideY - 2}`;
-            x0 = rx; y0 = rootY;
+            d += ` Q${((x0 + x) / 2 + 0.8).toFixed(1)} ${(y - 0.6).toFixed(1)} ${x} ${y}`;
+            d += ` Q${(x - 0.8).toFixed(1)} ${(y - 0.6).toFixed(1)} ${rx.toFixed(1)} ${next ? rootY : sideY}`;
+            x0 = rx;
         });
-        return d + ` L${left} ${sideY} Z`;
+        return d + ' Z';
     };
     const HAIR = {
         messy: {
-            back: c => `<path d="M10.5 30 C8 14 16 7 24 7 C32 7 40 14 37.5 30 L35 27 L13 27 Z" fill="${tint(c, -0.25)}"/>`,
-            tips: [[16.2, 22.6], [22.4, 21.8], [29.2, 21.6]],
-            front: bangs([[13, 25.5], [16.2, 22.6], [19.6, 24.4], [22.4, 21.8], [25.8, 24.2], [29.2, 21.6], [32.4, 24.6], [35.4, 23]], 17.5)
+            back: c => `<path d="M10.6 30 C8.4 14 16 7.6 24 7.6 C32 7.6 39.6 14 37.4 30 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            front: bangs([[14.6, 25], [19.6, 22.2], [25, 23.8], [30.4, 22], [34.6, 25.4]], 18.4)
         },
         long: {
-            back: c => `<path d="M10 24 C8 10 40 10 38 24 L40.5 42 Q36 45.5 32 42 L33 30 L15 30 L16 42 Q12 45.5 7.5 42 Z" fill="${tint(c, -0.22)}"/>`,
-            tips: [[19.4, 21.4], [27.6, 21], [15.6, 23.6], [31.6, 23.4]],
-            front: bangs([[12.4, 33], [15.6, 23.6], [19.4, 21.4], [23.6, 23.6], [27.6, 21], [31.6, 23.4], [35.6, 33]], 17, 10.6, 37.4, 34)
+            back: c => `<path d="M10.4 24 C9 11 39 11 37.6 24 L39.6 41 Q35.4 43.6 32 41 L32 30 L16 30 L16 41 Q12.6 43.6 8.4 41 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            front: bangs([[12.8, 32], [18.6, 22.6], [24.4, 23.6], [30, 22.4], [35.2, 32]], 18, 11, 37, 33)
         },
         bun: {
-            back: c => `<circle cx="24" cy="8.4" r="6.2" fill="${c}"/><path d="M19.4 6.6 Q24 3.6 28.6 6.6" stroke="${tint(c, 0.45)}" stroke-width="0.9" fill="none" stroke-linecap="round"/><path d="M18.4 11.2 Q24 13.4 29.6 11.2" stroke="${tint(c, -0.35)}" stroke-width="1.1" fill="none"/>`,
-            tips: [[21.8, 21.6], [26, 21.2], [33.6, 21.6], [15.4, 23.4]],
-            front: bangs([[12.6, 27], [15.4, 23.4], [18.8, 24.6], [21.8, 21.6], [26, 21.2], [30.4, 22.8], [33.6, 21.6], [36, 26]], 16.6)
+            back: c => `<circle cx="24" cy="8.6" r="5.8" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/><path d="M10.8 28 C9 13 39 13 37.2 28 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            // 往一边扫的刘海
+            front: bangs([[14.4, 25.6], [20.2, 21.8], [27.4, 22.4], [33.8, 24.6]], 17.6)
         },
         twin: {
-            back: c => `<path d="M9.6 20 C2.6 23 2.4 35 5.6 43 Q8.4 40 9.4 34 Q11 28 12 23 Z M38.4 20 C45.4 23 45.6 35 42.4 43 Q39.6 40 38.6 34 Q37 28 36 23 Z" fill="${c}"/><path d="M6.4 26 Q5 33 6.6 39 M41.6 26 Q43 33 41.4 39" stroke="${tint(c, 0.4)}" stroke-width="0.7" fill="none" stroke-linecap="round"/><path d="M10.5 26 C8 13 40 13 37.5 26 Z" fill="${tint(c, -0.25)}"/>`,
-            // 姬发式齐刘海，两边垂到下巴
-            front: c => `<path d="M11 32 C9.4 15 16.5 8 24 8 C31.5 8 38.6 15 37 32 L35.4 32 L35.2 22.6 L12.8 22.6 L12.6 32 Z" fill="${c}"/>`,
-            extra: () => `<circle cx="10.4" cy="20.8" r="2.1" fill="#ff8fab" stroke="${LINE}" stroke-width="0.4"/><circle cx="37.6" cy="20.8" r="2.1" fill="#ff8fab" stroke="${LINE}" stroke-width="0.4"/>`
+            back: c => `<path d="M10.2 19 C3.6 21.6 3.2 33 6.4 41 Q9.4 38.4 10.4 32.6 Q11.4 26.6 12.4 22.4 Z M37.8 19 C44.4 21.6 44.8 33 41.6 41 Q38.6 38.4 37.6 32.6 Q36.6 26.6 35.6 22.4 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/><path d="M10.8 27 C9 13 39 13 37.2 27 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            // 齐刘海，两边垂到脸颊
+            front: 'M11 31 C9.6 14.6 16.8 8.6 24 8.6 C31.2 8.6 38.4 14.6 37 31 L34.8 31 L34.6 22.4 L13.4 22.4 L13.2 31 Z',
+            extra: () => `<circle cx="10.8" cy="19.8" r="1.9" fill="#ff8fab" stroke="${LINE}" stroke-width="0.6"/><circle cx="37.2" cy="19.8" r="1.9" fill="#ff8fab" stroke="${LINE}" stroke-width="0.6"/>`
         },
         part: {
-            back: c => `<path d="M10.8 27 C9 13 39 13 37.2 27 Z" fill="${tint(c, -0.25)}"/>`,
-            // 三七分，额前一缕斜过去
-            front: c => `<path d="M11 27 C9.6 14 16.5 8 24 8 C31.5 8 38.4 14 37 27 L35.8 24 Q35.4 19 33 17 Q27 20.6 20 18 Q17 21.2 15.4 23.6 Q14.2 22 13.6 20.6 Q12.4 23.2 12 27 Z" fill="${c}"/>`
+            back: c => `<path d="M10.8 27 C9 13 39 13 37.2 27 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            // 三七分，额前一大块斜过去
+            front: 'M11.2 26 C9.8 14 16.8 8.6 24 8.6 C31.2 8.6 38.2 14 36.8 26 Q36 20.6 32.6 17.8 Q26 21.6 19 18.6 Q15.6 21.4 14 25.2 Q12.4 24 11.2 26 Z'
         },
         short: {
-            back: c => `<path d="M10.8 28 C9 13 39 13 37.2 28 Z" fill="${tint(c, -0.25)}"/>`,
-            tips: [[15.8, 23.2], [22.6, 22], [29.8, 22.2]],
-            front: bangs([[12.6, 26], [15.8, 23.2], [19.2, 24.2], [22.6, 22], [26.2, 23.8], [29.8, 22.2], [33, 24], [35.6, 25.4]], 17.6)
+            back: c => `<path d="M10.8 28 C9 13 39 13 37.2 28 Z" fill="${c}" stroke="${LINE}" stroke-width="${SW}"/>`,
+            front: bangs([[14.4, 24.6], [20, 22.4], [25.6, 23.6], [31.2, 22.2], [34.8, 24.8]], 18.2)
         }
     };
-    // 一只眼睛：上睫毛线（外眼角带一点上挑）、虹膜上深下浅、瞳孔、两颗高光、细下睫毛
-    const eye = (cx, L, gid, side, shape = 'round') => {
-        const s = side;              // -1 左眼，1 右眼
-        const outer = cx + s * 3.3, inner = cx - s * 2.9;
-        const ry = L.calm ? 2.8 : 3.4;
-        const top = 28.6 - ry - 0.4;
-        let iris = `<ellipse cx="${cx}" cy="28.9" rx="2.5" ry="${ry}" fill="url(#${gid})"/><path d="M${cx - 2.5} 28.4 Q${cx} ${(28.9 - ry - 0.6).toFixed(1)} ${cx + 2.5} 28.4 Q${cx} ${(28.9 - ry + 1.4).toFixed(1)} ${cx - 2.5} 28.4 Z" fill="${tint(L.eye, -0.7)}" opacity="0.55"/>`
-            + `<ellipse cx="${cx}" cy="29.3" rx="1.05" ry="${(ry * 0.5).toFixed(2)}" fill="${tint(L.eye, -0.62)}"/>`;
-        if (shape === 'heart') iris = `<path d="M${cx} 31.6 L${cx - 2.5} 28.6 A1.45 1.45 0 0 1 ${cx} 26.4 A1.45 1.45 0 0 1 ${cx + 2.5} 28.6 Z" fill="#ec4f79"/>`;
-        if (shape === 'star') iris += `<path d="M${cx} 26.6 L${cx + 0.55} 28.2 L${cx + 2} 28.3 L${cx + 0.9} 29.2 L${cx + 1.3} 30.7 L${cx} 29.9 L${cx - 1.3} 30.7 L${cx - 0.9} 29.2 L${cx - 2} 28.3 L${cx - 0.55} 28.2 Z" fill="#ffe27a"/>`;
-        const glints = `<circle cx="${(cx - 0.95).toFixed(2)}" cy="27.4" r="0.95" fill="#fff"/><circle cx="${(cx + 0.95).toFixed(2)}" cy="30.4" r="0.42" fill="#fff" opacity="0.85"/>`;
-        return `<ellipse cx="${cx}" cy="28.8" rx="3.15" ry="${(ry + 0.2).toFixed(2)}" fill="#fff"/>${iris}${glints}`
-            + `<path d="M${outer} ${(top + 1.6).toFixed(1)} Q${(cx + s * 1.4).toFixed(1)} ${(top - 0.6).toFixed(1)} ${inner} ${(top + 1.1).toFixed(1)}" stroke="${LINE}" stroke-width="1.25" fill="none" stroke-linecap="round"/>`
-            + `<path d="M${outer} ${(top + 1.6).toFixed(1)} l${(s * 0.9).toFixed(1)} -0.7" stroke="${LINE}" stroke-width="0.8" stroke-linecap="round"/>`
-            + `<path d="M${(cx + s * 2.2).toFixed(1)} ${(28.8 + ry + 0.1).toFixed(1)} Q${cx} ${(29.2 + ry + 0.4).toFixed(1)} ${(cx - s * 1.6).toFixed(1)} ${(28.8 + ry).toFixed(1)}" stroke="${LINE}" stroke-width="0.45" fill="none" stroke-linecap="round" opacity="0.7"/>`;
-    };
-    const arcEyes = (up, w = 1.3) => {
-        const y = 28.8, k = up ? -2.8 : 1.8;
-        return `<path d="M16.2 ${y} Q19.2 ${y + k} 22.2 ${y} M25.8 ${y} Q28.8 ${y + k} 31.8 ${y}" stroke="${LINE}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
-    };
+    // 眼睛：深色竖椭圆，下半一块瞳色，一颗大高光 + 一个小点；上面一道粗睫毛线
+    const EX = [18.8, 29.2], EY = 28.6;
+    const eyeOpen = (cx, L) => `<ellipse cx="${cx}" cy="${EY}" rx="2.15" ry="2.9" fill="${tint(L.eye, -0.55)}"/>`
+        + `<ellipse cx="${cx}" cy="${EY + 1.25}" rx="1.55" ry="1.35" fill="${L.eye}"/>`
+        + `<circle cx="${(cx - 0.75).toFixed(2)}" cy="${EY - 1.1}" r="0.95" fill="#fff"/><circle cx="${(cx + 0.85).toFixed(2)}" cy="${EY + 1.5}" r="0.38" fill="#fff"/>`
+        + `<path d="M${cx - 2.7} ${EY - 2.2} Q${cx} ${EY - 4.1} ${cx + 2.7} ${EY - 2.2}" stroke="${LINE}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`;
+    const arcs = (k, w = 1.2) => `<path d="M${EX[0] - 2.4} ${EY} Q${EX[0]} ${EY + k} ${EX[0] + 2.4} ${EY} M${EX[1] - 2.4} ${EY} Q${EX[1]} ${EY + k} ${EX[1] + 2.4} ${EY}" stroke="${LINE}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
+    const heartAt = cx => `<path d="M${cx} ${EY + 2.4} L${cx - 2.4} ${EY - 0.2} A1.25 1.25 0 0 1 ${cx} ${EY - 1.9} A1.25 1.25 0 0 1 ${cx + 2.4} ${EY - 0.2} Z" fill="#ef5480" stroke="${LINE}" stroke-width="0.5"/>`;
+    const starAt = cx => `<path d="M${cx} ${EY - 2.8} L${cx + 0.8} ${EY - 0.8} L${cx + 2.8} ${EY - 0.6} L${cx + 1.2} ${EY + 0.7} L${cx + 1.8} ${EY + 2.7} L${cx} ${EY + 1.6} L${cx - 1.8} ${EY + 2.7} L${cx - 1.2} ${EY + 0.7} L${cx - 2.8} ${EY - 0.6} L${cx - 0.8} ${EY - 0.8} Z" fill="#ffc83d" stroke="${LINE}" stroke-width="0.5" stroke-linejoin="round"/>`;
     const EYES = {
-        open: (L, gid) => `<g class="gcf-eyes">${eye(19.2, L, gid, -1)}${eye(28.8, L, gid, 1)}</g>`,
-        happy: () => arcEyes(true, 1.4),
-        closed: () => arcEyes(false, 1.2),
-        wink: (L, gid) => `${eye(19.2, L, gid, -1)}<path d="M25.8 28.8 Q28.8 26.2 31.8 28.8 M31.8 28.8 l0.9 -0.8" stroke="${LINE}" stroke-width="1.35" fill="none" stroke-linecap="round"/>`,
-        heart: (L, gid) => `${eye(19.2, L, gid, -1, 'heart')}${eye(28.8, L, gid, 1, 'heart')}`,
-        star: (L, gid) => `${eye(19.2, L, gid, -1, 'star')}${eye(28.8, L, gid, 1, 'star')}`
+        open: L => `<g class="gcf-eyes">${eyeOpen(EX[0], L)}${eyeOpen(EX[1], L)}</g>`,
+        happy: () => arcs(-2.6, 1.3),
+        closed: () => arcs(1.8, 1.1),
+        wink: L => `${eyeOpen(EX[0], L)}<path d="M${EX[1] - 2.4} ${EY} Q${EX[1]} ${EY - 2.6} ${EX[1] + 2.4} ${EY}" stroke="${LINE}" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,
+        heart: () => heartAt(EX[0]) + heartAt(EX[1]),
+        star: () => starAt(EX[0]) + starAt(EX[1])
     };
-    const MOUTH_COL = '#a8434d';
+    const MC = '#8c3440';
     const MOUTH = {
-        smile: `<path class="gcf-m-smile" d="M22.7 34.6 Q24 35.5 25.3 34.6" stroke="${MOUTH_COL}" stroke-width="0.8" fill="none" stroke-linecap="round"/>`,
-        sing: `<path class="gcf-m-smile" d="M22.7 34.6 Q24 35.5 25.3 34.6" stroke="${MOUTH_COL}" stroke-width="0.8" fill="none" stroke-linecap="round"/><path class="gcf-m-open" d="M22.4 34.2 Q24 33.8 25.6 34.2 Q25.4 37 24 37.1 Q22.6 37 22.4 34.2 Z" fill="${MOUTH_COL}"/>`,
-        open: `<path d="M21.6 33.8 Q24 33.4 26.4 33.8 Q25.8 38 24 38.1 Q22.2 38 21.6 33.8 Z" fill="${MOUTH_COL}"/><path d="M22.6 36.6 Q24 35.6 25.4 36.6 Q24.8 37.8 24 37.8 Q23.2 37.8 22.6 36.6 Z" fill="#f08a90"/>`,
-        cat: `<path d="M21.8 34.2 Q22.9 35.6 24 34.4 Q25.1 35.6 26.2 34.2" stroke="${MOUTH_COL}" stroke-width="0.8" fill="none" stroke-linecap="round"/>`,
-        o: `<ellipse cx="24" cy="35" rx="1.1" ry="1.4" fill="${MOUTH_COL}"/>`
+        smile: `<path class="gcf-m-smile" d="M22.8 33.6 Q24 34.6 25.2 33.6" stroke="${LINE}" stroke-width="0.75" fill="none" stroke-linecap="round"/>`,
+        sing: `<path class="gcf-m-smile" d="M22.8 33.6 Q24 34.6 25.2 33.6" stroke="${LINE}" stroke-width="0.75" fill="none" stroke-linecap="round"/><path class="gcf-m-open" d="M22.5 33.3 L25.5 33.3 Q25.3 35.9 24 35.9 Q22.7 35.9 22.5 33.3 Z" fill="${MC}" stroke="${LINE}" stroke-width="0.5" stroke-linejoin="round"/>`,
+        open: `<path d="M22 33 L26 33 Q25.7 36.6 24 36.6 Q22.3 36.6 22 33 Z" fill="${MC}" stroke="${LINE}" stroke-width="0.55" stroke-linejoin="round"/><path d="M22.9 35.4 Q24 34.6 25.1 35.4 Q24.8 36.3 24 36.3 Q23.2 36.3 22.9 35.4 Z" fill="#f2848c"/>`,
+        cat: `<path d="M22 33.4 Q23 34.6 24 33.6 Q25 34.6 26 33.4" stroke="${LINE}" stroke-width="0.75" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+        o: `<ellipse cx="24" cy="34.2" rx="1" ry="1.2" fill="${MC}" stroke="${LINE}" stroke-width="0.5"/>`
     };
     const PROPS = {
-        heart: `<path d="M40 14 L36.4 10.4 A2.2 2.2 0 0 1 40 7.6 A2.2 2.2 0 0 1 43.6 10.4 Z" fill="#ec4f79" stroke="#fff" stroke-width="0.6"/>`,
+        heart: `<path d="M40 14 L36.4 10.4 A2.2 2.2 0 0 1 40 7.6 A2.2 2.2 0 0 1 43.6 10.4 Z" fill="#ef5480" stroke="${LINE}" stroke-width="0.6"/>`,
         notes: `<path d="M38 6 L44 4.6 L44 11.6 A1.8 1.5 0 1 1 42.6 10.2 L42.6 7.2 L39.4 8 L39.4 13 A1.8 1.5 0 1 1 38 11.6 Z" fill="currentColor"/>`,
-        sparkle: `<path d="M41 4 L42 8 L46 9 L42 10 L41 14 L40 10 L36 9 L40 8 Z" fill="#f2b51e"/><path d="M6 8 L6.6 10.4 L9 11 L6.6 11.6 L6 14 L5.4 11.6 L3 11 L5.4 10.4 Z" fill="#f2b51e"/>`,
+        sparkle: `<path d="M41 4 L42 8 L46 9 L42 10 L41 14 L40 10 L36 9 L40 8 Z" fill="#ffc83d"/><path d="M6 8 L6.6 10.4 L9 11 L6.6 11.6 L6 14 L5.4 11.6 L3 11 L5.4 10.4 Z" fill="#ffc83d"/>`,
         zzz: `<text x="35" y="12" font-size="7" font-weight="700" fill="currentColor" font-family="sans-serif">z</text><text x="40" y="7" font-size="5" font-weight="700" fill="currentColor" font-family="sans-serif">z</text>`,
-        sweat: `<path d="M37.4 18 Q39.6 22 38.2 23.8 Q36.2 24.6 35.8 22.6 Q36 20.6 37.4 18 Z" fill="#8fd3ff" stroke="#fff" stroke-width="0.5"/>`
+        sweat: `<path d="M37.4 17.6 Q39.6 21.6 38.2 23.4 Q36.2 24.2 35.8 22.2 Q36 20.2 37.4 17.6 Z" fill="#9ad8ff" stroke="${LINE}" stroke-width="0.5"/>`
     };
-    const LOOK_IDS = Object.keys(LOOKS);
     const face = (name, { eyes = 'open', mouth = 'sing', prop = null, bg = true } = {}) => {
-        const key = LOOKS[name] ? name : '阿澈';
-        const L = LOOKS[key];
-        const id = LOOK_IDS.indexOf(key);
-        const gid = `gcfI${id}`, hid = `gcfH${id}`, sid = `gcfS${id}`;
+        const L = LOOKS[name] || LOOKS['阿澈'];
         const hair = HAIR[L.hair];
         const c = L.hairCol;
-        const bgFill = L.bg < 0 ? 'var(--stage-accent, #e0a030)' : `hsl(${L.bg} 46% 80%)`;
-        const front = typeof hair.front === 'function' ? hair.front(c) : `<path d="${hair.front}" fill="${c}"/>`;
-        const frontLine = typeof hair.front === 'function' ? '' : `<path d="${hair.front}" fill="none" stroke="${tint(c, -0.45)}" stroke-width="0.45" stroke-linejoin="round"/>`;
-        const defs = `<defs>`
-            + `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tint(L.eye, -0.55)}"/><stop offset="0.55" stop-color="${L.eye}"/><stop offset="1" stop-color="${tint(L.eye, 0.55)}"/></linearGradient>`
-            + `<linearGradient id="${hid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tint(c, 0.12)}"/><stop offset="1" stop-color="${tint(c, -0.2)}"/></linearGradient>`
-            + `<linearGradient id="${sid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tint(L.skin.replace('#', '#'), -0.12)}"/><stop offset="0.35" stop-color="${L.skin}"/></linearGradient>`
-            + `</defs>`;
-        const shirt = L.bg < 0 ? 40 : L.bg;
-        const body = `<path d="M21.4 36 L21.4 41 L26.6 41 L26.6 36 Z" fill="${tint(L.skin, -0.12)}"/>`
-            + `<path d="M7 48 C8 42.6 14 40.4 20 40 L24 43.2 L28 40 C34 40.4 40 42.6 41 48 Z" fill="hsl(${shirt} 28% 42%)" stroke="${LINE}" stroke-width="0.4"/>`
-            + `<path d="M20 40 L24 43.2 L28 40" stroke="#fff" stroke-opacity="0.75" stroke-width="0.9" fill="none" stroke-linejoin="round"/>`;
-        // 脸：鬓角往下收成尖一点的下巴
-        const facePath = 'M12.4 24 C12.4 16 17.2 12.6 24 12.6 C30.8 12.6 35.6 16 35.6 24 C35.6 30.2 33.2 34.4 29.6 37 Q26.6 39.6 24 39.8 Q21.4 39.6 18.4 37 C14.8 34.4 12.4 30.2 12.4 24 Z';
-        const head = `<ellipse cx="12.4" cy="28" rx="1.5" ry="2.2" fill="${L.skin}" stroke="${LINE}" stroke-width="0.35"/><ellipse cx="35.6" cy="28" rx="1.5" ry="2.2" fill="${L.skin}" stroke="${LINE}" stroke-width="0.35"/>`
-            + `<path d="${facePath}" fill="url(#${sid})" stroke="${LINE}" stroke-width="0.45"/>`
-            // 腮红：一团淡粉 + 三道斜线
-            + `<ellipse cx="15.8" cy="32.6" rx="2.4" ry="1.2" fill="#ff7f8e" opacity="0.32"/><ellipse cx="32.2" cy="32.6" rx="2.4" ry="1.2" fill="#ff7f8e" opacity="0.32"/>`
-            + `<path d="M14.6 33.2 l0.7 -1.1 M15.8 33.2 l0.7 -1.1 M17 33.2 l0.7 -1.1 M31 33.2 l0.7 -1.1 M32.2 33.2 l0.7 -1.1 M33.4 33.2 l0.7 -1.1" stroke="#e8606e" stroke-width="0.3" stroke-linecap="round" opacity="0.7"/>`
-            + `<path d="M24.3 31.6 l-0.5 0.9" stroke="${tint(L.skin, -0.35)}" stroke-width="0.5" stroke-linecap="round"/>`;
-        // 眉毛：细，略带角度
-        const brows = `<path d="M16.4 23.8 Q18.8 22.6 21.4 23.4 M26.6 23.4 Q29.2 22.6 31.6 23.8" stroke="${tint(c, -0.2)}" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.9"/>`;
-        // 天使环：头顶一圈断开的亮弧
-        // 天使环：头顶一道柔和的亮带，中间断两处，像一缕缕头发各自反光
-        const ring = `<path d="M14.2 16.2 Q24 9.4 33.8 16.2" stroke="${tint(c, 0.5)}" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-dasharray="7 0.9 5.4 0.9 9" opacity="0.62"/>`
-            + `<path d="M17 13.6 Q21 11.4 24.4 11.4" stroke="#fff" stroke-width="0.55" fill="none" stroke-linecap="round" opacity="0.5"/>`;
-        // 发丝：从刘海每个尖往头顶拉的细线，分出一缕一缕
-        const strands = hair.tips ? hair.tips.map(([x, y]) => `M${x} ${y - 0.6} Q${(x * 0.75 + 6).toFixed(1)} ${((y + 12) / 2).toFixed(1)} ${(x * 0.55 + 10.8).toFixed(1)} 12.4`).join(' ') : '';
-        const strandLines = strands ? `<path d="${strands}" stroke="${tint(c, -0.4)}" stroke-width="0.35" fill="none" stroke-linecap="round" opacity="0.8"/>` : '';
-        const ahoge = L.ahoge ? `<path d="M24.6 8.4 Q25.2 3.4 30.2 3.2 Q26.8 4.8 26.4 8.6 Z" fill="${c}" stroke="${tint(c, -0.45)}" stroke-width="0.4"/>` : '';
-        const glasses = L.glasses ? `<g fill="#fff" fill-opacity="0.12" stroke="${LINE}" stroke-width="0.7"><rect x="15.4" y="25.4" width="7.6" height="6.4" rx="2"/><rect x="25" y="25.4" width="7.6" height="6.4" rx="2"/></g><path d="M23 27.6 Q24 27 25 27.6 M15.4 27 L12.6 26.6 M32.6 27 L35.4 26.6" stroke="${LINE}" stroke-width="0.6" fill="none"/><path d="M16.6 26.4 l2 0 M26.2 26.4 l2 0" stroke="#fff" stroke-width="0.5" opacity="0.7" stroke-linecap="round"/>` : '';
-        const phones = L.phones ? `<path d="M9.4 27 C9 10 39 10 38.6 27" stroke="#2a2a2e" stroke-width="2" fill="none"/><path d="M11 18 C14 11 34 11 37 18" stroke="#fff" stroke-opacity="0.3" stroke-width="0.6" fill="none"/><rect x="6.6" y="23.6" width="5.2" height="8.4" rx="2.4" fill="#2a2a2e"/><rect x="36.2" y="23.6" width="5.2" height="8.4" rx="2.4" fill="#2a2a2e"/><rect x="7.6" y="25" width="1.2" height="5.4" rx="0.6" fill="var(--stage-accent, #e0a030)"/><rect x="39.2" y="25" width="1.2" height="5.4" rx="0.6" fill="var(--stage-accent, #e0a030)"/>` : '';
-        return `<svg class="gcf" viewBox="0 0 48 48" aria-hidden="true">${defs}${bg ? `<circle cx="24" cy="24" r="24" fill="${bgFill}"/>` : ''}`
-            + `${hair.back(c)}${body}${head}${brows}${EYES[eyes](L, gid)}${MOUTH[mouth]}`
-            + `${front.replace(`fill="${c}"`, `fill="url(#${hid})"`)}${frontLine}${strandLines}${ring}${ahoge}${hair.extra ? hair.extra(c) : ''}${glasses}${phones}${prop ? PROPS[prop] : ''}</svg>`;
+        const bgFill = L.bg < 0 ? 'var(--stage-accent, #e0a030)' : `hsl(${L.bg} 42% 82%)`;
+        const shirt = `hsl(${L.bg < 0 ? 40 : L.bg} 30% 46%)`;
+        const body = `<path d="M8 48 C9 42.4 15 40 24 40 C33 40 39 42.4 40 48 Z" fill="${shirt}" stroke="${LINE}" stroke-width="${SW}"/>`
+            + `<path d="M21.6 37 L21.6 40.6 Q24 42 26.4 40.6 L26.4 37 Z" fill="${tint(L.skin, -0.1)}"/>`;
+        const head = `<path d="M11.6 25 C11.6 16.6 17 12.4 24 12.4 C31 12.4 36.4 16.6 36.4 25 C36.4 32.4 31 38.4 24 38.4 C17 38.4 11.6 32.4 11.6 25 Z" fill="${L.skin}" stroke="${LINE}" stroke-width="${SW}"/>`
+            + `<ellipse cx="15.6" cy="32" rx="2.2" ry="1.25" fill="#ff8a96" opacity="0.38"/><ellipse cx="32.4" cy="32" rx="2.2" ry="1.25" fill="#ff8a96" opacity="0.38"/>`;
+        const frontPath = hair.front;
+        const front = `<path d="${frontPath}" fill="${c}" stroke="${LINE}" stroke-width="${SW}" stroke-linejoin="round"/>`;
+        // 一道月牙高光
+        const shine = `<path d="M15.8 16.4 Q24 11 32.2 16.4 Q24 13.6 15.8 16.4 Z" fill="${tint(c, 0.38)}"/>`;
+        const ahoge = L.ahoge ? `<path d="M24.4 8.8 Q25 4 29.6 3.8 Q26.6 5.4 26.2 9 Z" fill="${c}" stroke="${LINE}" stroke-width="0.6" stroke-linejoin="round"/>` : '';
+        const glasses = L.glasses ? `<g fill="none" stroke="${LINE}" stroke-width="0.8"><rect x="15" y="25.2" width="7.6" height="6.4" rx="2.2"/><rect x="25.4" y="25.2" width="7.6" height="6.4" rx="2.2"/><path d="M22.6 27.4 L25.4 27.4"/></g>` : '';
+        const phones = L.phones ? `<path d="M9.8 26 C9.4 10.4 38.6 10.4 38.2 26" stroke="${LINE}" stroke-width="2.4" fill="none"/><path d="M9.8 26 C9.4 10.4 38.6 10.4 38.2 26" stroke="#3a3a44" stroke-width="1.4" fill="none"/><rect x="7" y="22.8" width="5" height="8.4" rx="2.4" fill="#3a3a44" stroke="${LINE}" stroke-width="${SW}"/><rect x="36" y="22.8" width="5" height="8.4" rx="2.4" fill="#3a3a44" stroke="${LINE}" stroke-width="${SW}"/>` : '';
+        return `<svg class="gcf" viewBox="0 0 48 48" aria-hidden="true">${bg ? `<circle cx="24" cy="24" r="24" fill="${bgFill}"/>` : ''}`
+            + `${hair.back(c)}${body}${head}${EYES[eyes](L)}${MOUTH[mouth]}${front}${shine}${ahoge}${hair.extra ? hair.extra(c) : ''}${glasses}${phones}${prop ? PROPS[prop] : ''}</svg>`;
     };
            // 间奏长过这么久，语音之后再来一个表情
 
