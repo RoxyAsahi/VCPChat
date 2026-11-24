@@ -208,7 +208,20 @@
             current.end = Math.max(current.end, g.end);
             offset += g.text.length;
         });
-        return units;
+        // 超长的西文词（没有空格的长串）切成十来个字母一段：不然它一个词就是一整行，
+        // 字号被压到最小也装不下、冲出画面；切开的段之间几乎不留空，读起来还是一个词
+        const out = [];
+        units.forEach((u) => {
+            const n = u.glyphs.length;
+            if (n <= 13 || u.glyphs.some(g => CJK.test(g.text))) { out.push(u); return; }
+            const parts = Math.ceil(n / 10);
+            const per = Math.ceil(n / parts);
+            for (let i = 0; i < n; i += per) {
+                const gs = u.glyphs.slice(i, i + per);
+                out.push({ glyphs: gs, start: gs[0].start, end: Math.max(...gs.map(g => g.end)), joins: i + per < n });
+            }
+        });
+        return out;
     };
 
     // 量一个单元在 100px 字号下的宽度。
@@ -263,7 +276,9 @@
             return cursor;
         };
         const gap = 0.28;
-        const rowWidth100 = row => row.reduce((sum, u) => sum + u.w100, 0) + Math.max(0, row.length - 1) * (row.some(u => !u.cjk) ? gap * 100 : 0.12 * 100);
+        // 单元后面留的空：汉字 0.12，西文词 0.28，切开的长词段之间几乎不留
+        const unitGap = u => (u.cjk ? 0.12 : u.joins ? 0.02 : gap);
+        const rowWidth100 = row => row.reduce((sum, u, i) => sum + u.w100 + (i < row.length - 1 ? unitGap(u) * 100 : 0), 0);
         const maxSize = H * 0.3 * fontScale;
         const minSize = H * 0.05;
 
@@ -291,7 +306,7 @@
                 splitRows(before, Math.max(1, Math.ceil(before.reduce((s, u) => s + u.glyphs.length, 0) / 14))).forEach((row) => {
                     baseline += small * lineH(row[0].cjk);
                     let x = 0;
-                    row.forEach((u) => { x = place(u, x, baseline, small) + small * (u.cjk ? 0.12 : gap); });
+                    row.forEach((u) => { x = place(u, x, baseline, small) + small * unitGap(u); });
                 });
                 baseline += small * 0.3;
             }
@@ -302,7 +317,7 @@
                 splitRows(after, Math.max(1, Math.ceil(after.reduce((s, u) => s + u.glyphs.length, 0) / 14))).forEach((row) => {
                     baseline += small * lineH(row[0].cjk);
                     let x = heroSize * 0.04;
-                    row.forEach((u) => { x = place(u, x, baseline, small) + small * (u.cjk ? 0.12 : gap); });
+                    row.forEach((u) => { x = place(u, x, baseline, small) + small * unitGap(u); });
                 });
             }
             return { style, placed };
@@ -321,7 +336,7 @@
                 const size = style === 'scatter' ? common * (0.7 + random() * 0.6) : common;
                 baseline += size * lineH(row[0].cjk);
                 let x = style === 'scatter' ? random() * widthTarget * 0.35 : r * step;
-                row.forEach((u) => { x = place(u, x, baseline, size) + size * (u.cjk ? 0.12 : gap); });
+                row.forEach((u) => { x = place(u, x, baseline, size) + size * unitGap(u); });
             });
             return { style, placed };
         }
@@ -331,7 +346,7 @@
             baseline += size * (r ? lineH(row[0].cjk) : 0.9);
             const width = rowWidth100(row) * size / 100;
             let x = (widthTarget - width) / 2;
-            row.forEach((u) => { x = place(u, x, baseline, size) + size * (u.cjk ? 0.12 : gap); });
+            row.forEach((u) => { x = place(u, x, baseline, size) + size * unitGap(u); });
             baseline += size * 0.08;
         });
         return { style: 'rows', placed };
