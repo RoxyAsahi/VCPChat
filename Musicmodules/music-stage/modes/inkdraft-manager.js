@@ -99,6 +99,7 @@
         });
         if (cues.length && cues[0].start > 0) cues[0].start = 0;
         markKeywords(cues, sung);
+        markChorus(cues);
         return cues;
     };
 
@@ -133,6 +134,36 @@
                 cue.keys = [ranked.slice().sort((a, b) => b.w.length - a.w.length)[0].w];
             } else cue.keys = [];
         });
+    };
+    // 副歌：歌词自己标了的算；没标的（多数 LRC 都没标）看重复——同一句唱了两次以上就是副歌，
+    // 夹在两句副歌中间的一两句也算进去。连着的副歌句是一段，记下这是第几段、哪句是进段的第一句；
+    // 重复的那几句记下原文，排版和线稿按原文取随机数，每次唱到都是同一版（像绘本里的复句），镜头每次不同。
+    const markChorus = (cues) => {
+        const lines = cues.filter(c => c.kind === 'line');
+        const counts = new Map();
+        lines.forEach((c) => { const k = plainWord(c.line.fullText); if (k.length >= 3) counts.set(k, (counts.get(k) || 0) + 1); });
+        const repeated = c => (counts.get(plainWord(c.line.fullText)) || 0) >= 2;
+        const flagged = lines.map(c => Boolean(c.line.isChorus) || repeated(c));
+        lines.forEach((c, i) => {
+            if (flagged[i]) return;
+            const before = flagged.slice(Math.max(0, i - 2), i).some(Boolean);
+            const after = flagged.slice(i + 1, i + 3).some(Boolean);
+            if (before && after && (flagged[i - 1] || flagged[i + 1])) c.bridged = true;
+        });
+        let section = 0;
+        let last = null;
+        cues.forEach((c) => {
+            if (c.kind !== 'line') { last = c; return; }
+            const i = lines.indexOf(c);
+            c.chorus = flagged[i] || Boolean(c.bridged);
+            if (c.chorus) {
+                if (!last || !last.chorus) { section += 1; c.chorusEntry = true; }
+                c.chorusSection = section;
+                if (repeated(c)) c.motif = plainWord(c.line.fullText);
+            }
+            last = c;
+        });
+        lines.forEach((c) => { if (c.chorus) c.lastChorus = c.chorusSection === section; });
     };
     const findCue = (cues, time) => {
         let low = 0, high = cues.length - 1, result = 0;
@@ -483,7 +514,10 @@
 
     const prepareCue = (cue, index, ctx) => {
         const { W, H, aspect, family, settings, trackKey, title, mainCanvas, idsCanvas } = ctx;
-        const random = seededRandom(`inkdraft:${trackKey}:${index}:${cue.kind}:${cue.start.toFixed(2)}`);
+        const cueSeed = `inkdraft:${trackKey}:${index}:${cue.kind}:${cue.start.toFixed(2)}`;
+        // 重复的副歌句：版式和线稿按原文取数，每次一样；镜头另取一串数，每次不同
+        const random = seededRandom(cue.motif ? `inkdraft:${trackKey}:motif:${cue.motif}` : cueSeed);
+        const shotRandom = cue.motif ? seededRandom(`${cueSeed}:shots`) : random;
         // 字都用细的一档（INK_WEIGHT）：墨切阈值后比字形胖一圈，细字切完正好
         const fontFor = size => `${INK_WEIGHT} ${size.toFixed(1)}px ${family}`;
         const main = mainCanvas.getContext('2d', { alpha: false });
@@ -498,7 +532,9 @@
         measureUnits(main, units, fontFor);
         const total = units.reduce((s, u) => s + u.glyphs.length, 0);
         const cjkShare = total ? units.reduce((s, u) => s + u.glyphs.filter(g => CJK.test(g.text)).length, 0) / total : 0;
-        const composed = composeText(units, W, H, random, settings.fontScale, cjkShare);
+        // 副歌字大一号，最后一段副歌再大一点
+        const chorusScale = cue.chorus ? (cue.lastChorus ? 1.22 : 1.14) : 1;
+        const composed = composeText(units, W, H, random, settings.fontScale * chorusScale, cjkShare);
         let placed = composed.placed;
         let textBox = null;
         if (placed.length) {
@@ -939,17 +975,17 @@
         });
 
         // 镜头的取景表
-        // 进这一段的转场：多数直接硬切；进副歌时多半漫墨或冲镜
-        const intoChorus = cue.kind === 'line' && cue.line?.isChorus && !(ctx.prevCue?.kind === 'line' && ctx.prevCue.line?.isChorus);
-        const transition = index > 0 ? pickWeighted(random, intoChorus
-            ? [['flood', 3], ['smash', 3], ['ink', 1], ['cut', 1.5]]
-            : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]) : 'cut';
-        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect, sceneKey: ctx.scene }, random, settings, transition);
+        // 进这一段的转场：多数直接硬切；进副歌那一句是「开墨」——整屏先是墨，从正中炸开一个口子，
+        // 冲镜落到第一个字上，头一个镜头反相（白字黑底）；副歌里面多漫墨、冲镜
+        const transition = index === 0 ? 'cut' : cue.chorusEntry ? 'burst' : pickWeighted(shotRandom, cue.chorus
+            ? [['flood', 2], ['smash', 2.5], ['ink', 1], ['cut', 2.5]]
+            : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]);
+        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect, sceneKey: ctx.scene }, shotRandom, settings, transition);
         return {
             index, cue, atlas, glyphInst, glyphCount: glyphEntries.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
             strokeStart, strokeStep,
             transition,
-            flood: [0.2 + random() * 0.6, 0.25 + random() * 0.5],
+            flood: transition === 'burst' ? [0.5, 0.5] : [0.2 + random() * 0.6, 0.25 + random() * 0.5],
             sparks: placed.slice(0, MAX_GLYPHS).map((p, i) => ({
                 t: p.g.start, x: (p.box[0] + p.box[2]) / 2, y: (p.box[1] + p.box[3]) / 2, s: p.size,
                 a: random() * TAU, spin: (i % 2 ? 1 : -1) * (2.2 + random() * 1.4)
@@ -1031,7 +1067,7 @@
         const shots = [];
         const length = cue.end - cue.start;
         const cuts = settings.cameraCuts && !settings.reducedMotion;
-        const chorus = cue.kind === 'line' && Boolean(cue.line?.isChorus);
+        const chorus = cue.kind === 'line' && Boolean(cue.chorus);
         // 反相镜头的多少看意象：星夜多（黑底白线像夜空），信笺少（信纸是白的）
         const negScale = { night: 1.7, sea: 1.2, city: 1.1, letters: 0.5, flora: 0.8 }[sceneKey] ?? 1;
         const negChance = settings.negativeShots ? Math.min(0.55, (chorus ? 0.34 : 0.2) * negScale) : 0;
@@ -1040,7 +1076,7 @@
         const push = (start, type, first) => {
             // 先取随机数再判断：开关反相不改后面取到的数，机位不跟着变
             const roll = random();
-            const neg = !first && inverted < 2 && roll < negChance;
+            const neg = (!first && inverted < 2 && roll < negChance) || (first && transition === 'burst' && settings.negativeShots);
             inverted = neg ? inverted + 1 : 0;
             const pose = shotPose(type, random);
             let angle = SCREEN_ANGLES[Math.floor(random() * SCREEN_ANGLES.length)];
@@ -1072,12 +1108,14 @@
         } else if (!cuts || !placed.length) {
             push(cue.start, 'wide', true);
         } else {
-            const count = Math.max(1, Math.min(7, Math.round(length * (chorus ? 1.25 : 1) / 2.6)));
+            // 副歌切得密：一般 1.4 倍，最后一段副歌 1.7 倍
+            const density = chorus ? (cue.lastChorus ? 1.7 : 1.4) : 1;
+            const count = Math.max(1, Math.min(8, Math.round(length * density / 2.6)));
             const onsets = unitBoxes.map(u => u.unit.start).filter(o => o > cue.start + 0.6 && o < cue.end - 0.6);
             const edges = [cue.start, ...planCuts(cue.start, cue.end, count, onsets), cue.end];
             edges.slice(0, -1).forEach((start, i) => {
                 const end = edges[i + 1];
-                if (i === 0 && transition === 'smash') { push(start, 'crash', true); return; }
+                if (i === 0 && (transition === 'smash' || transition === 'burst')) { push(start, 'crash', true); return; }
                 let weights = i === 0 ? FIRST_SHOT : MIDDLE_SHOT;
                 // 一句的最后一个镜头够长时多半拉远，把整句和周围的墨交代出来
                 if (i > 0 && i === edges.length - 2 && end - start >= 1.4) weights = weights.concat([['pullback', 5]]);
@@ -2030,8 +2068,10 @@ void main() {
                     if (data.transition === 'smash') smash = clamp(since / 0.5, 0.001, 1);
                 }
             }
-            const flooding = data.transition === 'flood' && since >= 0 && since < 0.6 && !s.reducedMotion;
-            const floodR = flooding ? 1.9 * (1 - Math.pow(1 - since / 0.6, 2.4)) : 0;
+            // 开墨比墨漫慢一点、口子从正中开，开到一半网点跟着鼓一下
+            const floodLen = data.transition === 'burst' ? 0.85 : 0.6;
+            const flooding = (data.transition === 'flood' || data.transition === 'burst') && since >= 0 && since < floodLen && !s.reducedMotion;
+            const floodR = flooding ? 1.9 * (1 - Math.pow(1 - since / floodLen, 2.4)) : 0;
 
             // 逐字层画进墨场
             const fieldTarget = glState.field;
@@ -2146,7 +2186,8 @@ void main() {
             gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
             gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, glState.paper); gl.uniform1i(u.uPaperTex, 7);
             gl.uniform1f(u.uPaperGrain, s.paper);
-            gl.uniform1f(u.uBeat, s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0)));
+            const burstKick = data.transition === 'burst' && since >= 0 && since < 0.9 ? Math.sin(Math.PI * since / 0.9) : 0;
+            gl.uniform1f(u.uBeat, s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0) + burstKick));
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
