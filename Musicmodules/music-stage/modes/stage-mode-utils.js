@@ -1039,6 +1039,7 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
         return {
             program, uniforms,
             get size() { return size; },
+            get textLayer() { return layers[1]; },
             // 低分辨率那一遍：绑到三张图上
             begin(w, h) {
                 if (w !== size[0] || h !== size[1]) {
@@ -1076,6 +1077,145 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
             }
         };
     };
+    // 逐字层：一句字图里的每个字画成一个小四边形，按屏幕像素画在合成好的画面上，各自缩放、旋转、
+    // 位移、淡入（入场、唱到时的动作都由播放时间算出，拖进度、暂停都对）。字的颜色取自 createSharpText
+    // 低分辨率那一遍的「被字盖住的颜色」，在字原来的位置取，所以光照、唱到的颜色和整句画法一致。
+    // 舞台给出 home(t) 的 GLSL：字图坐标（y 朝下）→ 屏幕 uv（y 朝上），和它要用的 uniform。
+    // 每个字 16 个浮点：
+    //   box（字图 uv 的外框 x0 y0 x1 y1）、centre（字心 uv、字编号、字号像素）、
+    //   xf（位移 x y 像素、缩放、旋转）、look（不透明度、闪白、描边样式 0 无 1 深色硬边 2 浅纸压痕、0）
+    const GLYPH_FLOATS = 16;
+    const createGlyphLayer = (gl, { home, label = 'stage' }) => {
+        const vert = `#version 300 es
+precision highp float;
+layout(location = 0) in vec4 aBox;
+layout(location = 1) in vec4 aCtr;
+layout(location = 2) in vec4 aXf;
+layout(location = 3) in vec4 aLook;
+uniform vec2 uTextSize;
+${home}
+out vec2 vTex;
+out vec2 vHome;
+flat out vec4 vCtr;
+flat out vec4 vLook;
+void main() {
+    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+    vec2 t = mix(aBox.xy, aBox.zw, corner);
+    vec2 rel = (t - aCtr.xy) * uTextSize;
+    float c = cos(aXf.w), s = sin(aXf.w);
+    rel = mat2(c, s, -s, c) * rel * aXf.z + aXf.xy;
+    vec2 sp = home(aCtr.xy + rel / uTextSize);
+    gl_Position = vec4(sp * 2.0 - 1.0, 0.0, 1.0);
+    vTex = t;
+    vHome = home(t);
+    vCtr = aCtr;
+    vLook = aLook;
+}`;
+        const frag = `#version 300 es
+precision highp float;
+precision highp int;
+uniform sampler2D uText;
+uniform sampler2D uTextLayer;
+uniform vec2 uTextSize;
+uniform float uLod;      // 段落进场时整句是虚的（mip 级），< 0 不虚
+uniform float uFade;
+in vec2 vTex;
+in vec2 vHome;
+flat in vec4 vCtr;
+flat in vec4 vLook;
+out vec4 outColor;
+// 只取自己这个字的笔画（字框按编号写在 G 通道），邻字伸进外框的笔画不跟着动
+float cov(vec2 uv) {
+    ivec2 p = clamp(ivec2(uv * uTextSize), ivec2(0), ivec2(uTextSize) - 1);
+    if (int(texelFetch(uText, p, 0).g * 255.0 + 0.5) != int(vCtr.z + 0.5)) return 0.0;
+    return uLod >= 0.0 ? textureLod(uText, uv, uLod).r : texture(uText, uv).r;
+}
+void main() {
+    float r = cov(vTex);
+    vec2 px = vCtr.w / uTextSize;
+    vec4 o = vec4(0.0);
+    if (vLook.z > 0.5 && vLook.z < 1.5) {
+        // 深色硬边：字外一圈深色描边，右下一层半透明的硬投影，像剪下来贴上去
+        float rim = r;
+        for (int i = 0; i < 8; i++) {
+            float a = float(i) * 0.7854;
+            rim = max(rim, cov(vTex + vec2(cos(a), sin(a)) * px * 0.075));
+        }
+        vec2 so = vec2(0.045, 0.06) * px;
+        float sh = max(cov(vTex - so), max(cov(vTex - so + vec2(0.06, 0.0) * px), cov(vTex - so - vec2(0.0, 0.06) * px)));
+        o = vec4(0.0, 0.0, 0.0, sh * 0.5);
+        vec4 rc = vec4(vec3(0.071, 0.055, 0.118) * 0.92, 0.92) * rim;
+        o = rc + o * (1.0 - rc.a);
+    } else if (vLook.z > 1.5) {
+        // 浅纸：右下错开一点的白色压痕
+        float hl = cov(vTex - vec2(0.03, 0.04) * px) * 0.5;
+        o = vec4(vec3(hl), hl);
+    }
+    vec3 fill = texture(uTextLayer, vHome).rgb + vec3(1.0, 0.97, 0.92) * vLook.y;
+    o = vec4(fill * r, r) + o * (1.0 - r);
+    outColor = o * vLook.x * uFade;
+}`;
+        const { program, uniforms } = compileProgram(gl, vert, frag, `${label}:glyphs`);
+        const vao = gl.createVertexArray();
+        const buffer = gl.createBuffer();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        for (let i = 0; i < 4; i += 1) {
+            gl.enableVertexAttribArray(i);
+            gl.vertexAttribPointer(i, 4, gl.FLOAT, false, GLYPH_FLOATS * 4, i * 16);
+            gl.vertexAttribDivisor(i, 1);
+        }
+        gl.bindVertexArray(null);
+        return {
+            program, uniforms,
+            // 画到当前帧缓冲上（预乘透明度叠加）。bind(uniforms) 绑 uText、uTextLayer 和 home 要用的参数
+            draw(data, count, bind) {
+                if (!count) return;
+                gl.useProgram(program);
+                gl.bindVertexArray(vao);
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, count * GLYPH_FLOATS), gl.DYNAMIC_DRAW);
+                bind(uniforms);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+                gl.disable(gl.BLEND);
+                gl.bindVertexArray(null);
+            }
+        };
+    };
+    // 入场、唱到时的字的动作：输入归一化的时间，返回 [位移 x, 位移 y（字号倍数，y 朝下）, 缩放, 旋转, 不透明度, 闪白]
+    const easeOut = k => 1 - Math.pow(1 - k, 3);
+    const backOut = (k, s = 1.9) => 1 + (s + 1) * Math.pow(k - 1, 3) + s * Math.pow(k - 1, 2);
+    const bounceOut = (k) => {
+        if (k < 1 / 2.75) return 7.5625 * k * k;
+        if (k < 2 / 2.75) { k -= 1.5 / 2.75; return 7.5625 * k * k + 0.75; }
+        if (k < 2.5 / 2.75) { k -= 2.25 / 2.75; return 7.5625 * k * k + 0.9375; }
+        k -= 2.625 / 2.75; return 7.5625 * k * k + 0.984375;
+    };
+    const GLYPH_ENTER = Object.freeze({
+        pop: k => [0, 0, 0.35 + 0.65 * backOut(k), 0, Math.min(1, k * 3), 0],
+        rise: k => [0, (1 - easeOut(k)) * 0.45, 1, 0, Math.min(1, k * 2.2), 0],
+        drop: k => [0, -(1 - bounceOut(k)) * 0.7, 1, 0, Math.min(1, k * 4), 0],
+        stamp: k => [0, 0, 1 + (1 - easeOut(k)) * 0.85, (1 - easeOut(k)) * 0.18, Math.min(1, k * 2.5), k > 0.55 ? Math.max(0, 1 - (k - 0.55) * 4) * 0.35 : 0],
+        spin: k => [0, 0, 0.5 + 0.5 * easeOut(k), -(1 - easeOut(k)) * 1.3, Math.min(1, k * 2.5), 0],
+        slide: k => [-(1 - easeOut(k)) * 0.6, 0, 1, 0, Math.min(1, k * 2.5), 0]
+    });
+    const GLYPH_SING = Object.freeze({
+        bounce: k => [0, -Math.sin(Math.PI * k) * 0.16, 1, 0, 1, 0],
+        swell: k => [0, 0, 1 + Math.sin(Math.PI * k) * 0.14, 0, 1, 0],
+        nod: k => [0, 0, 1, Math.sin(Math.PI * 2 * k) * 0.12 * (1 - k), 1, 0],
+        flash: k => [0, 0, 1 + Math.sin(Math.PI * k) * 0.05, 0, 1, (1 - k) * 0.55]
+    });
+    // 一个字这一刻的姿态（入场 × 唱到）：enter/sing 是上面两张表里的名字，tauEnter/tauSing 是距入场、开唱的秒数
+    const glyphPose = (enter, tauEnter, sing, tauSing, still = false) => {
+        if (still) return [0, 0, 1, 0, 1, 0];
+        if (tauEnter < 0) return [0, 0, 1, 0, 0, 0];
+        const e = (GLYPH_ENTER[enter] || GLYPH_ENTER.rise)(Math.min(1, tauEnter / 0.42));
+        if (tauSing < -0.02 || tauSing > 0.32 || !GLYPH_SING[sing]) return e;
+        const g = GLYPH_SING[sing](Math.max(0, tauSing) / 0.32);
+        return [e[0] + g[0], e[1] + g[1], e[2] * g[2], e[3] + g[3], e[4] * g[4], e[5] + g[5]];
+    };
     // 字形纹理和画布都按屏幕原生像素；效果层按像素预算缩小。返回两者尺寸
     const sharpSizes = (w, h, pixels, ratioCap = 2) => {
         const native = Math.min(ratioCap, global.devicePixelRatio || 1);
@@ -1090,6 +1230,7 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     global.MusicStageModeUtils = Object.freeze({
         NOISE_GLSL, noiseTexture, bindNoise,
         SPLIT_OUT_GLSL, compileProgram, createSharpText, sharpSizes,
+        GLYPH_FLOATS, createGlyphLayer, GLYPH_ENTER, GLYPH_SING, glyphPose,
         lineCounter, withPlainLyrics,
         watchOverlay, watchCardInset, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,

@@ -688,8 +688,9 @@ vec4 coverage(vec2 uv) {
         c1 = mat2(cr, -sr, sr, cr) * c1 / vec2(aspect, 1.0);
         t1 = c1 / (uZoom * uEnter2.x) + 0.5;
     }
+    // 这一句的字由逐字层画；这里只留它的覆盖率给上一句和火星做遮挡
     float r = (uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z + uLodBias) : texture(uText, t1)).r * uEnter.w;
-    vec4 c = vec4(r, 0.0, 0.0, 0.0);
+    vec4 c = vec4(0.0);
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, -(1.0 - uPrevFade) * 0.02);
         float r0 = texture(uPrevText, t0).r;
@@ -705,6 +706,21 @@ vec4 coverage(vec2 uv) {
     return c;
 }`;
     const POST = 'vec3 post(vec3 col, vec4 c) { return col + vec3(1.0, 0.7, 0.35) * c.z; }';
+    // 逐字层：字图坐标 → 屏幕，和上面 coverage 里的 t1 互逆
+    const HOME = `
+uniform float uZoom;
+uniform vec4 uEnter;
+uniform vec2 uEnter2;
+vec2 home(vec2 t) {
+    vec2 tc;
+    if (uEnter.w < 0.999 || uEnter2.y > 0.0) {
+        float aspect = uTextSize.x / uTextSize.y;
+        vec2 c1 = (t - 0.5) * (uZoom * uEnter2.x) * vec2(aspect, 1.0);
+        float cr = cos(uEnter.y), sr = sin(uEnter.y);
+        tc = mat2(cr, sr, -sr, cr) * c1 / vec2(aspect, 1.0) + 0.5 + vec2(0.0, uEnter.x);
+    } else tc = (t - 0.5) * uZoom + 0.5;
+    return vec2(tc.x, 1.0 - tc.y);
+}`;
 
     const createGl = (canvas) => {
         const gl = canvas.getContext('webgl2', {
@@ -748,7 +764,9 @@ vec4 coverage(vec2 uv) {
         return {
             gl, sky: link(SKY_VERT, SKY_FRAG), spark: link(SPARK_VERT, SPARK_FRAG),
             vao: gl.createVertexArray(), slots, bursts: texture(gl.NEAREST, false), burstsKey: null,
-            sharp: Utils.createSharpText(gl, { label: 'hanabi', coverage: COVERAGE, post: POST })
+            sharp: Utils.createSharpText(gl, { label: 'hanabi', coverage: COVERAGE, post: POST }),
+            glyphs: Utils.createGlyphLayer(gl, { label: 'hanabi', home: HOME }),
+            glyphData: new Float32Array(256 * Utils.GLYPH_FLOATS)
         };
     };
 
@@ -1118,31 +1136,10 @@ vec4 coverage(vec2 uv) {
                 });
                 let id = 0;
                 let chunkFirst = 0, lastChunk = -1;
-                const rim = style && style !== 'paper' ? 'rgba(18,14,30,0.92)' : null;
                 items.forEach(({ g, x, baseline, size, chunk, rot, pivot: own }) => {
                     ctx.font = font(size);
                     const w = ctx.measureText(g.text).width;
-                    // 深色卡上的字描一圈深边、带一点硬投影，像剪下来贴上去；粉纸上只留一道浅浅的压痕
-                    if (style && g.text.trim()) {
-                        cctx.save();
-                        const piv = own || pivot, ang = own ? rot : tilt;
-                        cctx.translate(piv[0], piv[1]); cctx.rotate(ang); cctx.translate(-piv[0], -piv[1]);
-                        cctx.font = font(size);
-                        cctx.lineJoin = 'round';
-                        if (rim) {
-                            cctx.fillStyle = cctx.strokeStyle = 'rgba(0,0,0,0.5)';
-                            cctx.lineWidth = size * 0.16;
-                            cctx.strokeText(g.text, x + size * 0.045, baseline + size * 0.06);
-                            cctx.fillStyle = cctx.strokeStyle = rim;
-                            cctx.strokeText(g.text, x, baseline);
-                        } else {
-                            cctx.fillStyle = 'rgba(255,255,255,0.5)';
-                            cctx.fillText(g.text, x + size * 0.03, baseline + size * 0.04);
-                            cctx.fillStyle = 'rgba(140,50,90,0.22)';
-                        }
-                        cctx.fillText(g.text, x, baseline);
-                        cctx.restore();
-                    }
+                    // 卡片上的字的深色描边、硬投影、浅纸压痕交给逐字层（跟着字一起动），不再画进卡片图
                     id = Math.min(255, id + 1);
                     if (own) {
                         ctx.save();
@@ -1158,7 +1155,16 @@ vec4 coverage(vec2 uv) {
                     }
                     ctx.globalCompositeOperation = 'lighten';
                     ctx.fillStyle = `rgb(0,${id},0)`;
-                    ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
+                    const gx = Math.floor(x - 2), gy = Math.floor(baseline - size * 0.95), gw = Math.ceil(w + 4), gh = Math.ceil(size * 1.2);
+                    ctx.fillRect(gx, gy, gw, gh);
+                    // 逐字层的外框：字框四角经过当前变换后的外接矩形，再留出描边和投影的边
+                    const m = ctx.getTransform();
+                    const corners = [[gx, gy], [gx + gw, gy], [gx, gy + gh], [gx + gw, gy + gh]].map(([u, v]) => [m.a * u + m.c * v + m.e, m.b * u + m.d * v + m.f]);
+                    const padG = size * 0.14;
+                    const gbox = [
+                        (Math.min(...corners.map(q => q[0])) - padG) / W, (Math.min(...corners.map(q => q[1])) - padG) / H,
+                        (Math.max(...corners.map(q => q[0])) + padG) / W, (Math.max(...corners.map(q => q[1])) + padG) / H
+                    ];
                     ctx.globalCompositeOperation = 'lighter';
                     ctx.fillStyle = 'rgb(255,0,0)';
                     ctx.fillText(g.text, x, baseline);
@@ -1170,7 +1176,7 @@ vec4 coverage(vec2 uv) {
                         const dx = x + w / 2 - own[0], dy = baseline - size * 0.35 - own[1];
                         c = [(own[0] + dx * Math.cos(rot) - dy * Math.sin(rot)) / W, (own[1] + dx * Math.sin(rot) + dy * Math.cos(rot)) / H];
                     } else c = toTex(x + w / 2, baseline - size * 0.35);
-                    placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end });
+                    placed.push({ x: c[0], y: c[1], size: size / H, w: w / W, start: g.start, end: g.end, id, box: gbox, px: size });
                 });
                 ctx.restore();
                 // 导火索：沿着字走一条波浪线，按唱到的位置烧过去
@@ -1197,6 +1203,12 @@ vec4 coverage(vec2 uv) {
             slot.key = key;
             slot.dark = cardStyle === 'paper' ? 1 : 0;
             slot.carded = cardStyle ? 1 : 0;
+            slot.rim = cardStyle === 'paper' ? 2 : cardStyle ? 1 : 0;
+            // 这一句的字怎么进场、唱到时怎么动
+            const pick = seededRandom(`hanabi:${cuesFor?.key}:${index}:glyphs`);
+            const enters = cue.kind === 'line' ? ['pop', 'rise', 'drop', 'stamp', 'spin', 'slide'] : ['rise'];
+            slot.enter = enters[Math.floor(pick() * enters.length)];
+            slot.sing = ['bounce', 'swell', 'nod', 'flash'][Math.floor(pick() * 4)];
             slot.glyphs = placed;
             slot.fuse = fuse;
             slot.used = performance.now();
@@ -1364,6 +1376,36 @@ vec4 coverage(vec2 uv) {
                 gl.activeTexture(gl.TEXTURE0 + unit + 2); gl.bindTexture(gl.TEXTURE_2D, slot.card); gl.uniform1i(c.uCard, unit + 2);
                 gl.uniform1f(c.uCardIn, cardIn);
             });
+            // 逐字层：每个字按自己的入场和唱到的动作画在合成好的画面上
+            {
+                const data = glState.glyphData;
+                let n = 0;
+                const still = s.reducedMotion;
+                const list = slot.glyphs || [];
+                const stagger = Math.min(0.045, 0.55 / Math.max(1, list.length));
+                list.forEach((g, i) => {
+                    if (!g.box || n >= 256) return;
+                    const pose = Utils.glyphPose(slot.enter, t - cue.start - i * stagger, slot.sing, t - g.start, still);
+                    if (pose[4] <= 0.001) return;
+                    const o = n * Utils.GLYPH_FLOATS;
+                    data.set(g.box, o);
+                    data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
+                    data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
+                    data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = slot.rim || 0; data[o + 15] = 0;
+                    n += 1;
+                });
+                glState.glyphs.draw(data, n, (c) => {
+                    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(c.uText, 0);
+                    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sharp.textLayer); gl.uniform1i(c.uTextLayer, 1);
+                    gl.uniform2f(c.uTextSize, world.W, world.H);
+                    gl.uniform1f(c.uLod, enter[2] > 0.01 ? enter[2] + lodBias : -1);
+                    gl.uniform1f(c.uFade, enter[3]);
+                    gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
+                    gl.uniform4fv(c.uEnter, enter);
+                    gl.uniform2fv(c.uEnter2, enter2);
+                });
+                stats.glyphs = n;
+            }
             gl.bindVertexArray(vao);
 
             if (count) {
