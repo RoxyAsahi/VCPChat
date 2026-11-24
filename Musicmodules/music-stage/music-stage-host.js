@@ -71,7 +71,7 @@
             edgeSpectrum: root.querySelector('.music-stage-edge-spectrum'),
             edgeCanvas: root.querySelector('.music-stage-edge-spectrum-canvas'),
             modeRoot: root.querySelector('.music-stage-mode-root'),
-            modeSwitcher: root.querySelector('.music-stage-mode-switcher'),
+            modeSwitcher: root.querySelector('.music-stage-mode-picker, .music-stage-mode-switcher'),
             settings: root.querySelector('.music-stage-settings'),
             settingsToggle: root.querySelector('.music-stage-settings-toggle'),
             settingsCard: root.querySelector('.music-stage-settings-card'),
@@ -503,8 +503,9 @@
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
                 const selected = button.dataset.stageMode === state.modeId;
                 button.classList.toggle('is-active', selected);
-                button.setAttribute('aria-pressed', String(selected));
+                button.setAttribute(button.getAttribute('role') === 'menuitemradio' ? 'aria-checked' : 'aria-pressed', String(selected));
             });
+            syncModePickerLabel();
             revealActiveMode();
 
             if (state.active) {
@@ -513,9 +514,64 @@
             }
         };
 
-        // The switcher scrolls sideways in narrow windows; keep the selected
-        // stage in view instead of leaving it clipped off either end.
+        // 舞台切换：角落里一个按钮写着当前舞台，点开竖着弹出全部舞台（行高 28，和主程序设置页的下拉同一套）。
+        // 键盘：上下键 / Home / End 移动，回车或空格选中，Esc 或点外面收起；列表放不下时自己滚动。
+        const picker = { built: false, open: false, toggle: null, label: null, menu: null };
+        const isPicker = () => elements.modeSwitcher?.classList.contains('music-stage-mode-picker');
+        const modeMenu = () => (picker.built ? picker.menu : elements.modeSwitcher);
+        const modeOptions = () => Array.from(modeMenu()?.querySelectorAll('[data-stage-mode]') || []);
+        const buildModePicker = () => {
+            if (picker.built || !isPicker()) return;
+            const host = elements.modeSwitcher;
+            picker.toggle = createElement('button', 'music-stage-mode-picker-toggle', {
+                type: 'button',
+                'aria-haspopup': 'menu',
+                'aria-expanded': 'false',
+                title: '切换舞台'
+            });
+            picker.label = createElement('span', 'music-stage-mode-picker-label');
+            const chevron = createElement('span', 'music-stage-mode-picker-chevron', {
+                'aria-hidden': 'true',
+                html: '<svg viewBox="0 0 12 12" width="12" height="12"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            });
+            picker.toggle.append(picker.label, chevron);
+            picker.menu = createElement('div', 'music-stage-mode-menu', { role: 'menu', 'aria-label': '歌词演出模式', tabindex: '-1' });
+            picker.menu.hidden = true;
+            host.replaceChildren(picker.toggle, picker.menu);
+            picker.built = true;
+        };
+        const syncModePickerLabel = () => {
+            if (!picker.built) return;
+            const entry = Modes.entries.find((item) => item.id === state.modeId);
+            picker.label.textContent = entry?.label || '';
+            picker.toggle.title = entry ? `舞台：${entry.label}（点开切换）` : '切换舞台';
+        };
+        const focusModeOption = (index) => {
+            const options = modeOptions();
+            if (!options.length) return;
+            const target = options[(index + options.length) % options.length];
+            target.focus({ preventScroll: true });
+            target.scrollIntoView?.({ block: 'nearest' });
+        };
+        const setModePickerOpen = (open, { focus = 'menu' } = {}) => {
+            if (!picker.built || picker.open === open) return;
+            picker.open = open;
+            picker.menu.hidden = !open;
+            picker.toggle.setAttribute('aria-expanded', String(open));
+            elements.modeSwitcher.classList.toggle('is-open', open);
+            if (open) {
+                const options = modeOptions();
+                const current = Math.max(0, options.findIndex((option) => option.dataset.stageMode === state.modeId));
+                if (focus === 'menu') focusModeOption(current);
+                else options[current]?.scrollIntoView?.({ block: 'nearest' });
+            } else if (focus === 'toggle') {
+                picker.toggle.focus({ preventScroll: true });
+            }
+        };
+
+        // 旧的横排页签在窄窗口里会横向滚动：把选中的那个留在可见范围里。竖向菜单打开时由 setModePickerOpen 负责。
         const revealActiveMode = () => {
+            if (picker.built) return;
             const bar = elements.modeSwitcher;
             const button = bar?.querySelector('.music-stage-mode-button.is-active');
             if (!button || bar.scrollWidth <= bar.clientWidth + 1) return;
@@ -526,22 +582,42 @@
         };
 
         const renderModeButtons = () => {
+            buildModePicker();
             const fragment = document.createDocumentFragment();
             const visibleIds = state.config.enabledModes.includes(state.modeId)
                 ? state.config.enabledModes
                 : [state.modeId, ...state.config.enabledModes];
             Modes.entries.filter((entry) => visibleIds.includes(entry.id)).forEach((entry) => {
-                const button = createElement('button', 'music-stage-mode-button', {
-                    type: 'button',
-                    text: entry.label,
-                    title: `切换至${entry.label}`,
-                    'data-stage-mode': entry.id,
-                    'aria-pressed': String(entry.id === state.modeId)
-                });
-                button.classList.toggle('is-active', entry.id === state.modeId);
+                const selected = entry.id === state.modeId;
+                const button = picker.built
+                    ? createElement('button', 'music-stage-mode-menu-item', {
+                        type: 'button',
+                        role: 'menuitemradio',
+                        tabindex: '-1',
+                        'data-stage-mode': entry.id,
+                        'aria-checked': String(selected)
+                    })
+                    : createElement('button', 'music-stage-mode-button', {
+                        type: 'button',
+                        text: entry.label,
+                        title: `切换至${entry.label}`,
+                        'data-stage-mode': entry.id,
+                        'aria-pressed': String(selected)
+                    });
+                if (picker.built) {
+                    button.append(
+                        createElement('span', 'music-stage-mode-menu-item-label', entry.label),
+                        createElement('span', 'music-stage-mode-menu-item-check', {
+                            'aria-hidden': 'true',
+                            html: '<svg viewBox="0 0 14 14" width="13" height="13"><path d="M3 7.2 5.8 10 11 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                        })
+                    );
+                }
+                button.classList.toggle('is-active', selected);
                 fragment.appendChild(button);
             });
-            elements.modeSwitcher.replaceChildren(fragment);
+            modeMenu().replaceChildren(fragment);
+            syncModePickerLabel();
             revealActiveMode();
         };
 
@@ -626,7 +702,7 @@
             const config = state.config;
             const modeFragment = document.createDocumentFragment();
             Modes.entries.forEach((entry) => {
-                const label = createElement('label', 'music-stage-mode-option', {
+                const label = createElement('label', 'music-stage-mode-menu-item', {
                     title: entry.description ? `${entry.label} · ${entry.description}` : entry.label
                 });
                 const checkbox = createElement('input', '', {
@@ -1485,6 +1561,7 @@
         const exit = () => {
             if (!state.active || state.destroyed) return;
             if (state.settingsOpen) setSettingsOpen(false);
+            setModePickerOpen(false, { focus: 'none' });
             state.active = false;
             app.isStageActive = false;
             root.classList.remove('is-visible');
@@ -1720,9 +1797,44 @@
         });
         scope.listen(elements.volumeSlider, 'input', (event) => setVolume(event.target.value));
         scope.listen(elements.modeSwitcher, 'click', (event) => {
+            if (picker.built && event.target.closest('.music-stage-mode-picker-toggle')) {
+                // 鼠标点开时不抢焦点到列表（免得出现键盘焦点框），键盘打开时直接落到当前舞台上
+                setModePickerOpen(!picker.open, { focus: event.detail === 0 ? 'menu' : 'none' });
+                return;
+            }
             const button = event.target.closest('[data-stage-mode]');
-            if (button) setMode(button.dataset.stageMode);
+            if (!button) return;
+            setMode(button.dataset.stageMode);
+            setModePickerOpen(false, { focus: event.detail === 0 ? 'toggle' : 'none' });
         });
+        scope.listen(elements.modeSwitcher, 'keydown', (event) => {
+            if (!picker.built) return;
+            const options = modeOptions();
+            const index = options.indexOf(document.activeElement);
+            if (event.target === picker.toggle && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                event.preventDefault();
+                event.stopPropagation();
+                setModePickerOpen(true);
+                return;
+            }
+            if (!picker.open) return;
+            const moves = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: options.length - 1 };
+            if (event.key in moves) {
+                event.preventDefault();
+                event.stopPropagation();
+                focusModeOption(index < 0 && event.key === 'ArrowUp' ? options.length - 1 : moves[event.key]);
+            } else if (event.key === 'Escape') {
+                // 只收起菜单，不退出舞台
+                event.preventDefault();
+                event.stopPropagation();
+                setModePickerOpen(false, { focus: 'toggle' });
+            } else if (event.key === 'Tab') {
+                setModePickerOpen(false, { focus: 'none' });
+            }
+        });
+        scope.listen(document, 'pointerdown', (event) => {
+            if (picker.open && !elements.modeSwitcher.contains(event.target)) setModePickerOpen(false, { focus: 'none' });
+        }, true);
         scope.listen(elements.progressTrack, 'pointerdown', (event) => {
             state.draggingProgress = true;
             elements.progressTrack.setPointerCapture?.(event.pointerId);
