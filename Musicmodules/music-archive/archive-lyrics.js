@@ -42,6 +42,7 @@
     const TEMPLATE = `
         <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-chip" data-y="chip" hidden></button><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
+        <button type="button" class="archive-lyrics-back" data-y="back" data-dir="up" tabindex="-1" title="不等它自己滑回，马上回到正在唱的那一句">回到当前句 <i aria-hidden="true"></i></button>
         <div class="archive-lyrics-index" data-y="index" title="歌词行索引：点一格跳到那一段"></div>
         <div class="archive-lyrics-none" data-y="none"><span data-y="noneText">这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
@@ -358,6 +359,7 @@
             }
             state.manual += e.deltaY * unit;
             state.manual = Math.max(-state.shift, state.manual);
+            if (r.back) r.back.dataset.dir = state.manual > 0 ? 'up' : 'down';
             el.classList.add('browsing');
             place(false);
             clearTimeout(state.manualTimer);
@@ -376,6 +378,14 @@
             else if (!want && state.timer) { clearInterval(state.timer); state.timer = 0; }
         };
 
+        /* 滚轮翻看时（5 秒后自己滑回）下方出现「回到当前句」：点一下马上回去 */
+        r.back?.addEventListener('click', () => {
+            clearTimeout(state.manualTimer);
+            state.manualTimer = 0;
+            state.manual = 0;
+            el.classList.remove('browsing');
+            place();
+        });
         r.track.addEventListener('click', (e) => {
             // 纯文本歌词顶上的「换一份带时间轴的」：打开获取歌词
             if (e.target.closest('.plain-fetch')) {

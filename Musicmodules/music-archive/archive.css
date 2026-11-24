@@ -878,3 +878,13 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
     pointer-events: none;
 }
 .archive-lyrics.none::after { display: none; }
+/* R27 歌词滚轮翻看时的「回到当前句」 */
+.archive-lyrics-back { position: absolute; left: var(--lyrics-start); bottom: 16px; z-index: 2; display: none; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--ar-rule); border-radius: 999px; background: rgba(var(--ar-paper-rgb), .92); color: var(--ar-muted); font: inherit; font-size: 11px; letter-spacing: .6px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.archive-lyrics.browsing:not(.plain):not(.none) .archive-lyrics-back { display: inline-flex; }
+.archive-lyrics-back:hover { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-back i { font-style: normal; }
+.archive-lyrics-back[data-dir="up"] i::before { content: "↑"; }
+.archive-lyrics-back[data-dir="down"] i::before { content: "↓"; }
+.archive-lyrics.browsing:not(.plain):not(.none) .archive-lyrics-back { animation: archive-lyrics-back-in .18s ease both; }
+@keyframes archive-lyrics-back-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
