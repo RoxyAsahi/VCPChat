@@ -171,3 +171,34 @@ test('after export the toast offers to show the file in its folder', async () =>
     assert.deepEqual(shown, { path: 'C:\\out.m3u8' });
     delete globalThis.MusicToast;
 });
+
+test('dropping files the library cannot take says so; folders with dots in their names are not counted', () => {
+    const { JSDOM } = require('jsdom');
+    const dom = new JSDOM('<body></body>');
+    const g = globalThis;
+    const MOD = path.join(__dirname, '../Musicmodules/music-m3u.js');
+    g.window = dom.window; g.document = dom.window.document;
+    const toasts = [];
+    dom.window.MusicToast = { show: (t) => toasts.push(t) };
+    delete require.cache[MOD];
+    const { setupMusicM3u: setup } = require(MOD);
+    const app = { playlist: [], customPlaylists: [], api: { importMusicM3u: async () => ({ ok: false }), exportMusicM3u: async () => ({ ok: true }), getPathForFile: () => '' } };
+    setup(app);
+    const drop = (entries) => {
+        const ev = new dom.window.Event('drop', { bubbles: true });
+        const items = entries.map(([name, dir]) => ({ webkitGetAsEntry: () => ({ isDirectory: dir }), getAsFile: () => ({ name }) }));
+        ev.dataTransfer = { types: ['Files'], items, files: entries.filter(([, d]) => !d).map(([name]) => ({ name })) };
+        document.dispatchEvent(ev);
+    };
+    drop([['a.ape', false], ['b.wma', false]]);
+    assert.match(toasts.at(-1).message, /2 个文件曲库收不了（APE、WMA）/);
+    assert.equal(toasts.at(-1).kind, 'error');
+    drop([['a.flac', false], ['c.zip', false]]);
+    assert.match(toasts.at(-1).message, /有 1 个文件曲库收不了（ZIP），跳过了/);
+    const n = toasts.length;
+    drop([['Vol.1', true], ['x.mp3', false], ['cover', false]]);
+    assert.equal(toasts.length, n);
+    drop([['Vol.1', true], ['notes.txt', false]]);
+    assert.match(toasts.at(-1).message, /跳过了/); // 有文件夹在加，不算全部失败
+    delete g.window; delete g.document;
+});

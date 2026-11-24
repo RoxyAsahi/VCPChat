@@ -10,6 +10,9 @@
     'use strict';
 
     const norm = (p) => String(p || '').replace(/\//g, '\\').toLowerCase();
+    // 和主进程扫描器（musicLibraryScanner SUPPORTED_FORMATS）一致
+    const SUPPORTED = new Set(['mp3', 'wav', 'ogg', 'flac', 'm4a']);
+    const extOf = (name) => { const m = /\.([a-z0-9]{1,6})$/i.exec(String(name || '')); return m ? m[1].toLowerCase() : ''; };
 
     // entries: [{ path, exists }]，library: [{ path }] → { paths, toAdd, missing }
     const matchEntries = (entries, library) => {
@@ -111,6 +114,17 @@
             }))
         ];
 
+        // 拖进来的文件里有曲库收不了的格式（.ape、.wma、图片、压缩包…）时说一声：以前松手后什么也不发生，不知道是没加上还是还在扫
+        const noteUnsupported = (files, dirs = 0) => {
+            const odd = files.filter((f) => { const ext = extOf(f.name); return ext && !SUPPORTED.has(ext) && !/^m3u8?$/.test(ext); });
+            if (!odd.length) return;
+            const kinds = [...new Set(odd.map((f) => extOf(f.name).toUpperCase()))].slice(0, 4).join('、');
+            const all = odd.length === files.length && !dirs;
+            toast(all
+                ? `拖进来的${odd.length > 1 ? ` ${odd.length} 个` : ''}文件曲库收不了（${kinds}）。能加的格式：FLAC、MP3、WAV、OGG、M4A，或者整个文件夹`
+                : `有 ${odd.length} 个文件曲库收不了（${kinds}），跳过了；其余的正在加进曲库`, { kind: all ? 'error' : 'info', duration: 6000 });
+        };
+
         // 拖进来的 .m3u / .m3u8：当歌单导入（music.js 那边把音频文件加进曲库，歌单文件它会忽略）
         const doc = global.document;
         if (doc && typeof api().getPathForFile === 'function') {
@@ -138,6 +152,15 @@
             global.addEventListener?.('blur', hideHint);
             doc.addEventListener('drop', hideHint, true);
             doc.addEventListener('drop', (event) => {
+                // 文件夹名也可能带点（「Vol.1」）：用 webkitGetAsEntry 认出文件夹，只看真正的文件
+                if (isFileDrag(event)) {
+                    const items = Array.from(event.dataTransfer?.items || []);
+                    const plain = items.length
+                        ? items.map((it) => { let e = null; try { e = it.webkitGetAsEntry?.(); } catch (x) { e = null; } return e && e.isDirectory ? null : it.getAsFile?.(); }).filter(Boolean)
+                        : Array.from(event.dataTransfer?.files || []);
+                    const dirs = items.length - plain.length;
+                    noteUnsupported(plain, dirs);
+                }
                 const files = Array.from(event.dataTransfer?.files || []).filter((f) => /\.m3u8?$/i.test(f.name || ''));
                 if (!files.length) return;
                 for (const f of files) {
