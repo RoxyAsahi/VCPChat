@@ -547,6 +547,32 @@ uniform float uGrainStep;
 out vec4 outColor;
 ${COMMON}
 
+// 指痕外沿积的水：手指把雾推到笔画两边，聚成一圈水。这个像素自己没被擦开、
+// 但旁边一小圈里有已经写到的笔画，就算在水线上（返回 0..1，越靠近笔画越满）。
+float wetEdge(sampler2D atlas, sampler2D data, vec4 info, vec2 uv) {
+    if (info.y < 0.5) return 0.0;
+    vec2 au = vec2(uv.x, 1.0 - uv.y);
+    vec4 here = texelFetch(atlas, min(ivec2(au * uAtlasSize), ivec2(uAtlasSize) - 1), 0);
+    int id = int(here.g * 255.0 + 0.5);
+    if (id <= 0 || here.r > 0.5) return 0.0;
+    vec4 tw = texelFetch(data, ivec2(id, 0), 0);
+    float prog = clamp((uTime - tw.x) / max(tw.y, 0.05), 0.0, 1.0) * 1.12;
+    if (prog <= 0.0) return 0.0;
+    vec2 px = 1.0 / uAtlasSize;
+    float rad = 0.0042 * uAtlasSize.y;
+    float wet = 0.0;
+    for (int i = 0; i < 8; i++) {
+        float a = float(i) * 0.7854 + 0.39;
+        vec4 t = texture(atlas, au + vec2(cos(a), sin(a)) * rad * px);
+        if (t.r < 0.3) continue;
+        float sp = t.b > 0.0 ? t.b : 1.0;
+        wet = max(wet, smoothstep(sp - 0.03, sp, prog) * smoothstep(0.3, 0.8, t.r));
+    }
+    float n = vnoise(uv * vec2(9.0, 6.0) + info.z) * 0.6 + vnoise(uv * 40.0) * 0.4;
+    float back = smoothstep(info.x, info.x + ${FOG_RETURN.toFixed(1)}, uTime + (n - 0.5) * 2.2);
+    return wet * (1.0 - back);
+}
+
 // 一句歌词在这个像素擦掉了多少雾
 float written(sampler2D atlas, sampler2D data, vec4 info, vec2 uv) {
     if (info.y < 0.5) return 0.0;
@@ -586,6 +612,7 @@ void main() {
     float dl = length(d);
     float drop = radius > 0.0 ? smoothstep(radius, radius * 0.8, dl) * uDrops : 0.0;
     vec2 refract = drop > 0.0 ? -d / max(radius, 1e-4) * 0.035 : vec2(0.0);
+    float dropShade = radius > 0.0 ? smoothstep(radius * 0.45, radius, dl) : 0.0;
 
     // 往下淌的水：走过的地方清出一道，慢慢又起雾
     float trail = 0.0;
@@ -608,7 +635,27 @@ void main() {
     }
 
     float wipe = max(max(written(uAtlas0, uData0, uLine[0], uv), written(uAtlas1, uData1, uLine[1], uv)), written(uAtlas2, uData2, uLine[2], uv));
+    float wet = 0.0;
+    if (wipe < 0.5) wet = max(max(wetEdge(uAtlas0, uData0, uLine[0], uv), wetEdge(uAtlas1, uData1, uLine[1], uv)), wetEdge(uAtlas2, uData2, uLine[2], uv));
     wipe = max(wipe, trail * 0.85);
+    // 水线不是一条匀的线，是一颗颗挤在一起的水珠：屏幕上按小格撒珠子，只在水线上的才显出来
+    float edgeBead = 0.0;
+    vec2 beadD = vec2(0.0);
+    float beadR = 1.0;
+    if (wet > 0.0) {
+        vec2 bg = vec2(uRes.x / uRes.y, 1.0) * 110.0;
+        vec2 bc = floor(uv * bg);
+        for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {
+            vec2 c = bc + vec2(float(ox), float(oy));
+            vec2 ctr = (c + 0.5 + (hash22(c) - 0.5) * 0.7) / bg;
+            if (hash12(c + 7.7) < 0.62) continue;
+            float r = 0.0018 + hash12(c + 3.1) * 0.0026;
+            vec2 dd = (uv - ctr) * vec2(uRes.x / uRes.y, 1.0);
+            float m = smoothstep(r, r * 0.75, length(dd));
+            if (m > edgeBead) { edgeBead = m; beadD = dd; beadR = r; }
+        }
+        edgeBead *= smoothstep(0.15, 0.6, wet);
+    }
 
     vec3 blurred = textureLod(uScene, uv + refract * 0.4, 4.2).rgb;
     float grainy = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 180.0) - 0.5;
@@ -616,14 +663,27 @@ void main() {
     // 雾里的灯：除了透过来的模糊光斑，再往外晕开一大圈
     vec3 wide = textureLod(uScene, uv, 6.2).rgb;
     vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25 + max(wide - uFogCol * 0.6, 0.0) * 0.45;
-    vec3 clear = textureLod(uScene, uv + refract, 0.4).rgb * 1.3;
+    // 透过擦开的地方看窗外：眼睛对在玻璃上，窗外是虚的（窗外场景只有 1/3 分辨率，直接看会是一格格的方块）
+    vec3 clear = textureLod(uScene, uv + refract, 2.2).rgb * 1.05;
     vec3 col = mix(fog, clear, wipe);
     // 指痕边上积着一圈水，亮一点
     float rim = wipe * (1.0 - wipe) * 4.0;
     col += rim * 0.06 + rim * blurred * 0.25;
-    // 水珠：透过它看到的窗外是倒着、清楚的，带一个高光
-    col = mix(col, clear * 1.2 + fog * 0.45, drop * 0.8);
-    col += drop * smoothstep(radius * 0.5, 0.0, length(d + vec2(radius * 0.35, -radius * 0.35))) * 0.35;
+    // 水珠：透过它看到的窗外是倒着的、亮一点；边上一圈暗（折射把暗处压进去），左上一点高光，右下一道透光
+    {
+        vec3 inside = textureLod(uScene, uv - d * 2.2, 2.2).rgb * 1.25 + fog * 0.35;
+        col = mix(col, inside * (1.0 - dropShade * 0.55), drop * 0.92);
+        col += drop * smoothstep(radius * 0.32, 0.0, length(d + vec2(radius * 0.38, -radius * 0.38))) * 0.45;
+        col += drop * smoothstep(radius * 0.35, 0.0, abs(length(d - vec2(radius * 0.12, -radius * 0.12)) - radius * 0.62)) * smoothstep(0.0, radius, dot(d, vec2(0.7, -0.7)) + radius * 0.3) * 0.12;
+    }
+    // 指痕外沿：一圈薄水膜压暗雾，上面一颗颗水珠
+    col = mix(col, clear * 0.8, wet * 0.22);
+    if (edgeBead > 0.0) {
+        float bl = length(beadD);
+        vec3 inside = textureLod(uScene, uv - beadD * 2.0, 2.4).rgb * 1.1;
+        col = mix(col, inside * (1.0 - smoothstep(beadR * 0.3, beadR, bl) * 0.7), edgeBead * 0.9);
+        col += edgeBead * smoothstep(beadR * 0.3, 0.0, length(beadD + vec2(beadR * 0.35, -beadR * 0.35))) * 0.55;
+    }
     col = mix(col, clear * 1.2 + fog * 0.5, bead * 0.9);
     // 呵气：一团白雾慢慢晕开，把附近写过的字也蒙上
     if (uBreath.z > 0.0) {
@@ -655,8 +715,6 @@ void main() {
         float glint = step(0.996, hash12(floor(gl_FragCoord.xy / 2.0))) * band;
         col += vec3(0.9, 0.95, 1.0) * glint * 0.5;
     }
-    // 大水珠边上一圈暗边（折射把背景压进去）
-    col *= 1.0 - big * drop * smoothstep(radius * 0.55, radius, dl) * 0.45;
     // 正在写的那个字：指尖那一带的雾被呵暖，透出一点窗外的光
     if (uSpot.w > 0.0) {
         vec2 sd = (uv - uSpot.xy) * vec2(uRes.x / uRes.y, 1.0);
