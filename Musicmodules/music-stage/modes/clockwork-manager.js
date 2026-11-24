@@ -287,6 +287,34 @@ void main() {
         }
     }
 
+    // 摆轮：右下角一只钢摆轮来回摆，游丝跟着一松一紧（每秒擒纵两次）
+    {
+        vec2 bc = vec2(aspect - 0.22, 0.25);
+        float swing = 1.25 * sin(uTime * 6.2832 * 1.25);
+        vec2 q = p - bc;
+        float r = length(q);
+        float R = 0.085;
+        float a = atan(q.y, q.x) - swing;
+        if (r < R + 0.02) {
+            float ring = 1.0 - smoothstep(0.0045, 0.0045 + aa, abs(r - R));
+            float sa = abs(fract(a * 3.0 / (2.0 * PI) + 0.5) - 0.5) * 2.0 * PI / 3.0 * r;
+            float spoke = (1.0 - smoothstep(0.0022, 0.0022 + aa, sa)) * step(r, R);
+            // 游丝：阿基米德螺线，摆到一头时紧、另一头松
+            float b = 0.0058 * (1.0 + 0.12 * sin(uTime * 6.2832 * 1.25));
+            float phi = atan(q.y, q.x) - swing * 0.6;
+            float turnK = floor((r - 0.008 - b * (phi + PI)) / (b * 2.0 * PI) + 0.5);
+            float sr = 0.008 + b * (phi + PI + turnK * 2.0 * PI);
+            float spring = (1.0 - smoothstep(0.0009, 0.0009 + aa, abs(r - sr))) * step(r, R * 0.72) * step(0.008, r);
+            // 摆轮边上的螺钉
+            float screws = (1.0 - smoothstep(0.0045, 0.0045 + aa, length(vec2(abs(fract(a * 8.0 / (2.0 * PI) + 0.5) - 0.5) * 2.0 * PI / 8.0 * R, r - R - 0.006)))) * step(R - 0.004, r);
+            vec3 steel = metal(uSteel, q, vec3(1.0, 0.0, r), swing);
+            col = mix(col, steel, clamp(ring + spoke * 0.9 + screws, 0.0, 1.0));
+            col = mix(col, mix(uSteel, uAccent, 0.35) * 1.2, spring * 0.8);
+            float jewel = 1.0 - smoothstep(0.006, 0.006 + aa, r);
+            col = mix(col, vec3(0.62, 0.06, 0.1) * 1.2, jewel);
+        }
+    }
+
     // 秒针：从轴心伸到刻度环，跟播放时间走
     if (uSecondHand > 0.5) {
         vec2 q = p - hubC;

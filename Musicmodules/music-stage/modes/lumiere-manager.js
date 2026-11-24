@@ -414,7 +414,14 @@ void main() {
         const viewfinder = createElement('div', 'lumiere-viewfinder');
         viewfinder.setAttribute('aria-hidden', 'true');
         ['tl', 'tr', 'bl', 'br', 'cl', 'cr', 'dl', 'dr'].forEach(k => viewfinder.append(createElement('i', `vf-${k}`)));
-        mode.root.append(canvas, viewfinder, kicker, translation, notice);
+        // 片尾字幕卡：最后一段间奏里亮起曲名和歌手
+        const credits = createElement('div', 'lumiere-credits');
+        const creditsTitle = createElement('div', 'lumiere-credits-title');
+        const creditsArtist = createElement('div', 'lumiere-credits-artist');
+        credits.append(createElement('i'), creditsTitle, creditsArtist, createElement('i'));
+        credits.setAttribute('aria-hidden', 'true');
+        let creditsOn = false;
+        mode.root.append(canvas, viewfinder, kicker, translation, credits, notice);
         const textCanvas = document.createElement('canvas');
 
         let glState = null;
@@ -772,6 +779,16 @@ void main() {
         const updateOverlay = (frame) => {
             const next = `绘光 · ${Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
+            const ci = cues.length > 1 ? findCue(cues, frame.playbackTime) : -1;
+            const outro = ci === cues.length - 1 && cues[ci]?.kind === 'rest' && frame.playbackTime - cues[ci].start > 1.2;
+            if (outro !== creditsOn) {
+                creditsOn = outro;
+                if (outro) {
+                    creditsTitle.textContent = String(frame.track?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg)$/i, '');
+                    creditsArtist.textContent = String(frame.track?.artist || '');
+                }
+                credits.classList.toggle('is-on', outro);
+            }
             const text = settings().showTranslation ? resolveSupplementalText(frame.activeLine) : '';
             if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; }
         };

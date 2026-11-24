@@ -320,7 +320,7 @@
             showParticles: bool(source.showParticles, fallback.showParticles),
             geometryMode: enumValue(source.geometryMode, ['clouds', 'corridor'], fallback.geometryMode),
             cabinFrame: bool(source.cabinFrame, fallback.cabinFrame),
-            rain: enumValue(source.rain, ['off', 'light', 'heavy'], fallback.rain),
+            rain: enumValue(source.rain, ['off', 'light', 'heavy', 'snow'], fallback.rain),
             fog: fallback.fog === undefined ? source.fog : clamp(source.fog, 0.5, 1.5, fallback.fog),
             lightning: fallback.lightning === undefined ? source.lightning : bool(source.lightning, fallback.lightning),
             reflections: fallback.reflections === undefined ? source.reflections : bool(source.reflections, fallback.reflections),

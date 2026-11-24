@@ -3584,6 +3584,42 @@ body.music-stage-active #custom-title-bar,
 }
 .lumiere-viewfinder > .vf-dl { left: 36%; }
 .lumiere-viewfinder > .vf-dr { right: 36%; }
+.lumiere-credits {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    transform: translate(-50%, -46%);
+    opacity: 0;
+    color: rgba(244, 238, 224, 0.92);
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 1.6s ease, transform 2.4s ease;
+}
+.lumiere-credits.is-on {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+.lumiere-credits > i {
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(244, 238, 224, 0.5), transparent);
+}
+.lumiere-credits-title {
+    font-size: 30px;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 24px rgba(255, 226, 180, 0.35);
+}
+.lumiere-credits-artist {
+    font: 500 11px/1.4 "SFMono-Regular", Consolas, monospace;
+    letter-spacing: 0.3em;
+    color: rgba(244, 238, 224, 0.55);
+}
+.lumiere-credits-artist:empty { display: none; }
 .lumiere-kicker {
     position: absolute;
     z-index: 2;

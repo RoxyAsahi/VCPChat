@@ -192,6 +192,7 @@ uniform vec3 uNeon;
 uniform vec3 uNeon2;
 uniform vec3 uLamp;
 uniform float uRain;
+uniform float uSnow;
 out vec4 outColor;
 ${COMMON}
 float disc(vec2 p, vec2 c, float r) {
@@ -278,6 +279,20 @@ void main() {
     float rx = floor(p.x * 140.0);
     float ry = fract(p.y * 1.6 + uT * (1.4 + hash12(vec2(rx, 2.0))) + hash12(vec2(rx, 4.0)));
     col += vec3(0.6, 0.65, 0.75) * step(0.93, hash12(vec2(rx, 8.0))) * smoothstep(0.08, 0.0, ry) * 0.18 * uRain;
+    // 下雪：三层雪片，近的大、快、斜着飘
+    if (uSnow > 0.0) {
+        for (int L = 0; L < 3; L++) {
+            float fl = float(L);
+            float scale = 18.0 + fl * 14.0;
+            vec2 sp = p * scale + vec2(uT * (2.0 - fl * 0.5) + sin(p.y * 3.0 + uT * 0.7 + fl) * 0.6, uT * (3.4 - fl * 0.9));
+            vec2 cell = floor(sp);
+            vec2 h = hash22(cell + fl * 19.0);
+            vec2 f = fract(sp) - (0.25 + h * 0.5);
+            float flake = smoothstep(0.12 - fl * 0.03, 0.0, length(f)) * step(0.55, h.x);
+            col += vec3(0.85, 0.88, 0.95) * flake * (0.55 - fl * 0.12) * uSnow;
+        }
+        col = mix(col, vec3(0.75, 0.78, 0.85), smoothstep(0.26, 0.0, p.y) * 0.35 * uSnow);
+    }
     outColor = vec4(col, 1.0);
 }`;
 
@@ -300,6 +315,7 @@ uniform float uDripTop[6]; // 从哪儿开始淌（字底下的积水，或窗�
 uniform vec4 uSpot;      // 正在写的字：x, y, 半径, 强度
 uniform vec3 uBreath;    // 停唱时对着窗呵一口气：x, y, 浓度
 uniform float uFireflies;
+uniform float uFrost;
 uniform int uDripCount;
 uniform vec3 uFogCol;
 uniform float uFogDensity;
@@ -400,6 +416,17 @@ void main() {
             float g = exp(-dot(fd, fd) * mix(9000.0, 60000.0, wipe)) * blink;
             col += vec3(1.0, 0.86, 0.4) * g * mix(0.35, 1.1, wipe) * uFireflies;
         }
+    }
+    // 结霜：窗四角长出冰花，冰花上写不开
+    if (uFrost > 0.0) {
+        vec2 e = min(uv, 1.0 - uv) * vec2(uRes.x / uRes.y, 1.0);
+        float edge = min(e.x, e.y);
+        float n = vnoise(uv * 14.0) * 0.6 + vnoise(uv * 60.0) * 0.4;
+        float hf = vnoise(gl_FragCoord.xy / 1.6) * 0.5 + vnoise(gl_FragCoord.xy / 5.0) * 0.5;
+        float band = smoothstep(0.16 + n * 0.12, 0.0, edge) * uFrost;
+        col = mix(col, vec3(0.82, 0.86, 0.93) * (0.72 + hf * 0.32), band * 0.62);
+        float glint = step(0.996, hash12(floor(gl_FragCoord.xy / 2.0))) * band;
+        col += vec3(0.9, 0.95, 1.0) * glint * 0.5;
     }
     // 大水珠边上一圈暗边（折射把背景压进去）
     col *= 1.0 - big * drop * smoothstep(radius * 0.55, radius, dl) * 0.45;
@@ -742,7 +769,8 @@ void main() {
             gl.uniform3fv(su.uNeon, colours.neon);
             gl.uniform3fv(su.uNeon2, colours.neon2);
             gl.uniform3fv(su.uLamp, colours.lamp);
-            gl.uniform1f(su.uRain, s.rain === 'off' ? 0 : s.rain === 'heavy' ? 1.8 : 1);
+            gl.uniform1f(su.uRain, s.rain === 'off' || s.rain === 'snow' ? 0 : s.rain === 'heavy' ? 1.8 : 1);
+            gl.uniform1f(su.uSnow, s.rain === 'snow' ? 1 : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex);
             gl.generateMipmap(gl.TEXTURE_2D);
@@ -795,7 +823,8 @@ void main() {
                 }
             }
             gl.uniform3f(u.uBreath, bx, by, breath);
-            gl.uniform1f(u.uFireflies, s.reducedMotion ? 0 : s.fireflies);
+            gl.uniform1f(u.uFireflies, s.reducedMotion || s.rain === 'snow' ? 0 : s.fireflies);
+            gl.uniform1f(u.uFrost, s.rain === 'snow' ? 1 : 0);
             gl.uniform1i(u.uDripCount, drips);
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));
