@@ -24,6 +24,10 @@
         let x0 = 0, y0 = 0, radius = 1, cos = 1, sin = 0;
         const width = options.lineWidth || 2;
         const toneLevel = options.toneLevel ?? 0.32;
+        // 线的边是一道缓坡（不是一刀切）：着色器切阈值时被噪点搅过，切出来的边才是毛的
+        const soft = options.soft || 0;
+        // 编号图上的笔比线宽出一圈：线两边那圈网点也按这一笔的笔序出现
+        const fringe = options.fringe || 0;
 
         const map = (x, y) => [x0 + (x * cos - y * sin) * radius, y0 + (x * sin + y * cos) * radius];
 
@@ -41,6 +45,7 @@
                 main.fillStyle = 'rgb(0,255,0)';
             }
             main.lineWidth = width;
+            if (soft > 0) main.filter = `blur(${soft.toFixed(2)}px)`;
             if (ids && !tone) {
                 ids.save();
                 ids.globalCompositeOperation = 'lighten';
@@ -49,7 +54,7 @@
                 ids.fillStyle = `rgb(0,${value},0)`;
                 ids.lineCap = 'round';
                 ids.lineJoin = 'round';
-                ids.lineWidth = Math.max(2, width * idScale + 2);
+                ids.lineWidth = Math.max(2, (width + fringe * 2) * idScale + 2);
             }
         };
         const end = (fill = false) => {
@@ -140,7 +145,7 @@
                 const [px, py] = map(cx, cy);
                 const pr = Math.max(1, r * radius);
                 main.beginPath(); main.arc(px, py, pr, 0, TAU);
-                if (ids && !tone) { ids.beginPath(); ids.arc(px * idScale, py * idScale, pr * idScale + 1, 0, TAU); }
+                if (ids && !tone) { ids.beginPath(); ids.arc(px * idScale, py * idScale, (pr + fringe) * idScale + 1, 0, TAU); }
                 end(true);
             },
             note(text, x, y, size = 0.09, align = 'center') {

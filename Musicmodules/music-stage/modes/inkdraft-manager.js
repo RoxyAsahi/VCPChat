@@ -25,7 +25,8 @@
     const ID_SCALE = 0.5;
     const MAX_BLOBS = 48;
     const MAX_RINGS = 4;
-    const MAX_ACCENT = 3;
+    const MAX_ACCENT = 5;
+    const MAX_CLOUDS = 6;
     const MAX_GLYPHS = 255;
     const TAU = Math.PI * 2;
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
@@ -332,7 +333,7 @@
         if (placed.length) {
             const raw = unionBox(placed.map(p => [p.x, p.baseline - p.size * 0.88, p.x + p.w, p.baseline + p.size * 0.2]));
             const bw = raw[2] - raw[0], bh = raw[3] - raw[1];
-            const fit = Math.min(1, (W * 0.66) / bw, (H * 0.6) / bh);
+            const fit = Math.min(1, (W * 0.62) / bw, (H * 0.56) / bh);
             const cx = W * (0.5 + (random() - 0.5) * 0.12);
             const cy = H * (0.5 + (random() - 0.5) * 0.1);
             placed = placed.map(p => ({
@@ -377,7 +378,7 @@
 
         // 全景：把字框进画面，字周围留白。
         const wideH = textBox
-            ? clamp(Math.max((textBox[3] - textBox[1]) / 0.6, (textBox[2] - textBox[0]) / aspect / 0.74), H * 0.45, H)
+            ? clamp(Math.max((textBox[3] - textBox[1]) / 0.8, (textBox[2] - textBox[0]) / aspect / 0.86), H * 0.4, H)
             : H * 0.92;
         const wideC = textBox ? [(textBox[0] + textBox[2]) / 2, (textBox[1] + textBox[3]) / 2] : [W / 2, H / 2];
         const wideRect = [wideC[0] - wideH * aspect / 2, wideC[1] - wideH / 2, wideC[0] + wideH * aspect / 2, wideC[1] + wideH / 2];
@@ -385,7 +386,10 @@
         // 空着的大格：线稿和墨团摆在这里。
         const cols = aspect > 1.4 ? 4 : 3;
         const rowsN = aspect > 1.4 ? 3 : 4;
-        const region = cue.kind === 'rest' ? [W * 0.06, H * 0.06, W * 0.94, H * 0.94] : wideRect;
+        // 全景把字撑满了：线稿摆在全景的边上和外面（一半露在画里），拉远、留白远景时整个看得见
+        const spill = [(wideRect[2] - wideRect[0]) * 0.28, (wideRect[3] - wideRect[1]) * 0.3];
+        const region = cue.kind === 'rest' ? [W * 0.06, H * 0.06, W * 0.94, H * 0.94]
+            : [Math.max(0, wideRect[0] - spill[0]), Math.max(0, wideRect[1] - spill[1]), Math.min(W, wideRect[2] + spill[0]), Math.min(H, wideRect[3] + spill[1])];
         const cw = (region[2] - region[0]) / cols, ch = (region[3] - region[1]) / rowsN;
         const inflated = textBox ? [textBox[0] - H * 0.03, textBox[1] - H * 0.03, textBox[2] + H * 0.03, textBox[3] + H * 0.03] : null;
         const cells = [];
@@ -426,13 +430,13 @@
         }
         main.globalCompositeOperation = 'source-over';
         if (settings.figures) {
-            const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.011, toneLevel: 0.34 });
+            const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.02, toneLevel: 0.4, soft: H * 0.004 });
             Figures.drawFigure(tonePen, Figures.KINDS[Math.floor(random() * Figures.KINDS.length)],
                 wideC[0], wideC[1], H * (0.36 + random() * 0.1), (random() - 0.5) * 0.4, random);
         }
 
         // 版面零件（规线、裁切标记、行号、时间码）和线稿，一笔一笔冒出来。
-        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: Math.max(1.2, H * 0.0021), startOrder: 1 });
+        const pen = Figures.createPen(main, ids, ID_SCALE, { lineWidth: Math.max(2, H * 0.0068), soft: H * 0.002, fringe: H * 0.018, startOrder: 1 });
         if (textBox) {
             const pad = H * 0.035;
             const [x0, y0, x1, y1] = [textBox[0] - pad, textBox[1] - pad, textBox[2] + pad, textBox[3] + pad];
@@ -488,6 +492,47 @@
                 phase: random() * TAU, size: 0.16 + random() * 0.16
             }))
         } : null;
+        // 字块的尺度：一个字高（em）和字块的半宽半高，下面几样墨都按它摆
+        const tb = textBox || [W * 0.36, H * 0.4, W * 0.64, H * 0.6];
+        const tcx = (tb[0] + tb[2]) / 2, tcy = (tb[1] + tb[3]) / 2;
+        const halfW = (tb[2] - tb[0]) / 2, halfH = (tb[3] - tb[1]) / 2;
+        const em = placed.length ? Math.max(...placed.map(p => p.size)) : H * 0.1;
+        const reach = Math.max(halfW, halfH, em * 2);
+        const drift = (ax, ay) => ({ ax, ay, w1: 0.06 + random() * 0.1, w2: 0.06 + random() * 0.1, p1: random() * TAU, p2: random() * TAU });
+        // 第二个墨团（小一些，也带墨滴），摆在另一个空格里
+        const massCell2 = freeCells[1];
+        const mass2 = massCell2 && random() < 0.75 ? {
+            x: (massCell2[0] + massCell2[2]) / 2, y: (massCell2[1] + massCell2[3]) / 2,
+            r: Math.min(massCell2[2] - massCell2[0], massCell2[3] - massCell2[1]) * (0.07 + random() * 0.05),
+            sats: Array.from({ length: 2 + Math.floor(random() * 2) }, () => ({
+                orbit: 1.5 + random() * 0.8, speed: (0.1 + random() * 0.2) * (random() < 0.5 ? -1 : 1),
+                phase: random() * TAU, size: 0.18 + random() * 0.14
+            }))
+        } : null;
+        // 网点云：几团盖过小半个画面的灰，摆在字块四周、极慢地漂（只进网点，不是墨）
+        const clouds = Array.from({ length: cue.kind === 'rest' ? 5 : 4 }, () => {
+            const a = random() * TAU, d = reach * (0.35 + random() * 1.4);
+            return {
+                x: tcx + Math.cos(a) * d * (halfW / reach + 0.6), y: tcy + Math.sin(a) * d * (halfH / reach + 0.6),
+                r: reach * (0.55 + random() * 0.85), level: 0.45 + random() * 0.45,
+                ...drift(reach * (0.08 + random() * 0.25), reach * (0.08 + random() * 0.2))
+            };
+        });
+        // 贴着字块四边的小墨滴：离字半个到一个字高，慢慢漂
+        const drops = cue.kind === 'line' ? Array.from({ length: 3 + Math.floor(random() * 3) }, () => {
+            const side = Math.floor(random() * 4), along = random() * 2 - 1, out = em * (0.35 + random() * 0.55);
+            return {
+                x: side < 2 ? tcx + along * halfW : tcx + (side === 2 ? -1 : 1) * (halfW + out),
+                y: side < 2 ? tcy + (side === 0 ? -1 : 1) * (halfH + out) : tcy + along * halfH,
+                r: em * (0.07 + random() * 0.13), ...drift(em * (0.1 + random() * 0.35), em * (0.1 + random() * 0.35))
+            };
+        }) : [];
+        // 漂在字上的灰墨团：盖住一两个字的大小，在字块里慢慢游；显影时墨压在它上面，字照样读得出
+        const drifters = Array.from({ length: (cue.kind === 'line' ? 1 : 2) + (random() < 0.55 ? 1 : 0) }, () => ({
+            x: tcx + (random() * 1.8 - 0.9) * halfW, y: tcy + (random() * 1.8 - 0.9) * halfH,
+            r: em * (0.55 + random() * 0.45) * (cue.kind === 'line' ? 1 : 1.6),
+            ...drift(Math.min(halfW, em * 1.5) * (0.3 + random() * 0.6), Math.min(halfH, em * 1.2) * (0.2 + random() * 0.4))
+        }));
         const collisions = [];
         if (settings.collisions) {
             const spots = freeCells.slice(1).concat(cells);
@@ -519,11 +564,16 @@
         });
 
         // 镜头的取景表
-        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect }, random, settings);
+        // 进这一段的转场：多数直接硬切；进副歌时多半漫墨或冲镜
+        const intoChorus = cue.kind === 'line' && cue.line?.isChorus && !(ctx.prevCue?.kind === 'line' && ctx.prevCue.line?.isChorus);
+        const transition = index > 0 ? pickWeighted(random, intoChorus
+            ? [['flood', 3], ['smash', 3], ['ink', 1], ['cut', 1.5]]
+            : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]) : 'cut';
+        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect }, random, settings, transition);
         return {
-            index, cue, glyphData, shots, mass, collisions, accents,
+            index, cue, glyphData, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
             strokeStart: cue.start + 0.12, strokeStep,
-            transition: index > 0 ? pickWeighted(random, [['ink', 0.3], ['flood', 0.22], ['smash', 0.16], ['cut', 0.32]]) : 'cut',
+            transition,
             flood: [0.2 + random() * 0.6, 0.25 + random() * 0.5],
             sparks: placed.slice(0, MAX_GLYPHS).map((p, i) => ({
                 t: p.g.start, x: (p.box[0] + p.box[2]) / 2, y: (p.box[1] + p.box[3]) / 2, s: p.size,
@@ -559,122 +609,193 @@
         return pick;
     };
 
-    const planShots = (cue, scene, random, settings) => {
+    // 每种机位自己的滚转和偏心范围：大特写斜得最狠（字斜着撑出画面），倾斜镜头次之，其余只歪一点点。
+    const shotPose = (type, random) => {
+        const span = (lo, hi) => lo + random() * (hi - lo);
+        const sign = () => (random() < 0.5 ? -1 : 1);
+        switch (type) {
+            case 'macro': return { roll: sign() * span(0.25, 0.6), off: [span(-0.12, 0.12), span(-0.12, 0.12)] };
+            case 'dutch': return { roll: sign() * span(0.2, 0.4), off: [span(-0.1, 0.1), 0] };
+            case 'close': return { roll: span(-0.07, 0.07), off: [span(-0.08, 0.08), span(-0.05, 0.05)] };
+            case 'far': return { roll: span(-0.04, 0.04), off: [sign() * span(0.18, 0.3), sign() * span(0.1, 0.22)] };
+            case 'figure': return { roll: sign() * span(0.08, 0.3), off: [span(-0.1, 0.1), span(-0.1, 0.1)] };
+            case 'follow': return { roll: span(-0.03, 0.03), off: [0, 0] };
+            case 'pullback': return { roll: span(-0.1, 0.1), off: [0, 0] };
+            case 'crash': return { roll: span(-0.12, 0.12), off: [0, 0] };
+            default: return { roll: span(-0.05, 0.05), off: [0, 0] };
+        }
+    };
+    const SCREEN_ANGLES = [0.26, 0.52, 0.79, 1.31];
+    const FIRST_SHOT = [['wide', 3], ['close', 2], ['dutch', 1.5], ['far', 0.8], ['follow', 1.5]];
+    const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 2], ['dutch', 1.5], ['wide', 1], ['far', 0.6]];
+    // 切点：按节奏均分（一句大约 2.6 秒一刀，副歌密一些），再吸到最近的词开唱时刻上
+    const planCuts = (start, end, count, onsets) => {
+        const cuts = [];
+        const spacing = (end - start) / count;
+        for (let i = 1; i < count; i += 1) {
+            const ideal = start + spacing * i;
+            const near = onsets.reduce((best, o) => (Math.abs(o - ideal) < Math.abs(best - ideal) ? o : best), Infinity);
+            const at = Math.abs(near - ideal) <= spacing * 0.4 ? near : ideal;
+            const previous = cuts.length ? cuts[cuts.length - 1] : start;
+            if (at - previous >= 0.6 && end - at >= 0.6) cuts.push(at);
+        }
+        return cuts;
+    };
+
+    const planShots = (cue, scene, random, settings, transition = 'cut') => {
         const { placed, unitBoxes, wideH, wideC, figures, W, H, aspect } = scene;
         const maxSize = placed.length ? Math.max(...placed.map(p => p.size)) : H * 0.1;
         const closeH = clamp(maxSize * 2.5, H * 0.16, wideH * 0.72);
         const close = buildFrames(placed, closeH, aspect);
-        const macro = unitBoxes.map((u) => {
+        // 跟词：一个词一框（大特写对准的词唱完以后也用它一个词一个词地跳）
+        const words = unitBoxes.map((u) => {
             const w = u.box[2] - u.box[0], h = u.box[3] - u.box[1];
-            return { start: u.unit.start, c: [(u.box[0] + u.box[2]) / 2, (u.box[1] + u.box[3]) / 2], h: clamp(Math.max(h * 1.8, w / aspect * 1.25), H * 0.08, closeH * 0.85) };
-        });
-        const starts = unitBoxes.map(u => u.unit.start).sort((a, b) => a - b);
+            return { start: u.unit.start, c: [(u.box[0] + u.box[2]) / 2, (u.box[1] + u.box[3]) / 2], h: clamp(Math.max(h * 1.45, w / aspect * 1.45), H * 0.1, wideH) };
+        }).sort((x, y) => x.start - y.start);
         const shots = [];
         const length = cue.end - cue.start;
         const cuts = settings.cameraCuts && !settings.reducedMotion;
+        const chorus = cue.kind === 'line' && Boolean(cue.line?.isChorus);
+        const negChance = settings.negativeShots ? (chorus ? 0.34 : 0.2) : 0;
+        let inverted = 0;
+        let previous = '';
+        const push = (start, type, first) => {
+            // 先取随机数再判断：开关反相不改后面取到的数，机位不跟着变
+            const roll = random();
+            const neg = !first && inverted < 2 && roll < negChance;
+            inverted = neg ? inverted + 1 : 0;
+            const pose = shotPose(type, random);
+            let angle = SCREEN_ANGLES[Math.floor(random() * SCREEN_ANGLES.length)];
+            if (shots.length && angle === shots[shots.length - 1].angle) angle = SCREEN_ANGLES[(SCREEN_ANGLES.indexOf(angle) + 1) % SCREEN_ANGLES.length];
+            const shot = { start, type, drift: [random() - 0.5, random() - 0.5], roll: pose.roll, off: pose.off, neg, angle };
+            if (type === 'macro' && placed.length) {
+                // 大特写只框住镜头开头正在唱的那个字的一部分：字斜着撑出画面
+                let p = placed[0];
+                placed.forEach((q) => { if (q.g.start <= start + 0.05 && q.g.start >= p.g.start) p = q; });
+                shot.anchor = { start: p.unit?.start ?? p.g.start, c: [(p.box[0] + p.box[2]) / 2, (p.box[1] + p.box[3]) / 2], h: p.size * 0.74 };
+            }
+            shots.push(shot);
+            previous = type;
+            return shot;
+        };
         if (cue.kind === 'rest') {
             let t = cue.start;
             let k = 0;
             while (t < cue.end - 0.5) {
                 const fig = figures.length && cuts && k % 2 === 1 ? figures[Math.floor(random() * figures.length)] : null;
-                shots.push({ start: t, type: fig ? 'figure' : (k % 3 === 2 ? 'far' : 'wide'), fig, drift: [random() - 0.5, random() - 0.5], neg: false, roll: 0 });
-                t += 4 + random() * 2.5;
+                const shot = push(t, fig ? 'figure' : (k % 3 === 2 ? 'far' : 'wide'), k === 0);
+                shot.fig = fig;
+                t += 4.5 + random() * 3.5;
                 k += 1;
                 if (!cuts) break;
             }
+        } else if (!cuts || !placed.length) {
+            push(cue.start, 'wide', true);
         } else {
-            let t = cue.start;
-            let previous = '';
-            while (t < cue.end - 0.3) {
-                const first = !shots.length;
-                let type;
-                if (!cuts || !placed.length) type = 'wide';
-                else if (first) type = pickWeighted(random, length > 2.2 ? [['wide', 0.45], ['close', 0.25], ['crash', 0.15], ['far', 0.15]] : [['wide', 0.6], ['close', 0.4]]);
-                else {
-                    const options = [['wide', 0.22], ['close', 0.24], ['macro', 0.12], ['dutch', 0.12], ['far', 0.08], ['pullback', 0.12], ['crash', 0.06]]
-                        .filter(([name]) => name !== previous);
-                    type = pickWeighted(random, options);
-                }
-                const shot = {
-                    start: t, type, drift: [random() - 0.5, random() - 0.5],
-                    roll: type === 'dutch' ? (random() < 0.5 ? -1 : 1) * (0.09 + random() * 0.07) : 0,
-                    neg: settings.negativeShots && !first && random() < 0.14
-                };
-                shots.push(shot);
-                previous = type;
-                if (!cuts) break;
-                const want = 2 + random() * 1.6;
-                const next = starts.find(s => s >= t + want && s < cue.end - 0.6);
-                if (!next) break;
-                t = next;
-            }
+            const count = Math.max(1, Math.min(7, Math.round(length * (chorus ? 1.25 : 1) / 2.6)));
+            const onsets = unitBoxes.map(u => u.unit.start).filter(o => o > cue.start + 0.6 && o < cue.end - 0.6);
+            const edges = [cue.start, ...planCuts(cue.start, cue.end, count, onsets), cue.end];
+            edges.slice(0, -1).forEach((start, i) => {
+                const end = edges[i + 1];
+                if (i === 0 && transition === 'smash') { push(start, 'crash', true); return; }
+                let weights = i === 0 ? FIRST_SHOT : MIDDLE_SHOT;
+                // 一句的最后一个镜头够长时多半拉远，把整句和周围的墨交代出来
+                if (i > 0 && i === edges.length - 2 && end - start >= 1.4) weights = weights.concat([['pullback', 5]]);
+                if (chorus) weights = weights.map(([n, w]) => [n, w + (n === 'macro' ? 1.5 : n === 'dutch' ? 1 : 0)]);
+                const pool = weights.filter(([n]) => n !== previous);
+                push(start, pickWeighted(random, pool.length ? pool : weights), i === 0);
+            });
         }
+        const starts = unitBoxes.map(u => u.unit.start).sort((x, y) => x - y);
         shots.forEach((shot, i) => {
             shot.end = shots[i + 1]?.start ?? cue.end;
             if (shot.type === 'pullback') {
-                const inside = starts.filter(s => s >= shot.start && s < shot.end);
-                shot.steps = inside.length >= 3 ? inside.slice(0, 3) : [0, 1, 2].map(k => shot.start + (shot.end - shot.start) * k / 3);
+                const inside = starts.filter(st => st > shot.start + 0.3 && st < shot.end - 0.3);
+                shot.steps = inside.length >= 3 ? [shot.start, ...inside.slice(0, 2)] : [0, 1, 2].map(k => shot.start + (shot.end - shot.start) * k / 3);
             }
         });
-        return { shots, closeH, close, macro, wideH, wideC, W, H };
+        return { shots, closeH, close, words, wideH, wideC, W, H };
     };
 
-    // 某一刻的机位：中心、取景高度（世界像素）、滚转。
+    // 某一刻的机位：中心、取景高度（世界像素）、滚转。机位只在开唱、跳档的时刻上跳，镜头里只极慢地蠕动。
     const viewAt = (plan, t) => {
-        const { shots, closeH, close, macro, wideH, wideC, W, H } = plan;
+        const { shots, closeH, close, wideH, wideC, H } = plan;
+        const words = plan.words || [];
         let shot = shots[0];
         for (const s of shots) { if (s.start <= t) shot = s; else break; }
         if (!shot) return { c: wideC, h: wideH, roll: 0, neg: false, shot: 'wide' };
         let c = wideC, h = wideH;
+        let roll = shot.roll || 0;
+        const u = clamp((t - shot.start) / Math.max(0.5, shot.end - shot.start), 0, 1);
         const closeFrame = close.length ? frameAt(close, t) : null;
+        const word = words.length ? frameAt(words, t) : null;
         switch (shot.type) {
-            case 'far': c = [wideC[0] * 0.7 + W * 0.15, wideC[1] * 0.7 + H * 0.15]; h = Math.min(wideH * 1.4, H * 1.02); break;
-            case 'close': case 'dutch': if (closeFrame) { c = closeFrame.c; h = closeH; } break;
+            case 'far': h = Math.min(wideH * 1.85, H * 1.15); break;
+            case 'dutch': h = wideH * 1.04; break;
+            case 'close': if (closeFrame) { c = closeFrame.c; h = closeH; } break;
+            case 'follow': if (word) { c = word.c; h = word.h; } break;
             case 'macro': {
-                const m = macro.length ? frameAt(macro, t) : null;
-                if (m) { c = m.c; h = m.h; }
+                const a = shot.anchor;
+                if (word && a && word.start > a.start + 1e-3) {
+                    // 对准的词唱完了：换成特写一个词一个词地跳，斜度收掉大半
+                    c = word.c; h = word.h * 0.92; roll *= 0.12;
+                } else if (a) { c = a.c; h = a.h; roll += 0.03 * (u - 0.5); } else if (closeFrame) { c = closeFrame.c; h = closeH; }
                 break;
             }
             case 'pullback': {
-                const step = shot.steps.filter(s => s <= t).length;
+                const step = (shot.steps || []).filter(st => st <= t).length;
                 const k = clamp((step - 1) / 2, 0, 1);
                 const from = closeFrame ? closeFrame.c : wideC;
                 c = [from[0] + (wideC[0] - from[0]) * k, from[1] + (wideC[1] - from[1]) * k];
-                h = closeH + (wideH * 1.08 - closeH) * k;
+                h = closeH + (wideH * 1.25 - closeH) * k;
                 break;
             }
             case 'crash': {
-                const jumps = Math.min(3, Math.floor((t - shot.start) / 0.16) + 1);
+                // 冲镜：从很远处连跳三格，落到第一个词上
+                const jumps = Math.min(3, Math.floor((t - shot.start) / 0.16));
                 const k = jumps / 3;
                 const to = closeFrame ? closeFrame.c : wideC;
                 c = [wideC[0] + (to[0] - wideC[0]) * k, wideC[1] + (to[1] - wideC[1]) * k];
-                h = wideH + (closeH - wideH) * k;
+                h = wideH * 2.6 + (closeH - wideH * 2.6) * k;
                 break;
             }
-            case 'figure': if (shot.fig) { c = [shot.fig.x, shot.fig.y]; h = shot.fig.r * 3.1; } break;
+            case 'figure': if (shot.fig) { c = [shot.fig.x, shot.fig.y]; h = shot.fig.r * 2.6; } break;
             default: break;
         }
-        // 镜头里只极慢地蠕动：推近 3.5%，挪 2%。
-        const u = clamp((t - shot.start) / Math.max(0.5, shot.end - shot.start), 0, 1);
+        // 一个镜头从头到尾只推近 3.5%
         h *= 1 - 0.035 * u;
+        const off = shot.off || [0, 0];
         // 顶上是模式栏、底下是播放条：取景中心放在两者之间（比屏幕正中略高）
-        c = [c[0] + shot.drift[0] * h * 0.04 * u, c[1] + shot.drift[1] * h * 0.04 * u + h * 0.035];
-        return { c, h, roll: shot.roll, neg: shot.neg, shot: shot.type };
+        c = [c[0] - off[0] * h + shot.drift[0] * h * 0.04 * u, c[1] - off[1] * h + shot.drift[1] * h * 0.04 * u + h * 0.035];
+        return { c, h, roll, neg: shot.neg, shot: shot.type, angle: shot.angle };
     };
 
     // 某一刻的墨团（世界像素：x, y, 半径, 强度）和冲击环。
-    const blobsAt = (cue, t, out, rings, accentsOut, bass, beatAge = Infinity) => {
+    const wander = (d, local) => [Math.sin(local * d.w1 + d.p1) * d.ax, Math.sin(local * d.w2 + d.p2) * d.ay];
+    const blobsAt = (cue, t, out, rings, accentsOut, bass, beatAge = Infinity, cloudsOut = null) => {
         let n = 0;
         const push = (x, y, r, s = 1) => { if (n < MAX_BLOBS && r > 0.5) { out[n * 4] = x; out[n * 4 + 1] = y; out[n * 4 + 2] = r; out[n * 4 + 3] = s; n += 1; } };
         const local = t - cue.cue.start;
         const appear = smooth(0, 0.8, local);
-        if (cue.mass) {
-            const m = cue.mass;
-            const breath = 1 + 0.05 * Math.sin(local * 0.7) + bass * 0.06;
+        [cue.mass, cue.mass2].forEach((m, k) => {
+            if (!m) return;
+            const breath = 1 + 0.05 * Math.sin(local * 0.7 + k * 2.1) + bass * 0.06;
             push(m.x, m.y, m.r * breath * appear);
             m.sats.forEach((s) => {
                 const a = s.phase + local * s.speed;
                 push(m.x + Math.cos(a) * m.r * s.orbit, m.y + Math.sin(a) * m.r * s.orbit * 0.8, m.r * s.size * appear);
+            });
+        });
+        (cue.drops || []).forEach((d) => {
+            const [ox, oy] = wander(d, local);
+            push(d.x + ox, d.y + oy, d.r * appear * (1 + bass * 0.08));
+        });
+        if (cloudsOut) {
+            cloudsOut.fill(0);
+            (cue.clouds || []).slice(0, MAX_CLOUDS).forEach((c, i) => {
+                const [ox, oy] = wander(c, local);
+                cloudsOut[i * 4] = c.x + ox; cloudsOut[i * 4 + 1] = c.y + oy;
+                cloudsOut[i * 4 + 2] = c.r * (1 + bass * 0.05); cloudsOut[i * 4 + 3] = c.level * smooth(0, 1.2, local);
             });
         }
         rings.fill(0);
@@ -740,6 +861,12 @@
         });
         let a = 0;
         accentsOut.fill(0);
+        (cue.drifters || []).forEach((d) => {
+            if (a >= MAX_ACCENT) return;
+            const [ox, oy] = wander(d, local);
+            accentsOut[a * 4] = d.x + ox; accentsOut[a * 4 + 1] = d.y + oy; accentsOut[a * 4 + 2] = d.r * appear * (1 + bass * 0.05); accentsOut[a * 4 + 3] = 1;
+            a += 1;
+        });
         cue.accents.forEach((acc) => {
             if (a >= MAX_ACCENT) return;
             const grow = smooth(acc.start - 0.05, acc.start + 0.3, t) * (1 - smooth(acc.end + 0.2, acc.end + 0.8, t));
@@ -781,6 +908,10 @@ uniform int uBlobCount;
 uniform vec4 uAccent[${MAX_ACCENT}];
 uniform int uAccentCount;
 uniform vec4 uRings[${MAX_RINGS}];
+uniform vec4 uClouds[${MAX_CLOUDS}];
+uniform vec3 uBlobCol;
+uniform float uDotPx;
+uniform float uDotAngle;
 uniform vec4 uFlood;     // 屏幕 x, y, 半径, 0 = 不漫
 uniform float uSmash;    // 0..1 上一段碎开
 uniform float uCloud;    // 墨云浓度
@@ -823,7 +954,8 @@ void main() {
     vec2 uv = w / uWorld;
     bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
     vec4 m = inside ? texture(uMain, uv) : vec4(0.0);
-    float halo = inside ? textureLod(uMain, uv, 4.0).r : 0.0;
+    vec2 haloRG = inside ? textureLod(uMain, uv, 4.0).rg : vec2(0.0);
+    float halo = haloRG.r;
     vec4 idv = inside ? texelFetch(uIds, min(ivec2(uv * uIdSize), ivec2(uIdSize) - 1), 0) : vec4(0.0);
     int gid = int(idv.r * 255.0 + 0.5);
     float so = floor(idv.g * 255.0 + 0.5);
@@ -845,7 +977,8 @@ void main() {
     }
     float glyphInk = m.r * reveal;
     ghost = m.r * (1.0 - reveal) * uGhost;
-    float lineInk = so > 0.5 ? m.g * smoothstep(0.0, 0.12, uTime - (uStroke.x + (so - 1.0) * uStroke.y)) : 0.0;
+    float lineOn = so > 0.5 ? smoothstep(0.0, 0.12, uTime - (uStroke.x + (so - 1.0) * uStroke.y)) : 0.0;
+    float lineInk = m.g * lineOn;
 
     vec2 wp = w;
     float field = 0.0;
@@ -895,29 +1028,49 @@ void main() {
     float cloud = smoothstep(0.5, 0.95, cl) * uCloud;
     float vig = smoothstep(0.4, 0.85, length(sp * vec2(1.0, 0.8)));
     float T = m.b * uTone + clamp(field * 0.18, 0.0, 0.35) * smoothstep(0.2, 0.0, a);
+    // 网点云：几团大的灰慢慢漂，中间浓、边上平滑落到没有，挨近了连成一片
+    float cloudT = 0.0;
+    for (int i = 0; i < ${MAX_CLOUDS}; i++) {
+        vec4 c = uClouds[i];
+        if (c.w <= 0.0) continue;
+        vec2 d = (wp - c.xy) / c.z;
+        float q = max(0.0, 1.0 - dot(d, d));
+        cloudT += q * q * c.w;
+    }
+    T = max(T, min(cloudT, 0.85) * uCloud);
+    // 线稿两边一圈网点：线不是干干净净浮在纸上的，跟着这一笔一起出现
+    T = max(T, clamp(haloRG.g * 2.6, 0.0, 0.6) * lineOn * smoothstep(0.3, 0.0, a));
     T = max(T, max(cloud * 0.72, vig * 0.6 * uCloud));
-    T = max(T, (halo * 1.5 + m.r * 0.5) * pre * uGhost / max(uGhost, 0.001) * 0.9);
-    T = max(T, halo * reveal * 0.55 * uCloud);
+    // 字周围那团晕只取靠近笔画的那部分：编号框的边上晕已经很淡，不然框边会切出一块方的灰
+    float haloNear = smoothstep(0.12, 0.6, halo);
+    T = max(T, (haloNear * 1.1 + m.r * 0.5) * pre * uGhost / max(uGhost, 0.001) * 0.9);
+    T = max(T, haloNear * reveal * 0.55 * uCloud);
     // 还没唱到的字只是一层网点的影子（不是一块平的灰）
     T = max(T, ghost / max(uGhost, 0.001) * 0.85 * min(1.0, uGhost * 3.0));
-    float ca = 0.2588, sa = 0.9659;
-    vec2 g = vec2(wp.x * sa + wp.y * ca, -wp.x * ca + wp.y * sa) / (k / mix(150.0, 96.0, uCloud));
+    // 网点格钉在屏幕上（7 个 CSS 像素一格，大特写也不会放出一颗颗大圆片），每个镜头换一个网角
+    float ca = cos(uDotAngle), sa = sin(uDotAngle);
+    vec2 sf = gl_FragCoord.xy / uDotPx;
+    vec2 g = vec2(sf.x * ca - sf.y * sa, sf.x * sa + sf.y * ca) / 7.0;
     float dist = length(fract(g) - 0.5);
-    float radius = sqrt(clamp(T, 0.0, 1.0)) * 0.62;
-    float dots = (1.0 - smoothstep(radius - 0.09, radius + 0.09, dist)) * uHalftone * step(0.01, T);
+    // 最浓的地方圆点也只是刚好相连，留着格子间的纸
+    float radius = sqrt(clamp(T, 0.0, 1.0)) * 0.6;
+    float dots = (1.0 - smoothstep(radius - 0.13, radius + 0.13, dist)) * uHalftone * step(0.012, T);
 
     vec3 paper = mix(uPaper, uInk, uNeg);
     vec3 ink = mix(uInk, uPaper, uNeg);
     vec3 col = paper;
     col = mix(col, uDot, dots * 0.85);
-    col = mix(col, uAccentCol, aA);
+    col = mix(col, uBlobCol, aA);
+    // 灰墨团盖着还没唱到的字：字的网点影子压在它上面，照样看得见
+    col = mix(col, mix(uBlobCol, ink, 0.45), dots * aA * smoothstep(0.02, 0.2, ghost + pre * (m.r + haloNear)));
     // 还没唱到的字：淡淡的墨，同样切阈值（毛边一致）
     float gF = ghost / max(uGhost, 0.001);
     float gW = max(fwidth(gF), 0.0001) * 0.75;
     float ga = smoothstep(thr - gW, thr + gW, gF) * uGhost;
     // 关键词的字身用强调色（字周围的晕仍是墨，像套色印刷压了一道黑边）
     vec3 inkK = mix(ink, uAccentCol, kw * smoothstep(0.3, 0.65, m.r));
-    col = mix(col, mix(inkK, paper, aA), max(a, ga * 0.18 * (1.0 - a)));
+    // 墨最后画：灰墨团漂到字上时，字压在它上面照样读得出来
+    col = mix(col, inkK, max(a, ga * 0.18 * (1.0 - a)));
 
     if (uPrevFade > 0.0) {
         vec2 wq = flowed(worldAt(uPrevView));
@@ -1039,6 +1192,7 @@ void main() {
         let lastOnsets = -1;
         let beatTime = -Infinity;
         const accentBuffer = new Float32Array(MAX_ACCENT * 4);
+        const cloudBuffer = new Float32Array(MAX_CLOUDS * 4);
         let cues = [];
         let cuesFor = null;
         let world = { W: 0, H: 0, aspect: 0 };
@@ -1085,7 +1239,9 @@ void main() {
             if (settings().inkFlip) [paper, ink] = [ink, paper];
             // 网点：纸和墨之间偏纸的一档，和墨分得开
             const dot = paper.map((v, i) => v + (ink[i] - v) * 0.42);
-            palette = { paper, ink, accent, dot };
+            // 漂在字上的墨团：纸和墨之间的一档灰（像印刷压的第二道专色）
+            const blob = paper.map((v, i) => v + (ink[i] - v) * 0.36);
+            palette = { paper, ink, accent, dot, blob };
             const css = (rgb, alpha = 1) => `rgba(${rgb.map(v => Math.round(v * 255)).join(',')},${alpha})`;
             mode.root.style.setProperty('--inkdraft-paper', css(paper));
             mode.root.style.setProperty('--inkdraft-mark', css(ink, 0.62));
@@ -1144,6 +1300,7 @@ void main() {
             const data = prepareCue(cues[index], index, {
                 W: world.W, H: world.H, aspect: world.aspect, family: fontFamily(), settings: settings(),
                 trackKey: trackKey(current || {}), title: current?.track?.title || '',
+                prevCue: cues[index - 1] || null,
                 mainCanvas, idsCanvas
             });
             const { gl } = glState;
@@ -1194,7 +1351,7 @@ void main() {
                 lastOnsets = audio.onsets;
             }
             const beatAge = t >= beatTime ? t - beatTime : Infinity;
-            const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass, s.reducedMotion ? Infinity : beatAge);
+            const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass, s.reducedMotion ? Infinity : beatAge, cloudBuffer);
 
             let prevFade = 0;
             let prevSlot = null;
@@ -1237,6 +1394,10 @@ void main() {
             gl.uniform4fv(u.uAccent, accentBuffer);
             gl.uniform1i(u.uAccentCount, counts.accents);
             gl.uniform4fv(u.uRings, ringBuffer);
+            gl.uniform4fv(u.uClouds, cloudBuffer);
+            gl.uniform3fv(u.uBlobCol, palette.blob);
+            gl.uniform1f(u.uDotPx, canvas.height / Math.max(1, size.h));
+            gl.uniform1f(u.uDotAngle, view.angle ?? 0.26);
             gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
             gl.uniform1f(u.uSmash, smash);
             gl.uniform1f(u.uCloud, s.cloud);
