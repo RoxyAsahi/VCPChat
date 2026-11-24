@@ -39,6 +39,7 @@
         return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
     };
     const mixRgb = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
     const luminance = c => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
 
     /* ───────────────────────── 排版：每句写在窗上的位置 ───────────────────────── */
@@ -75,19 +76,49 @@
             if (row.length && !rowsOf.includes(row)) rowsOf.push(row);
             const items = [];
             let width = 0;
-            rowsOf.forEach((r, ri) => {
+            // 三种写法：一两行；大小不一（有的词写得大）；竖着一列列往下写（从右往左）
+            const style = cjk && n <= 14 && random() < 0.28 ? 'vertical' : random() < 0.42 ? 'mixed' : 'rows';
+            if (style === 'vertical') {
+                const cols = n > 7 ? 2 : 1;
+                const perCol = Math.ceil(n / cols);
+                const size = clamp(H * 0.5 / perCol, H * 0.05, H * 0.11) * fontScale;
+                let k = 0;
+                visible.forEach((g) => {
+                    const col = Math.floor(k / perCol), row = k % perCol;
+                    const w = measure(g.text, size, CJK.test(g.text));
+                    items.push({ g, x: (cols - 1 - col) * size * 1.45 + (size - w) / 2 + (random() - 0.5) * size * 0.1, row: 0, w,
+                        size: size * (0.92 + random() * 0.16), rot: (random() - 0.5) * 0.1, dy: 0,
+                        by: (row + 0.85) * size * 1.08 + col * size * 0.5 });
+                    k += 1;
+                });
+                width = cols * size * 1.45;
+            }
+            const sizes = style === 'mixed' ? rowsOf.map(r => r.map(() => 1)) : null;
+            if (sizes) {
+                // 每 1~3 个字一个词块，词块放大或缩小
+                rowsOf.forEach((r, ri) => {
+                    let left = 0, k = 1;
+                    r.forEach((g, gi) => {
+                        if (left <= 0) { left = 1 + Math.floor(random() * 3); k = random() < 0.35 ? 1.35 + random() * 0.2 : 0.72 + random() * 0.2; }
+                        sizes[ri][gi] = k;
+                        left -= 1;
+                    });
+                });
+            }
+            if (style !== 'vertical') rowsOf.forEach((r, ri) => {
                 let x = (random() - 0.5) * base * 0.6 + ri * base * (random() * 0.5);
-                r.forEach((g) => {
-                    const w = g.text.trim() ? measure(g.text, base, CJK.test(g.text)) : base * (cjk ? 0.5 : 0.32);
+                r.forEach((g, gi) => {
+                    const k = sizes ? sizes[ri][gi] : 1;
+                    const w = g.text.trim() ? measure(g.text, base * k, CJK.test(g.text)) : base * (cjk ? 0.5 : 0.32);
                     if (g.text.trim()) {
-                        items.push({ g, x, row: ri, w, size: base * (0.92 + random() * 0.16),
-                            rot: (random() - 0.5) * 0.12, dy: (random() - 0.5) * base * 0.12 });
+                        items.push({ g, x, row: ri, w, size: base * k * (0.92 + random() * 0.16),
+                            rot: (random() - 0.5) * 0.12, dy: (random() - 0.5) * base * 0.12 + (k - 1) * base * 0.3 });
                     }
                     x += w * (cjk ? 1.02 : 1);
                 });
                 width = Math.max(width, x);
             });
-            const height = rowsOf.length * base * 1.25;
+            const height = style === 'vertical' ? Math.max(...items.map(it => it.by + it.size * 0.3)) : rowsOf.length * base * 1.25 * (sizes ? 1.2 : 1);
             // 找一个和前两句重叠最少的地方（窗的安全区里）
             const safe = [W * 0.08, H * 0.16, W * 0.92, H * 0.76];
             let best = null;
@@ -101,7 +132,7 @@
             const [bx, by] = best.box;
             items.forEach((it) => {
                 it.x += bx;
-                it.baseline = by + (it.row + 0.85) * base * 1.25 + it.dy;
+                it.baseline = it.by !== undefined ? by + it.by : by + (it.row + 0.85) * base * 1.25 * (sizes ? 1.2 : 1) + it.dy;
                 it.box = [it.x - it.size * 0.08, it.baseline - it.size * 0.9, it.x + it.w + it.size * 0.08, it.baseline + it.size * 0.18];
             });
             const end = Math.max(line.endTime, line.vocalEndTime || 0, ...items.map(it => it.g.end));
@@ -265,6 +296,8 @@ uniform vec2 uRes;
 uniform vec2 uAtlasSize;
 uniform float uTime;
 uniform vec4 uDrips[6];   // x, 开始时刻, 速度, 种子
+uniform float uDripTop[6]; // 从哪儿开始淌（字底下的积水，或窗顶）
+uniform vec4 uSpot;      // 正在写的字：x, y, 半径, 强度
 uniform int uDripCount;
 uniform vec3 uFogCol;
 uniform float uFogDensity;
@@ -306,7 +339,8 @@ void main() {
     vec2 jitter = hash22(cell + round_ * 17.0);
     vec2 centre = (cell + 0.2 + jitter * 0.6) / grid;
     float life = fract((uTime + phase) / period);
-    float radius = (0.0022 + hash12(cell + round_ * 3.0) * 0.005) * step(0.62, hash12(cell + round_)) * smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.85, 1.0, life));
+    float big = step(0.93, hash12(cell + round_ * 5.0));
+    float radius = (0.0022 + hash12(cell + round_ * 3.0) * 0.005 + big * 0.007) * step(0.62, hash12(cell + round_)) * smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.85, 1.0, life));
     vec2 d = (uv - centre) * vec2(uRes.x / uRes.y, 1.0);
     float dl = length(d);
     float drop = radius > 0.0 ? smoothstep(radius, radius * 0.8, dl) * uDrops : 0.0;
@@ -319,10 +353,11 @@ void main() {
         if (i >= uDripCount) break;
         vec4 dr = uDrips[i];
         float x = dr.x + sin(uv.y * 23.0 + dr.w * 6.0) * 0.004 + sin(uv.y * 61.0 + dr.w) * 0.0015;
-        float headY = 1.02 - (uTime - dr.y) * dr.z;
+        float top = uDripTop[i];
+        float headY = top - (uTime - dr.y) * dr.z;
         float dx = abs(uv.x - x) * uRes.x / uRes.y;
-        if (uv.y >= headY) {
-            float passed = uTime - (dr.y + (1.02 - uv.y) / dr.z);
+        if (uv.y >= headY && uv.y <= top) {
+            float passed = uTime - (dr.y + (top - uv.y) / dr.z);
             trail = max(trail, smoothstep(0.0032, 0.0012, dx) * exp(-passed / 7.0));
         }
         float hb = length(vec2(dx, (uv.y - headY) * 0.8));
@@ -345,6 +380,14 @@ void main() {
     col = mix(col, clear * 1.2 + fog * 0.45, drop * 0.8);
     col += drop * smoothstep(radius * 0.5, 0.0, length(d + vec2(radius * 0.35, -radius * 0.35))) * 0.35;
     col = mix(col, clear * 1.2 + fog * 0.5, bead * 0.9);
+    // 大水珠边上一圈暗边（折射把背景压进去）
+    col *= 1.0 - big * drop * smoothstep(radius * 0.55, radius, dl) * 0.45;
+    // 正在写的那个字：指尖那一带的雾被呵暖，透出一点窗外的光
+    if (uSpot.w > 0.0) {
+        vec2 sd = (uv - uSpot.xy) * vec2(uRes.x / uRes.y, 1.0);
+        float spot = exp(-dot(sd, sd) / (uSpot.z * uSpot.z)) * uSpot.w;
+        col += (clear * 0.22 + vec3(1.0, 0.86, 0.66) * 0.05) * spot;
+    }
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 13.0) - 0.5) * 0.03 * uGrain;
     // 窗框四周暗一点
     vec2 v = uv - 0.5;
@@ -439,6 +482,7 @@ void main() {
         let idleHandle = 0;
         const stats = { builds: 0, buildMs: 0, draws: 0, visible: 0 };
         const dripBuffer = new Float32Array(24);
+        const dripTop = new Float32Array(6);
 
         const settings = () => {
             const tuning = mode.config.modes?.fogpane || {};
@@ -607,11 +651,28 @@ void main() {
         };
 
         // 往下淌的水：每隔七八秒从窗顶淌下来一道，时刻、位置只由歌和序号决定
-        const dripsAt = (t, seedKey) => {
+        const dripsAt = (t, seedKey, lines) => {
             let n = 0;
+            dripTop.fill(1.02);
+            // 写过的字底下积了水，有的会淌下来
+            for (const p of lines) {
+                for (const it of p.items) {
+                    if (n >= 4) break;
+                    const r = seededRandom(`${seedKey}:gdrip:${p.index}:${it.g.start.toFixed(2)}`);
+                    if (r() > 0.22) continue;
+                    const start = it.g.end + 0.4 + r() * 1.2;
+                    const speed = 0.03 + r() * 0.035;
+                    const top = 1 - it.box[3] / world.H;
+                    if (start > t || top - (t - start) * speed < -0.3) continue;
+                    dripBuffer.set([(it.x + it.w * (0.3 + r() * 0.4)) / world.W, start, speed, r() * 10], n * 4);
+                    dripTop[n] = top;
+                    n += 1;
+                }
+            }
             const period = 7.5;
             const k0 = Math.floor(t / period);
             for (let k = k0; k > k0 - 6 && n < 6; k -= 1) {
+                dripTop[n] = 1.02;
                 if (k < 0) break;
                 const r = seededRandom(`${seedKey}:drip:${k}`);
                 const start = k * period + r() * period;
@@ -685,8 +746,19 @@ void main() {
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uAtlasSize, world.W, world.H);
             gl.uniform1f(u.uTime, t);
-            const drips = s.drips && !s.reducedMotion ? dripsAt(t, planFor?.key || '') : 0;
+            const drips = s.drips && !s.reducedMotion ? dripsAt(t, planFor?.key || '', visible) : 0;
             gl.uniform4fv(u.uDrips, dripBuffer);
+            gl.uniform1fv(u.uDripTop, dripTop);
+            // 指尖：正在写的字
+            let spot = [0, 0, 0, 0];
+            for (const p of visible) {
+                for (const it of p.items) {
+                    if (t >= it.g.start - 0.05 && t < it.g.end + 0.25) {
+                        spot = [(it.x + it.w / 2) / world.W, 1 - (it.baseline - it.size * 0.4) / world.H, it.size / world.H * 1.4, 1 - smooth(it.g.end, it.g.end + 0.25, t)];
+                    }
+                }
+            }
+            gl.uniform4f(u.uSpot, spot[0], spot[1], spot[2], s.reducedMotion ? 0 : spot[3]);
             gl.uniform1i(u.uDripCount, drips);
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));
