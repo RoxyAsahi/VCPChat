@@ -169,7 +169,7 @@
             global.addEventListener('keydown', onKey, true);
             syncDialog();
             global.requestAnimationFrame?.(() => overlay && overlay.classList.add('visible'));
-            try { slider.focus({ preventScroll: true }); } catch (e) { /* 没关系 */ }
+            try { x.focus({ preventScroll: true }); } catch (e) { /* 没关系 */ }
         };
 
         app.channels = {
