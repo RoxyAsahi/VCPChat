@@ -41,8 +41,8 @@
      * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', etchHi: 'rgba(255,253,249,.85)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', etchHi: 'rgba(0,0,0,.35)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, sticker: ['#faf8f4', 'rgba(38,40,40,.86)', 'rgba(70,66,60,.22)'], tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', etchHi: 'rgba(255,253,249,.85)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, sticker: ['#3a4448', 'rgba(228,231,224,.84)', 'rgba(220,226,222,.18)'], tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', etchHi: 'rgba(0,0,0,.35)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -752,6 +752,7 @@ vec3 archiveUntone(vec3 y) {
             labelEpoch++;
             drawEtch();
             paintFittings();
+            drawSticker();
             frameMat.color.set(lighting.mat[0]);
             const to = lookOf(lighting);
             accentIdx = -1;
@@ -918,6 +919,55 @@ vec3 archiveUntone(vec3 y) {
         scene.add(fittings);
         // 刻线跟着选中卡一直在（参考播放器只给焦点卡画 Case_Engraving，浏览时也画），不再等取出才淡入
         fittings.add(etchMesh);
+        // 左上角的小标签纸（参考播放器焦点卡 Printed_Label 那块：x −1.855…−0.865，y 2.835…3.245）：曲名、歌手、一行小字，比卡面白一档
+        const stickerGeo = new THREE.PlaneGeometry(0.99, 0.41);
+        stickerGeo.translate(-1.36, 3.04, FRONT + 0.006);
+        const stickerCanvas = document.createElement('canvas');
+        stickerCanvas.width = 512;
+        stickerCanvas.height = 212;
+        const stickerMap = new THREE.CanvasTexture(stickerCanvas);
+        stickerMap.colorSpace = THREE.SRGBColorSpace;
+        stickerMap.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        const stickerMat = coverMat({ map: stickerMap });
+        const stickerMesh = new THREE.Mesh(stickerGeo, stickerMat);
+        stickerMesh.visible = false;
+        fittings.add(stickerMesh);
+        let stickerInfo = { title: '', artist: '' };
+        const drawSticker = () => {
+            const title = String(stickerInfo.title || '').trim(), artist = String(stickerInfo.artist || '').trim();
+            stickerMesh.visible = Boolean(title);
+            if (!title) return;
+            const g = stickerCanvas.getContext('2d'), Wc = stickerCanvas.width, Hc = stickerCanvas.height;
+            const [paper, ink, rule] = lighting.sticker;
+            g.clearRect(0, 0, Wc, Hc);
+            g.fillStyle = paper;
+            g.fillRect(0, 0, Wc, Hc);
+            g.strokeStyle = rule; g.lineWidth = 2;
+            g.strokeRect(1, 1, Wc - 2, Hc - 2);
+            const fit = (text, maxW) => {
+                if (g.measureText(text).width <= maxW) return text;
+                let t = text;
+                while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+                return t + '…';
+            };
+            g.fillStyle = ink;
+            g.textBaseline = 'alphabetic';
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            g.font = `650 34px ${fontStack}`;
+            g.fillText(fit(title, Wc - 48), 24, 60);
+            g.font = `500 25px ${fontStack}`;
+            g.fillText(fit(artist, Wc - 48), 24, 104);
+            g.fillStyle = rule;
+            g.fillRect(24, 132, Wc - 48, 2);
+            g.fillStyle = ink;
+            g.globalAlpha = 0.62;
+            g.font = `500 18px ${fontStack}`;
+            if ('letterSpacing' in g) g.letterSpacing = '3px';
+            g.fillText('MUSIC ARCHIVE', 24, 176);
+            g.globalAlpha = 1;
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            stickerMap.needsUpdate = true;
+        };
         const paintFittings = () => {
             const c = [new THREE.Color(lighting.fit[0]), new THREE.Color(lighting.fit[1]), new THREE.Color(lighting.fit[1]).multiplyScalar(0.62)];
             const kind = fittingsGeo.userData.kind, col = fittingsGeo.attributes.color.array;
@@ -967,6 +1017,8 @@ vec3 archiveUntone(vec3 y) {
             if (key === coverKey && artMat.map) return;
             coverKey = key;
             freeCoverTex();
+            stickerInfo = { title: info.title || '', artist: info.artist || '' };
+            drawSticker();
             captionMesh.visible = Boolean(source || info.format || info.bitrate);
             if (captionMesh.visible) drawCaption(info, Boolean(source));
             let img = source;
@@ -1420,6 +1472,7 @@ vec3 archiveUntone(vec3 y) {
             glowUniforms.uHero.value = detailK;
             glowUniforms.uQuality.value = fitQ;
             etchMat.opacity = fitQ;
+            stickerMat.opacity = fitQ;
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
             glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
@@ -1529,9 +1582,9 @@ vec3 archiveUntone(vec3 y) {
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat]) m.dispose();
+            for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat, stickerMat]) m.dispose();
             if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); host.classList.remove('archive-post-atmos'); }
-            freeCoverTex(); fittingsGeo.dispose(); fittingsMat.dispose(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose();
+            freeCoverTex(); fittingsGeo.dispose(); fittingsMat.dispose(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose(); stickerGeo.dispose(); stickerMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             renderer.dispose();
