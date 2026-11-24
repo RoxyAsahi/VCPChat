@@ -47,7 +47,7 @@
     const overlap = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
 
     // 整首一次排好（只用 measureText），和准备顺序无关：拖进度到哪都一样。
-    const planSong = (lines, W, H, fontScale, measure, seedKey) => {
+    const planSong = (lines, W, H, fontScale, measure, seedKey, avoid = null) => {
         const sung = lines.filter(line => readableText(line.fullText));
         const placed = [];
         sung.forEach((line, index) => {
@@ -61,7 +61,7 @@
             const perRow = cjk ? 9 : 20;
             const rows = Math.min(3, Math.max(1, Math.ceil(n / perRow)));
             // 字号：一行占窗宽六成上下，手写的字不会太整齐
-            const base = clamp((W * (0.4 + random() * 0.14)) / Math.ceil(n / rows) / (cjk ? 1 : 0.55), H * 0.055, H * 0.13) * fontScale;
+            let base = clamp((W * (0.4 + random() * 0.14)) / Math.ceil(n / rows) / (cjk ? 1 : 0.55), H * 0.055, H * 0.13) * fontScale;
             // 按行切开（拉丁字母在空格处换行）
             const rowsOf = [];
             let row = [];
@@ -69,7 +69,8 @@
                 row.push(g);
                 const count = row.filter(x => x.text.trim()).length;
                 const target = Math.ceil(n / rows);
-                const breakable = cjk || !g.text.trim();
+                // 西文在空格、连字符处换行；一个词长得放不下时硬断
+                const breakable = cjk || !g.text.trim() || /^[-–—/]$/.test(g.text) || count >= target * 1.6;
                 if (rowsOf.length < rows - 1 && count >= target && breakable) { rowsOf.push(row); row = []; }
                 else if (i === glyphs.length - 1) rowsOf.push(row);
             });
@@ -118,15 +119,25 @@
                 });
                 width = Math.max(width, x);
             });
-            const height = style === 'vertical' ? Math.max(...items.map(it => it.by + it.size * 0.3)) : rowsOf.length * base * 1.25 * (sizes ? 1.2 : 1);
+            let height = style === 'vertical' ? Math.max(...items.map(it => it.by + it.size * 0.3)) : rowsOf.length * base * 1.25 * (sizes ? 1.2 : 1);
             // 找一个和前两句重叠最少的地方（窗的安全区里）
             const safe = [W * 0.08, H * 0.16, W * 0.92, H * 0.76];
+            // 还是比安全区宽（窄窗口、超长的词）：整句缩小到放得下
+            const fit = Math.min(1, (safe[2] - safe[0]) / Math.max(1, width), (safe[3] - safe[1]) / Math.max(1, height));
+            if (fit < 1) {
+                items.forEach((it) => {
+                    it.x *= fit; it.w *= fit; it.size *= fit; it.dy *= fit;
+                    if (it.by !== undefined) it.by *= fit;
+                });
+                base *= fit; width *= fit; height *= fit;
+            }
             let best = null;
             for (let k = 0; k < 16; k += 1) {
                 const x0 = safe[0] + random() * Math.max(1, safe[2] - safe[0] - width);
                 const y0 = safe[1] + random() * Math.max(1, safe[3] - safe[1] - height);
                 const box = [x0, y0, x0 + width, y0 + height];
-                const cost = placed.slice(-2).reduce((s, p, j) => s + overlap(box, p.box) * (j === placed.slice(-2).length - 1 ? 2 : 1), 0);
+                const cost = placed.slice(-2).reduce((s, p, j) => s + overlap(box, p.box) * (j === placed.slice(-2).length - 1 ? 2 : 1), 0)
+                    + (avoid ? overlap(box, avoid) * 6 : 0);   // 左上角的档案卡底下别写字
                 if (!best || cost < best.cost) best = { box, cost };
             }
             const [bx, by] = best.box;
@@ -614,6 +625,8 @@ void main() {
         const notice = createElement('div', 'fogpane-notice');
         notice.hidden = true;
         mode.root.append(canvas, kicker, translation, notice);
+        const card = Utils.watchOverlay(mode.root);
+        mode.scope.add(() => card.destroy());
 
         const atlasCanvas = document.createElement('canvas');
         const measureCtx = document.createElement('canvas').getContext('2d');
@@ -721,9 +734,11 @@ void main() {
 
         const ensurePlan = (frame) => {
             const s = settings();
-            const key = `${frame.track?.path || frame.track?.title || ''}|${world.W}x${world.H}|${s.fontScale}`;
+            const b = card.box;
+            const avoid = b ? [(b.left + 1) / 2 * world.W - 12, (1 - b.top) / 2 * world.H - 12, (b.right + 1) / 2 * world.W + 12, (1 - b.bottom) / 2 * world.H + 12].map(Math.round) : null;
+            const key = `${frame.track?.path || frame.track?.title || ''}|${world.W}x${world.H}|${s.fontScale}|${avoid || ''}`;
             if (planFor && planFor.lines === frame.lines && planFor.key === key) return;
-            plan = planSong(frame.lines || [], world.W, world.H, s.fontScale, measure, key);
+            plan = planSong(frame.lines || [], world.W, world.H, s.fontScale, measure, `${frame.track?.path || frame.track?.title || ''}|${world.W}x${world.H}|${s.fontScale}`, avoid);
             planFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; });
         };
@@ -977,14 +992,43 @@ void main() {
         };
 
         const updateOverlay = (frame) => {
-            const next = `雾笺 · ${Utils.lineCounter(frame)}`;
+            const next = `雾笺 · ${frame.titleOnly ? '暂无歌词' : Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
             const text = settings().showTranslation ? resolveSupplementalText(frame.activeLine) : '';
             if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; }
         };
 
+        // 没有歌词：开头在玻璃上写下歌名，整首歌留着
+        let titleLine = null;
+        const titleOnGlass = (frame) => {
+            if (frame.lines?.length) return frame;
+            const title = String(frame.track?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg|aac|ape|opus)$/i, '').trim();
+            const duration = frame.duration > 0 ? frame.duration : 240;
+            if (!readableText(title)) return frame;
+            const key = `${title}|${Math.round(duration)}`;
+            if (titleLine?.key !== key) {
+                const chars = Runtime.splitGraphemes(title).filter(c => c.trim());
+                const words = chars.map((text, i) => ({ text, startTime: 1.6 + i * 0.32, endTime: 1.6 + (i + 1) * 0.32 }));
+                titleLine = { key, lines: Runtime.normalizeLines([{ time: 1.5, endTime: Math.max(6, duration - 2), original: title, translation: '', words }]) };
+            }
+            const t = frame.playbackTime || 0;
+            const line = titleLine.lines[0];
+            const on = t >= line.startTime && t < line.endTime;
+            return {
+                ...frame,
+                ...Runtime.resolveWordState(on ? line : null, t),
+                lines: titleLine.lines,
+                currentLineIndex: on ? 0 : -1,
+                activeLine: on ? line : null,
+                lineProgress: on ? Utils.clamp((t - line.startTime) / (line.endTime - line.startTime), 0, 1) : 0,
+                titleOnly: true
+            };
+        };
+
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
+            frame = titleOnGlass(frame);
             latestFrame = frame;
             if (!colours) readColours();
             ensurePlan(frame);
@@ -1006,7 +1050,7 @@ void main() {
         };
         const updateConfig = mode.updateConfig;
         mode.updateConfig = (config) => { updateConfig(config); resize(); readColours(); redraw(); };
-        mode.resize = () => { resize(); redraw(); };
+        mode.resize = () => { card.measure(); resize(); redraw(); };
         mode.suspend = () => { paused = true; mode.root.classList.add('is-suspended'); };
         mode.resume = () => { paused = false; mode.root.classList.remove('is-suspended'); redraw(); };
         mode.updateTheme = () => { readColours(); redraw(); };

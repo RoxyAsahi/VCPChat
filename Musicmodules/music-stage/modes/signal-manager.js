@@ -668,7 +668,7 @@ void main() {
             let text = active && readableText(active.fullText) ? String(active.fullText).trim() : '';
             // 第一句之前：监视窗里先打出歌名
             let title = false;
-            if (!text && (frame.playbackTime || 0) < firstStart(frame) && frame.track?.title) { text = String(frame.track.title).trim(); title = true; }
+            if (!text && (frame.playbackTime || 0) < firstStart(frame) && frame.track?.title) { text = String(frame.track.title).replace(/\.(mp3|flac|wav|m4a|ogg|aac|ape|opus)$/i, '').trim(); title = true; }
             if (text !== lastLine) {
                 const prev = slots[slot];
                 if (lastLine) restart(prev, 'is-out');
@@ -689,6 +689,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latestFrame = frame;
             if (!colours) readColours();
             updateOverlay(frame);

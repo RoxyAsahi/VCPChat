@@ -30,6 +30,9 @@
     ]);
     const ME = Object.freeze({ name: '我', hue: -1, me: true });
     const REACTIONS = Object.freeze(['♥', '＋1', '☆', '哈', '♪']);
+    // 长间奏里有人回一个表情
+    const STICKERS = Object.freeze(['ヽ(✿ﾟ▽ﾟ)ノ', '♪(´▽｀)', '(๑•̀ㅂ•́)و✧', '(っ˘ω˘ς )', '٩(ˊᗜˋ*)و', '(*´∀`)~♥', '( ˘ ³˘)♪', '(ﾉ´ヮ`)ﾉ*:･ﾟ✧']);
+    const STICKER_GAP = 9;           // 间奏长过这么久，语音之后再来一个表情
 
     const unit = (...parts) => (hashString(parts.join('|')) >>> 0) / 4294967295;
     const normLine = line => String(line?.fullText || '').replace(/[\s，。、,.!?！？…~～'"“”‘’()（）-]/g, '').toLowerCase();
@@ -61,6 +64,14 @@
                     const who = MEMBERS[Math.floor(unit('voice', i, line.startTime) * MEMBERS.length)];
                     messages.push({ kind: 'voice', start, end, sender: who, side: 'left' });
                     last = null;
+                    if (end - start > STICKER_GAP) {
+                        const others = MEMBERS.filter(m => m !== who);
+                        const from = others[Math.floor(unit('sticker-who', i) * others.length)];
+                        messages.push({
+                            kind: 'sticker', start: start + (end - start) * 0.55, sender: from, side: 'left',
+                            text: STICKERS[Math.floor(unit('sticker', i, line.startTime) * STICKERS.length)]
+                        });
+                    }
                 }
             }
             // 隔一阵插一个时间戳
@@ -96,6 +107,10 @@
             last = sender;
         });
         const lastLine = sung[sung.length - 1];
+        // 没有歌词：整首歌是一条语音，群里就听着
+        if (!lastLine && duration > 6) {
+            messages.push({ kind: 'voice', start: 1.2, end: duration - 1.5, sender: MEMBERS[0], side: 'left', whole: true });
+        }
         if (lastLine) {
             const end = Math.max(lastLine.endTime, lastLine.vocalEndTime || 0) + 1.5;
             if (!(duration > 0) || end < duration) messages.push({ kind: 'system', start: end, text: '— 曲终 · 群聊结束 —' });
@@ -143,6 +158,8 @@
         viewport.append(list);
         const kicker = createElement('div', 'gc-kicker', '群唱');
         mode.root.append(head, viewport, kicker);
+        const cardInset = Utils.watchCardInset(mode.root);
+        mode.scope.add(() => cardInset.destroy());
 
         const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         let messages = [];
@@ -190,6 +207,14 @@
                 return { message, el };
             }
             const el = createElement('div', `gc-row is-${message.side}`);
+            if (message.kind === 'sticker') {
+                el.classList.add('is-sticker');
+                el.append(avatar(message.sender));
+                const body = createElement('div', 'gc-body');
+                body.append(createElement('div', 'gc-name', message.sender.name), createElement('div', 'gc-sticker', message.text));
+                el.append(body);
+                return { message, el };
+            }
             if (message.continued) el.classList.add('is-continued');
             el.append(avatar(message.sender));
             const body = createElement('div', 'gc-body');
@@ -211,7 +236,8 @@
                     wave.append(b);
                     bars.push(b);
                 }
-                bubble.querySelector('.gc-dur').textContent = `${Math.max(1, Math.round(message.end - message.start))}″`;
+                bubble.querySelector('.gc-dur').textContent = message.whole ? fmt(message.end - message.start) : `${Math.max(1, Math.round(message.end - message.start))}″`;
+                if (message.whole) body.append(createElement('div', 'gc-meta', '这首没有歌词 · 一起听'));
                 return { message, el, bars, played: 0 };
             }
             if (message.chorus) el.classList.add('is-chorus');
@@ -225,15 +251,6 @@
                 bubble.append(tr);
             }
             const row = { message, el, text, glyphs, shown: 0, tr, bubble, body, meta: null };
-            if (past) {
-                text.textContent = message.line.fullText;
-                row.shown = glyphs.length;
-                el.classList.add('is-past');
-                finish(row, s, false);
-            } else {
-                if (tr) tr.classList.add('is-waiting');
-                el.classList.add('is-active');
-            }
             if (message.chorus && s.echoes && message.echoes.length) {
                 const echo = createElement('div', 'gc-echo');
                 const stack = createElement('div', 'gc-stack');
@@ -242,6 +259,15 @@
                 body.append(echo);
                 row.echo = echo;
                 if (past) echo.classList.add('is-on');
+            }
+            if (past) {
+                text.textContent = message.line.fullText;
+                row.shown = glyphs.length;
+                el.classList.add('is-past');
+                finish(row, s, false);
+            } else {
+                if (tr) tr.classList.add('is-waiting');
+                el.classList.add('is-active');
             }
             return row;
         };
@@ -259,6 +285,7 @@
                 parts.push(chip);
             }
             if (m.side === 'right') parts.push(createElement('span', 'gc-read', `${2 + (m.index % 4)} 人已读`));
+            parts.push(createElement('span', 'gc-time', fmt(m.start)));
             if (parts.length) {
                 const meta = createElement('div', 'gc-meta');
                 meta.append(...parts);
@@ -288,7 +315,7 @@
             }
         };
 
-        const rebuild = (index, s) => {
+        const rebuild = (index, s, t) => {
             stats.rebuilds += 1;
             list.replaceChildren();
             rows = [];
@@ -301,7 +328,7 @@
                 const live = k === index && (m.kind === 'line' || m.kind === 'voice');
                 const row = makeRow(m, !live, s);
                 pushRow(row, false);
-                if (live && m.kind === 'voice') voiceRow = row;
+                if (m.kind === 'voice' && t < m.end) voiceRow = row;
             }
             shownUpTo = index;
         };
@@ -390,6 +417,7 @@
             let subtitle;
             if (typing) subtitle = `${typing.sender.me ? '我' : typing.sender.name} 正在输入…`;
             else if (voiceRow && frame.playbackTime < voiceRow.message.end && frame.playbackTime >= voiceRow.message.start) subtitle = `${voiceRow.message.sender.name} 的语音 · 播放中`;
+            else if (frame.lyricsEstimated) subtitle = `${MEMBERS.length + 1} 人 · 纯文本歌词，按时长铺开`;
             else subtitle = `${MEMBERS.length + 1} 人 · ${Utils.lineCounter(frame)}`;
             if (subtitle !== sub) { sub = subtitle; headSub.textContent = subtitle; head.classList.toggle('is-typing', Boolean(typing)); }
             // 右上角的电平小格
@@ -404,6 +432,7 @@
         const step = (frame) => {
             const s = settings();
             s.live = Boolean(frame.isPlaying);
+            mode.root.classList.toggle('is-live', s.live && !s.reducedMotion);
             const t = frame.playbackTime || 0;
             const key = `${frame.track?.path || frame.track?.title || ''}|${Math.round(frame.duration || 0)}`;
             if (!threadFor || threadFor.lines !== frame.lines || threadFor.key !== key) {
@@ -413,7 +442,7 @@
             }
             const index = messageIndexAt(messages, t);
             // 往回拖、或者一下跳过好几条：整列重排；正常播放：一条一条加
-            if (index < shownUpTo || index > shownUpTo + 2 || t < lastT - 0.5) rebuild(index, s);
+            if (index < shownUpTo || index > shownUpTo + 2 || t < lastT - 0.5) rebuild(index, s, t);
             else {
                 while (shownUpTo < index) {
                     shownUpTo += 1;
@@ -465,6 +494,7 @@
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latest = frame;
             const aim = 1000 / (FPS[mode.config.quality || 'standard'] || 30);
             const now = frame.now ?? performance.now();
@@ -478,7 +508,7 @@
         const refresh = () => { lastDraw = -Infinity; shownUpTo = -2; threadFor = null; if (latest) mode.updateFrame(latest); };
         const updateConfig = mode.updateConfig;
         mode.updateConfig = (config) => { updateConfig(config); applyScale(); refresh(); };
-        mode.resize = () => {};
+        mode.resize = () => cardInset.measure();
         mode.suspend = () => { paused = true; mode.root.classList.add('is-suspended'); };
         mode.resume = () => { paused = false; mode.root.classList.remove('is-suspended'); lastDraw = -Infinity; if (latest) mode.updateFrame(latest); };
         mode.updateTheme = () => {};

@@ -211,6 +211,39 @@ test('groupchat: a deterministic thread with typing lead, voice notes in long br
     assert.equal(G.messageIndexAt(a, -1), -1);
 });
 
+test('groupchat: a long interlude gets a sticker after the voice note; no lyrics is one long voice note', () => {
+    const G = window.MusicStageGroupchatManager._test;
+    const song = window.MusicStageRuntime.normalizeLines([
+        { time: 5, original: '我们走到海边' }, { time: 9, original: '再见夏天' }, { time: 40, original: '最后一句' }
+    ]);
+    const thread = G.buildThread(song, '夏', 60);
+    const voice = thread.find(m => m.kind === 'voice' && m.start > 9);
+    const sticker = thread.find(m => m.kind === 'sticker');
+    assert.ok(voice && sticker && sticker.start > voice.start && sticker.start < voice.end && sticker.sender !== voice.sender);
+    assert.equal(G.typingAt(thread, sticker.start + 0.1), null, 'nobody types during the interlude');
+    const silent = G.buildThread([], '夏', 120);
+    const whole = silent.find(m => m.kind === 'voice');
+    assert.ok(whole && whole.whole && whole.start < 2 && whole.end > 115);
+});
+
+test('plain lyrics without timing are spread over the song by length, marked as estimated', () => {
+    const U = window.MusicStageModeUtils;
+    const R = window.MusicStageRuntime;
+    const plain = Object.freeze(['清晨的站台还没有人', '短句', '我把车票折成纸船放进口袋慢慢地等']);
+    const base = { lines: [], plainLines: plain, duration: 200, playbackTime: 100, isPlaying: true };
+    const f = U.withPlainLyrics(base);
+    assert.ok(f.lyricsEstimated && f.lines.length === 3);
+    assert.ok(f.lines[0].startTime >= 8 && f.lines[2].endTime <= 200);
+    for (let i = 1; i < 3; i += 1) assert.ok(f.lines[i].startTime > f.lines[i - 1].startTime);
+    assert.ok(f.lines[2].startTime - f.lines[1].startTime < f.lines[1].startTime - f.lines[0].startTime, 'a short line gets a shorter slot');
+    assert.ok(f.activeLine && f.currentLineIndex >= 0);
+    assert.equal(U.withPlainLyrics({ ...base, playbackTime: 101 }).lines, f.lines, 'the spread lines are cached');
+    assert.match(U.lineCounter(f), /未对时/);
+    const timed = { ...base, lines: R.normalizeLines([{ time: 1, original: 'x' }]) };
+    assert.equal(U.withPlainLyrics(timed), timed, 'timed lyrics win');
+    assert.equal(U.withPlainLyrics({ ...base, plainLines: [] }).lyricsEstimated, undefined);
+});
+
 require(path.join(stage, 'modes', 'impression-manager.js'));
 test('impression: sections turn at long breaks and chorus entries, and never closer than eight seconds', () => {
     const I = window.MusicStageImpressionManager._test;

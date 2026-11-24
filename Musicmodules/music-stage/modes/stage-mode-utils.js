@@ -514,6 +514,30 @@
         };
     };
 
+    // 给只用 DOM 排字的舞台：把左上角档案卡的右边、下边（相对舞台的像素）写成
+    // --stage-card-right / --stage-card-bottom，CSS 里用 max() 让开；窗口宽时卡片
+    // 碰不到内容，这两个值不起作用。只在卡片或舞台改尺寸时量一次。
+    const watchCardInset = (root, selector = '.music-stage-id3') => {
+        const card = root?.closest?.('.music-stage')?.querySelector?.(selector) || null;
+        const measure = () => {
+            let right = 0, bottom = 0;
+            if (card && root.isConnected && global.getComputedStyle?.(card)?.display !== 'none') {
+                const view = root.getBoundingClientRect(), r = card.getBoundingClientRect();
+                if (r.width && r.height && r.right > view.left && r.left < view.left + view.width / 2) {
+                    right = Math.round(r.right - view.left);
+                    bottom = Math.round(r.bottom - view.top);
+                }
+            }
+            root.style.setProperty('--stage-card-right', `${right}px`);
+            root.style.setProperty('--stage-card-bottom', `${bottom}px`);
+        };
+        const observer = card && global.ResizeObserver ? new global.ResizeObserver(measure) : null;
+        observer?.observe(card);
+        observer?.observe(root);
+        measure();
+        return { measure, destroy() { observer?.disconnect(); } };
+    };
+
     // The faces a 3D stage can write its lyrics in. Each list starts with the
     // face Windows ships, then the usual macOS and open-source equivalents.
     const LYRIC_FONTS = Object.freeze({
@@ -638,9 +662,71 @@
         const count = frame?.lines?.length || 0;
         const index = Number(frame?.currentLineIndex);
         if (!count) return '暂无歌词';
-        if (!(index >= 0)) return '前奏';
+        if (!(index >= 0)) return frame.lyricsEstimated ? '纯文本歌词' : '前奏';
         const pad = value => String(value).padStart(digits, '0');
-        return `${pad(Math.min(count, index + 1))} / ${pad(count)}`;
+        return `${pad(Math.min(count, index + 1))} / ${pad(count)}${frame.lyricsEstimated ? ' · 未对时' : ''}`;
+    };
+
+    // 只有纯文本歌词（没有时间）时，按字数把它们铺在整首歌上，让靠时间走的舞台也能唱起来。
+    // 返回一个新 frame（lines / 当前句 / 进度 / 字的状态都按铺开的时间算），带 lyricsEstimated；
+    // 有带时间的歌词、或者也没有纯文本时，原样返回。
+    const estimatedCache = new WeakMap();
+    const estimateLines = (plain, duration) => {
+        const R = global.MusicStageRuntime;
+        let byDuration = estimatedCache.get(plain);
+        if (!byDuration) { byDuration = new Map(); estimatedCache.set(plain, byDuration); }
+        const key = Math.round(duration);
+        const hit = byDuration.get(key);
+        if (hit) return hit;
+        const total = duration > 0 ? duration : Math.max(60, plain.length * 4.5);
+        const begin = Math.min(12, total * 0.08);
+        const end = Math.max(begin + plain.length, total - Math.min(10, total * 0.06));
+        const weights = plain.map(text => Math.max(4, R.splitGraphemes(text.replace(/\s+/g, '')).length));
+        const sum = weights.reduce((a, b) => a + b, 0) || 1;
+        // 每句占满自己那一段（不留成间奏），字按 0.38 秒一个念出来，最多用掉这一段的七成
+        const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
+        let t = begin;
+        const raw = plain.map((text, i) => {
+            const slot = (end - begin) * weights[i] / sum;
+            const start = t;
+            t += slot;
+            const tokens = text.split(/\s+/).filter(Boolean).flatMap(tok => (CJK.test(tok) ? R.splitGraphemes(tok) : [tok]));
+            const units = tokens.map(tok => Math.max(1, Math.min(6, R.splitGraphemes(tok).length * (CJK.test(tok) ? 1 : 0.4))));
+            const total = units.reduce((a, b) => a + b, 0) || 1;
+            const span = Math.min(slot * 0.7, total * 0.38 + 0.4);
+            let w = start + 0.1;
+            const words = tokens.map((tok, k) => {
+                const d = span * units[k] / total;
+                const word = { text: tok, startTime: +w.toFixed(3), endTime: +(w + d).toFixed(3) };
+                w += d;
+                return word;
+            });
+            return { time: +start.toFixed(3), endTime: +(t - 0.3).toFixed(3), original: text, translation: '', words };
+        });
+        const lines = R.normalizeLines(raw).filter(line => R.readableText(line.fullText));
+        byDuration.clear();
+        byDuration.set(key, lines);
+        return lines;
+    };
+    const withPlainLyrics = (frame) => {
+        if (!frame || frame.lines?.length || !frame.plainLines?.length || !global.MusicStageRuntime) return frame;
+        const R = global.MusicStageRuntime;
+        const lines = estimateLines(frame.plainLines, frame.duration);
+        const t = frame.playbackTime || 0;
+        const currentLineIndex = R.findActiveLineIndex(lines, t, -1);
+        const activeLine = currentLineIndex >= 0 ? lines[currentLineIndex] : null;
+        const lineProgress = activeLine ? clamp((t - activeLine.startTime) / Math.max(0.001, activeLine.endTime - activeLine.startTime), 0, 1) : 0;
+        return {
+            ...frame,
+            ...R.resolveWordState(activeLine, t),
+            lines,
+            currentLineIndex,
+            activeLine,
+            previousLine: currentLineIndex > 0 ? lines[currentLineIndex - 1] : null,
+            nextLines: currentLineIndex >= 0 ? lines.slice(currentLineIndex + 1, currentLineIndex + 4) : lines.slice(0, 3),
+            lineProgress,
+            lyricsEstimated: true
+        };
     };
 
     // 值噪声查表：格点上的 hash12 预先算进一张 512×512 的浮点纹理，
@@ -696,8 +782,8 @@ float vnoise(vec2 p) {
 
     global.MusicStageModeUtils = Object.freeze({
         NOISE_GLSL, noiseTexture, bindNoise,
-        lineCounter,
-        watchOverlay, breathe, settlePrograms,
+        lineCounter, withPlainLyrics,
+        watchOverlay, watchCardInset, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,
         lyricFont,
         createRenderScale,

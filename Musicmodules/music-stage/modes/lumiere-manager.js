@@ -795,6 +795,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latestFrame = frame;
             if (!colours) readColours();
             ensureCues(frame);

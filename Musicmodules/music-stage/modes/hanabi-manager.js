@@ -797,16 +797,18 @@ void main() {
                         row.push(g);
                         const filled = row.filter(x => x.text.trim()).length;
                         const target = Math.ceil(visible / Math.ceil(visible / perRow));
-                        if (filled >= target && (cjk || !g.text.trim() || i === glyphs.length - 1)) { rows.push(row); row = []; }
+                        // 西文在空格、连字符处换行；一个词长得放不下时硬断
+                        if (filled >= target && (cjk || !g.text.trim() || /^[-–—/]$/.test(g.text) || filled >= target * 1.6 || i === glyphs.length - 1)) { rows.push(row); row = []; }
                     });
                     if (row.length) rows.push(row);
                     ctx.font = font(100);
                     const widest = Math.max(...rows.map(r => ctx.measureText(r.map(g => g.text).join('').trim()).width));
-                    const size = clamp(W * 0.56 / widest * 100, H * 0.045, H * 0.085) * s.fontScale;
+                    const size = Math.min(clamp(W * 0.56 / widest * 100, H * 0.045, H * 0.085) * s.fontScale, W * 0.9 / widest * 100);
                     ctx.font = font(size);
                     const lineH = size * 1.3;
                     // 字在河岸上方，留出天空给烟花
-                    const top = H * 0.62 - rows.length * lineH / 2 + size * 0.95;
+                    // 行多了往上让，最后一行不压到河岸下面的翻译
+                    const top = Math.min(H * 0.62 - rows.length * lineH / 2 + size * 0.95, H * 0.7 - (rows.length - 1) * lineH);
                     rows.forEach((r, ri) => {
                         const trimmed = r.map(g => g.text).join('').replace(/\s+$/, '');
                         let x = (W - ctx.measureText(trimmed).width) / 2;
@@ -1078,6 +1080,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latestFrame = frame;
             if (!colours) readColours();
             ensureCues(frame);

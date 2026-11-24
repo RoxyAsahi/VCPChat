@@ -255,6 +255,7 @@
             impression: {
                 fontScale: 1,
                 flecks: 1,
+                lamp: 1,
                 frame: true,
                 timeOfDay: true,
                 audioReactivity: 1,
@@ -383,6 +384,7 @@
             tilt: fallback.tilt === undefined ? source.tilt : clamp(source.tilt, 0.15, 0.6, fallback.tilt),
             roll: fallback.roll === undefined ? source.roll : clamp(source.roll, -30, 30, fallback.roll),
             flecks: fallback.flecks === undefined ? source.flecks : clamp(source.flecks, 0, 2, fallback.flecks),
+            lamp: fallback.lamp === undefined ? source.lamp : clamp(source.lamp, 0, 1.5, fallback.lamp),
             frame: fallback.frame === undefined ? source.frame : bool(source.frame, fallback.frame),
             timeOfDay: fallback.timeOfDay === undefined ? source.timeOfDay : bool(source.timeOfDay, fallback.timeOfDay),
             voiceNotes: fallback.voiceNotes === undefined ? source.voiceNotes : bool(source.voiceNotes, fallback.voiceNotes),

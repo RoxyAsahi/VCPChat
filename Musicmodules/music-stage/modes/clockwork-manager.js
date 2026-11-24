@@ -535,7 +535,11 @@ void main() {
         // 以第 index 句为中心的七行字图；只有中间那行写字编号
         const slotFor = (index, build = true) => {
             if (!glState) return null;
-            const key = `${index}|${sung.length}`;
+            // 一行字最长能占多少：从 R0 到窗口右边（留一点边）。窄窗口里长句缩小，不出画
+            const aspect = canvas.width / Math.max(1, canvas.height);
+            const avail = aspect - Math.min(0.3, aspect * 0.16) - 0.42 - 0.06;
+            const fitPx = Math.round(clamp(avail * 100 / (0.052 * settings().fontScale), 400, ATLAS_W - 24) / 40) * 40;
+            const key = `${index}|${sung.length}|${fitPx}`;
             const hit = glState.slots.find(slot => slot.key === key);
             if (hit) { hit.used = performance.now(); return hit; }
             if (!build) return null;
@@ -559,7 +563,7 @@ void main() {
                 let size = base;
                 ctx.font = `500 ${size}px ${family()}`;
                 const width = ctx.measureText(glyphs.join('')).width;
-                if (width > ATLAS_W - 24) { size = Math.floor(size * (ATLAS_W - 24) / width); ctx.font = `500 ${size}px ${family()}`; }
+                if (width > fitPx) { size = Math.floor(size * fitPx / width); ctx.font = `500 ${size}px ${family()}`; }
                 const baseline = row * ROW_PX + ROW_PX * 0.5 + size * 0.36;
                 let x = 4;
                 let id = 0;
@@ -581,7 +585,7 @@ void main() {
                 });
             }
             const { gl } = glState;
-            const busy = `${stats.index}|${sung.length}`;
+            const busy = `${stats.index}|${sung.length}|${fitPx}`;
             const slot = glState.slots.filter(sl => sl.key !== busy).sort((a, b) => a.used - b.used)[0] || glState.slots[0];
             gl.bindTexture(gl.TEXTURE_2D, slot.text);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
@@ -723,6 +727,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latestFrame = frame;
             if (!colours) readColours();
             ensureLines(frame);

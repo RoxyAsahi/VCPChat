@@ -183,6 +183,10 @@ void main() {
 precision highp float;
 uniform vec2 uRes;
 uniform sampler2D uPaint;
+uniform sampler2D uPrev;   // 上一首的画：新画就画在它上面
+uniform float uHasPrev;
+uniform vec4 uLamp;       // 画灯：中心 x、灯杆 y、半宽（像素）、亮度
+uniform float uTreble;
 uniform vec3 uWall;
 uniform vec3 uInk;
 uniform vec3 uAccent;
@@ -228,6 +232,7 @@ void main() {
     // 墙：同一幅画放大、糊开、压暗，像画挂在被它映亮的墙上
     vec2 bgUv = 0.5 + (uv - 0.5) * vec2(1.0, uRes.y / uRes.x) * 0.9;
     vec3 bg = grade(textureLod(uPaint, bgUv, 5.5).rgb);
+    if (uHasPrev > 0.5 && uReveal < 1.05) bg = mix(grade(textureLod(uPrev, bgUv, 5.5).rgb), bg, smoothstep(0.0, 1.0, uReveal));
     vec3 col = mix(uWall, bg * mix(0.5, 1.0, uLight), mix(0.55, 0.3, uLight));
     col *= 1.0 - mix(0.55, 0.22, uLight) * dot(uv - 0.5, uv - 0.5);
 
@@ -283,7 +288,9 @@ void main() {
             float ly = luma(textureLod(uPaint, p + vec2(0.0, e), 1.5).rgb) - luma(textureLod(uPaint, p - vec2(0.0, e), 1.5).rgb);
             float sketch = smoothstep(0.05, 0.2, length(vec2(lx, ly)));
             vec3 primed = uPrimed * (1.0 + (sin(frag.x * 2.1) * sin(frag.y * 2.1)) * 0.02);
-            primed = mix(primed, primed * 0.45, sketch * smoothstep(0.0, 0.25, uReveal) * 0.8);
+            // 换歌：没落到笔的地方还是上一幅画，炭笔线稿淡淡地压在上面
+            if (uHasPrev > 0.5) primed = grade(texture(uPrev, p).rgb) * (1.0 + (sin(frag.x * 2.1) * sin(frag.y * 2.1)) * 0.018);
+            primed = mix(primed, primed * 0.45, sketch * smoothstep(0.0, 0.25, uReveal) * mix(0.8, 0.4, uHasPrev));
             float m = 1.0 - smoothstep(uReveal - 0.07, uReveal, paint.a);
             pc = mix(primed, pc, m);
         }
@@ -304,6 +311,38 @@ void main() {
             fc *= lit;
             col = mix(col, fc, 1.0 - smoothstep(0.96, 1.0, t));
         }
+    }
+    // 画灯：画框上方一支铜灯，往下打一束暖光；光里有灰尘慢慢飘，高音亮时闪一下
+    vec2 q = frag - uLamp.xy;
+    float hw = uLamp.z;
+    // 只在灯和它的光照得到的那一块里算
+    if (uLamp.w > 0.0 && q.y > -hw * 3.6 && q.y < hw * 0.3 && abs(q.x) < hw * 1.05 + max(-q.y, 0.0) * 0.62 + 4.0) {
+        float down = -q.y;
+        float spread = hw * 1.05 + max(down, 0.0) * 0.62;
+        float cone = smoothstep(spread, spread * 0.45, abs(q.x)) * smoothstep(-hw * 0.08, hw * 0.3, down) * exp(-max(down, 0.0) / (hw * 2.8));
+        vec3 warm = vec3(1.0, 0.86, 0.62);
+        col += (col * 0.42 + warm * mix(0.05, 0.02, uLight)) * cone * uLamp.w;
+        if (cone > 0.015 && down < hw * 2.8) {
+            // 灰尘：光束切成格子，一格最多一粒，格子整体慢慢往下飘——每个像素只看自己那一格
+            float c = hw * 0.2;
+            vec2 bq = vec2(q.x, down + uTime * c * 0.12);
+            vec2 cell = floor(bq / c);
+            float h1 = hash12(cell + 3.7), h2 = hash12(cell + 9.1), h3 = hash12(cell + 17.3);
+            vec2 mp = (cell + 0.2 + 0.6 * vec2(h1, h2)) * c + vec2(sin(uTime * (0.3 + h3) + h1 * 20.0) * c * 0.15, 0.0);
+            vec2 m = mp - bq;
+            float r = 0.9 + 1.4 * h3;
+            float tw = 0.55 + 0.45 * sin(uTime * (1.3 + 2.0 * h1) + h2 * 30.0);
+            float dust = step(0.78, h3 * 0.5 + h1 * 0.5) * exp(-dot(m, m) / (r * r)) * tw;
+            col += warm * dust * cone * (0.55 + 1.6 * uTreble) * uLamp.w * mix(1.0, 0.35, uLight);
+        }
+        // 灯罩：一根细铜管，下沿是发光的缝；两根短臂接到画框上
+        vec2 bd = abs(q - vec2(0.0, hw * 0.07)) - vec2(hw, hw * 0.055);
+        float bar = length(max(bd, 0.0)) + min(max(bd.x, bd.y), 0.0);
+        float arm = max(abs(abs(q.x) - hw * 0.55) - 1.2, max(q.y - hw * 0.05, -q.y - hw * 0.42));
+        vec3 brass = vec3(0.5, 0.38, 0.2) * (0.75 + 0.5 * smoothstep(-hw * 0.05, hw * 0.12, q.y - hw * 0.02));
+        col = mix(col, brass * 0.8, 1.0 - smoothstep(0.0, 1.2, arm));
+        col = mix(col, brass, 1.0 - smoothstep(0.0, 1.2, bar));
+        col += warm * exp(-pow(max(abs(q.x) - hw * 0.92, 0.0) / 3.0, 2.0) - pow((q.y - hw * 0.015) / 1.6, 2.0)) * 0.7 * uLamp.w;
     }
     col += (hash12(floor(frag / 1.5) + uGrainStep * 11.0) - 0.5) * 0.035 * uGrain;
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
@@ -345,13 +384,17 @@ void main() {
             return t;
         };
         const cover = makeTex();
-        const painted = makeTex();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PAINT, PAINT, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-        const fbo = gl.createFramebuffer();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, painted, 0);
+        // 两张画轮流用：换歌时旧画留着，新画落笔前露出来
+        const sheets = [0, 1].map(() => {
+            const tex = makeTex();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PAINT, PAINT, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            const fbo = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+            return { tex, fbo };
+        });
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        return { gl, paint, main, cover, painted, fbo, vao: gl.createVertexArray() };
+        return { gl, paint, main, cover, sheets, cur: 0, hasPrev: false, vao: gl.createVertexArray() };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -371,6 +414,8 @@ void main() {
         const notice = createElement('div', 'impression-notice');
         notice.hidden = true;
         mode.root.append(canvas, rail, label, kicker, notice);
+        const card = Utils.watchOverlay(mode.root);
+        mode.scope.add(() => card.destroy());
 
         let glState = null;
         try { glState = createGl(canvas); } catch (error) { console.error(error); }
@@ -392,6 +437,7 @@ void main() {
         let painted = false;
         let paintedAt = 0;     // 墙上时钟：开始落笔的时刻（秒）
         let energy = 0;
+        let treble = 0;
         let lastOnsets = -1;
         let ripple = { age: 1, str: 0 };
         let sectionsFor = null;
@@ -415,6 +461,7 @@ void main() {
                 timeOfDay: tuning.timeOfDay !== false,
                 audioReactivity: clamp(tuning.audioReactivity ?? 1, 0, 2),
                 grain: clamp(tuning.grain ?? 0.3, 0, 1),
+                lamp: clamp(tuning.lamp ?? 1, 0, 1.5),
                 showTranslation: tuning.showTranslation !== false,
                 reducedMotion: Boolean(reducedMotion?.matches)
             };
@@ -448,7 +495,10 @@ void main() {
         // 封面 → 油画：只在换封面时做一次
         const paintCover = (image) => {
             if (!glState || lostContext) return;
-            const { gl, paint, cover, painted: target, fbo, vao } = glState;
+            const { gl, paint, cover, vao } = glState;
+            // 已经有一幅了：换到另一张上画，旧的那张留作底
+            if (painted) { glState.cur = 1 - glState.cur; glState.hasPrev = true; }
+            const { tex: target, fbo } = glState.sheets[glState.cur];
             // 太大的图先缩到 1024 以内
             let source = image;
             const longest = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height) || 1;
@@ -553,9 +603,11 @@ void main() {
                     prev.row.classList.add('is-past');
                     prev.text.textContent = String(prev.line.fullText).trim();
                 }
+                // 离当前句越远越淡、越糊；还没唱的比唱过的亮一点
                 railRows.forEach((r, i) => {
                     r.row.classList.toggle('is-past', i < k);
                     r.row.classList.toggle('is-near', Math.abs(i - k) <= 1.5 && i !== k);
+                    r.row.style.setProperty('--d', String(Math.min(6, Math.max(1, Math.round(Math.abs(i - k))))));
                 });
                 currentRow = k;
                 const item = railRows[k];
@@ -580,10 +632,16 @@ void main() {
                 const t = frame.playbackTime || 0;
                 let n = 0;
                 while (n < glyphs.length && glyphs[n].startTime <= t) n += 1;
+                const spans = item.text.children;
                 if (n !== sung) {
-                    const spans = item.text.children;
                     for (let i = 0; i < spans.length; i += 1) spans[i].classList.toggle('is-sung', i < n);
                     sung = n;
+                }
+                // 刚唱到的字亮一下，唱完一会儿再慢慢退回去（亮起快、退下慢）
+                const glow = frame.isPlaying && !s.reducedMotion;
+                for (let i = 0; i < n && i < spans.length; i += 1) {
+                    const on = glow && t < glyphs[i].endTime + 0.9;
+                    if (spans[i].classList.contains('is-glow') !== on) spans[i].classList.toggle('is-glow', on);
                 }
             }
         };
@@ -607,6 +665,8 @@ void main() {
             const playing = frame.isPlaying && !s.reducedMotion;
             const power = clamp((audio.power || 0) * s.audioReactivity, 0, 1);
             energy += (power - energy) * (1 - Math.exp(-dt * 4));
+            const hi = clamp((audio.treble || 0) * 1.4 * s.audioReactivity, 0, 1);
+            treble += (hi - treble) * (1 - Math.exp(-dt * (hi > treble ? 14 : 3)));
             const onset = Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets;
             if (Number.isFinite(audio.onsets)) lastOnsets = audio.onsets;
             if (playing && onset && ripple.age > 0.45) ripple = { age: 0, str: 0.55 + 0.45 * clamp((audio.bass || 0) * 1.5, 0, 1) };
@@ -636,12 +696,25 @@ void main() {
         };
 
         const draw = (frame, s) => {
-            const { gl, main, painted: tex, vao } = glState;
+            const { gl, main, vao } = glState;
+            const tex = glState.sheets[glState.cur].tex;
+            const prevTex = glState.sheets[1 - glState.cur].tex;
             const t = frame.playbackTime || 0;
             const W = canvas.width, H = canvas.height;
-            const size = Math.min(H * 0.6, W * 0.4);
-            const fw = Math.max(8, size * 0.045);
-            const x0 = W * 0.33 - size / 2, y0 = H * 0.5 - size / 2 + H * 0.02;
+            let size = Math.min(H * 0.6, W * 0.4);
+            let fw = Math.max(8, size * 0.045);
+            let x0 = W * 0.33 - size / 2;
+            const y0 = H * 0.5 - size / 2 + H * 0.02;
+            // 窄窗口：画让开左上角的档案卡，也不压到右边的歌词
+            const box = card.box;
+            if (box && (box.bottom + 1) / 2 * H < y0 + size + fw * 2 + size * 0.2) {
+                const minX = (box.right + 1) / 2 * W + fw + W * 0.025;
+                if (x0 < minX) {
+                    x0 = minX;
+                    const room = W * 0.56 - x0 - fw;
+                    if (size > room) { size = Math.max(H * 0.25, room); fw = Math.max(8, size * 0.045); }
+                }
+            }
             const reveal = s.reducedMotion ? 1.2 : clamp((performance.now() / 1000 - paintedAt) / REVEAL_SECONDS, 0, 1.2) * 1.1;
             gl.viewport(0, 0, W, H);
             gl.useProgram(main.program);
@@ -651,6 +724,13 @@ void main() {
             gl.bindTexture(gl.TEXTURE_2D, tex);
             gl.uniform1i(u.uPaint, 0);
             Utils.bindNoise(gl, u.uNoise, 1);
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, prevTex);
+            gl.uniform1i(u.uPrev, 2);
+            gl.uniform1f(u.uHasPrev, glState.hasPrev ? 1 : 0);
+            const lampOn = s.lamp * (0.75 + 0.5 * grade.night) * (1 + 0.12 * (s.reducedMotion ? 0 : energy));
+            gl.uniform4f(u.uLamp, x0 + size / 2, y0 + size + fw + size * 0.085, size * 0.21, s.frame ? lampOn : 0);
+            gl.uniform1f(u.uTreble, s.reducedMotion ? 0 : treble);
             gl.uniform2f(u.uRes, W, H);
             gl.uniform3fv(u.uWall, colours.wall);
             gl.uniform3fv(u.uInk, colours.ink);
@@ -680,6 +760,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latest = frame;
             if (!colours) readColours();
             const s = settings();
@@ -704,7 +785,7 @@ void main() {
         const redraw = () => { still.invalidate(); lastDraw = -Infinity; if (latest) mode.updateFrame(latest); };
         const updateConfig = mode.updateConfig;
         mode.updateConfig = (config) => { updateConfig(config); applyScale(); railFor = null; resize(); redraw(); };
-        mode.resize = () => { resize(); if (railRows[currentRow]) placeRail(currentRow, false); redraw(); };
+        mode.resize = () => { card.measure(); resize(); if (railRows[currentRow]) placeRail(currentRow, false); redraw(); };
         mode.suspend = () => { paused = true; mode.root.classList.add('is-suspended'); };
         mode.resume = () => { paused = false; lastT = null; mode.root.classList.remove('is-suspended'); redraw(); };
         mode.updateTheme = () => { readColours(); coverUrl = null; redraw(); };
@@ -724,8 +805,7 @@ void main() {
                 gl.deleteProgram(glState.paint.program);
                 gl.deleteProgram(glState.main.program);
                 gl.deleteTexture(glState.cover);
-                gl.deleteTexture(glState.painted);
-                gl.deleteFramebuffer(glState.fbo);
+                glState.sheets.forEach(({ tex, fbo }) => { gl.deleteTexture(tex); gl.deleteFramebuffer(fbo); });
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
             glState = null;

@@ -474,6 +474,8 @@ void main() {
             const span = items.length ? centres.at(-1) - centres[0] + items[0].advance : 1;
             // 字图像素换成轨道长度（已按透视折算）；太长的句子整体收紧
             const unit = Math.min(geo.size * 1.06 / 88, geo.perimeter * SPAN / span);
+            // 收紧了字距，字也跟着缩，不然长句的字会叠在一起
+            const shrink = unit / (geo.size * 1.06 / 88);
             const list = [];
             items.forEach((item, i) => {
                 const theta = thetaAlong(geo.table, geo.perimeter, (centres[i] - turn) * unit) + (rest ? -0.25 * (1 - fade) : 0);
@@ -491,7 +493,7 @@ void main() {
                 const outward = rest ? (1 - fade) * 0.06 : 0;
                 list.push({
                     z: pt.z,
-                    a: [geo.cx + pt.x * (1 + outward), geo.cy + pt.y * (1 + outward), geo.size * pt.s * (1 + singing * 0.12), rot],
+                    a: [geo.cx + pt.x * (1 + outward), geo.cy + pt.y * (1 + outward), geo.size * shrink * pt.s * (1 + singing * 0.12), rot],
                     b: [item.cell + clamp(back, 0, 1) * 0.9, alpha, singing, sungAmount]
                 });
             });
@@ -602,6 +604,7 @@ void main() {
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
+            frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             latestFrame = frame;
             if (!colours) readColours();
             ensureLines(frame);

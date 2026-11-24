@@ -311,6 +311,7 @@
                 { key: 'timeOfDay', label: '每段换一个时辰的光', type: 'toggle' },
                 { key: 'flecks', label: '画上的光斑', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'frame', label: '画框', type: 'toggle' },
+                { key: 'lamp', label: '画灯', type: 'range', min: 0, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
