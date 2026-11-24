@@ -35,6 +35,9 @@
     const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const REST_PART = 20;
     const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+    const V_ROTATE = /[ー～〜—―…‥\-–_()（）「」『』【】〈〉《》［］\[\]]/;
+    const V_SMALL = /[ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ]/;
+    const V_PUNCT = /[、。，．,.]/;
     const CREDIT = /^(作词|作詞|作曲|编曲|編曲|词|詞|曲|编|制作人|监制|混音|母带|和声|吉他|贝斯|鼓|演唱|原唱|Lyrics?|Lyricist|Compose[rd]?|Composition|Arrange[rd]?|Arrangement|Producer|Vocals?|Mix(?:ing)?|Master(?:ing)?)\s*(by)?\s*[:：]/i;
     const KANJI = /[\p{Script=Han}々〆ヶ]/u;
     const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
@@ -324,7 +327,12 @@
                 const col = Math.floor(i / perCol);
                 const row = i % perCol;
                 const x = (cols - 1 - col) * size * 1.3 + (size - g.w100 * size / 100) / 2;
-                placed.push({ g, unit, x, baseline: (row + 0.88) * size * 1.08, size, w: g.w100 * size / 100 });
+                const entry = { g, unit, x, baseline: (row + 0.88) * size * 1.08, size, w: g.w100 * size / 100 };
+                // 竖排的规矩：长音、波浪线、括号转 90 度；小假名往右上靠；句读点放在格子右上角
+                if (V_ROTATE.test(g.text)) entry.rot = Math.PI / 2;
+                else if (V_SMALL.test(g.text)) { entry.x += size * 0.1; entry.baseline -= size * 0.1; }
+                else if (V_PUNCT.test(g.text)) { entry.x += size * 0.5; entry.baseline -= size * 0.58; }
+                placed.push(entry);
             });
             return { style, placed };
         }
@@ -640,7 +648,7 @@
             const s = p.size / GLYPH_EM;
             glyphEntries.push({
                 key: p.g.text, cx: p.x + p.w / 2, cy: p.baseline - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * s + GLYPH_CELL * s / 2,
-                cell: GLYPH_CELL * s, rot: 0, start: p.g.start, end: p.g.end,
+                cell: GLYPH_CELL * s, rot: p.rot || 0, start: p.g.start, end: p.g.end,
                 kw: keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0, note: 0
             });
         });
