@@ -156,19 +156,65 @@ vec3 gear(vec2 q, float R, float teeth, float spokes, float ang, float aa) {
     cover *= 1.0 - window * (1.0 - spoke);
     // 斜面：贴近边缘的地方亮或暗
     float edge = min(min(-d, abs(r - rim)), abs(r - hub));
-    float bevel = 1.0 - smoothstep(0.0, 0.006, edge);
+    // 辐条两侧到边的弧长（只在轮缘和轴心之间）
+    if (window > 0.0) edge = min(edge, abs(abs(sa) - spokeW) * r * 2.0 * PI / spokes);
+    float bevel = 1.0 - smoothstep(0.0, 0.009, edge);
     return vec3(cover, bevel, r);
 }
 
 vec3 metal(vec3 base, vec2 q, vec3 g, float ang) {
     float a = atan(q.y, q.x);
     // 车削刷纹 + 斜上方来的高光（随角度变）
-    float brushed = 0.92 + 0.08 * sin(g.z * 900.0 + hash12(vec2(floor(g.z * 900.0), 1.0)) * 6.0);
+    // 车削纹很细，比一个像素还密的部分淡掉（不然会混叠成一圈圈木纹）
+    float fw = fwidth(g.z * 900.0);
+    float brushed = 1.0 + 0.06 * (sin(g.z * 900.0 + hash12(vec2(floor(g.z * 900.0), 1.0)) * 6.0) * (1.0 - smoothstep(0.6, 1.6, fw)) - 0.5 * smoothstep(0.6, 1.6, fw));
     float aniso = 0.55 + 0.45 * pow(abs(cos(a - 2.3)), 6.0);
     vec3 c = base * brushed * (0.55 + aniso * 0.6);
     c += vec3(1.0, 0.95, 0.85) * g.y * 0.22 * (0.4 + 0.6 * max(0.0, cos(a - 2.3)));
     c -= base * g.y * 0.25 * max(0.0, cos(a + 0.8));
     return c;
+}
+
+// 齿轮按立体的板子打光：边上一圈倒角（法线由覆盖率的梯度算），左上来的光打亮朝光的倒角、背光的压暗，倒角上有一道高光。
+// 齿、辐条、轮缘、轴心的每条边都有。梯度只在倒角那一圈里差分（里面、外面都是平的，不多算）。返回 (颜色, 覆盖)
+vec4 gearLit(vec3 base, vec2 q, float R, float teeth, float spokes, float ang, float aa) {
+    vec3 g = gear(q, R, teeth, spokes, ang, aa);
+    if (g.x <= 0.0) return vec4(0.0);
+    const float W = 0.0055;      // 倒角宽
+    const float E = 0.0025;
+    float c0 = 1.0;
+    vec2 grad = vec2(0.0);
+    if (g.y > 0.0) c0 = gear(q, R, teeth, spokes, ang, W).x;
+    if (c0 < 1.0) {
+        grad = vec2(gear(q + vec2(E, 0.0), R, teeth, spokes, ang, W).x - c0,
+                    gear(q + vec2(0.0, E), R, teeth, spokes, ang, W).x - c0) / E;
+    }
+    vec3 n = normalize(vec3(-grad * 0.007, 1.0));
+    float slope = smoothstep(0.02, 0.2, 1.0 - n.z);
+    const vec3 L = vec3(-0.5, 0.62, 0.6);
+    vec3 l = normalize(L);
+    float diff = dot(n, l);
+    float spec = pow(max(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0), 36.0);
+    vec3 c = metal(base, q, vec3(g.x, 0.0, g.z), ang);
+    c *= mix(1.0, 0.45 + max(diff, 0.0) * 0.95, slope);
+    c += vec3(1.0, 0.95, 0.86) * spec * slope * 1.0;
+    return vec4(c, g.x);
+}
+
+// 底板上的鱼鳞纹（一圈圈压出来的小圆，后压的盖住先压的），只在齿轮底下那块板上，很淡
+float perlage(vec2 p) {
+    vec2 g = p / 0.026;
+    vec2 c = floor(g - 0.5);
+    float v = 0.5, best = -1.0;
+    for (int oy = 0; oy <= 1; oy++) for (int ox = 0; ox <= 1; ox++) {
+        vec2 cc = c + vec2(float(ox), float(oy));
+        vec2 ctr = cc + 0.5 + (vec2(hash12(cc), hash12(cc + 17.3)) - 0.5) * 0.3;
+        float d = length(g - ctr);
+        float order = hash12(cc + 5.1);
+        // 每一圈是一块磨出来的圆斑：一侧亮一侧暗（磨痕是转着的），边上一道细暗线
+        if (d < 0.85 && order > best) { best = order; v = 0.5 + 0.45 * dot((g - ctr) / max(d, 1e-3), vec2(-0.6, 0.8)) * smoothstep(0.0, 0.6, d) - smoothstep(0.76, 0.85, d) * 0.35; }
+    }
+    return v;
 }
 
 void main() {
@@ -233,6 +279,13 @@ void main() {
         col = mix(col, lineCol, wl * mix(0.16, 0.22, uLight) * uWire * (1.0 + uBeat * 0.6));
     }
 
+    // 底板：齿轮组底下那块板压着鱼鳞纹（从轴心往外淡掉）
+    {
+        float r = length(p - hubC);
+        float plate = 1.0 - smoothstep(0.3, 0.36, r);
+        if (plate > 0.0) col += mix(uSteel, uInk, 0.5) * (perlage(p - hubC) - 0.4) * 0.07 * plate * (1.0 - uLight * 0.5);
+    }
+
     // 刻度环：固定不转，60 格，指针位置（三点钟）那格是强调色
     {
         vec2 q = p - hubC;
@@ -271,12 +324,12 @@ void main() {
     // 每层浮在表盘上方不同的高度：表盘一倾斜，层和层、层和落影就错开（主齿轮最高）
     vec2 lift = vec2(sin(uTilt.x), -sin(uTilt.y)) * uParallax;
     vec2 L1 = lift * 0.075, L2 = lift * 0.05, L3 = lift * 0.032;
-    vec3 g3 = gear(p + L3 - c3, 0.095, 20.0, 3.0, a3, aa);
-    if (g3.x > 0.0) col = mix(col, metal(uSteel, p + L3 - c3, g3, a3), g3.x);
-    vec3 g2 = gear(p + L2 - c2, 0.17, 37.0, 4.0, a2, aa);
-    if (g2.x > 0.0) col = mix(col, metal(uBrass * 0.92, p + L2 - c2, g2, a2), g2.x);
-    vec3 g1 = gear(p + L1 - hubC, 0.33, 72.0, 5.0, uGear, aa);
-    if (g1.x > 0.0) col = mix(col, metal(uBrass, p + L1 - hubC, g1, uGear), g1.x);
+    vec4 g3 = gearLit(uSteel, p + L3 - c3, 0.095, 20.0, 3.0, a3, aa);
+    col = mix(col, g3.rgb, g3.a);
+    vec4 g2 = gearLit(uBrass * 0.92, p + L2 - c2, 0.17, 37.0, 4.0, a2, aa);
+    col = mix(col, g2.rgb, g2.a);
+    vec4 g1 = gearLit(uBrass, p + L1 - hubC, 0.33, 72.0, 5.0, uGear, aa);
+    col = mix(col, g1.rgb, g1.a);
 
     // 轴心宝石：低音时亮
     for (int i = 0; i < 3; i++) {
