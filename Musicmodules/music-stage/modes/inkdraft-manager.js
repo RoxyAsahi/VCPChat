@@ -276,10 +276,11 @@
             }
             return { style, placed };
         }
-        const target = cjkShare > 0.5 ? (n <= 6 ? n : 5 + random() * 2) : (n <= 12 ? n : 11 + random() * 5);
+        // 汉字一行三四个字（Folia 也是这样摞成几行）：一句摞成两三行，字能大一倍，整块方正好构图
+        const target = cjkShare > 0.5 ? (n <= 4 ? n : 2.8 + random() * 1.4) : (n <= 12 ? n : 9 + random() * 4);
         const rowsCount = clamp(Math.round(n / target), 1, 4);
         const rows = splitRows(units, rowsCount);
-        const widthTarget = W * (0.5 + random() * 0.12);
+        const widthTarget = W * (0.52 + random() * 0.14);
         const sizes = rows.map(row => clamp(widthTarget / rowWidth100(row) * 100 * fontScale, minSize, maxSize));
         if (style === 'stair' || style === 'scatter') {
             const common = Math.min(...sizes) * (style === 'scatter' ? 1 : 0.96);
@@ -789,7 +790,7 @@
         if (settings.figures) {
             const want = cue.kind === 'rest' ? 4 + Math.floor(random() * 3) : Math.min(4, Math.max(1, Math.round(cells.length * (0.35 + random() * 0.2))));
             cells.slice(0, want).forEach((rect) => {
-                const r = Math.min(rect[2] - rect[0], rect[3] - rect[1]) * (0.3 + random() * 0.08) * settings.figureScale;
+                const r = Math.min(rect[2] - rect[0], rect[3] - rect[1]) * (0.36 + random() * 0.1) * settings.figureScale;   // 大一些，边上可以压到字（Folia 的图也是这样压着字）
                 // 线稿从这首歌的意象场景里挑；同一句不重复
                 const pool = scene.kinds.filter(k => !usedKinds.includes(k));
                 const kind = (pool.length ? pool : scene.kinds)[Math.floor(random() * (pool.length || scene.kinds.length))];
@@ -1002,7 +1003,7 @@
     };
     const SCREEN_ANGLES = [0.26, 0.52, 0.79, 1.31];
     const FIRST_SHOT = [['wide', 3], ['close', 2], ['dutch', 1.5], ['far', 0.8], ['follow', 1.5]];
-    const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 1.6], ['dutch', 1.5], ['wide', 1.6], ['far', 0.9]];
+    const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 1.6], ['dutch', 1.5], ['wide', 1.6], ['far', 0.6]];
     // 切点：按节奏均分（一句大约 2.6 秒一刀，副歌密一些），再吸到最近的词开唱时刻上
     const planCuts = (start, end, count, onsets) => {
         const cuts = [];
