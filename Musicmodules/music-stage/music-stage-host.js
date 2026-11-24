@@ -296,6 +296,7 @@
             ],
             fogpane: [
                 { key: 'fog', label: '雾气浓度', type: 'range', min: 0.5, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'view', label: '窗外的景', type: 'select', options: [['alternate', '间奏时换景（街景／水族馆）'], ['street', '雨夜街景'], ['aquarium', '水族馆']] },
                 { key: 'rain', label: '窗外的天气', type: 'select', options: [['off', '晴'], ['light', '小雨'], ['heavy', '大雨'], ['snow', '下雪（窗上结霜）']] },
                 { key: 'drops', label: '玻璃上的水珠', type: 'toggle' },
                 { key: 'drips', label: '往下淌的水痕', type: 'toggle' },

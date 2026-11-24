@@ -193,6 +193,7 @@ uniform vec3 uNeon2;
 uniform vec3 uLamp;
 uniform float uRain;
 uniform float uSnow;
+uniform float uAqua;
 out vec4 outColor;
 ${COMMON}
 float disc(vec2 p, vec2 c, float r) {
@@ -244,9 +245,7 @@ vec3 lights(vec2 p, float horizonY) {
     }
     return col;
 }
-void main() {
-    vec2 uv = gl_FragCoord.xy / uRes;
-    vec2 p = vec2(uv.x * uAspect, uv.y + uBump);
+vec3 street(vec2 p) {
     float horizonY = 0.26;
     // 天：城市的光把低处的云照亮
     vec3 col = mix(uSky * 1.7 + vec3(0.07, 0.05, 0.04), uSky * 0.7, smoothstep(0.25, 1.0, p.y));
@@ -293,6 +292,116 @@ void main() {
         }
         col = mix(col, vec3(0.75, 0.78, 0.85), smoothstep(0.26, 0.0, p.y) * 0.35 * uSnow);
     }
+    return col;
+}
+// 水族馆：车停在一面大鱼缸前。顶上漏下来的光柱、水母、气泡、远处的鱼群、水草和沙底
+vec3 aquarium(vec2 p) {
+    float t = uT * 0.35;
+    vec3 deep = vec3(0.005, 0.02, 0.05) + uSky * 0.15;
+    vec3 shallow = vec3(0.03, 0.2, 0.3) + uNeon2 * 0.06;
+    vec3 col = mix(deep, shallow, smoothstep(0.0, 1.05, p.y));
+    // 光柱：斜着从水面落下，慢慢晃
+    float rays = 0.0;
+    for (int k = 0; k < 3; k++) {
+        float fk = float(k);
+        float x = (p.x + p.y * (0.32 + fk * 0.05)) * (5.0 + fk * 3.0) + sin(p.x * 1.7 + t * (0.4 + fk * 0.13) + fk) * 1.4 + t * 0.2;
+        rays += pow(0.5 + 0.5 * sin(x), 8.0 + fk * 4.0) * (0.5 - fk * 0.12);
+    }
+    col += vec3(0.35, 0.62, 0.7) * rays * smoothstep(0.05, 1.0, p.y) * 0.6;
+    // 缸顶的灯：水面上一团亮
+    vec2 ld = (p - vec2(uAspect * 0.62, 1.08)) * vec2(0.6, 1.0);
+    col += vec3(0.55, 0.85, 0.9) * exp(-dot(ld, ld) * 7.0) * 0.55;
+    // 水面的亮纹
+    float surf = smoothstep(0.86, 1.0, p.y) * (0.5 + 0.5 * sin(p.x * 22.0 + sin(p.x * 7.0 + t * 1.3) * 2.0 + t));
+    col += vec3(0.4, 0.75, 0.8) * surf * 0.18;
+    // 远处的鱼群：一小片暗影，整群慢慢游过去
+    for (int L = 0; L < 2; L++) {
+        float fl = float(L);
+        float speed = 0.05 + fl * 0.04;
+        vec2 sp = vec2((p.x + uT * speed) * (26.0 - fl * 8.0), (p.y - 0.42 - fl * 0.12 + sin(p.x * 2.0 + t) * 0.03) * (26.0 - fl * 8.0));
+        vec2 cell = floor(sp);
+        float school = smoothstep(0.55, 0.75, vnoise(vec2(cell.x * 0.12 + fl * 7.0, cell.y * 0.4)));
+        vec2 f = fract(sp) - 0.5;
+        f.y += (hash12(cell + fl) - 0.5) * 0.3;
+        float body = smoothstep(0.08, 0.0, length(f * vec2(0.9, 2.6)) - 0.12);
+        float tail = step(f.x, -0.2) * step(abs(f.y), (-0.2 - f.x) * 0.9) * step(-0.38, f.x);
+        float fish = max(body, tail) * school * step(abs(sp.y), 3.0);
+        col = mix(col, deep * (0.7 + fl * 0.4) + uNeon2 * 0.03, fish * (0.55 + fl * 0.2));
+    }
+    // 水草：几簇深色的带子，随水摆
+    for (int k = 0; k < 6; k++) {
+        float fk = float(k);
+        float bx = (hash12(vec2(fk, 41.0)) * 1.1 - 0.05) * uAspect;
+        float hgt = 0.28 + hash12(vec2(fk, 43.0)) * 0.32;
+        float sway = sin(p.y * 6.0 + t * 1.4 + fk * 1.7) * 0.03 * p.y / hgt;
+        float w = 0.012 * (1.0 - p.y / hgt * 0.7);
+        float blade = smoothstep(w, w * 0.4, abs(p.x - bx - sway)) * step(p.y, hgt);
+        col = mix(col, vec3(0.02, 0.09, 0.07), blade * 0.85);
+    }
+    // 沙底和岩：沙上一层晃动的焦散网
+    float ground = 0.09 + vnoise(vec2(p.x * 3.0, 1.0)) * 0.06 + vnoise(vec2(p.x * 11.0, 2.0)) * 0.02;
+    if (p.y < ground) {
+        vec2 cq = p * 9.0;
+        float c1 = abs(vnoise(cq + vec2(t * 0.6, t * 0.3)) - 0.5);
+        float c2 = abs(vnoise(cq * 1.7 - vec2(t * 0.4, -t * 0.5)) - 0.5);
+        float caust = pow(1.0 - min(c1, c2) * 2.0, 10.0);
+        col = mix(vec3(0.07, 0.11, 0.13), vec3(0.16, 0.22, 0.24), smoothstep(0.0, ground, p.y)) + vec3(0.4, 0.7, 0.75) * caust * 0.3;
+    }
+    // 水母：伞盖一张一缩往上漂，触须拖在后面
+    for (int i = 0; i < 5; i++) {
+        float fi = float(i);
+        vec2 h = hash22(vec2(fi, 17.0));
+        float size = 0.07 + h.y * 0.08;
+        float rise = 0.015 + h.x * 0.012;
+        vec2 c = vec2(fract(h.x * 3.1 + sin(uT * 0.05 + fi) * 0.04) * uAspect,
+                      fract(h.y + uT * rise) * 1.5 - 0.2);
+        float pulse = sin(uT * (1.4 + h.x * 0.6) + fi * 2.3);
+        vec2 q = (p - c) / size;
+        q.x *= 1.0 + pulse * 0.1;
+        q.y *= 1.0 - pulse * 0.08;
+        vec3 tint = mix(vec3(1.0, 0.5, 0.82), vec3(0.4, 0.85, 1.0), step(0.5, hash12(vec2(fi, 23.0))));
+        tint = mix(tint, uNeon2, 0.2);
+        // 伞盖：半个椭圆，边上亮
+        float d = length(q * vec2(1.0, 1.3));
+        float bell = smoothstep(1.0, 0.85, d) * smoothstep(-0.25, 0.05, q.y);
+        float rim = smoothstep(0.7, 1.0, d) * bell;
+        float glow = exp(-d * d * 1.2) * 0.35;
+        // 触须
+        float tent = 0.0;
+        for (int k = 0; k < 4; k++) {
+            float ox = (float(k) - 1.5) * 0.32;
+            float tx = q.x - ox - sin(q.y * 2.2 - uT * 2.0 + fi + float(k)) * 0.18 * (-q.y) * 0.4;
+            tent += smoothstep(0.06, 0.0, abs(tx)) * smoothstep(-3.2 - h.x, -0.2, q.y) * step(q.y, -0.1);
+        }
+        float a = bell * 0.55 + rim * 0.9 + tent * 0.5;
+        col += tint * (a * 1.3 + glow * 1.6 + exp(-d * d * 0.18) * 0.18);
+    }
+    // 气泡：三串，从底下冒上来，越往上越大
+    for (int sIdx = 0; sIdx < 3; sIdx++) {
+        float fs = float(sIdx);
+        float sx = (0.18 + hash12(vec2(fs, 61.0)) * 0.7) * uAspect;
+        for (int b = 0; b < 8; b++) {
+            float fb = float(b);
+            float y = fract(fb * 0.137 + hash12(vec2(fs, fb)) * 0.3 + uT * (0.09 + fs * 0.02));
+            vec2 c = vec2(sx + sin(y * 12.0 + fb * 2.0 + uT) * 0.015, y * 1.1 - 0.05);
+            float r = 0.004 + y * 0.008 + hash12(vec2(fb, fs + 5.0)) * 0.004;
+            float dd = length(p - c);
+            float ring = smoothstep(r * 0.35, 0.0, abs(dd - r)) * 0.6 + smoothstep(r * 0.5, 0.0, length(p - c - vec2(-r, r) * 0.4)) * 0.6;
+            col += vec3(0.75, 0.92, 1.0) * ring * 0.5;
+        }
+    }
+    // 缸里浮着的微尘
+    vec2 dp = p * 60.0 + vec2(uT * 0.3, uT * 0.5);
+    float dust = step(0.985, hash12(floor(dp))) * smoothstep(0.35, 0.0, length(fract(dp) - 0.5));
+    col += vec3(0.6, 0.8, 0.85) * dust * 0.25;
+    return col;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uRes;
+    vec2 p = vec2(uv.x * uAspect, uv.y + uBump);
+    vec3 col = vec3(0.0);
+    if (uAqua < 1.0) col = street(p);
+    if (uAqua > 0.0) col = mix(col, aquarium(vec2(uv.x * uAspect, uv.y)), uAqua);
     outColor = vec4(col, 1.0);
 }`;
 
@@ -316,6 +425,7 @@ uniform vec4 uSpot;      // 正在写的字：x, y, 半径, 强度
 uniform vec3 uBreath;    // 停唱时对着窗呵一口气：x, y, 浓度
 uniform float uFireflies;
 uniform float uFrost;
+uniform float uAquaMain;
 uniform int uDripCount;
 uniform vec3 uFogCol;
 uniform float uFogDensity;
@@ -414,7 +524,7 @@ void main() {
             vec2 fd = (uv - c) * vec2(uRes.x / uRes.y, 1.0);
             float blink = smoothstep(0.2, 1.0, sin(uTime * (0.9 + fract(fi * 0.71)) + fi * 3.0));
             float g = exp(-dot(fd, fd) * mix(9000.0, 60000.0, wipe)) * blink;
-            col += vec3(1.0, 0.86, 0.4) * g * mix(0.35, 1.1, wipe) * uFireflies;
+            col += mix(vec3(1.0, 0.86, 0.4), vec3(0.45, 0.9, 1.0), uAquaMain) * g * mix(0.35, 1.1, wipe) * uFireflies;
         }
     }
     // 结霜：窗四角长出冰花，冰花上写不开
@@ -541,6 +651,7 @@ void main() {
                 fireflies: clamp(tuning.fireflies ?? 1, 0, 2),
                 drips: tuning.drips !== false,
                 rain: tuning.rain || 'light',
+                view: ['street', 'aquarium', 'alternate'].includes(tuning.view) ? tuning.view : 'alternate',
                 cameraSpeed: clamp(tuning.cameraSpeed ?? 1, 0.55, 1.85),
                 grain: clamp(tuning.grain ?? 0.4, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -699,6 +810,31 @@ void main() {
             idleHandle = global.requestIdleCallback ? global.requestIdleCallback(run, { timeout: 700 }) : global.setTimeout(run, 120);
         };
 
+        // 窗外换景：间奏（两句之间空了 4.5 秒以上）处换一次，街景和水族馆轮流；
+        // 换的时刻只由歌词时间决定，拖动进度条也对得上。
+        let aquaPlan = null;
+        const aquaAt = (t, view) => {
+            if (view === 'street') return 0;
+            if (view === 'aquarium') return 1;
+            if (!aquaPlan || aquaPlan.plan !== plan) {
+                const cuts = [];
+                for (let i = 1; i < plan.length; i += 1) {
+                    const gap = plan[i].start - plan[i - 1].end;
+                    if (gap > 4.5) cuts.push((plan[i - 1].end + plan[i].start) / 2);
+                }
+                aquaPlan = { plan, cuts };
+            }
+            let state = 0;
+            let value = 0;
+            for (const at of aquaPlan.cuts) {
+                if (t < at - 1.1) break;
+                const next = 1 - state;
+                value = state + (next - state) * smooth(at - 1.1, at + 1.1, t);
+                if (t >= at + 1.1) state = next;
+            }
+            return value;
+        };
+
         // 往下淌的水：每隔七八秒从窗顶淌下来一道，时刻、位置只由歌和序号决定
         const dripsAt = (t, seedKey, lines) => {
             let n = 0;
@@ -769,6 +905,8 @@ void main() {
             gl.uniform3fv(su.uNeon, colours.neon);
             gl.uniform3fv(su.uNeon2, colours.neon2);
             gl.uniform3fv(su.uLamp, colours.lamp);
+            const aqua = aquaAt(t, s.view);
+            gl.uniform1f(su.uAqua, aqua);
             gl.uniform1f(su.uRain, s.rain === 'off' || s.rain === 'snow' ? 0 : s.rain === 'heavy' ? 1.8 : 1);
             gl.uniform1f(su.uSnow, s.rain === 'snow' ? 1 : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -823,8 +961,9 @@ void main() {
                 }
             }
             gl.uniform3f(u.uBreath, bx, by, breath);
-            gl.uniform1f(u.uFireflies, s.reducedMotion || s.rain === 'snow' ? 0 : s.fireflies);
-            gl.uniform1f(u.uFrost, s.rain === 'snow' ? 1 : 0);
+            gl.uniform1f(u.uFireflies, s.reducedMotion || (s.rain === 'snow' && aqua < 0.5) ? 0 : s.fireflies);
+            gl.uniform1f(u.uFrost, s.rain === 'snow' ? 1 - aqua : 0);
+            gl.uniform1f(u.uAquaMain, aqua);
             gl.uniform1i(u.uDripCount, drips);
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));
