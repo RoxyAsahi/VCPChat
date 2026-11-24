@@ -282,7 +282,8 @@
             ],
             inkdraft: [
                 { key: 'cameraCuts', label: '踩词硬切（多机位分镜）', type: 'toggle' },
-                { key: 'figures', label: '演算纸线稿', type: 'toggle' },
+                { key: 'figures', label: '线稿', type: 'toggle' },
+                { key: 'inkScene', label: '意象场景', type: 'select', options: [['auto', '自动（每首歌一套）'], ['notebook', '演算纸'], ['rail', '铁道'], ['sea', '海'], ['night', '星夜']] },
                 { key: 'collisions', label: '墨团对撞', type: 'toggle' },
                 { key: 'keywords', label: '关键词套色（反复出现的意象词用强调色）', type: 'toggle' },
                 { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

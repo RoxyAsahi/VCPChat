@@ -306,17 +306,12 @@
     };
 
     // 歌词里的意象 → 线稿：有对应的就让这一句的第一张图用它
-    const THEMES = [
-        [/[车站轨铁列票]|远方|月台/u, ['rail']],
-        [/[海浪潮岸船帆]|水天/u, ['tide']],
-        [/[星光夜月天]/u, ['starmap', 'orbit']],
-        [/[梦忆旧昨]|回不去/u, ['paths']],
-        [/[信写字]|名字/u, ['draft']],
-        [/[花开落]/u, ['shower']]
-    ];
-    const themedFigure = (text, random) => {
-        const hit = THEMES.find(([re]) => re.test(text));
-        return hit ? hit[1][Math.floor(random() * hit[1].length)] : null;
+    // 这首歌用哪套意象：设置里指定了就用指定的；自动时按歌定一套（同一首歌每次一样），演算纸多一点
+    const sceneFor = (key, wanted) => {
+        const scenes = Figures.SCENES;
+        if (wanted && scenes[wanted]) return wanted;
+        const r = seededRandom(`inkdraft:scene:${key}`)();
+        return r < 0.34 ? 'notebook' : r < 0.56 ? 'rail' : r < 0.78 ? 'sea' : 'night';
     };
 
     /* ───────────────────────── 逐字图集 ───────────────────────── */
@@ -554,12 +549,22 @@
             });
             picks.sort((a, b) => (b.kw - a.kw) || ((b.end - b.start) - (a.end - a.start)));
             picks.slice(0, 2).forEach((e) => {
-                // 溅在字的上方或下方（不压字、不压同一行的邻字），甩出去的墨线朝外
-                const a = (random() < 0.5 ? -1 : 1) * Math.PI / 2 + (random() - 0.5) * 0.9;
+                // 溅在字旁边的空处：试几个方向，墨点那一摊（按半径 0.8 字高算）不能碰到任何一个字的框；都碰到就不溅
                 const size = e.cell * GLYPH_EM / GLYPH_CELL;
+                const scale = 0.7 + random() * 0.3;
+                const reach = size * 0.8 * scale;
+                const first = random() * TAU;
+                let a = null;
+                for (let k = 0; k < 12 && a === null; k += 1) {
+                    const t = first + k * TAU / 12;
+                    const px = e.cx + Math.cos(t) * size * 0.85, py = e.cy + Math.sin(t) * size * 0.85;
+                    const box = [px - reach * 0.55, py - reach * 0.55, px + reach * 0.55, py + reach * 0.55];
+                    if (!placed.some(p => rectsOverlap(box, p.box))) a = t;
+                }
+                if (a === null) return;
                 glyphEntries.push({
-                    key: SPLAT_PREFIX + Math.floor(random() * SPLAT_KINDS), cx: e.cx + Math.cos(a) * size * 0.78, cy: e.cy + Math.sin(a) * size * 0.78,
-                    cell: e.cell * (0.7 + random() * 0.3), rot: a, start: e.start + 0.04, end: cue.end, kw: e.kw, note: 2
+                    key: SPLAT_PREFIX + Math.floor(random() * SPLAT_KINDS), cx: e.cx + Math.cos(a) * size * 0.85, cy: e.cy + Math.sin(a) * size * 0.85,
+                    cell: e.cell * scale, rot: a, start: e.start + 0.04, end: cue.end, kw: e.kw, note: 2
                 });
             });
         }
@@ -599,7 +604,8 @@
         }
 
         // 半调层：背景纹样 + 垫在字后面的一张大图（粗线，只进网点）。
-        const backdrop = pickWeighted(random, [['band', 0.34], ['graph', 0.24], ['arcs', 0.26], ['none', 0.16]]);
+        const scene = Figures.SCENES[ctx.scene] || Figures.SCENES.notebook;
+        const backdrop = pickWeighted(random, scene.backdrops);
         main.globalCompositeOperation = 'lighter';
         if (backdrop === 'band') {
             const y = (textBox ? (textBox[1] + textBox[3]) / 2 : H / 2) + (random() - 0.5) * H * 0.2;
@@ -628,17 +634,72 @@
             main.beginPath();
             for (let r = H * 0.2; r < W * 1.2; r += H * 0.07) { main.moveTo(ox + r, oy); main.arc(ox, oy, r, 0, TAU); }
             main.stroke();
+        } else if (backdrop === 'sleepers') {
+            // 枕木：一道斜穿画面的轨道，两根钢轨、一排粗的枕木
+            const y = (textBox ? (textBox[1] + textBox[3]) / 2 : H / 2) + (random() < 0.5 ? -1 : 1) * H * (0.18 + random() * 0.1);
+            main.save();
+            main.translate(W / 2, y);
+            main.rotate((random() - 0.5) * 0.3);
+            main.fillStyle = 'rgb(0,0,82)';
+            main.strokeStyle = 'rgb(0,0,96)';
+            const gauge = H * 0.09, tie = H * 0.022, gap = H * 0.06;
+            for (let x = -W; x < W; x += gap) main.fillRect(x, -gauge * 0.95, tie, gauge * 1.9);
+            main.lineWidth = H * 0.009;
+            main.beginPath();
+            main.moveTo(-W, -gauge * 0.6); main.lineTo(W, -gauge * 0.6);
+            main.moveTo(-W, gauge * 0.6); main.lineTo(W, gauge * 0.6);
+            main.stroke();
+            main.restore();
+        } else if (backdrop === 'swell') {
+            // 涌浪：一排平行的浪线，越往下越密
+            main.strokeStyle = 'rgb(0,0,80)';
+            main.lineWidth = H * 0.006;
+            const k = TAU / (W * (0.18 + random() * 0.1));
+            const phase = random() * TAU;
+            main.beginPath();
+            for (let i = 0; i < 14; i += 1) {
+                const y0 = H * (0.1 + Math.pow(i / 13, 0.8) * 0.95);
+                const amp = H * (0.01 + i * 0.002);
+                for (let x = 0; x <= W; x += 8) {
+                    const y = y0 + Math.sin(x * k + phase + i * 0.9) * amp;
+                    if (x) main.lineTo(x, y); else main.moveTo(x, y);
+                }
+            }
+            main.stroke();
+        } else if (backdrop === 'trails') {
+            // 星轨：围着画外一点转的一段段弧，长短不一
+            main.strokeStyle = 'rgb(0,0,88)';
+            main.lineWidth = H * 0.004;
+            main.lineCap = 'round';
+            const ox = W * (random() < 0.5 ? -0.1 : 1.1), oy = H * (-0.2 - random() * 0.3);
+            const span = 0.18 + random() * 0.12;
+            for (let i = 0; i < 70; i += 1) {
+                const r = H * (0.3 + random() * 1.6);
+                const a = random() * TAU;
+                main.beginPath();
+                main.arc(ox, oy, r, a, a + span * (0.5 + random()));
+                main.stroke();
+            }
+        } else if (backdrop === 'radial') {
+            // 放射的赤经线：从画外的天极放出来的一束直线
+            main.strokeStyle = 'rgb(0,0,72)';
+            main.lineWidth = Math.max(1, H * 0.002);
+            const ox = W * (0.2 + random() * 0.6), oy = -H * 0.3;
+            main.beginPath();
+            for (let i = 0; i < 24; i += 1) { const a = i / 24 * Math.PI; main.moveTo(ox, oy); main.lineTo(ox + Math.cos(a) * W * 2, oy + Math.sin(a) * W * 2); }
+            for (let r = H * 0.6; r < W * 1.6; r += H * 0.22) { main.moveTo(ox + r, oy); main.arc(ox, oy, r, 0, Math.PI); }
+            main.stroke();
         }
         main.globalCompositeOperation = 'source-over';
         if (settings.figures) {
             // 垫在字后面的大图：粗线、只进网点，浓到网点刚好相连（全景里字占满画面时，看得见的主要是它）
             const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.026, toneLevel: 0.64, soft: H * 0.004 });
-            Figures.drawFigure(tonePen, Figures.KINDS[Math.floor(random() * Figures.KINDS.length)],
+            Figures.drawFigure(tonePen, scene.tone[Math.floor(random() * scene.tone.length)],
                 wideC[0], wideC[1], H * (0.36 + random() * 0.1), (random() - 0.5) * 0.4, random);
             // 一半的段再垫一张小一点的，偏到一边、露一半在画外
             if (random() < 0.5) {
                 const side = random() < 0.5 ? -1 : 1;
-                Figures.drawFigure(tonePen, Figures.KINDS[Math.floor(random() * Figures.KINDS.length)],
+                Figures.drawFigure(tonePen, scene.tone[Math.floor(random() * scene.tone.length)],
                     wideC[0] + side * W * (0.3 + random() * 0.12), wideC[1] + (random() - 0.5) * H * 0.4, H * (0.22 + random() * 0.08), random() * TAU, random);
             }
         }
@@ -675,15 +736,15 @@
             }
         }
         const figures = [];
-        const lineText = units.map(u => u.glyphs.map(g => g.text).join('')).join('');
-        const themed = cue.kind === 'line' ? themedFigure(lineText, random) : null;
+        const usedKinds = [];
         if (settings.figures) {
             const want = cue.kind === 'rest' ? 4 + Math.floor(random() * 3) : Math.min(4, Math.max(1, Math.round(cells.length * (0.35 + random() * 0.2))));
             cells.slice(0, want).forEach((rect) => {
                 const r = Math.min(rect[2] - rect[0], rect[3] - rect[1]) * (0.3 + random() * 0.08) * settings.figureScale;
-                // 第一张图跟着歌词走（Folia 是随机挑）：唱到车站就是配线图，唱到海就是潮汐曲线……
-                const pickRandom = Figures.KINDS[Math.floor(random() * Figures.KINDS.length)];
-                const kind = (figures.length === 0 && themed) || pickRandom;
+                // 线稿从这首歌的意象场景里挑；同一句不重复
+                const pool = scene.kinds.filter(k => !usedKinds.includes(k));
+                const kind = (pool.length ? pool : scene.kinds)[Math.floor(random() * (pool.length || scene.kinds.length))];
+                usedKinds.push(kind);
                 const fx = (rect[0] + rect[2]) / 2 + (random() - 0.5) * (rect[2] - rect[0]) * 0.15;
                 const fy = (rect[1] + rect[3]) / 2 + (random() - 0.5) * (rect[3] - rect[1]) * 0.15;
                 Figures.drawFigure(pen, kind, fx, fy, r, (random() - 0.5) * 0.35, random);
@@ -1714,6 +1775,7 @@ void main() {
                 keywords: tuning.keywords !== false,
                 bleed: tuning.inkBleed !== false,
                 spatter: tuning.inkSpatter !== false,
+                scene: typeof tuning.inkScene === 'string' ? tuning.inkScene : 'auto',
                 paper: tuning.paperTexture === false ? 0 : 1,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
@@ -1785,7 +1847,7 @@ void main() {
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
         const slotKey = (index) => {
             const s = settings();
-            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}|${s.spatter}`;
+            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}|${s.spatter}|${s.scene}`;
         };
         const slotFor = (index, build = true) => {
             if (!glState || index < 0 || index >= cues.length) return null;
@@ -1799,6 +1861,7 @@ void main() {
                 W: world.W, H: world.H, aspect: world.aspect, family: fontFamily(), settings: settings(),
                 trackKey: trackKey(current || {}), title: current?.track?.title || '',
                 prevCue: cues[index - 1] || null,
+                scene: sceneFor(trackKey(current || {}), settings().scene),
                 mainCanvas, idsCanvas
             });
             const { gl } = glState;

@@ -498,10 +498,336 @@
             [-1, -0.5, 0, 0.5, 1].forEach((x, i) => { pen.line([[x, 0.62], [x, 0.68]]); pen.note(`${i * 6}h`, x, 0.76, 0.06); });
             pen.circle(0.82, -0.78, 0.09);
             pen.ellipse(0.82, -0.78, 0.045, 0.09, 0, -Math.PI / 2, Math.PI / 2);
+        },
+
+        /* ── 铁道 ── */
+        // 列车运行图：横轴时间、竖轴车站，一列车一条斜线（快车陡、慢车缓，站上停一下是一段平线）
+        timetable(pen, random) {
+            const stations = ['A', 'B', 'C', 'D', 'E'];
+            const ys = stations.map((_, i) => -0.7 + i * 0.35);
+            pen.line([[-0.85, -0.82], [-0.85, 0.82], [1.0, 0.82]]);
+            pen.segments(ys.map(y => [[-0.85, y], [1.0, y]]).filter((_, i) => i % 2 === 0));
+            ys.forEach((y, i) => pen.note(pick(random, [['甲', '乙', '丙', '丁', '戊'], stations])[i], -0.95, y, 0.075, 'right'));
+            const trains = 4 + Math.floor(random() * 3);
+            for (let t = 0; t < trains; t += 1) {
+                const down = random() < 0.5;
+                let x = -0.85 + random() * 0.9;
+                const v = 0.12 + random() * 0.2;
+                const pts = [];
+                const order = down ? ys : ys.slice().reverse();
+                order.forEach((y, i) => {
+                    if (i) x += v * (0.8 + random() * 0.4);
+                    pts.push([x, y]);
+                    if (i && i < order.length - 1 && random() < 0.5) { x += 0.04 + random() * 0.05; pts.push([x, y]); }
+                });
+                if (pts[pts.length - 1][0] > 1.05) continue;
+                pen.line(pts);
+                if (random() < 0.5) pen.note(`${down ? 'D' : 'K'}${100 + Math.floor(random() * 800)}`, pts[1][0] + 0.03, pts[1][1] - 0.07, 0.06, 'left');
+            }
+            [0, 6, 12, 18].forEach((h, i) => pen.note(`${h}:00`, -0.85 + i * 0.6, 0.94, 0.06));
+        },
+        // 信号机立面：一根柱、三显示的灯头、遮檐，旁边标灯色
+        signal(pen, random) {
+            pen.line([[0, 0.95], [0, -0.25]]);
+            pen.line([[-0.2, 0.95], [0.2, 0.95]]);
+            pen.line([[-0.17, -0.25], [0.17, -0.25], [0.17, -0.95], [-0.17, -0.95]], true);
+            const lamps = [-0.82, -0.6, -0.38];
+            const lit = Math.floor(random() * 3);
+            lamps.forEach((y, i) => {
+                pen.circle(0, y, 0.075);
+                pen.line([[-0.1, y - 0.1], [0.1, y - 0.1]]);
+                if (i === lit) pen.dot(0, y, 0.045);
+            });
+            ['R', 'Y', 'G'].forEach((c, i) => pen.note(c, 0.28, lamps[i], 0.07, 'left'));
+            pen.line([[0, 0.2], [0.42, 0.2]]);
+            pen.line([[0.42, 0.08], [0.78, 0.08], [0.78, 0.32], [0.42, 0.32]], true);
+            pen.note(`${pick(random, ['X', 'S', 'XN', 'SF'])}${1 + Math.floor(random() * 9)}`, 0.6, 0.2, 0.08);
+        },
+        // 车票：圆角票面、一道撕口打孔虚线，起讫站、车次、座位
+        ticket(pen, random) {
+            const w = 0.95, h = 0.55, c = 0.08;
+            pen.line([[-w + c, -h], [w - c, -h], [w, -h + c], [w, h - c], [w - c, h], [-w + c, h], [-w, h - c], [-w, -h + c]], true);
+            const cut = 0.48 + random() * 0.12;
+            const holes = [];
+            for (let y = -h + 0.06; y < h - 0.04; y += 0.09) holes.push([[cut, y], [cut, y + 0.035]]);
+            pen.segments(holes);
+            const from = pick(random, ['海滨', '旧城', 'Seaside', '北口', '終点']), to = pick(random, ['山上', '新町', 'Hill St.', '南口', '始発']);
+            pen.note(from, -0.62, -0.2, 0.14);
+            pen.arrow([-0.36, -0.2], [-0.04, -0.2], 0.05);
+            pen.note(to, 0.22, -0.2, 0.14);
+            pen.line([[-w + 0.12, 0.08], [cut - 0.12, 0.08]]);
+            pen.note(`No. ${String(Math.floor(random() * 99999)).padStart(5, '0')}`, -w + 0.14, 0.26, 0.07, 'left');
+            pen.note(`${Math.floor(random() * 16) + 1} 车 ${Math.floor(random() * 90) + 1}${pick(random, ['A', 'B', 'C', 'D', 'F'])}`, -w + 0.14, 0.42, 0.07, 'left');
+            pen.note('¥ ' + (Math.floor(random() * 300) + 20), (cut + w) / 2, 0.05, 0.08);
+        },
+        // 接触网支柱立面：立柱、腕臂、承力索和接触线的悬链，吊弦一根根垂下来
+        catenary(pen, random) {
+            const xs = [-0.8, 0.8];
+            xs.forEach((x) => {
+                pen.line([[x, 0.9], [x, -0.75]]);
+                pen.line([[x, -0.62], [x + (x < 0 ? 0.24 : -0.24), -0.55]]);
+            });
+            const sag = 0.16 + random() * 0.1;
+            const msg = [];
+            for (let i = 0; i <= 32; i += 1) { const t = i / 32; const x = -0.56 + t * 1.12; msg.push([x, -0.55 + Math.sin(t * Math.PI) * sag]); }
+            pen.line(msg);
+            pen.line([[-0.6, 0.0], [0.6, 0.0]]);
+            const droppers = [];
+            for (let i = 1; i < 8; i += 1) { const t = i / 8; const x = -0.56 + t * 1.12; droppers.push([[x, -0.55 + Math.sin(t * Math.PI) * sag], [x, 0.0]]); }
+            pen.segments(droppers);
+            pen.line([[-1.0, 0.9], [1.0, 0.9]]);
+            pen.note('1500 V DC', 0, 0.16, 0.07);
+            pen.note(`L = ${Math.floor(40 + random() * 25)} m`, 0, -0.84, 0.07);
+        },
+        // 轨道断面：道砟梯形、轨枕、两根工字轨，标轨距
+        trackSection(pen, random) {
+            pen.line([[-1.0, 0.6], [-0.7, 0.15], [0.7, 0.15], [1.0, 0.6]]);
+            pen.line([[-0.62, 0.15], [-0.62, 0.02], [0.62, 0.02], [0.62, 0.15]]);
+            [-0.38, 0.38].forEach((x) => {
+                pen.line([[x - 0.09, 0.02], [x + 0.09, 0.02], [x + 0.09, -0.01], [x + 0.025, -0.03], [x + 0.025, -0.2], [x + 0.06, -0.22], [x + 0.06, -0.28], [x - 0.06, -0.28], [x - 0.06, -0.22], [x - 0.025, -0.2], [x - 0.025, -0.03], [x - 0.09, -0.01]], true);
+            });
+            pen.arrow([-0.1, -0.42], [-0.38, -0.42], 0.04);
+            pen.arrow([0.1, -0.42], [0.38, -0.42], 0.04);
+            pen.note(pick(random, ['1435', '1067', '1520']), 0, -0.42, 0.08);
+            for (let i = 0; i < 14; i += 1) pen.dot(-0.85 + random() * 1.7, 0.22 + random() * 0.34, 0.012 + random() * 0.012);
+            pen.note(pick(random, ['60 kg/m', 'JIS 50N', 'UIC 60']), 0.75, -0.2, 0.07, 'left');
+        },
+        // 线路图：一条主线、一条支线，站是圆圈，换乘站是两个圈
+        routeMap(pen, random) {
+            const main = [];
+            let x = -0.95, y = (random() - 0.5) * 0.3;
+            for (let i = 0; i < 6; i += 1) {
+                main.push([x, y]);
+                x += 0.34 + random() * 0.08;
+                if (random() < 0.4) y += (random() < 0.5 ? -1 : 1) * 0.25;
+            }
+            pen.line(main);
+            const hub = main[2 + Math.floor(random() * 2)];
+            const branch = [hub, [hub[0] + 0.25, hub[1] - 0.35], [hub[0] + 0.25, hub[1] - 0.75]];
+            pen.line(branch);
+            const names = ['北口', '中央', '港前', '桜台', '旧市街', '海岸通', '博物馆', 'Pier', 'Market'];
+            main.forEach(([px, py], i) => {
+                pen.circle(px, py, 0.045);
+                if (i % 2 === 0 || random() < 0.4) pen.note(pick(random, names), px, py + (i % 2 ? -0.13 : 0.14), 0.065);
+            });
+            pen.circle(hub[0], hub[1], 0.075);
+            pen.circle(branch[2][0], branch[2][1], 0.045);
+        },
+
+        /* ── 海 ── */
+        // 罗盘玫瑰：两圈刻度、十六个方位的尖角，N 上面一个箭头
+        compass(pen, random) {
+            pen.circle(0, 0, 0.82);
+            pen.circle(0, 0, 0.7);
+            const ticks = [];
+            for (let i = 0; i < 72; i += 1) {
+                const a = i / 72 * TAU;
+                const r2 = i % 9 === 0 ? 0.6 : 0.66;
+                ticks.push([[Math.cos(a) * 0.7, Math.sin(a) * 0.7], [Math.cos(a) * r2, Math.sin(a) * r2]]);
+            }
+            pen.segments(ticks);
+            for (let i = 0; i < 8; i += 1) {
+                const a = i / 8 * TAU - Math.PI / 2;
+                const len = i % 2 === 0 ? 0.62 : 0.38;
+                const w = i % 2 === 0 ? 0.1 : 0.07;
+                const tip = [Math.cos(a) * len, Math.sin(a) * len];
+                const l = [Math.cos(a - Math.PI / 2) * w, Math.sin(a - Math.PI / 2) * w];
+                const r = [Math.cos(a + Math.PI / 2) * w, Math.sin(a + Math.PI / 2) * w];
+                pen.line([l, tip, r]);
+            }
+            pen.note('N', 0, -0.95, 0.12);
+            pen.note(pick(random, ['VAR 7°W', 'VAR 3°E', 'MAG']), 0, 0.98, 0.07);
+        },
+        // 海图等深线：几道弯弯的等深线，散着测深数字，一个锚地符号
+        isobaths(pen, random) {
+            const base = random() * TAU;
+            for (let k = 0; k < 4; k += 1) {
+                const pts = [];
+                const off = -0.6 + k * 0.38;
+                for (let i = 0; i <= 30; i += 1) {
+                    const x = -1 + i / 15;
+                    pts.push([x, off + Math.sin(x * 2.2 + base + k * 0.6) * 0.12 + Math.sin(x * 5 + k) * 0.03]);
+                }
+                if (k % 2) pen.line(pts); else pen.segments(pts.slice(1).map((p, i) => [pts[i], p]).filter((_, i) => i % 3 !== 2));
+                pen.note(`${[2, 5, 10, 20][k]}`, -0.95, off - 0.07, 0.06, 'left');
+            }
+            for (let i = 0; i < 10; i += 1) pen.note(String(Math.floor(3 + random() * 30)), -0.8 + random() * 1.6, -0.75 + random() * 1.5, 0.055);
+            const ax = 0.4 + random() * 0.3, ay = -0.4;
+            pen.line([[ax, ay - 0.1], [ax, ay + 0.1]]);
+            pen.ellipse(ax, ay + 0.02, 0.08, 0.08, 0, 0.2, Math.PI - 0.2, 16);
+            pen.line([[ax - 0.05, ay - 0.06], [ax + 0.05, ay - 0.06]]);
+        },
+        // 灯塔立面：收分的塔身、灯室、栏杆，光弧扇面标灯质
+        lighthouse(pen, random) {
+            pen.line([[-0.28, 0.9], [-0.16, -0.35], [0.16, -0.35], [0.28, 0.9]], true);
+            [0.45, 0.0].forEach(y => { const w = 0.16 + (y + 0.35) / 1.25 * 0.12; pen.line([[-w, y], [w, y]]); });
+            pen.line([[-0.22, -0.35], [0.22, -0.35]]);
+            pen.line([[-0.13, -0.35], [-0.13, -0.58], [0.13, -0.58], [0.13, -0.35]]);
+            pen.line([[-0.17, -0.58], [0, -0.72], [0.17, -0.58]]);
+            pen.dot(0, -0.47, 0.035);
+            const side = random() < 0.5 ? -1 : 1;
+            pen.line([[0, -0.47], [side * 1.0, -0.62]]);
+            pen.line([[0, -0.47], [side * 1.0, -0.32]]);
+            pen.ellipse(0, -0.47, 0.95, 0.95, 0, side > 0 ? -0.16 : Math.PI - 0.16, side > 0 ? 0.16 : Math.PI + 0.16, 12);
+            pen.note(pick(random, ['Fl W 10s', 'Oc R 4s', 'LFl 6s', 'Iso G 2s']), side * 0.6, -0.78, 0.08);
+            pen.line([[-0.6, 0.9], [0.6, 0.9]]);
+            pen.wave([-1.0, 0.98], [1.0, 0.98], 7, 0.025);
+        },
+        // 波浪剖面：一条余摆线似的浪，标波长、波高、静水面
+        waveSection(pen, random) {
+            const amp = 0.22 + random() * 0.08, lambda = 0.9;
+            const pts = [];
+            // 余摆线：浪峰尖、浪谷宽
+            for (let i = 0; i <= 120; i += 1) {
+                const t = (-1.1 + i / 120 * 2.2) * TAU / lambda;
+                pts.push([t * lambda / TAU - Math.sin(t) * amp * 0.5, -Math.cos(t) * amp]);
+            }
+            pen.line(pts.filter(([x]) => x > -1.05 && x < 1.05));
+            pen.dashed([-1, 0], [1, 0], 0.04);
+            pen.note('SWL', 1.0, -0.07, 0.065, 'left');
+            const c1 = -lambda / 2 + 0.05, c2 = c1 + lambda;
+            pen.line([[c1, -amp - 0.12], [c1, -amp - 0.24]]); pen.line([[c2, -amp - 0.12], [c2, -amp - 0.24]]);
+            pen.arrow([0, -amp - 0.18], [c1, -amp - 0.18], 0.04); pen.arrow([0, -amp - 0.18], [c2, -amp - 0.18], 0.04);
+            pen.note('λ', 0, -amp - 0.3, 0.1);
+            pen.arrow([c2 + 0.12, 0], [c2 + 0.12, -amp], 0.035); pen.note('H/2', c2 + 0.18, -amp * 0.5, 0.07, 'left');
+            for (let i = 0; i < 3; i += 1) pen.ellipse(-0.5 + i * 0.5, 0.35 + i * 0.12, 0.12 - i * 0.03, 0.12 - i * 0.03, 0, 0, TAU, 24);
+            pen.note(`T = ${(4 + random() * 8).toFixed(1)} s`, -0.95, 0.85, 0.07, 'left');
+        },
+        // 船体型线（横剖面图）：左半边是船首的几道剖面、右半边是船尾的，水线一道
+        hullLines(pen, random) {
+            pen.line([[0, -0.75], [0, 0.75]]);
+            pen.line([[-1, 0.62], [1, 0.62]]);
+            const wl = -0.05 + random() * 0.1;
+            pen.dashed([-1, wl], [1, wl], 0.04);
+            pen.note('DWL', 1.0, wl - 0.07, 0.065, 'left');
+            for (let k = 1; k <= 5; k += 1) {
+                const bw = 0.85 * (k / 5), deep = 0.6;
+                const sternPts = [], bowPts = [];
+                for (let i = 0; i <= 16; i += 1) {
+                    const t = i / 16;
+                    const y = -0.55 + t * (deep + 0.55);
+                    // 船中的剖面方（U 形），越往船首越尖（V 形）
+                    const stern = bw * (1 - Math.pow(t, 1.4 + k * 1.1));
+                    const bow = bw * 0.9 * (1 - Math.pow(t, 0.9 + k * 0.45));
+                    sternPts.push([stern, y]);
+                    bowPts.push([-bow, y]);
+                }
+                pen.line(sternPts); pen.line(bowPts);
+            }
+            pen.note(pick(random, ['Body Plan', '横剖线图', 'Stn 0–10']), -0.95, -0.85, 0.075, 'left');
+        },
+
+        /* ── 星夜 ── */
+        // 星座连线：几颗不同亮度的星，连成一个星座，标名字和几颗星的希腊字母
+        constellation(pen, random) {
+            const n = 6 + Math.floor(random() * 3);
+            const stars = [];
+            let x = -0.8, y = (random() - 0.5) * 0.6;
+            for (let i = 0; i < n; i += 1) { stars.push([x, y]); x += 0.2 + random() * 0.12; y += (random() - 0.5) * 0.7; y = Math.max(-0.8, Math.min(0.8, y)); }
+            stars.forEach(([sx, sy], i) => {
+                const m = random();
+                pen.dot(sx, sy, 0.018 + m * 0.035);
+                if (m > 0.75) pen.segments([[[sx - 0.09, sy], [sx + 0.09, sy]], [[sx, sy - 0.09], [sx, sy + 0.09]]]);
+                if (i < 4) pen.note('αβγδ'[i], sx + 0.07, sy - 0.08, 0.07, 'left');
+            });
+            pen.line(stars.slice(0, n - 2));
+            pen.line([stars[2], stars[n - 2], stars[n - 1]]);
+            pen.note(pick(random, ['Lyra', 'Cygnus', 'Cassiopeia', 'Orion', 'Ursa Minor', '天琴座', '北斗']), 0, 0.92, 0.09);
+        },
+        // 月相：一排月亮从新月到满月，下面标日期
+        moonPhases(pen, random) {
+            const n = 5;
+            const start = Math.floor(random() * 20) + 1;
+            for (let i = 0; i < n; i += 1) {
+                const cx = -0.8 + i * 0.4, r = 0.15;
+                pen.circle(cx, 0, r);
+                const k = -1 + i / (n - 1) * 2;
+                pen.ellipse(cx, 0, Math.abs(k) * r, r, 0, -Math.PI / 2, Math.PI / 2, 20);
+                if (k < 0) pen.ellipse(cx, 0, r, r, 0, Math.PI / 2, Math.PI * 1.5, 20);
+                pen.note(`${start + i * 3}`, cx, 0.3, 0.07);
+            }
+            pen.line([[-1, 0.45], [1, 0.45]]);
+            pen.note(pick(random, ['lunation 1271', '朔望月 29.53 d', 'age 0 → 14 d']), 0, -0.36, 0.075);
+        },
+        // 地平坐标网：地平线、几道等高圈（弧）、方位刻度，一条星轨划过
+        altaz(pen, random) {
+            pen.line([[-1, 0.6], [1, 0.6]]);
+            [0.35, 0.7, 1.05].forEach((r) => pen.ellipse(0, 0.6, r, r * 0.95, 0, Math.PI, TAU, 40));
+            const ticks = [];
+            for (let i = 0; i <= 12; i += 1) { const x = -1 + i / 6; ticks.push([[x, 0.6], [x, 0.66]]); }
+            pen.segments(ticks);
+            ['E', 'S', 'W'].forEach((c, i) => pen.note(c, -0.9 + i * 0.9, 0.78, 0.08));
+            const pts = [];
+            const r = 0.55 + random() * 0.3, cy = 0.6 + random() * 0.2;
+            for (let i = 0; i <= 30; i += 1) { const a = Math.PI + 0.25 + i / 30 * (Math.PI - 0.5); pts.push([Math.cos(a) * r * 1.3, cy + Math.sin(a) * r]); }
+            pen.line(pts);
+            pen.dot(pts[18][0], pts[18][1], 0.035);
+            pen.note(`h = ${Math.floor(20 + random() * 50)}°`, pts[18][0] + 0.08, pts[18][1] - 0.08, 0.07, 'left');
+        },
+        // 折射望远镜的光路：物镜、目镜，两束平行光会聚到焦点再散开
+        telescope(pen, random) {
+            pen.ellipse(-0.6, 0, 0.05, 0.4, 0, 0, TAU, 32);
+            pen.ellipse(0.62, 0, 0.03, 0.15, 0, 0, TAU, 24);
+            const f = 0.45;
+            pen.dashed([-1.0, 0], [1.0, 0], 0.03);
+            [-0.32, 0.32].forEach((y) => {
+                pen.line([[-1.0, y], [-0.6, y], [f, 0], [0.62, -y * 0.38]]);
+                pen.line([[0.62, -y * 0.38], [1.0, -y * 0.38]]);
+            });
+            pen.dot(f, 0, 0.025);
+            pen.note('F', f, 0.12, 0.08);
+            pen.note(`f = ${Math.floor(600 + random() * 900)} mm`, -0.6, 0.55, 0.07);
+            pen.note(pick(random, ['×48', '×80', '×120']), 0.62, 0.28, 0.07);
+        },
+        // 光变曲线：一串带误差棒的测点，中间一个凹下去的掩食
+        lightCurve(pen, random) {
+            pen.line([[-0.9, -0.7], [-0.9, 0.55], [1.0, 0.55]]);
+            const depth = 0.2 + random() * 0.15, c = (random() - 0.5) * 0.6, w = 0.18 + random() * 0.1;
+            const model = x => -0.25 + depth * Math.max(0, 1 - Math.pow(Math.max(0, Math.abs(x - c) - w * 0.4) / (w * 0.6), 2)) * (Math.abs(x - c) < w ? 1 : 0);
+            const pts = [];
+            for (let i = 0; i <= 48; i += 1) { const x = -0.85 + i / 48 * 1.8; pts.push([x, model(x)]); }
+            pen.line(pts);
+            for (let i = 0; i < 22; i += 1) {
+                const x = -0.82 + i / 21 * 1.74, y = model(x) + (random() - 0.5) * 0.06, e = 0.03 + random() * 0.03;
+                pen.dot(x, y, 0.015);
+                pen.line([[x, y - e], [x, y + e]]);
+            }
+            pen.note('Δm', -1.0, -0.72, 0.08, 'right');
+            pen.note('phase', 0.95, 0.68, 0.07, 'right');
+            pen.note(pick(random, ['P = 3.52 d', 'Algol', 'transit', 'P = 0.94 d']), 0.2, -0.6, 0.08);
         }
     };
 
     const KINDS = Object.freeze(Object.keys(DRAW));
+
+    // 意象场景：一首歌一套（Folia 只有一种演算纸）。每套有自己的线稿、垫底大图和背景纹样；
+    // 线稿还是同一支笔、同一种细线插图的画法，所以换套不换手。
+    const SCENES = Object.freeze({
+        notebook: {
+            label: '演算纸',
+            kinds: ['orbit', 'starmap', 'lattice', 'cell', 'molecule', 'detector', 'feynman', 'paths', 'draft', 'shower', 'decay', 'spectrum', 'potential', 'running', 'cherenkov', 'collider', 'bubble', 'penguin', 'box'],
+            tone: ['orbit', 'lattice', 'detector', 'feynman', 'paths', 'shower', 'spectrum', 'potential', 'collider', 'bubble', 'penguin'],
+            backdrops: [['band', 0.34], ['graph', 0.24], ['arcs', 0.26], ['none', 0.16]]
+        },
+        rail: {
+            label: '铁道',
+            kinds: ['rail', 'timetable', 'signal', 'ticket', 'catenary', 'trackSection', 'routeMap'],
+            tone: ['rail', 'timetable', 'catenary', 'routeMap', 'trackSection', 'signal'],
+            backdrops: [['sleepers', 0.34], ['band', 0.22], ['graph', 0.22], ['none', 0.22]]
+        },
+        sea: {
+            label: '海',
+            kinds: ['tide', 'compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines'],
+            tone: ['compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines', 'tide'],
+            backdrops: [['swell', 0.4], ['arcs', 0.22], ['band', 0.2], ['none', 0.18]]
+        },
+        night: {
+            label: '星夜',
+            kinds: ['starmap', 'orbit', 'constellation', 'moonPhases', 'altaz', 'telescope', 'lightCurve'],
+            tone: ['orbit', 'constellation', 'altaz', 'telescope', 'moonPhases', 'starmap'],
+            backdrops: [['trails', 0.42], ['radial', 0.18], ['band', 0.2], ['none', 0.2]]
+        }
+    });
 
     // 画一张图：kind、世界中心、半径、旋转。返回画完后的下一个笔序。
     const drawFigure = (pen, kind, x, y, r, rot, random) => {
@@ -510,5 +836,5 @@
         return pen.order;
     };
 
-    global.MusicStageInkFigures = Object.freeze({ createPen, drawFigure, KINDS, NOTE_FONT });
+    global.MusicStageInkFigures = Object.freeze({ createPen, drawFigure, KINDS, SCENES, NOTE_FONT });
 })(window);
