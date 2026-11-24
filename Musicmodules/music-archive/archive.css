@@ -850,3 +850,9 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list[data-sort="duration"] .archive-list-cols span:nth-child(3) { color: var(--ar-ink); font-weight: 600; }
 .archive-list[data-sort="duration"] .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 86%, transparent); }
 .archive-list[data-sort="added"] .archive-list-cols span:nth-child(1) { color: var(--ar-ink); font-weight: 600; }
+/* 歌单、为你、检索结果不跟排序菜单走，表头不标排序列 */
+.archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols span:nth-child(n) { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); font-weight: inherit; }
+.archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 64%, transparent); }
+/* 滚到底：去掉下沿渐隐，最后一行完整显示 */
+.archive-list-viewport.at-bottom { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px); mask-image: linear-gradient(to bottom, transparent 0, #000 26px); }
+.archive-list-viewport.at-top.at-bottom { -webkit-mask-image: none; mask-image: none; }

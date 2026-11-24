@@ -365,6 +365,8 @@
                 b.setAttribute('aria-selected', String(on));
             });
             placeKindMark();
+            // 歌单、为你、检索结果有自己的顺序，不跟排序菜单走；表头按这个决定标不标排序列
+            el.dataset.kind = state.query.trim() ? 'search' : state.kind;
             paintSort();
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
@@ -564,6 +566,8 @@
             // 滚在最上面时顶上没有东西可淡出，第一行不该被遮淡
             r.viewport.classList.toggle('at-top', top <= 1);
             const h = r.viewport.clientHeight || 600;
+            // 滚到底时最后一行也不该被下沿渐隐遮淡
+            r.viewport.classList.toggle('at-bottom', top + h >= r.viewport.scrollHeight - 1);
             syncThumb(top, h);
             if (!state.rows.length) { r.sticky.textContent = ''; return; }
             const first = Math.max(0, rowAt(top) - OVERSCAN);
