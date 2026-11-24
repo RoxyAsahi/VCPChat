@@ -286,11 +286,12 @@ void main() {
     float lit = clamp(total, 0.0, 1.6);
     {
         vec4 tx = textureLod(uText, t1, uFocus * 4.5);
-        tx.r *= 1.0 - uFocus * 0.35;
+        tx.r *= 1.0 - uFocus * 0.7;
         float halo = textureLod(uText, t1, 3.5 + uFocus).r;
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         float reveal = glyphReveal(gid);
-        float singing = glyphSinging(gid);
+        // 虚着的时候字框里没有清楚的笔画，按字框上色会糊成一块金色方块：对焦完成前不上唱到的颜色
+        float singing = glyphSinging(gid) * (1.0 - uFocus) * (1.0 - uFocus);
         float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.8 + lit * 0.5));
         vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.3), clamp(lit, 0.0, 1.0));
         // 字压在光上要读得清：字周围的光和烟压暗一圈（光越亮压得越多），字本身比光亮
@@ -704,8 +705,8 @@ void main() {
             const sectionEnds = !nextCue || nextCue.sectionStart;
             const lights = (cue.sectionStart && !cue.flash ? smooth(0, 0.6, local) : 1) * (sectionEnds ? 1 - smooth(cue.end - 0.4, cue.end, t) * 0.85 : 1);
             const beams = beamsAt(cue.rig, cue.seed, t, colours, beamBuffer, beamColours);
-            const prev = index > 0 && local < 0.6 ? slotFor(index - 1, false) : null;
-            const prevFade = prev ? 1 - smooth(0, 0.6, local) : 0;
+            const prev = index > 0 && local < 0.4 ? slotFor(index - 1, false) : null;
+            const prevFade = prev ? 1 - smooth(0, 0.4, local) : 0;
             const zoom = 1 + clamp(local / Math.max(1, cue.end - cue.start), 0, 1) * 0.045;
             const prevCue = cues[index - 1];
             const prevZoom = prevCue ? 1.045 + local * 0.06 : 1;
