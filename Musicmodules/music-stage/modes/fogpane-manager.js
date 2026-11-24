@@ -78,7 +78,10 @@
             const items = [];
             let width = 0;
             // 三种写法：一两行；大小不一（有的词写得大）；竖着一列列往下写（从右往左）
-            const style = cjk && n <= 14 && random() < 0.28 ? 'vertical' : random() < 0.42 ? 'mixed' : 'rows';
+            const credit = line.credits || '';
+            // 片尾的曲名、歌手：一律横着写，曲名大、歌手小
+            if (credit) base = clamp(credit === 'title' ? W * 0.56 / Math.ceil(n / rows) / (cjk ? 1 : 0.55) : H * 0.05, H * 0.045, credit === 'title' ? H * 0.12 : H * 0.06) * fontScale;
+            const style = credit ? 'rows' : cjk && n <= 14 && random() < 0.28 ? 'vertical' : random() < 0.42 ? 'mixed' : 'rows';
             if (style === 'vertical') {
                 const cols = n > 7 ? 2 : 1;
                 const perCol = Math.ceil(n / cols);
@@ -112,8 +115,9 @@
                     const k = sizes ? sizes[ri][gi] : 1;
                     const w = g.text.trim() ? measure(g.text, base * k, CJK.test(g.text)) : base * (cjk ? 0.5 : 0.32);
                     if (g.text.trim()) {
-                        items.push({ g, x, row: ri, w, size: base * k * (0.92 + random() * 0.16),
-                            rot: (random() - 0.5) * 0.12, dy: (random() - 0.5) * base * 0.12 + (k - 1) * base * 0.3 });
+                        const calm = credit ? 0.4 : 1;
+                        items.push({ g, x, row: ri, w, size: base * k * (0.92 + random() * 0.16 * calm),
+                            rot: (random() - 0.5) * 0.12 * calm, dy: ((random() - 0.5) * base * 0.12 + (k - 1) * base * 0.3) * calm });
                     }
                     x += w * (cjk ? 1.02 : 1);
                 });
@@ -132,7 +136,14 @@
                 base *= fit; width *= fit; height *= fit;
             }
             let best = null;
-            for (let k = 0; k < 16; k += 1) {
+            if (credit) {
+                // 曲名写在玻璃正中偏上，歌手写在它下面
+                const above = credit === 'artist' ? placed.findLast(p => p.line.credits === 'title') : null;
+                const x0 = (W - width) / 2;
+                const y0 = above ? above.box[3] + H * 0.03 : H * 0.4 - height / 2;
+                best = { box: [x0, y0, x0 + width, y0 + height], cost: 0 };
+            }
+            for (let k = 0; k < (credit ? 0 : 16); k += 1) {
                 const x0 = safe[0] + random() * Math.max(1, safe[2] - safe[0] - width);
                 const y0 = safe[1] + random() * Math.max(1, safe[3] - safe[1] - height);
                 const box = [x0, y0, x0 + width, y0 + height];
@@ -155,10 +166,12 @@
             let back = p.end + FOG_HOLD;
             const third = placed[i + 3];
             if (third) back = Math.min(back, third.start - FOG_RETURN * 0.5);
+            const credits = placed.find(q => q.line.credits);
+            if (credits && !p.line.credits) back = Math.min(back, credits.start - FOG_RETURN - 0.2);   // 片尾开写前雾已经漫满
             for (const q of placed.slice(i + 1, i + 3)) {
                 if (overlap(p.box, q.box) > 0) back = Math.min(back, q.start - FOG_RETURN * 0.6);
             }
-            p.fogBack = Math.max(back, p.end + 0.3);
+            p.fogBack = p.line.credits ? 1e6 : Math.max(back, p.end + 0.3);   // 片尾写完一直留着
         });
         return placed;
     };
@@ -1062,7 +1075,7 @@ void main() {
         };
 
         const updateOverlay = (frame) => {
-            const next = `雾笺 · ${frame.titleOnly ? '暂无歌词' : Utils.lineCounter(frame)}`;
+            const next = `雾笺 · ${frame.titleOnly ? '暂无歌词' : frame.inCredits ? '片尾' : Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
             const text = settings().showTranslation ? resolveSupplementalText(frame.activeLine) : '';
             if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; }
@@ -1095,10 +1108,53 @@ void main() {
             };
         };
 
+        // 片尾：最后一句唱完 4 秒，前面的句子都起雾散掉，在玻璃正中手写曲名，下面小一点写歌手，写完一直留着
+        let creditsFor = null;
+        const withCredits = (frame) => {
+            const lines = frame.lines;
+            if (frame.titleOnly || !lines?.length) return frame;
+            const title = String(frame.track?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg|aac|ape|opus)$/i, '').trim();
+            const artist = String(frame.track?.artist || '').trim();
+            if (!readableText(title)) return frame;
+            const duration = frame.duration > 0 ? frame.duration : 0;
+            if (creditsFor?.source !== lines || creditsFor.title !== title || creditsFor.artist !== artist || creditsFor.duration !== Math.round(duration)) {
+                const lastEnd = Math.max(...lines.map(l => Math.max(l.endTime || 0, l.vocalEndTime || 0, l.startTime || 0)));
+                let at = lastEnd + 4;
+                if (duration) at = Math.min(at, Math.max(lastEnd + 1, duration - 8));
+                const tail = duration ? Math.max(duration, at + 30) : at + 600;
+                const make = (text, from, step, kind) => {
+                    const chars = Runtime.splitGraphemes(text);
+                    let k = 0;
+                    const words = chars.map((c) => { const st = from + k * step; if (c.trim()) k += 1; return { text: c, startTime: st, endTime: st + step }; });
+                    return { line: { time: from, endTime: tail, original: text, translation: '', words, credits: kind }, end: from + k * step };
+                };
+                const head = make(title, at, 0.32, 'title');
+                const extra = [head.line];
+                if (readableText(artist) && artist !== title) extra.push(make(artist, head.end + 0.3, 0.2, 'artist').line);
+                const normal = Runtime.normalizeLines(extra).map((l, i) => ({ ...l, credits: extra[i].credits }));
+                creditsFor = { source: lines, title, artist, duration: Math.round(duration), at, lines: [...lines, ...normal], extra: normal };
+            }
+            const t = frame.playbackTime || 0;
+            if (t < creditsFor.at) return { ...frame, lines: creditsFor.lines };
+            let k = -1;
+            creditsFor.extra.forEach((l, i) => { if (t >= l.startTime) k = i; });
+            const line = k >= 0 ? creditsFor.extra[k] : null;
+            return {
+                ...frame,
+                ...Runtime.resolveWordState(line, t),
+                lines: creditsFor.lines,
+                currentLineIndex: line ? creditsFor.lines.length - creditsFor.extra.length + k : -1,
+                activeLine: line,
+                lineProgress: 1,
+                inCredits: true
+            };
+        };
+
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
             frame = Utils.withPlainLyrics(frame);   // 只有纯文本歌词时按时长铺开
             frame = titleOnGlass(frame);
+            frame = withCredits(frame);
             latestFrame = frame;
             if (!colours) readColours();
             ensurePlan(frame);
