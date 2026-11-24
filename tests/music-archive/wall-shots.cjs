@@ -208,6 +208,15 @@ const FAKE = ({ n, light, covers }) => {
   await page.waitForTimeout(1500);
   await shot(tag + '-8-grid-scrolled');
   {
+    const sk = await page.evaluate(() => { const k = document.querySelector('.ag-sticky'); return { hidden: k.hidden, name: k.children[0].textContent, no: k.children[2].textContent }; });
+    await page.evaluate(() => document.querySelector('.ag-scroll').scrollBy(0, 700));
+    await page.waitForTimeout(120);
+    const sk2 = await page.evaluate(() => { const k = document.querySelector('.ag-sticky'); return { hidden: k.hidden, name: k.children[0].textContent, no: k.children[2].textContent, roll: k.className }; });
+    check('网格吸顶题头带编号、换节时卷动', !sk.hidden && /^\d\d \/ \d\d$/.test(sk.no) && (sk2.name === sk.name || /ag-roll-up/.test(sk2.roll)), JSON.stringify({ sk, sk2 }));
+    await shot(tag + '-8d-grid-sticky-roll');
+    await page.waitForTimeout(500);
+  }
+  {
     const g0 = await page.evaluate(() => { const b = document.querySelector('.ag-locate'); return b ? { hidden: b.hidden, away: b.classList.contains('is-away') } : null; });
     await page.evaluate(() => { const sc = document.querySelector('.ag-scroll'); sc.scrollTop = sc.scrollHeight; });
     await page.waitForTimeout(500);

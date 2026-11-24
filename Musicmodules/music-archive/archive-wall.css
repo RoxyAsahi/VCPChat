@@ -355,8 +355,19 @@ body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel > *
 .ag-head i { position: absolute; left: 0; right: 0; bottom: 4px; height: 1.5px; background: color-mix(in srgb, var(--ar-ink) 26%, transparent); }
 .ag-sticky { position: absolute; left: 0; right: 8px; top: 0; height: 34px; display: flex; align-items: center; gap: 12px; padding: 0 2px; background: linear-gradient(180deg, var(--ar-paper) 78%, rgba(var(--ar-paper-rgb), 0)); height: 40px; pointer-events: none; z-index: 2; }
 .ag-sticky[hidden] { display: none; }
-.ag-sticky b { font-size: 15px; font-weight: 600; color: var(--ar-ink); }
-.ag-sticky span { font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); color: var(--ar-muted); }
+.ag-sticky b { font-size: 19px; font-weight: 800; letter-spacing: -.03em; color: var(--ar-ink); max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-sticky span { font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .6px; color: var(--ar-muted); }
+/* 和节题头同一套：强调色的「第几节 / 共几节」，底下一条结构细线 */
+.ag-sticky em { font: 600 11px/1 var(--mt-font-mono, ui-monospace, monospace); font-style: normal; letter-spacing: .8px; color: var(--ar-accent-text, var(--ar-accent)); }
+.ag-sticky i { position: absolute; left: 0; right: 0; bottom: 6px; height: 1px; background: color-mix(in srgb, var(--ar-ink) 16%, transparent); }
+.ag-sticky:not([hidden]) { animation: aw-fade .2s var(--mt-ease, ease) backwards; }
+.ag-sticky.ag-roll-up > :is(b, span, em) { animation: ag-roll-up .32s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) backwards; }
+.ag-sticky.ag-roll-down > :is(b, span, em) { animation: ag-roll-down .32s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) backwards; }
+.ag-sticky > span { animation-delay: 30ms !important; }
+.ag-sticky > em { animation-delay: 60ms !important; }
+@keyframes ag-roll-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes ag-roll-down { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+body.music-reduce-motion .ag-sticky, body.music-reduce-motion .ag-sticky > * { animation: none !important; }
 .ag-cell { cursor: pointer; }
 .ag-art { position: relative; aspect-ratio: 1; overflow: hidden; background: linear-gradient(145deg, hsl(var(--aw-h, 200) 44% 62%), hsl(calc(var(--aw-h, 200) + 52) 40% 22%)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 10%, transparent), 0 1px 2px rgba(0, 0, 0, .08); transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter .22s var(--mt-ease, ease); }
 /* 顶上一抹高光（悬停、选中时） */

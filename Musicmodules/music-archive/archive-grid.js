@@ -23,7 +23,7 @@
         el.hidden = true;
         el.setAttribute('role', 'grid');
         el.setAttribute('aria-label', '分节网格');
-        el.innerHTML = '<div class="ag-scroll"><div class="ag-content"></div></div><div class="ag-sticky" aria-hidden="true"><b></b><span></span></div><div class="ag-empty" hidden>这一组还没有曲目</div>';
+        el.innerHTML = '<div class="ag-scroll"><div class="ag-content"></div></div><div class="ag-sticky" aria-hidden="true"><b></b><span></span><em></em><i></i></div><div class="ag-empty" hidden>这一组还没有曲目</div>';
         const scroller = el.querySelector('.ag-scroll');
         const content = el.querySelector('.ag-content');
         const sticky = el.querySelector('.ag-sticky');
@@ -240,9 +240,17 @@
                 const headVisible = r.type === 'head' && r.y > top - 4;
                 sticky.hidden = headVisible || top < 4;
                 if (!sticky.hidden && sticky.dataset.s !== String(r.s)) {
+                    // 换节：节名从滚动方向那边卷进来（往下滚从下面上来，往上滚从上面下来），编号跟着换
+                    const prev = Number(sticky.dataset.s);
                     sticky.dataset.s = String(r.s);
-                    sticky.firstChild.textContent = sec.name;
-                    sticky.lastChild.textContent = sec.ids.length + ' 首';
+                    sticky.children[0].textContent = sec.name;
+                    sticky.children[1].textContent = sec.ids.length + ' 首';
+                    sticky.children[2].textContent = String(r.s + 1).padStart(2, '0') + ' / ' + String(st.secs.length).padStart(2, '0');
+                    if (!reduced() && Number.isFinite(prev)) {
+                        sticky.classList.remove('ag-roll-up', 'ag-roll-down');
+                        void sticky.offsetWidth;
+                        sticky.classList.add(r.s > prev ? 'ag-roll-up' : 'ag-roll-down');
+                    }
                 }
             } else sticky.hidden = true;
             st.revealOk = !reduced();
