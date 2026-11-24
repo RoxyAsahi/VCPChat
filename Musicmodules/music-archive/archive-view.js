@@ -13,6 +13,8 @@
     const Model = global.MusicArchiveModel;
     const SceneLib = global.MusicArchiveScene;
     const VIEW_KEY = 'musicArchiveView';
+    const LAYOUT_KEY = 'musicArchiveLayout';   // 档案页里用哪种视图：array（3D 档案阵列）/ wall（封面墙）/ grid（分节网格）
+    const LAYOUTS = ['array', 'wall', 'table', 'grid'];
     const DESIGN_W = 1920, DESIGN_H = 1080;
     // 窗口再矮，界面也不缩到这个比例以下（小字 11px 缩完还有 10px 左右）；矮窗口改成少显示，不是缩小
     const MIN_SCALE = 0.9;
@@ -28,14 +30,18 @@
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
+        <div class="archive-grain" data-ref="grain" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
+        <div class="archive-keys" data-ref="keys" role="dialog" aria-label="快捷键" hidden><div class="archive-keys-head"><span class="archive-tiny">KEYS</span><b>快捷键</b><button type="button" data-act="keys" aria-label="关闭">×</button></div><dl><dt>↑ ↓</dt><dd>上一首 / 下一首</dd><dt>← →</dt><dd>换一组</dd><dt>PgUp PgDn</dt><dd>跳 10 首</dd><dt>Home End</dt><dd>这一组的第一首 / 最后一首</dd><dt>Enter</dt><dd>播放选中（Shift+Enter 直接进舞台）</dd><dt>空格</dt><dd>播放 / 暂停</dd><dt>/ 或直接打字</dt><dd>检索</dd><dt>Ctrl+L</dt><dd>回到正在播放</dd><dt>Shift+R</dt><dd>随机抽取</dd><dt>Shift+F10</dt><dd>选中曲目的菜单</dd><dt>Esc</dt><dd>收起 / 停下</dd></dl><p class="archive-keys-wall">封面墙 / 网格里：方向键按位置走，单击展开大卡、双击播放，PgUp PgDn 在网格里翻页，拖动或滚轮平移</p><p>再按 ? 或 Esc 关闭</p></div>
         <div class="archive-hud" data-ref="hud">
             <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
+                <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option></select></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
+                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
             <div class="archive-empty" role="status">
@@ -46,7 +52,7 @@
                 <button type="button" data-act="add-cloud">从云端导入 <span aria-hidden="true">→</span></button>
             </div>
             <div class="archive-bottom">
-                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
+                <div class="archive-counter"><div class="archive-lanes" data-ref="lanes"><button type="button" data-act="lane-prev" title="上一组（←）" aria-label="上一组">←</button><button type="button" class="archive-lanes-name" data-act="list" title="打开目录，看全部分组"><span class="archive-tiny" data-ref="laneN"></span><b data-ref="laneName"></b></button><button type="button" data-act="lane-next" title="下一组（→）" aria-label="下一组">→</button></div><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
                 <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
@@ -79,8 +85,10 @@
             row: 0,
             playedLane: 0,           // 最近一次从哪一列开始播放
             mode: 'archive',
+            layout: 'array',
             scene: null,
             raf: 0,
+            wait: 0,                 // 低帧率时两帧之间用定时器等，不每个显示帧都醒一次
             lastDraw: 0,
             activity: { animated: true, idle: false },
             destroyed: false,
@@ -281,8 +289,8 @@
             const byPath = pathIndex();
             return mix.map((t) => byPath.get(Model.normalizePath(t && t.path))).filter((i) => i !== undefined);
         };
-        // 每日推荐跨天会换：日期也算进列的指纹
-        const dailyKey = () => (typeof app.dailyMix === 'function' ? new Date().toISOString().slice(0, 10) : '');
+        // 每日推荐跨天、换一批都会换：批号也算进列的指纹
+        const dailyKey = () => (typeof app.dailyMix !== 'function' ? '' : typeof app.dailyMixKey === 'function' ? app.dailyMixKey() : new Date().toISOString().slice(0, 10));
         const columnsKey = () => dailyKey() + '\n' + sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
         const buildColumns = (prepared = null) => {
             const out = prepared && prepared.cols && prepared.colsKey === columnsKey() && prepared.index === searchIndex ? prepared.cols : computeColumns(searchIndex);
@@ -368,8 +376,110 @@
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
+            renderRuler(col, count, r);
+            renderLanes(col);
             syncCard();
+            flat()?.sync();
         };
+
+        /*
+         * 索引标尺（借鉴 RhinE 档案页阵列下方的刻度尺）：一组里的曲目摊成一排细刻线，
+         * 多于刻线数时每根代表相等的一段；当前位置是一根高的强调色刻线。
+         * 悬停在上面显示那一格的曲名，按住左右拖动一路选过去，松手停下；两头的 ↑ ↓ 逐首走。
+         */
+        /* 分组切换（借鉴 RhinE 阵列下方的「← SHELF 04 / 31  名称 →」）：目录收起时也知道自己在哪一组、能换组 */
+        const renderLanes = (col) => {
+            const n = state.columns.length;
+            if (!refs.lanes) return;
+            refs.lanes.hidden = n < 2;
+            if (n < 2) return;
+            const d = Math.max(2, String(n).length);
+            refs.laneN.textContent = `组 ${pad(Model.wrap(state.lane, n) + 1, d)} / ${pad(n, d)}`;
+            refs.laneName.textContent = col.name || '';
+        };
+        const RULER_TICKS = 32;
+        let rulerKey = '';
+        const rulerTicks = (count) => Math.min(count, RULER_TICKS);
+        const renderRuler = (col, count, r) => {
+            const el = refs.ruler;
+            if (!el) return;
+            el.hidden = count < 2;
+            if (count < 2) return;
+            const n = rulerTicks(count);
+            const key = col.id + ':' + count;
+            if (key !== rulerKey) {
+                rulerKey = key;
+                refs.rulerTrack.style.setProperty('--ticks', n);
+                // 刻线用真元素画：HUD 整体缩放后，1px 的重复渐变会有几根被吃掉
+                refs.rulerTrack.querySelectorAll('.archive-ruler-tick').forEach((x) => x.remove());
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < n; i++) { const t = document.createElement('s'); t.className = 'archive-ruler-tick'; t.style.left = ((i + 0.5) / n * 100).toFixed(3) + '%'; frag.appendChild(t); }
+                refs.rulerTrack.insertBefore(frag, refs.rulerAt);
+                refs.rulerTrack.setAttribute('aria-valuemin', '1');
+                refs.rulerTrack.setAttribute('aria-valuemax', String(count));
+            }
+            // 刻线 i 管 [i*count/n, (i+1)*count/n) 这几首；位置线按所在那一段的中点放
+            const tick = Math.min(n - 1, Math.floor(r * n / count));
+            refs.rulerAt.style.setProperty('--at', ((tick + 0.5) / n).toFixed(4));
+            refs.rulerTrack.setAttribute('aria-valuenow', String(r + 1));
+        };
+        const rulerRowAt = (clientX) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (count < 2) return -1;
+            const box = refs.rulerTrack.getBoundingClientRect();
+            const f = Math.min(0.9999, Math.max(0, (clientX - box.left) / Math.max(1, box.width)));
+            const n = rulerTicks(count);
+            const tick = Math.floor(f * n);
+            // 一根刻线代表好几首时，按刻线内的位置细分，拖动时能走到每一首
+            return Math.min(count - 1, Math.floor((tick + (f * n - tick)) * count / n));
+        };
+        const rulerTipAt = (clientX) => {
+            const row = rulerRowAt(clientX);
+            const col = column();
+            const t = row >= 0 && col ? tracks()[col.items[row]] : null;
+            if (!t) { refs.rulerTip.classList.remove('on'); refs.rulerTrack.classList.remove('hovering'); return; }
+            // 悬停的那一格先亮一根细线（借鉴 RhinE 刻度尺的 hoverTick），松手或点下去才真的选过去
+            const hn = rulerTicks(col.items.length);
+            refs.rulerTrack.style.setProperty('--hover', ((Math.min(hn - 1, Math.floor(row * hn / col.items.length)) + 0.5) / hn).toFixed(4));
+            refs.rulerTrack.classList.add('hovering');
+            const box = refs.rulerTrack.getBoundingClientRect();
+            refs.rulerTip.textContent = pad(row + 1, Math.max(2, String(col.items.length).length)) + '  ' + (Model.stripExtension(t.title) || '未知标题');
+            // HUD 整体按设计稿缩放过：屏幕像素换回标尺自己的像素
+            const k = refs.rulerTrack.offsetWidth / Math.max(1, box.width);
+            refs.rulerTip.style.left = Math.round(Math.min(box.width, Math.max(0, clientX - box.left)) * k) + 'px';
+            refs.rulerTip.classList.add('on');
+        };
+        const bindRuler = () => {
+            const track = refs.rulerTrack;
+            if (!track) return;
+            let dragging = false;
+            track.addEventListener('pointermove', (e) => {
+                rulerTipAt(e.clientX);
+                if (dragging) { const row = rulerRowAt(e.clientX); if (row >= 0) goRow(row, { pulse: false }); }
+            });
+            track.addEventListener('pointerleave', () => { if (!dragging) { refs.rulerTip.classList.remove('on'); track.classList.remove('hovering'); } });
+            track.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                dragging = true;
+                track.setPointerCapture?.(e.pointerId);
+                track.classList.add('drag');
+                stopInertia();
+                const row = rulerRowAt(e.clientX);
+                if (row >= 0) goRow(row);
+            });
+            const end = (e) => {
+                if (!dragging) return;
+                dragging = false;
+                track.classList.remove('drag');
+                track.releasePointerCapture?.(e.pointerId);
+                if (e.type === 'pointercancel' || !track.matches(':hover')) refs.rulerTip.classList.remove('on');
+            };
+            track.addEventListener('pointerup', end);
+            track.addEventListener('pointercancel', end);
+        };
+
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
         const fileNumber = (t, index) => {
@@ -409,6 +519,7 @@
                     capped(state.coverCache, url, { img, ok: true }, 64);
                     const t = selectedTrack();
                     if (t && !t.albumArt && dirOf(t) === dir) syncCard();
+                    flat()?.coverFound();
                 };
                 img.onerror = next;
                 img.src = url;
@@ -458,6 +569,31 @@
             capped(state.coverCache, url, entry, 64);
         };
         let cardExpanded = true;
+        /*
+         * 借鉴 RhinE「鼠标不动、档案在它下面移动后重新找一次指着的那张」：键盘、标尺、滚轮换了选中后，
+         * 镜头停稳时按鼠标最后的位置重新判一次悬停，高亮不会还挂在原来那张卡上。只改悬停和光标，不弹提示。
+         */
+        let lastPtr = null, rehoverTimer = 0;
+        let picking = false;   // 随机抽取正在跑（pick 在后面才声明，select 里用这个）
+        const rehover = () => {
+            rehoverTimer = 0;
+            const sc = state.scene;
+            if (!lastPtr || !sc || !sc.canvas || wheelBrowsing || turning || (plane && plane.active)) return;
+            const rect = sc.canvas.getBoundingClientRect();
+            const d = sc.detailRect && sc.detailRect();
+            const x = lastPtr.x - rect.left, y = lastPtr.y - rect.top;
+            if (d && x >= d.left && x <= d.right && y >= d.top && y <= d.bottom) return;
+            const c = sc.pick(lastPtr.x, lastPtr.y, rect);
+            sc.setHover(c);
+            const browsing = !cardExpanded && !sc.detail;
+            sc.canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
+            kick();
+        };
+        const rehoverSoon = () => {
+            if (!lastPtr) return;
+            clearTimeout(rehoverTimer);
+            rehoverTimer = setTimeout(rehover, reducedMotion() ? 0 : 420);
+        };
         let wheelBrowsing = false;
         const syncCard = () => {
             if (!state.scene || state.destroyed) return;
@@ -517,9 +653,12 @@
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
-            syncList();
+            // 随机抽取跑着时左侧目录先不跟（借鉴 RhinE：抽取途中资料面板不动，落定才显示）：
+            // 每一跳都换分组、滚列表又费又晃，停下或被打断时再一次对齐
+            if (!picking) syncList();
             schedulePlace();
             kick();
+            rehoverSoon();
         };
 
         /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
@@ -618,6 +757,7 @@
             if (queueEl) queueEl.hidden = !tracks()[app.currentTrackIndex];
             // 跟着在听：选中停在正在放的那首时，播放器换到下一首（自动接下一首、底栏的上一首/下一首），
             // 选中和目录跟过去，歌词面板留着；在看别的歌时不打扰
+            flat()?.sync();
             const prevPlaying = state.playingIndex;
             state.playingIndex = app.currentTrackIndex;
             if (prevPlaying !== undefined && prevPlaying !== app.currentTrackIndex
@@ -775,6 +915,10 @@
 
         let list = null;
         let lyrics = null;
+        let wall = null;            // 封面墙（archive-wall.js），没有那个文件时只有档案阵列
+        let grid = null;            // 分节网格（archive-grid.js）
+        let table = null;           // 平放（封面墙倒下去的那一版）
+        const flat = () => (state.layout === 'wall' ? wall : state.layout === 'table' ? table : state.layout === 'grid' ? grid : null);
         const wantLyrics = (on) => {
             on = Boolean(on);
             if (on === Boolean(state.lyricsOn)) return;
@@ -849,6 +993,80 @@
             if (selectedIndex() !== i) return;
             playSelected(playback);
         };
+        /*
+         * 随机抽取：选择框先跨列跑过去，再沿列往下走、越走越慢，停在随机的一首上，取出并播放。
+         * 跑的途中用户任何操作（按键、点击、滚轮）都会停下，停在当时那一格，不播放。
+         * 降低动态时直接落到那一首。
+         */
+        const pick = { timers: [], on: false };
+        const pickStop = () => {
+            if (!pick.on) return;
+            pick.on = false;
+            picking = false;
+            pick.timers.forEach(clearTimeout);
+            pick.timers = [];
+            refs.pickBtn?.classList.remove('running');
+            setCardExpanded(true);
+            syncList();
+        };
+        const randomPick = () => {
+            if (pick.on || !state.columns.length) return;
+            const order = libraryOrder();
+            const cur = selectedIndex();
+            const pool = order.length > 1 ? order.filter((i) => i !== cur) : order;
+            if (!pool.length) return;
+            const target = pool[Math.floor(Math.random() * pool.length)];
+            const n = state.columns.length;
+            const at = Model.locate(state.columns, target, Model.wrap(state.lane, n));
+            if (!at) return;
+            const lane1 = at.lane + n * Math.round((state.lane - at.lane) / n);
+            const m = state.columns[at.lane].items.length;
+            // 先算出到那一列时会停在第几行（换列会回到记住的位置），再从那里往目标走
+            const remembered = focusByColumn.get(state.columns[at.lane].id);
+            const startRow = lane1 === state.lane ? state.row
+                : remembered !== undefined ? remembered + m * Math.round((state.row - remembered) / m) : state.row;
+            const row1 = at.row + m * Math.round((startRow - at.row) / m);
+            const steps = [];
+            let t = 0;
+            if (reducedMotion()) {
+                steps.push({ t, lane: lane1, row: row1 });
+            } else {
+                const dl = lane1 - state.lane, hops = Math.min(Math.abs(dl), 8);
+                for (let h = 1; h <= hops; h++) steps.push({ t: t += 110, lane: state.lane + Math.round(dl * h / hops), row: null });
+                const dr = row1 - startRow, N = Math.min(Math.abs(dr), 12);
+                let last = startRow;
+                for (let j = 1; j <= N; j++) {
+                    const r = startRow + Math.round(dr * (1 - Math.pow(1 - j / N, 2))); // 缓出：最后几步最短、最慢
+                    if (r === last) continue;
+                    steps.push({ t: t += 60 + 240 * Math.pow(j / N, 2), lane: lane1, row: r });
+                    last = r;
+                }
+                if (last !== row1 || !steps.length) steps.push({ t: t += 100, lane: lane1, row: row1 });
+            }
+            pick.on = true;
+            picking = true;
+            refs.pickBtn?.classList.add('running');
+            setCardExpanded(false);
+            for (const s of steps) {
+                pick.timers.push(setTimeout(() => {
+                    if (!pick.on || state.destroyed) return;
+                    if (s.row === null) stepLane(s.lane - state.lane);
+                    else select(s.lane, s.row);
+                    state.scene?.touch?.();
+                }, s.t));
+            }
+            pick.timers.push(setTimeout(() => {
+                if (!pick.on || state.destroyed) return;
+                pick.on = false;
+                picking = false;
+                pick.timers = [];
+                refs.pickBtn?.classList.remove('running');
+                if (selectedIndex() !== target) select(lane1, row1);
+                syncList();
+                setCardExpanded(true);
+                playSelected();
+            }, t + (reducedMotion() ? 0 : 450)));
+        };
         /* 底部显示正在放的这一组（队列）叫什么 */
         const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
@@ -897,8 +1115,10 @@
         // 进播放页的过场里（music-stage-entering，最多 1.1 秒）舞台还没盖上来，继续画让选中卡的上浮看得见；
         // 开场动画（music-intro-playing）是一层不透明全屏层，期间不画
         let enteringSince = 0;
+        let layoutJob = null;     // 换视图过场里「盖上」那一段：{ layout }，盖满时换成它（见 sweepToLayout）
         const renderAllowed = () => {
-            if (!isShown() || state.destroyed || document.hidden) return false;
+            // 换视图的纸正在盖上来时，3D 阵列停在最后一帧不再画，把这几帧让给过场
+            if (!isShown() || state.destroyed || document.hidden || state.layout !== 'array' || layoutJob) return false;
             const body = document.body.classList;
             if (body.contains('music-intro-playing')) return false;
             if (!body.contains('music-stage-active')) return true;
@@ -921,7 +1141,12 @@
                 if (dataChanged()) rebuildSoon();
                 updatePlaying(true);
                 kick();
+                flat()?.show(true);
+                syncWallRoom();
             } else {
+                wall?.show(false);
+                table?.show(false);
+                grid?.show(false);
                 if (!app.isStageActive) originalCreateAmbient?.();
                 app.visualizerCanvas && (app.visualizerCanvas.width = app.visualizerCanvas.clientWidth);
             }
@@ -1043,6 +1268,7 @@
         };
         // 用目录、歌词和设置抽屉之间的可用空间给抽出的卡片构图。
         const syncSceneLayout = () => {
+            syncWallRoom();
             const scene = state.scene;
             if (!scene || !isShown()) return;
             const sc = hudScale(root.clientHeight || global.innerHeight);
@@ -1083,9 +1309,16 @@
                 state.lastDraw = now;
                 state.activity = state.scene.step(now);
             }
-            if (state.activity.animated || state.scene.dirty) state.raf = requestAnimationFrame(frame);
+            if (!state.activity.animated && !state.scene.dirty) return;
+            // 12 帧待机（或 30 帧档）时，下一帧还早就先睡到快到点再要显示帧，
+            // 免得 60/144Hz 屏上每个显示帧都把页面叫醒一次只为了判断「还没到」。
+            const wait = aim ? aim - (now - state.lastDraw) : 0;
+            if (!state.scene.dirty && wait > 20) state.wait = setTimeout(wake, wait - 8);
+            else state.raf = requestAnimationFrame(frame);
         };
+        const wake = () => { state.wait = 0; kick(); };
         const kick = () => {
+            if (state.wait) { clearTimeout(state.wait); state.wait = 0; }
             if (!state.raf && shouldRender()) state.raf = requestAnimationFrame(frame);
         };
 
@@ -1106,15 +1339,107 @@
         };
         let turned = false;
         let canvasPlayIndex = -1;
+        /*
+         * 按住空白处拖动整片档案，松手后带惯性滑行、再吸附到最近的一张卡。
+         * 照参考播放器 SceneDrag.cpp：移动超过 10 像素才算拖；释放速度取最近 120 毫秒的采样，
+         * 反向移动时重新取样，松手前 80 毫秒没动就不带速度；滑行摩擦 2.4，速度低于 0.6 格/秒
+         * 时按「当前位置 + 速度/摩擦」取最近的格子，用 10 的弹簧吸过去；起手速度低于 0.75 直接吸附。
+         */
+        let plane = null;        // 按住中：{ x0, y0, lane0, row0, inv, active, samples, dir, lastMove, pointerId }
+        let momentum = null;     // 松手后：{ lane: {v, vel, phase, target}, row: {...}, t }
+        let momentumRaf = 0;
+        const nearestCell = (lane, row) => [Math.floor(lane + 0.5), Math.floor(row + 0.5)];
+        const followPlane = (lane, row, vl = 0, vr = 0) => {
+            state.scene?.hold(lane, row, vl, vr);
+            const [l, r] = nearestCell(lane, row);
+            if (l !== state.lane || r !== state.row) select(l, r, { pulse: false });
+            kick();
+        };
+        const stopMomentum = () => {
+            if (momentumRaf) cancelAnimationFrame(momentumRaf);
+            momentumRaf = 0;
+            if (!momentum) return;
+            momentum = null;
+            state.scene?.unhold();
+            kick();
+        };
+        const axisStart = (v, vel) => ({ v, vel, phase: Math.abs(vel) >= 0.75 ? 'coast' : 'snap', target: Math.floor(v + 0.5) });
+        const axisStep = (a, dt, coasting) => {
+            const FRICTION = 2.4;
+            if (coasting) {
+                const decay = Math.exp(-FRICTION * dt);
+                a.v += a.vel * (1 - decay) / FRICTION;
+                a.vel *= decay;
+                if (Math.abs(a.vel) < 0.6) { a.target = Math.floor(a.v + a.vel / FRICTION + 0.5); a.phase = 'snap'; }
+            } else if (a.phase === 'snap') {
+                const rate = 10, d = a.v - a.target, imp = a.vel + rate * d, dec = Math.exp(-rate * dt);
+                a.v = a.target + (d + imp * dt) * dec;
+                a.vel = (a.vel - rate * imp * dt) * dec;
+                if (Math.abs(a.v - a.target) < 0.0001 && Math.abs(a.vel) < 0.005) { a.v = a.target; a.vel = 0; a.phase = 'idle'; }
+            }
+        };
+        const coast = (now) => {
+            momentumRaf = 0;
+            if (!momentum || state.destroyed || !isShown()) { stopMomentum(); return; }
+            const dt = Math.min(0.25, Math.max(0, (now - momentum.t) / 1000));
+            momentum.t = now;
+            const coasting = momentum.lane.phase === 'coast' || momentum.row.phase === 'coast';
+            axisStep(momentum.lane, dt, coasting);
+            axisStep(momentum.row, dt, coasting);
+            followPlane(momentum.lane.v, momentum.row.v, momentum.lane.vel, momentum.row.vel);
+            if (momentum.lane.phase === 'idle' && momentum.row.phase === 'idle') { stopMomentum(); return; }
+            momentumRaf = requestAnimationFrame(coast);
+        };
+        const releaseVelocity = (p, t) => {
+            const S = p.samples;
+            if (reducedMotion() || !S.length || t - p.lastMove > 80) return [0, 0];
+            const a = S[0], b = S[S.length - 1];
+            if (b.t - a.t < 8) return [0, 0];
+            const k = 1000 / (b.t - a.t);
+            return [(b.lane - a.lane) * k, (b.row - a.row) * k];
+        };
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
+                lastPtr = { x: e.clientX, y: e.clientY };
                 const rect = canvas.getBoundingClientRect();
-                state.scene?.setPointer((e.clientX - rect.left) / rect.width * 2 - 1, (e.clientY - rect.top) / rect.height * 2 - 1);
+                state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
+                if (plane && (e.buttons & 1)) {
+                    const dx = e.clientX - plane.x0, dy = e.clientY - plane.y0;
+                    if (!plane.active && Math.hypot(dx, dy) < 10) return;
+                    if (!plane.active) {
+                        if (!plane.inv) { plane = null; return; }
+                        plane.active = true;
+                        turned = true;   // 拖过就不再当成点击
+                        pendingPick = null;
+                        state.scene?.setHover(null);
+                        showTip(null);
+                        try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
+                        canvas.style.cursor = 'grabbing';
+                    }
+                    const k = plane.scale;
+                    const px = dx * k, py = dy * k;
+                    // 卡片跟着指针走，镜头往反方向退
+                    const lane = plane.lane0 - (px * plane.inv.a + py * plane.inv.b);
+                    const row = plane.row0 - (px * plane.inv.c + py * plane.inv.d);
+                    const t = e.timeStamp;
+                    const mx = e.clientX - plane.px, my = e.clientY - plane.py;
+                    if (Math.hypot(mx, my) > 1e-9) {
+                        if (mx * plane.dir[0] + my * plane.dir[1] < 0) plane.samples = plane.samples.slice(-1);
+                        plane.dir = [mx, my];
+                        plane.lastMove = t;
+                    }
+                    plane.px = e.clientX; plane.py = e.clientY;
+                    const last = plane.samples[plane.samples.length - 1];
+                    if (last && last.t === t) { last.lane = lane; last.row = row; } else plane.samples.push({ lane, row, t });
+                    plane.samples = plane.samples.filter((p) => t - p.t <= 120).slice(-32);
+                    followPlane(lane, row);
+                    return;
+                }
                 if (turning) {
                     const dx = e.clientX - turning.x;
                     turning.x = e.clientX;
                     if (Math.abs(e.clientX - turning.x0) > 4) turned = true;
-                    state.scene?.turn(dx * 0.006);
+                    state.scene?.turn(dx * 0.004);   // 参考播放器每像素 0.004 弧度
                     kick();
                     return;
                 }
@@ -1133,12 +1458,14 @@
                         const c = state.scene.pick(pendingPick.x, pendingPick.y, pendingPick.rect);
                         state.scene.setHover(c);
                         showTip(c, pendingPick);
-                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : '';
+                        // 卡上是手指；卡已放回时空白处显示「可抓」，提示能按住拖动整片档案（参考播放器 m_cursor = "grab"）
+                        const browsing = !cardExpanded && !state.scene.detail;
+                        canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
                     });
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { lastPtr = null; clearTimeout(rehoverTimer); pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
@@ -1147,6 +1474,26 @@
             };
             canvas.addEventListener('pointerdown', (e) => {
                 turned = false;
+                if (e.button === 0 && !onDetailCard(e)) {
+                    // 滑行中按下：停住（这次按下不算点击），并从停住的位置开始新一次拖动
+                    if (momentum) { turned = true; stopMomentum(); }
+                    plane = null;
+                    if (cardExpanded || wheelBrowsing || !state.scene || state.scene.detail) return;
+                    const ax = state.scene.dragAxes();
+                    const det = ax.lane.x * ax.row.y - ax.row.x * ax.lane.y;
+                    const area = Math.hypot(ax.lane.x, ax.lane.y) * Math.hypot(ax.row.x, ax.row.y);
+                    const cam = state.scene.camAt();
+                    const rect = canvas.getBoundingClientRect();
+                    plane = {
+                        x0: e.clientX, y0: e.clientY, px: e.clientX, py: e.clientY,
+                        lane0: cam.lane, row0: cam.row, active: false,
+                        scale: rect.width ? canvas.clientWidth / rect.width : 1,
+                        inv: Number.isFinite(area) && area > 0 && Math.abs(det) > area * 0.001
+                            ? { a: ax.row.y / det, b: -ax.row.x / det, c: -ax.lane.y / det, d: ax.lane.x / det } : null,
+                        samples: [{ lane: cam.lane, row: cam.row, t: e.timeStamp }], dir: [0, 0], lastMove: -1e9
+                    };
+                    return;
+                }
                 if (e.button !== 0 || !onDetailCard(e)) return;
                 turning = { x: e.clientX, x0: e.clientX };
                 try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 拿不到捕获也能拖 */ }
@@ -1159,8 +1506,19 @@
                 canvas.style.cursor = '';
                 kick();
             };
-            canvas.addEventListener('pointerup', endTurn);
-            canvas.addEventListener('pointercancel', endTurn);
+            const endPlane = (e, cancelled) => {
+                if (!plane) return;
+                const p = plane;
+                plane = null;
+                canvas.style.cursor = '';
+                if (!p.active) return;
+                const last = p.samples[p.samples.length - 1];
+                const [vl, vr] = cancelled ? [0, 0] : releaseVelocity(p, e.timeStamp);
+                momentum = { lane: axisStart(last.lane, vl), row: axisStart(last.row, vr), t: performance.now() };
+                if (!momentumRaf) momentumRaf = requestAnimationFrame(coast);
+            };
+            canvas.addEventListener('pointerup', (e) => { endPlane(e, false); endTurn(); });
+            canvas.addEventListener('pointercancel', (e) => { endPlane(e, true); endTurn(); });
             // 点卡取出，点空白收回；两种构图都留在同一个曲库页面。
             canvas.addEventListener('click', (e) => {
                 if (e.detail > 1) return;
@@ -1207,6 +1565,7 @@
             if (!wheelBrowsing) return;
             wheelBrowsing = false;
             syncCard();
+            rehoverSoon();
         };
         const stopInertia = () => {
             inertia.stop();
@@ -1236,6 +1595,7 @@
         root.addEventListener('wheel', (e) => {
             if (e.target !== state.scene?.canvas || (!e.deltaX && !e.deltaY)) return;
             e.preventDefault();
+            if (momentum) stopMomentum();
             const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
             const delta = horizontal && !e.shiftKey ? e.deltaX : e.deltaY;
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
@@ -1260,16 +1620,43 @@
             inertiaTimer = setTimeout(releaseWheel, 160);
         }, { passive: false });
 
+        // 借鉴 RhinE「在排名上滚轮换排」：滚轮停在分组名上换组、停在标尺上逐首走，不必先挪到场景里
+        const wheelLaneName = Model.createWheel(60);
+        const wheelRuler = Model.createWheel(60);
+        const onHudWheel = (e) => {
+            const onLanes = refs.lanes && refs.lanes.contains(e.target);
+            const onRuler = !onLanes && refs.ruler && refs.ruler.contains(e.target);
+            if (!onLanes && !onRuler) return;
+            const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta) return;
+            e.preventDefault();
+            const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            const n = Model.isWheelNotch(e, global.devicePixelRatio)
+                ? Math.sign(delta)
+                : (onLanes ? wheelLaneName : wheelRuler)(delta * unit, e.timeStamp);
+            if (!n) return;
+            if (onLanes) stepLane(Math.sign(n));
+            else select(state.lane, state.row + n);
+        };
+        root.addEventListener('wheel', onHudWheel, { passive: false });
+
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
                 switch (btn.dataset.act) {
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
+                    case 'pick': randomPick(); break;
+                    case 'row-prev': select(state.lane, state.row - 1); break;
+                    case 'row-next': select(state.lane, state.row + 1); break;
+                    case 'lane-prev': stepLane(-1); break;
+                    case 'keys': toggleKeys(false); break;
+                    case 'lane-next': stepLane(1); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
                     case 'classic': setMode('classic'); break;
+                    case 'layout': setLayout(btn.dataset.layout); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
                     case 'add-cloud': document.getElementById('add-webdav-btn')?.click(); break;
                     case 'save': {
@@ -1291,15 +1678,34 @@
         root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
 
+        // 借鉴 RhinE 的按键说明：按 ? 摊开一张快捷键卡，Esc / 再按 ? / 点别处收起
+        const keysOpen = () => Boolean(refs.keys && !refs.keys.hidden);
+        const toggleKeys = (on = !keysOpen()) => {
+            if (!refs.keys) return;
+            refs.keys.hidden = !on;
+            if (on && !reducedMotion()) refs.keys.animate([{ opacity: 0, transform: 'translate(-50%, calc(-50% + 6px))' }, { opacity: 1, transform: 'translate(-50%, -50%)' }], { duration: 160, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        };
+        const onKeysOutside = (e) => { if (keysOpen() && !refs.keys.contains(e.target)) toggleKeys(false); };
+        document.addEventListener('pointerdown', onKeysOutside, true);
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
+            if (momentum && isShown()) stopMomentum();
+            if (pick.on && isShown()) { pickStop(); if (e.key === 'Escape') { e.preventDefault(); return; } }
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
             // Ctrl+L 定位当前播放（输入框里也能用）
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
+            if (keysOpen() && (e.key === 'Escape' || e.key === '?')) { e.preventDefault(); toggleKeys(false); return; }
+            if (e.key === '?') { e.preventDefault(); toggleKeys(true); return; }
             stopInertia();
+            const fl = flat();
+            if (fl && fl.on) {
+                // 封面墙 / 网格：方向键按位置走，Esc 收起展开的大卡
+                if (/^(Arrow|Page)/.test(e.key) && fl.step(e.key)) { e.preventDefault(); return; }
+                if (e.key === 'Escape' && fl.collapse()) { e.preventDefault(); return; }
+            }
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) {
                 e.preventDefault();
@@ -1313,6 +1719,7 @@
                 e.preventDefault(); playSelected({ stage: e.shiftKey }); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+            if (e.shiftKey && e.code === 'KeyR') { e.preventDefault(); randomPick(); return; }
             if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenuForSelected(); return; }
             // 直接打字：打开目录、聚焦检索框并带入这个字（不用先按 /）。
             // 输入法正在组字（isComposing / Process / 229）时不抢，让输入法把字交给它自己的输入框
@@ -1329,9 +1736,95 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        bindRuler();
+        // 随机抽取跑着时，点哪里、滚轮都先停下（抽取按钮自己除外：再点一下不会重来）
+        const onPickInterrupt = (e) => {
+            if (!pick.on) return;
+            if (e.type === 'pointerdown' && e.target && e.target.closest && e.target.closest('[data-act="pick"]')) return;
+            pickStop();
+        };
+        document.addEventListener('pointerdown', onPickInterrupt, true);
+        document.addEventListener('wheel', onPickInterrupt, { capture: true, passive: true });
         // ---------- 外部状态 ----------
-        const onResize = () => resize();
+        const onResize = () => { resize(); syncGrain(); };
         global.addEventListener('resize', onResize);
+        /*
+         * 浅色/深色切换时的扫描带（借鉴 RhinE 换色时横扫整窗的那一道扫描线）：颜色先换好，
+         * 再有一条带横向扫描线的窄带从左扫到右，右边缘是一根强调色扫描头，扫过就散。
+         * 启动时第一次定主题不扫；降低动态时不扫；窗口在后台时不扫。
+         */
+        let modeLight = document.body.classList.contains('light-theme');
+        const modeReadyAt = performance.now() + 1500;
+        let modeSweepEl = null;
+        const modeSweep = () => {
+            if (reducedMotion() || document.hidden || performance.now() < modeReadyAt) return;
+            modeSweepEl?.remove();
+            const cs = getComputedStyle(root);
+            const el = document.createElement('div');
+            el.className = 'archive-mode-sweep';
+            el.setAttribute('aria-hidden', 'true');
+            el.style.setProperty('--sweep-ink', cs.getPropertyValue('--ar-ink').trim() || 'currentColor');
+            el.style.setProperty('--sweep-accent', cs.getPropertyValue('--ar-accent').trim() || 'currentColor');
+            el.innerHTML = '<i></i>';
+            document.body.appendChild(el);
+            modeSweepEl = el;
+            const band = el.firstChild;
+            const w = global.innerWidth || 1600;
+            const bw = Math.round(Math.min(260, Math.max(160, w * 0.12)));
+            band.style.width = bw + 'px';
+            const anim = band.animate?.([{ transform: `translateX(${-bw}px)` }, { transform: `translateX(${w}px)` }],
+                { duration: Math.round(Math.min(760, 420 + w * 0.12)), easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (modeSweepEl === el) modeSweepEl = null; el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else setTimeout(done, 0);
+        };
+        const modeObserver = new MutationObserver(() => {
+            const light = document.body.classList.contains('light-theme');
+            if (light === modeLight) return;
+            modeLight = light;
+            modeSweep();
+        });
+        modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        /*
+         * 颗粒质感（借鉴 RhinE 的 grain）：一块无缝噪点小图平铺在场景上、HUD 下面，按设备像素 1:1。
+         * 深色时是白色噪点（只把黑底提亮），浅色时是黑色噪点（只把纸面压暗），平均只差两三级灰，
+         * 让大面积的纸色和黑底不那么像塑料。图只生成一次，静止不动，不占每帧开销。
+         */
+        const GRAIN_TILE = 160;
+        const grainTiles = {};
+        const grainTile = (light) => {
+            const k = light ? 'light' : 'dark';
+            if (grainTiles[k] !== undefined) return grainTiles[k];
+            let url = '';
+            try {
+                const c = document.createElement('canvas');
+                c.width = c.height = GRAIN_TILE;
+                const g = c.getContext('2d');
+                const img = g.createImageData(GRAIN_TILE, GRAIN_TILE);
+                const v = light ? 0 : 255;
+                // 固定种子：每次打开颗粒一样，不会一闪
+                let seed = 0x2f6b1d;
+                const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return ((seed >>> 0) % 100000) / 100000; };
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const r = rnd();
+                    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+                    img.data[i + 3] = Math.round(r * r * r * (light ? 13 : 11));
+                }
+                g.putImageData(img, 0, 0);
+                url = c.toDataURL('image/png');
+            } catch (e) { url = ''; }
+            grainTiles[k] = url;
+            return url;
+        };
+        const syncGrain = () => {
+            const el = refs.grain;
+            if (!el) return;
+            const url = grainTile(document.body.classList.contains('light-theme'));
+            el.style.backgroundImage = url ? `url("${url}")` : 'none';
+            el.style.backgroundSize = (GRAIN_TILE / (global.devicePixelRatio || 1)) + 'px';
+        };
+        syncGrain();
+        const grainObserver = new MutationObserver(syncGrain);
+        grainObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
@@ -1414,7 +1907,16 @@
             list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
+            clearTimeout(state.wait);
+            state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            clearTimeout(rehoverTimer);
+            document.removeEventListener('pointerdown', onKeysOutside, true);
+            grainObserver.disconnect();
+            modeObserver.disconnect(); modeSweepEl?.remove();
+            pick.timers.forEach(clearTimeout); pick.on = false;
+            document.removeEventListener('pointerdown', onPickInterrupt, true);
+            document.removeEventListener('wheel', onPickInterrupt, { capture: true });
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
@@ -1475,6 +1977,7 @@
                 onPick: (i, ctx) => {
                     goToTrack(i, ctx);
                     setCardExpanded(true);
+                    flat()?.sync({ expand: true });
                 },
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
@@ -1490,10 +1993,189 @@
         }) : null;
         loadPinyin();
 
+        // ---------- 封面墙（第二种视图） ----------
+        const WallLib = global.MusicArchiveWall;
+        /* 墙上放哪些歌：和档案阵列里这一列一样；按首字母拆开的列就是整个曲库按当前排序 */
+        const wallItems = () => {
+            const col = column();
+            if (!col) return { key: '', ids: [] };
+            const whole = col.kind === 'letter' || col.kind === 'all';
+            return whole ? { key: 'library:' + sortMode + ':' + state.sig, ids: libraryOrder(), name: '全部曲目' } : { key: col.id + ':' + state.sig, ids: col.items, name: col.name };
+        };
+        /*
+         * 墙和网格上点的那首落在哪一列：墙上放的是整个曲库时，落到它所在的首字母列；
+         * 不指定的话会落到最前面含有它的列（每日推荐、最近播放），墙就跟着换成那一组了
+         */
+        const flatContext = (i) => {
+            const col = column();
+            if (!col) return null;
+            if (col.items.includes(i)) return col.id;
+            if (col.kind !== 'letter' && col.kind !== 'all') return null;
+            const home = state.columns.find((c) => (c.kind === 'letter' || c.kind === 'all') && c.items.includes(i));
+            return home ? home.id : null;
+        };
+        const wallOpts = {
+            host: root,
+            before: refs.hud,
+            items: wallItems,
+            track: (i) => tracks()[i],
+            cover: (t) => coverOf(t, true),
+            selected: selectedIndex,
+            playing: () => ({ index: tracks()[app.currentTrackIndex] ? app.currentTrackIndex : -1, active: Boolean(app.isPlaying || app.playIntent) }),
+            meta: (t, i) => ({
+                title: (t && Model.stripExtension(t.title)) || '未知标题',
+                artist: (t && t.artist) || '',
+                album: (t && t.album) || '',
+                code: t ? fileNumber(t, i) : '',
+                duration: fmtDur(trackDuration(t))
+            }),
+            pick: (i) => {
+                goToTrack(i, flatContext(i), { pulse: false });
+                syncList();
+            },
+            play: (i, { stage = false } = {}) => playIndex(i, flatContext(i), { stage }),
+            menu: (i, x, y, restore) => {
+                if (typeof app.showContextMenu !== 'function') return;
+                app.contextMenuTrackIndex = i;
+                app.showContextMenu(x, y);
+                ListLib?.menuKeyboard?.(app, { restore: restore || refs.layouts.querySelector("[aria-pressed=\"true\"]") });
+            },
+            // 展开大卡里的进度条：读播放器上次报的时间，播放中按经过的时间往前推
+            progress: () => {
+                const d = Math.max(0, Number(app.lastKnownDuration) || 0);
+                const base = Number(app.lastKnownCurrentTime) || 0;
+                const run = app.isPlaying && app.lastStateUpdateTime && !app.isTrackLoading ? (Date.now() - app.lastStateUpdateTime) / 1000 : 0;
+                const t = Math.max(0, base + run);
+                return { t: d ? Math.min(d, t) : t, d };
+            },
+            seek: (t) => app.seekTo?.(t),
+            transport: (act) => {
+                if (act === 'toggle') { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
+                else if (act === 'prev') app.prevTrack?.();
+                else if (act === 'next') app.nextTrack?.();
+            },
+            lyrics: () => (Array.isArray(app.currentLyrics) ? app.currentLyrics : []),
+            reducedMotion
+        };
+        wall = WallLib ? WallLib.create(wallOpts) : null;
+        table = WallLib ? WallLib.create({ ...wallOpts, tilt: true }) : null;
+        if (table) table.el.addEventListener('wheel', (e) => e.stopPropagation());
+        if (wall) wall.el.addEventListener('wheel', (e) => e.stopPropagation());
+        /* 网格按节排：整个曲库时一节一个首字母列，其他列就是一节 */
+        const gridSections = () => {
+            const col = column();
+            if (!col) return { key: '', list: [] };
+            const whole = col.kind === 'letter' || col.kind === 'all';
+            if (!whole) return { key: col.id + ':' + state.sig, list: [{ id: col.id, name: col.name, ids: col.items }] };
+            const letters = state.columns.filter((c) => c.kind === 'letter');
+            const list = letters.length ? letters.map((c) => ({ id: c.id, name: c.name, ids: c.items })) : [{ id: 'all', name: '全部曲目', ids: libraryOrder() }];
+            return { key: 'library:' + sortMode + ':' + state.sig, list };
+        };
+        const GridLib = global.MusicArchiveGrid;
+        grid = GridLib && wall ? GridLib.create({
+            host: root, before: refs.hud, sections: gridSections,
+            track: (i) => tracks()[i], cover: (t) => coverOf(t, true), selected: selectedIndex,
+            playing: wallOpts.playing, meta: wallOpts.meta, pick: wallOpts.pick, play: wallOpts.play, menu: wallOpts.menu, reducedMotion
+        }) : null;
+        /* 墙只占目录、歌词、导航和页脚之间的空地：按它们实际的位置量（HUD 整体有缩放） */
+        function syncWallRoom() {
+            const fl = flat();
+            if (!fl || !fl.on) return;
+            const box = root.getBoundingClientRect();
+            const hud = refs.hud.getBoundingClientRect();
+            const listEl = list && listOpen() ? list.el : null;
+            const lr = listEl && listEl.offsetWidth ? listEl.getBoundingClientRect() : null;
+            const stacked = refs.hud.classList.contains('tiny');
+            const lyr = lyrics && !lyrics.el.hidden && state.lyricsOn ? lyrics.el.getBoundingClientRect() : null;
+            const nav = refs.nav.getBoundingClientRect();
+            // 页脚（正在播放 · 经典视图）那一行在底栏上方，墙停在它上面
+            const foot = refs.hud.querySelector('.archive-footer')?.getBoundingClientRect();
+            const gutter = Math.max(24, Math.round(hud.width * 0.022));
+            const left = lr && !stacked ? lr.right - box.left + gutter * 0.6 : gutter;
+            const right = (lyr ? lyr.left - box.left - gutter * 0.6 : hud.right - box.left - gutter);
+            const top = nav.bottom - box.top + 14;
+            const bottomEdge = foot && foot.height ? foot.top - box.top - 16 : box.height - 90;
+            const bottom = lr && stacked ? Math.min(bottomEdge, lr.top - box.top - 10) : bottomEdge;
+            fl.setRoom({ left, top, width: right - left, height: bottom - top });
+        }
+        /*
+         * 换视图的过场，分两段：
+         *   盖上：纸色面板从左边推进来把画面盖满（前缘一道强调色扫描头），旧视图一点点被遮住；
+         *   换：盖满的那一刻才真正换视图——3D 阵列重新开画、封面墙/网格建格子解封面，最重的这一两帧都在纸后面，看不到卡顿；
+         *   揭开：等两帧画完，面板往右滑走，左缘扫描头身后拖一段细扫描线，新视图从左到右露出来（封面墙/网格的格子跟着扫描线翻过来）。
+         * 盖的过程只动 transform，跑在合成线程上，主线程忙也不掉帧。连点：还没盖满就只改目标，盖满后换成最后点的那个。
+         * 降低动态、窗口在后台时直接换。
+         */
+        let layoutSweepEl = null;
+        /* 视图切换是一个下拉框（音乐窗口里的 <select> 会被 music-fluid-select 换成主程序同款的选项卡片），这里只同步它的值 */
+        const layoutSelect = refs.layouts.querySelector('.archive-layout-select');
+        const markLayoutButtons = (layout) => { if (layoutSelect && layoutSelect.value !== layout) layoutSelect.value = layout; };
+        layoutSelect?.addEventListener('change', () => setLayout(layoutSelect.value));
+        const revealSweep = (el, w) => {
+            el.classList.remove('is-covering');
+            // 纸盖着时新视图的翻入动画是暂停的（layout-holding），揭开这一刻一起放，和扫描线对得上
+            root.classList.remove('layout-holding');
+            root.classList.add('layout-revealing');
+            const anim = el.firstChild.animate?.([{ transform: 'translateX(0)' }, { transform: `translateX(${w + 90}px)` }],
+                { duration: Math.round(Math.min(720, 380 + w * 0.16)), easing: 'cubic-bezier(.5, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (layoutSweepEl === el) { layoutSweepEl = null; root.classList.remove('layout-revealing'); } el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else done();
+        };
+        const sweepToLayout = (layout) => {
+            if (reducedMotion() || document.hidden || !isShown() || !refs.hud) { applyLayout(layout, true); return; }
+            markLayoutButtons(layout);
+            if (layoutJob) { layoutJob.layout = layout; return; }
+            layoutSweepEl?.remove();
+            root.classList.remove('layout-revealing');
+            const el = document.createElement('div');
+            el.className = 'archive-layout-sweep is-covering';
+            el.setAttribute('aria-hidden', 'true');
+            el.innerHTML = '<i></i>';
+            root.insertBefore(el, refs.hud);
+            layoutSweepEl = el;
+            const w = root.clientWidth || global.innerWidth || 1600;
+            const job = layoutJob = { layout };
+            const swap = () => {
+                if (layoutJob !== job) return;
+                layoutJob = null;
+                if (layoutSweepEl !== el || !el.isConnected) { root.classList.remove('layout-holding'); applyLayout(job.layout, true); return; }
+                el.dataset.full = '1';
+                root.classList.add('layout-holding');
+                applyLayout(job.layout, true);
+                // 盖着等两帧：新视图第一帧（最重的那帧）画完再揭开
+                requestAnimationFrame(() => requestAnimationFrame(() => { if (layoutSweepEl === el) revealSweep(el, w); }));
+            };
+            const anim = el.firstChild.animate?.([{ transform: `translateX(${-w - 4}px)` }, { transform: 'translateX(0)' }],
+                { duration: Math.round(Math.min(300, 170 + w * 0.06)), easing: 'cubic-bezier(.6, 0, .4, 1)', fill: 'forwards' });
+            if (anim) { anim.onfinish = swap; anim.oncancel = swap; } else swap();
+        };
+        const applyLayout = (layout, persist) => {
+            if (!LAYOUTS.includes(layout) || (layout === 'wall' && !wall) || (layout === 'table' && !table) || (layout === 'grid' && !grid)) layout = 'array';
+            state.layout = layout;
+            const flatOn = layout !== 'array';
+            root.classList.toggle('layout-wall', layout === 'wall');
+            root.classList.toggle('layout-table', layout === 'table');
+            root.classList.toggle('layout-grid', layout === 'grid');
+            root.classList.toggle('layout-flat', flatOn);
+            markLayoutButtons(layout);
+            if (persist) { try { localStorage.setItem(LAYOUT_KEY, state.layout); } catch (e) { /* 只是记住 */ } }
+            wall?.show(layout === 'wall' && isShown());
+            table?.show(layout === 'table' && isShown());
+            grid?.show(layout === 'grid' && isShown());
+            if (flatOn) { syncWallRoom(); flat()?.sync(); } else { state.lastDraw = 0; kick(); }
+        };
+        const setLayout = (layout, { persist = true } = {}) => {
+            const target = layoutJob ? layoutJob.layout : state.layout;
+            if (persist && target !== layout && LAYOUTS.includes(layout)) sweepToLayout(layout);
+            else if (!layoutJob) applyLayout(layout, persist);
+        };
+        try { const l = localStorage.getItem(LAYOUT_KEY); state.layout = LAYOUTS.includes(l) ? l : 'array'; } catch (e) { /* 默认档案阵列 */ }
+
         let initialMode = 'archive';
         try { initialMode = localStorage.getItem(VIEW_KEY) || 'archive'; } catch (e) { /* 默认档案页 */ }
         rebuild({ keep: false });
         setMode(initialMode, { persist: false });
+        setLayout(state.layout, { persist: false });
         applyListDefault();
 
         const api = {
@@ -1514,9 +2196,13 @@
             get list() { return list; },
             destroy,
             get mode() { return state.mode; },
+            get layout() { return state.layout; },
+            setLayout,
+            get wall() { return wall; },
+            get grid() { return grid; },
             debug: () => ({
-                mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null,
+                mode: state.mode, layout: state.layout, wall: wall ? wall.debug() : null, grid: grid ? grid.debug() : null, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
+                selected: selectedIndex(), rendering: Boolean(state.raf || state.wait), allowed: renderAllowed(), scene: state.scene?.debug() || null,
                 lyrics: lyrics ? lyrics.debug() : null, lyricsOn: Boolean(state.lyricsOn)
             })
         };

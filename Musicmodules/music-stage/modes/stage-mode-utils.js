@@ -270,6 +270,35 @@
     const durationChanged = (compiled, next) =>
         Number.isFinite(compiled) && Number.isFinite(next) ? Math.abs(compiled - next) > 0.5 : !Object.is(compiled, next);
 
+    /*
+     * A paused stage draws the same picture every frame: the clock stands
+     * still and the spectrum settles to zero. The host keeps calling every
+     * frame, so a mode that redraws regardless keeps the GPU busy on a still
+     * image. same() is true when this frame's inputs equal those of the frame
+     * last drawn; anything else that changes the picture (settings, theme,
+     * size) is passed in extra or calls invalidate().
+     */
+    const createStillGate = () => {
+        let key = null, lines = null;
+        return {
+            same(frame, extra = '') {
+                if (frame.isPlaying) { key = null; return false; }
+                const audio = frame.audio || {};
+                const spectrum = audio.spectrum || [];
+                let sum = 0;
+                for (let i = 0; i < spectrum.length; i += 1) sum += Number(spectrum[i]) || 0;
+                const next = `${frame.playbackTime}|${frame.track?.path || frame.track?.title || ''}|${frame.currentLineIndex}`
+                    + `|${audio.power}|${audio.bass}|${audio.lowMid}|${audio.mid}|${audio.vocal}|${audio.treble}|${sum}`
+                    + `|${global.devicePixelRatio || 1}|${extra}`;
+                if (next === key && frame.lines === lines) return true;
+                key = next;
+                lines = frame.lines;
+                return false;
+            },
+            invalidate() { key = null; }
+        };
+    };
+
     const createFrameCap = () => {
         let last = -Infinity;
         return {
@@ -621,7 +650,7 @@
         lyricFont,
         createRenderScale,
         createHandoverVeil,
-        createFrameCap, durationChanged,
+        createFrameCap, createStillGate, durationChanged,
         precompile,
         compileReady,
         warmLensless,

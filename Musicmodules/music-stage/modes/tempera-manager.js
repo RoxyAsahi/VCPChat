@@ -31,6 +31,7 @@
 
         let renderedKey = '';
         let paused = false;
+        const still = Utils.createStillGate();
 
         let latestFrame = null;
         const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -43,7 +44,9 @@
         });
 
         // 实例化 Pixi.js 凝彩高级导演
-        const director = global.TemperaPixiDirector ? new global.TemperaPixiDirector(stageContainer) : null;
+        const director = global.TemperaPixiDirector ? new global.TemperaPixiDirector(stageContainer, {
+            canvasAntialias: !global.MusicStagePixiEffects.lensOn(mode.config, 'tempera')
+        }) : null;
         if (director) {
             director.init().then(() => {
                 if (!mode.destroyed && latestFrame) mode.updateFrame(latestFrame);
@@ -79,8 +82,12 @@
             const caption = `凝彩 · ${Utils.lineCounter(frame)}`;
             if (kicker.textContent !== caption) kicker.textContent = caption;
             const tuning = getTuning();
+            // Paused and nothing changed: the canvas already shows this frame.
+            if (still.same(frame, `${Boolean(director?.initialized)}|${director?.width}x${director?.height}`
+                + `|${JSON.stringify(tuning.palette ?? null)}|${tuning.reducedMotion}`)) return;
             director?.update(frame, tuning);
-            mode.root.style.setProperty('--stage-vocal', Number(frame.audio?.vocal || 0).toFixed(4));
+            // No --stage-vocal here: the words are drawn by Pixi, nothing under
+            // this root reads it, and setting it restyled the root every frame.
         };
 
         const updateConfig = mode.updateConfig;
@@ -90,6 +97,7 @@
             const rebuild = ['fontScale', 'shotFlow', 'colorMode', 'lyricLayout', 'phraseLength'].some(key => before[key] !== after[key]);
             updateConfig(config);
             if (rebuild) renderedKey = '';
+            still.invalidate();
             if (latestFrame) mode.updateFrame(latestFrame);
         };
         mode.getDebugSnapshot = () => director?.getDebugSnapshot() || { initialized: false };
@@ -100,10 +108,12 @@
         };
         mode.resume = () => {
             paused = false;
+            still.invalidate();
             mode.root.classList.remove('is-suspended');
         };
         mode.updateTheme = () => {
             renderedKey = '';
+            still.invalidate();
         };
         mode.scope.add(() => {
             director?.destroy();

@@ -13,7 +13,7 @@
     let uid = 0;
 
     const CHEVRON = '<svg class="mfs-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    const CHECK = '<svg class="mfs-check" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><path d="M3.2 8.6l3.1 3 6.5-7.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const CHECK = '<svg class="mfs-check" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3.2 8.6l3.1 3 6.5-7.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
     const skip = (select) => select.multiple
         || select.size > 1
@@ -110,7 +110,7 @@
     function place(menu, trigger) {
         const r = trigger.getBoundingClientRect();
         const vw = global.innerWidth, vh = global.innerHeight, m = 10;
-        menu.style.minWidth = `${Math.max(r.width, 140)}px`;
+        menu.style.minWidth = `${Math.max(r.width, 120)}px`;
         const w = menu.offsetWidth, h = menu.offsetHeight;
         let left = Math.min(Math.max(m, r.right - w), vw - w - m);
         if (r.left + w <= vw - m && r.left >= m) left = r.left;
