@@ -340,6 +340,55 @@
     const GLYPH_FLOATS = 12;
     // 图集里注记的字前面带这个（同一个字，歌词和注记是两种字体）
     const NOTE_PREFIX = '\u0001';
+    // 图集里飞溅的墨点：前缀后面是种子（0–5），形状按种子画
+    const SPLAT_PREFIX = '\u0002';
+    const SPLAT_KINDS = 6;
+
+    // 一摊溅开的墨：中间一块不圆的墨，往外甩几道越来越细的墨线、线头一颗墨珠，再散几颗小点
+    const drawSplat = (ctx, seed) => {
+        const random = seededRandom(`inkdraft:splat:${seed}`);
+        const c = GLYPH_CELL / 2;
+        const core = GLYPH_EM * (0.13 + random() * 0.05);
+        ctx.beginPath();
+        const n = 22;
+        for (let i = 0; i <= n; i += 1) {
+            const a = (i % n) / n * Math.PI * 2;
+            const r = core * (0.72 + random() * 0.5);
+            const x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
+            if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.fill();
+        // 甩出去的墨线都朝 +x 那边（墨是朝一个方向甩出去的）；摆的时候转到背离字的方向
+        const bias = 0;
+        const streaks = 5 + Math.floor(random() * 5);
+        for (let i = 0; i < streaks; i += 1) {
+            const a = bias + (random() - 0.5) * (i < 3 ? 0.9 : 2.4);
+            const len = GLYPH_EM * (0.28 + random() * 0.42);
+            const w0 = core * (0.32 + random() * 0.25);
+            const ca = Math.cos(a), sa = Math.sin(a);
+            const px = -sa, py = ca;
+            const ex = c + ca * len, ey = c + sa * len;
+            ctx.beginPath();
+            ctx.moveTo(c + px * w0, c + py * w0);
+            ctx.quadraticCurveTo(c + ca * len * 0.5 + px * w0 * 0.3, c + sa * len * 0.5 + py * w0 * 0.3, ex, ey);
+            ctx.quadraticCurveTo(c + ca * len * 0.5 - px * w0 * 0.3, c + sa * len * 0.5 - py * w0 * 0.3, c - px * w0, c - py * w0);
+            ctx.fill();
+            const bead = 1.5 + random() * 3.2;
+            const gap = bead + 1 + random() * 5;
+            ctx.beginPath();
+            ctx.arc(c + ca * (len + gap), c + sa * (len + gap), bead, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        const dots = 6 + Math.floor(random() * 8);
+        const limit = GLYPH_CELL / 2 - 6;
+        for (let i = 0; i < dots; i += 1) {
+            const a = bias + (random() - 0.5) * 2.8;
+            const r = core * 1.6 + random() * (limit - core * 1.6);
+            ctx.beginPath();
+            ctx.arc(c + Math.cos(a) * r, c + Math.sin(a) * r, 0.8 + random() * random() * 3.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    };
 
     const blurLines = (src, dst, r, step, lineStep) => {
         const win = r * 2 + 1;
@@ -373,8 +422,9 @@
             clear() { cells.clear(); },
             cell(char, family) {
                 const note = char.startsWith(NOTE_PREFIX);
+                const splat = char.startsWith(SPLAT_PREFIX);
                 if (note) char = char.slice(NOTE_PREFIX.length);
-                const key = `${note ? 'note' : family}|${char}`;
+                const key = splat ? char : `${note ? 'note' : family}|${char}`;
                 const hit = cells.get(key);
                 if (hit) return hit;
                 ctx.clearRect(0, 0, GLYPH_CELL, GLYPH_CELL);
@@ -382,12 +432,13 @@
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillStyle = '#fff';
-                ctx.fillText(char, GLYPH_CELL / 2, GLYPH_PAD + GLYPH_EM * GLYPH_BASE);
+                if (splat) drawSplat(ctx, char.slice(SPLAT_PREFIX.length));
+                else ctx.fillText(char, GLYPH_CELL / 2, GLYPH_PAD + GLYPH_EM * GLYPH_BASE);
                 const px = ctx.getImageData(0, 0, GLYPH_CELL, GLYPH_CELL).data;
                 for (let i = 0; i < n; i += 1) { tight[i] = px[i * 4 + 3] / 255; wide[i] = tight[i]; }
                 boxBlur(tight, tmp, TIGHT_R);
                 boxBlur(wide, tmp, WIDE_R);
-                const gain = !note && CJK.test(char) ? WIDE_GAIN * DENSE_WIDE : WIDE_GAIN;
+                const gain = !note && !splat && CJK.test(char) ? WIDE_GAIN * DENSE_WIDE : WIDE_GAIN;
                 const out = new Uint8Array(n * 2);
                 for (let i = 0; i < n; i += 1) {
                     out[i * 2] = Math.round(Math.min(1, tight[i]) * 255);
@@ -488,6 +539,30 @@
             });
         });
         main.globalCompositeOperation = 'source-over';
+        // 飞溅的墨点（Folia 没有）：关键词落笔、或者拖长的那个字，墨甩出去一摊——一块墨、几道甩出去的细线、线头的墨珠、几颗散点。
+        // 每句最多两摊，按字边的像素画（图集里一格），关键词溅出来的是强调色
+        if (settings.spatter && cue.kind === 'line') {
+            // 单独一串随机数：开关这一项，别的东西摆的位置不变
+            const random = seededRandom(`inkdraft:spatter:${trackKey}:${index}:${cue.start.toFixed(2)}`);
+            const lyric = glyphEntries.slice();
+            const picks = [];
+            lyric.forEach((e, i) => {
+                const next = lyric[i + 1];
+                const kwTail = e.kw && (!next || !next.kw || next.start - e.end > 0.05);
+                const held = e.end - e.start >= 0.75;
+                if (kwTail || (held && random() < 0.45)) picks.push(e);
+            });
+            picks.sort((a, b) => (b.kw - a.kw) || ((b.end - b.start) - (a.end - a.start)));
+            picks.slice(0, 2).forEach((e) => {
+                // 溅在字的上方或下方（不压字、不压同一行的邻字），甩出去的墨线朝外
+                const a = (random() < 0.5 ? -1 : 1) * Math.PI / 2 + (random() - 0.5) * 0.9;
+                const size = e.cell * GLYPH_EM / GLYPH_CELL;
+                glyphEntries.push({
+                    key: SPLAT_PREFIX + Math.floor(random() * SPLAT_KINDS), cx: e.cx + Math.cos(a) * size * 0.78, cy: e.cy + Math.sin(a) * size * 0.78,
+                    cell: e.cell * (0.7 + random() * 0.3), rot: a, start: e.start + 0.04, end: cue.end, kw: e.kw, note: 2
+                });
+            });
+        }
 
         // 单元的框（镜头、强调色墨团用）
         const unitBoxes = units.map((unit) => {
@@ -1073,6 +1148,8 @@ void main() {
     float on = step(0.0, dt);
     // 开唱的一下鼓起来、慢慢收回；还没唱到的略小一点
     float scale = mix(0.94, 1.0 + uPop * 0.18 * exp(-max(dt, 0.0) * 2.2), on);
+    // 飞溅的墨点：一下甩开（0.1 秒从小到满）
+    if (iB.w > 1.5) scale = on * (1.0 - 0.55 * uPop * exp(-max(dt, 0.0) * 30.0));
     vec2 off = (corner - 0.5) * iA.z * scale;
     float rc = cos(iA.w), rs = sin(iA.w);
     vec2 w = iA.xy + vec2(off.x * rc - off.y * rs, off.x * rs + off.y * rc);
@@ -1123,7 +1200,11 @@ void main() {
     // 没唱到的字只是一层网点的影子；唱过的字周围留一圈网点
     float tone = (g.r * (1.0 - set) * 0.85 + g.g * (0.3 + 0.45 * set)) * uReveal;
     // 注记到时候直接出现：细的墨字，没有那一团；周围一圈淡网点，和线两边的毛边一样
-    if (vT.w > 0.5) {
+    if (vT.w > 1.5) {
+        // 溅开的墨：一下就是实的，边上沾一点网点；也会洇
+        ink = g.r * on * 1.15 + g.g * bleed * 0.4 * (1.0 - g.r);
+        tone = min(0.4, g.g * 0.8) * on;
+    } else if (vT.w > 0.5) {
         ink = g.r * on * 1.12;
         tone = min(0.55, g.g * 1.6) * on;
     }
@@ -1320,6 +1401,8 @@ vec2 warped() {
 }
 
 uniform sampler2D uWarp;
+uniform sampler2D uPaperTex;
+uniform float uPaperGrain;
 void main() {
     vec2 suv = gl_FragCoord.xy / uRes + (texture(uWarp, gl_FragCoord.xy / uRes).rg - 0.5) * 0.1;
     vec2 w = worldAt(uView, suv);
@@ -1427,6 +1510,10 @@ void main() {
     float gr = hash12(floor(cssPx / 1.5) + uGrainStep * 17.0) - 0.5;
     float fibre = vnoise(cssPx / 3.0 + uGrainStep * 5.0) - 0.5;
     col *= 1.0 + (gr * 0.44 + fibre * 0.2) * uGrain;
+    // 纸纹：纤维、绒、帘纹，钉在屏幕上不动（沸腾的只是上面那层颗粒）；墨里也透一点——干的墨盖不住纸的纤维
+    float pt = texture(uPaperTex, cssPx / 256.0).r - 0.5;
+    float pk = uPaperGrain * (1.0 - a * 0.55);
+    col = col * (1.0 + pt * 0.26 * pk) + pt * 0.035 * pk;
     // 杂点：纸上是墨色的点，墨里是纸色的点（印刷没压实的地方）
     float speck = step(0.988, hash12(floor(cssPx / 2.2) + uGrainStep * 3.7 + 0.5));
     col = mix(col, mix(ink, paper, a), speck * 0.55 * min(uGrain * 2.0, 1.0));
@@ -1443,6 +1530,52 @@ void main() {
             throw new Error(`[inkdraft] shader: ${log}`);
         }
         return shader;
+    };
+
+    // 纸纹（Folia 没有）：一块 256 见方、四边接得上的纸——几百根长短不一的纤维（多数比纸亮，少数暗）、
+    // 一层很淡的绒（低频的起伏）、横的帘纹和竖的链纹（抄纸帘子留下的），按 CSS 像素平铺、不随时间跳。
+    // 只算一次（一张 64KB 的图），画面里只多取一次图。
+    const PAPER_TILE = 256;
+    const makePaperTile = () => {
+        const N = PAPER_TILE;
+        const random = seededRandom('inkdraft:paper');
+        const v = new Float32Array(N * N);
+        const add = (x, y, k) => {
+            const xi = ((Math.floor(x) % N) + N) % N, yi = ((Math.floor(y) % N) + N) % N;
+            v[yi * N + xi] += k;
+        };
+        for (let f = 0; f < 420; f += 1) {
+            let x = random() * N, y = random() * N;
+            let a = random() * Math.PI * 2;
+            const turn = (random() - 0.5) * 0.08;
+            const len = 8 + random() * random() * 110;
+            const k = (random() < 0.72 ? 1 : -0.9) * (0.35 + random() * 0.65);
+            for (let t = 0; t < len; t += 0.5) {
+                add(x, y, k * 0.6);
+                add(x - Math.sin(a), y + Math.cos(a), k * 0.25);
+                x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5;
+                a += turn + (random() - 0.5) * 0.06;
+            }
+        }
+        const G = 16;
+        const grid = Float32Array.from({ length: G * G }, () => random() - 0.5);
+        for (let y = 0; y < N; y += 1) {
+            for (let x = 0; x < N; x += 1) {
+                const gx = x / N * G, gy = y / N * G;
+                const x0 = Math.floor(gx), y0 = Math.floor(gy);
+                const fx = gx - x0, fy = gy - y0;
+                const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+                const at = (i, j) => grid[((j + G) % G) * G + ((i + G) % G)];
+                const felt = (at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx) * (1 - sy) + (at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx) * sy;
+                const laid = Math.cos(y / 4 * Math.PI * 2) * 0.12;
+                const cd = ((x % 64) + 64) % 64 - 32;
+                const chain = Math.exp(-cd * cd / 3) * 0.35;
+                v[y * N + x] = v[y * N + x] * 0.55 + felt * 0.7 + laid + chain;
+            }
+        }
+        const out = new Uint8Array(N * N);
+        for (let i = 0; i < N * N; i += 1) out[i] = Math.max(0, Math.min(255, Math.round(128 + v[i] * 64)));
+        return out;
     };
 
     const createGl = (canvas) => {
@@ -1509,7 +1642,14 @@ void main() {
             gl.bindVertexArray(null);
             return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR, true), glyphVao, glyphBuf, key: null, data: null, used: 0 };
         });
-        return { gl, program, uniforms, glyphProgram, glyphUniforms, smoothProgram, smoothUniforms, field, smooth, vao, slots };
+        const paper = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, paper);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, PAPER_TILE, PAPER_TILE, 0, gl.RED, gl.UNSIGNED_BYTE, makePaperTile());
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        return { gl, program, uniforms, glyphProgram, glyphUniforms, smoothProgram, smoothUniforms, field, smooth, vao, slots, paper };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -1573,6 +1713,8 @@ void main() {
                 cloud: clamp(tuning.cloud ?? 0.75, 0, 1),
                 keywords: tuning.keywords !== false,
                 bleed: tuning.inkBleed !== false,
+                spatter: tuning.inkSpatter !== false,
+                paper: tuning.paperTexture === false ? 0 : 1,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -1643,7 +1785,7 @@ void main() {
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
         const slotKey = (index) => {
             const s = settings();
-            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}`;
+            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}|${s.spatter}`;
         };
         const slotFor = (index, build = true) => {
             if (!glState || index < 0 || index >= cues.length) return null;
@@ -1840,6 +1982,8 @@ void main() {
             applyUniforms(u, canvas.width, canvas.height);
             gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.tex); gl.uniform1i(u.uSmooth, 5);
             gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
+            gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, glState.paper); gl.uniform1i(u.uPaperTex, 7);
+            gl.uniform1f(u.uPaperGrain, s.paper);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
@@ -1909,6 +2053,7 @@ void main() {
             if (glState) {
                 const { gl } = glState;
                 glState.slots.forEach((slot) => { gl.deleteTexture(slot.main); gl.deleteTexture(slot.ids); gl.deleteTexture(slot.atlas); gl.deleteBuffer(slot.glyphBuf); gl.deleteVertexArray(slot.glyphVao); });
+                gl.deleteTexture(glState.paper);
                 gl.deleteTexture(glState.field.tex); gl.deleteFramebuffer(glState.field.fbo); gl.deleteProgram(glState.glyphProgram);
                 gl.deleteTexture(glState.smooth.tex); gl.deleteTexture(glState.smooth.warp.tex); gl.deleteFramebuffer(glState.smooth.fbo); gl.deleteProgram(glState.smoothProgram);
                 gl.deleteProgram(glState.program);
