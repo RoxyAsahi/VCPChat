@@ -826,3 +826,9 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 /* 无法播放：照原版写成状态字，不画框 */
 .archive-list-row.bad .tx b::after { content: "／ 无法播放"; padding: 0; border: 0; font-size: 11px; letter-spacing: .6px; vertical-align: 1px; }
 .archive-list-row.picked { --row-wash: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+/* 分组小标题：正在放的组只用琥珀导轨表示，去掉挂在表格外面的小圆点 */
+.archive-list-group.has-playing::before { display: none; }
+.archive-list-group.live-on .rail { animation: archive-list-rail-live 1.6s ease-in-out infinite; }
+@keyframes archive-list-rail-live { 50% { opacity: .45; } }
+body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
+@media (prefers-reduced-motion: reduce) { .archive-list-group.live-on .rail { animation: none; } }
