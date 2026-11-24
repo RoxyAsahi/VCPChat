@@ -864,14 +864,23 @@ vec3 archiveUntone(vec3 y) {
             g.textBaseline = 'alphabetic';
             g.fillText('MUSIC ARCHIVE', X(-1.15), Y(0.27));
             // 左边台阶里一行竖排模压字（位置照参考播放器 Moulded_Lettering，字是我们自己的）：从上往下读，压出来的凹字配亮边
+            // 字高、长度照原版比例（原版这行字高约 0.1、长约 1.2），收进我们台阶里两道刻线中间（x −2.24…−2.1，y 1.28…2.6）
             g.save();
-            g.translate(X(-2.17), Y(2.5));
+            g.translate(X(-2.17), Y(2.49));
             g.rotate(Math.PI / 2);
-            g.font = `500 22px ${fontStack}`;
-            g.textBaseline = 'middle';
-            if ('letterSpacing' in g) g.letterSpacing = '5px';
-            g.fillStyle = lighting.etchHi; g.fillText('MUSIC ARCHIVE', 1.6, -1.6);
-            g.fillStyle = lighting.etch; g.fillText('MUSIC ARCHIVE', 0, 0);
+            const word = 'MUSIC ARCHIVE', capPx = 0.082 * S, longPx = 1.1 * S;
+            g.textBaseline = 'alphabetic';
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            g.font = `500 40px ${fontStack}`;
+            const cap40 = g.measureText('M').actualBoundingBoxAscent || 29;
+            let size = 40 * capPx / cap40;
+            g.font = `500 ${size.toFixed(1)}px ${fontStack}`;
+            let w = g.measureText(word).width;
+            if (w > longPx) { size *= longPx / w; g.font = `500 ${size.toFixed(1)}px ${fontStack}`; w = longPx; }
+            if ('letterSpacing' in g) g.letterSpacing = `${((longPx - w) / (word.length - 1)).toFixed(1)}px`;
+            const base = size * cap40 / 40 / 2;   // 字身竖直居中在两道线中间
+            g.fillStyle = lighting.etchHi; g.fillText(word, 1.6, base - 1.6);
+            g.fillStyle = lighting.etch; g.fillText(word, 0, base);
             g.restore();
             etchMap.needsUpdate = true;
         };
