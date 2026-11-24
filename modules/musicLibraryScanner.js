@@ -91,8 +91,17 @@ async function fillFolderCovers(tracks, readdir = (dir) => fsp.readdir(dir)) {
         if (!byDir.has(dir)) {
             let names = [];
             try { names = await readdir(dir); } catch (_) { names = []; }
-            const hit = pickFolderCover(names);
-            byDir.set(dir, hit ? path.join(dir, hit) : null);
+            let hit = pickFolderCover(names);
+            let home = dir;
+            // 多碟专辑常把封面放在上一层（专辑/cover.jpg，歌在 专辑/CD1/ 里）
+            if (!hit && /^(?:cd|disc|disk|碟)\s*[-_]?\s*\d{1,2}\b/i.test(path.basename(dir))) {
+                const up = path.dirname(dir);
+                let upNames = [];
+                try { upNames = await readdir(up); } catch (_) { upNames = []; }
+                hit = pickFolderCover(upNames);
+                if (hit) home = up;
+            }
+            byDir.set(dir, hit ? path.join(home, hit) : null);
         }
         const cover = byDir.get(dir);
         if (cover) { t.albumArt = cover; filled++; }

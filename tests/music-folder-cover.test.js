@@ -37,3 +37,17 @@ test('changedSince notices a newly found cover', () => {
     assert.equal(changedSince([{ path: p, size: 1, mtimeMs: 1 }], [{ path: p, size: 1, mtimeMs: 1, albumArt: 'c.jpg' }], root), true);
     assert.equal(changedSince([{ path: p, size: 1, mtimeMs: 1, albumArt: 'c.jpg' }], [{ path: p, size: 1, mtimeMs: 1, albumArt: 'c.jpg' }], root), false);
 });
+
+test('multi-disc albums borrow the cover from the album folder above CD1 / Disc 2', async () => {
+    const album = path.join('m', 'Album');
+    const cd1 = path.join(album, 'CD1');
+    const disc2 = path.join(album, 'Disc 2');
+    const other = path.join('m', 'Live', 'Encore');
+    const tracks = [{ path: path.join(cd1, '1.flac') }, { path: path.join(disc2, '1.flac') }, { path: path.join(other, '1.flac') }];
+    const files = { [album]: ['Cover.JPG', 'CD1', 'Disc 2'], [cd1]: ['1.flac'], [disc2]: ['1.flac'], [path.join('m', 'Live')]: ['cover.jpg'], [other]: ['1.flac'] };
+    const n = await fillFolderCovers(tracks, async (dir) => files[dir] || []);
+    assert.equal(n, 2);
+    assert.equal(tracks[0].albumArt, path.join(album, 'Cover.JPG'));
+    assert.equal(tracks[1].albumArt, path.join(album, 'Cover.JPG'));
+    assert.equal(tracks[2].albumArt, undefined); // 不是碟号文件夹，不往上找
+});
