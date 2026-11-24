@@ -208,7 +208,18 @@ function createLibraryWatch({
         await rememberFolder(dir);
         if (!rememberedNow.some((r) => norm(r) === norm(dir))) rememberedNow = collapseRoots([...rememberedNow, dir]);
     };
-    return { start, stop, noteLibrarySaved, rememberFolder: rememberAndSync, rescanNow: () => roots().then(({ list, remembered }) => { rememberedNow = remembered; list.forEach(enqueue); }) };
+    // 曲库文件夹管理用：加过的文件夹；「移出」时从记录里拿掉（连同它下面的子文件夹），之后不再同步它
+    const folders = async () => collapseRoots((await readFolders().catch(() => [])) || []);
+    const forgetFolder = async (dir) => {
+        if (!dir) return false;
+        const list = (await readFolders().catch(() => [])) || [];
+        const kept = list.filter((d) => !isUnder(d, dir));
+        if (kept.length !== list.length) await writeFolders(kept);
+        rememberedNow = rememberedNow.filter((d) => !isUnder(d, dir));
+        queue = queue.filter((d) => !isUnder(d, dir));
+        return kept.length !== list.length;
+    };
+    return { start, stop, noteLibrarySaved, folders, forgetFolder, rememberFolder: rememberAndSync, rescanNow: () => roots().then(({ list, remembered }) => { rememberedNow = remembered; list.forEach(enqueue); }) };
 }
 
 module.exports = { createLibraryWatch, collapseRoots, inferredDirs, changedSince };

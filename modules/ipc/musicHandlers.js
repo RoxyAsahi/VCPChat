@@ -32,7 +32,7 @@ const musicThumbar = typeof createMusicThumbar === 'function'
 // 曲库文件夹自动同步：记住加过的文件夹，音乐窗口开着时后台对磁盘、监听变化（modules/musicLibraryWatch.js）
 const musicFoldersFile = () => (MUSIC_PLAYLIST_FILE ? path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_folders.json') : null);
 const libraryWatch = typeof createLibraryWatch !== 'function'
-    ? { start() {}, stop() {}, rememberFolder: async () => {}, noteLibrarySaved: async () => {} }
+    ? { start() {}, stop() {}, rememberFolder: async () => {}, noteLibrarySaved: async () => {}, folders: async () => [], forgetFolder: async () => false }
     : createLibraryWatch({
     // 用户自己在加文件夹时先等它扫完：两边的结果同时回到窗口会互相打乱「正在扫描」和排序
     scan: async (folderPath, signal) => {
@@ -798,6 +798,40 @@ function initialize(options) {
             if (!stat || !stat.isFile()) return { ok: false, message: '文件已经不在原来的位置了' };
             electron.shell.showItemInFolder(file);
             return { ok: true };
+        });
+
+        // 曲库文件夹管理：列出加过的文件夹、打开、移出（曲目由音乐窗口先从曲库拿掉并存盘，这里只忘掉文件夹、重建监听）、立即重扫
+        ipcMain.handle('music-library-folders', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const op = payload?.op || 'list';
+            const dir = typeof payload?.path === 'string' ? payload.path : '';
+            try {
+                if (op === 'list') {
+                    const folders = typeof libraryWatch.folders === 'function' ? await libraryWatch.folders() : [];
+                    const withState = [];
+                    for (const d of folders) withState.push({ path: d, exists: Boolean((await fs.stat(d).catch(() => null))?.isDirectory()) });
+                    return { ok: true, folders: withState };
+                }
+                if (!dir || !path.isAbsolute(dir)) return { ok: false, message: '不是本机文件夹' };
+                if (op === 'open') {
+                    const stat = await fs.stat(dir).catch(() => null);
+                    if (!stat || !stat.isDirectory()) return { ok: false, message: '这个文件夹已经不在了' };
+                    const err = await electron.shell.openPath(dir);
+                    return err ? { ok: false, message: err } : { ok: true };
+                }
+                if (op === 'forget') {
+                    if (typeof libraryWatch.forgetFolder === 'function') await libraryWatch.forgetFolder(dir);
+                    libraryWatch.start();
+                    return { ok: true };
+                }
+                if (op === 'rescan') {
+                    await libraryWatch.rescanNow?.();
+                    return { ok: true };
+                }
+                return { ok: false, message: '不认识的操作' };
+            } catch (err) {
+                return { ok: false, message: String(err && err.message || err) };
+            }
         });
 
         // 歌单导出 / 导入 .m3u8（和别的播放器互通）。只给音乐窗口；导出走保存对话框，导入走打开对话框或拖进来的文件。

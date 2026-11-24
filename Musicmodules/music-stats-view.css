@@ -284,3 +284,23 @@
 @media (prefers-reduced-motion: reduce) {
     .music-drop-hint, .music-drop-hint-card { transition: none; }
 }
+
+/* 曲库文件夹（music-folders.js）：一行一个文件夹，路径 + 歌数，右边打开 / 移出曲库 */
+.dialog-overlay.music-stats-dialog .dialog.glass-panel.mstats.mfold { width: min(640px, calc(100vw - 48px)); }
+.mfold-lead { margin: -6px 0 14px; font-size: 12.5px; line-height: 1.6; color: var(--ms-ink2); }
+.mfold-list { list-style: none; margin: 0 0 18px; padding: 0; }
+.mfold-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--mf-rule, rgba(255, 255, 255, .08));
+}
+.mfold-row:last-child { border-bottom: 0; }
+.mfold-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mfold-path { font-size: 13px; color: var(--ms-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mfold-meta { font-size: 12px; color: var(--ms-ink2); }
+.mfold-row.missing .mfold-path { color: var(--ms-ink2); }
+.mfold-acts { display: flex; gap: 6px; flex: none; }
+.mfold-acts .minfo-btn { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.mfold-acts .mfold-remove:hover { color: #e5484d; }
