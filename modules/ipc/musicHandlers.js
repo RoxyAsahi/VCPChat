@@ -873,10 +873,16 @@ function initialize(options) {
                 const stat = await fs.stat(file);
                 if (!stat.isFile() || stat.size > 20 * 1024 * 1024) return { ok: false, message: '这个文件不像歌单' };
                 const parsed = m3u.parseM3u(m3u.decodeM3u(await fs.readFile(file), file), { baseDir: path.dirname(file) });
-                const entries = [];
-                for (const entry of parsed.entries.slice(0, 50000)) {
-                    const s = await fs.stat(entry.path).catch(() => null);
-                    entries.push({ ...entry, exists: Boolean(s && s.isFile()) });
+                // 几千行的歌单逐个查文件太慢（网络盘、拔掉的盘每次都要等）：同一文件夹只查一次在不在，再 32 个一批并行查文件
+                const list = parsed.entries.slice(0, 50000);
+                const dirs = new Map();
+                const dirOk = (d) => { if (!dirs.has(d)) dirs.set(d, fs.stat(d).then((s) => s.isDirectory(), () => false)); return dirs.get(d); };
+                const entries = new Array(list.length);
+                for (let at = 0; at < list.length; at += 32) {
+                    await Promise.all(list.slice(at, at + 32).map(async (entry, k) => {
+                        const s = (await dirOk(path.dirname(entry.path))) ? await fs.stat(entry.path).catch(() => null) : null;
+                        entries[at + k] = { ...entry, exists: Boolean(s && s.isFile()) };
+                    }));
                 }
                 return { ok: true, file, name: parsed.name || path.basename(file).replace(/\.m3u8?$/i, ''), entries, skipped: parsed.skipped };
             } catch (err) {
