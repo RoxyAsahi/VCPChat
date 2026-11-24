@@ -1,6 +1,7 @@
 // Musicmodules/music-m3u.js
 // 歌单和别的播放器互通：导出成 .m3u8、从 .m3u / .m3u8 导入成新歌单。
 // 入口：命令面板（「导出歌单「名字」」「导入歌单」），以及把 .m3u / .m3u8 文件直接拖进窗口。
+// 从外面拖文件进窗口时显示整窗落点提示（.music-drop-hint，样式在 music-stats-view.css）。
 // 导入时按路径对上曲库（Windows 路径不分大小写）；不在曲库但文件还在的，顺手加进曲库；文件不在了的只计数提示。
 //
 // 对外：app.m3u = { importFile(path?), exportPlaylist(pl), commands() }；纯函数 matchEntries / uniqueName 供测试。
@@ -109,7 +110,27 @@
         // 拖进来的 .m3u / .m3u8：当歌单导入（music.js 那边把音频文件加进曲库，歌单文件它会忽略）
         const doc = global.document;
         if (doc && typeof api().getPathForFile === 'function') {
+            // 从资源管理器拖文件进来时整个窗口给个落点提示（以前拖进来什么反应都没有，不知道能不能放）
+            let hint = null;
+            let depth = 0;
+            const isFileDrag = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+            const showHint = () => {
+                if (!hint) {
+                    hint = doc.createElement('div');
+                    hint.className = 'music-drop-hint';
+                    hint.setAttribute('aria-hidden', 'true');
+                    hint.innerHTML = '<div class="music-drop-hint-card"><b>松开，加进曲库</b><span>歌曲和文件夹加进曲库；.m3u / .m3u8 歌单导入成新歌单</span></div>';
+                    doc.body.appendChild(hint);
+                }
+                global.requestAnimationFrame?.(() => hint && hint.classList.add('visible'));
+            };
+            const hideHint = () => { depth = 0; if (hint) hint.classList.remove('visible'); };
+            doc.addEventListener('dragenter', (event) => { if (!isFileDrag(event)) return; depth++; showHint(); });
+            doc.addEventListener('dragleave', (event) => { if (!isFileDrag(event)) return; depth = Math.max(0, depth - 1); if (!depth) hideHint(); });
+            doc.addEventListener('dragend', hideHint);
+            global.addEventListener?.('blur', hideHint);
             doc.addEventListener('drop', (event) => {
+                hideHint();
                 const files = Array.from(event.dataTransfer?.files || []).filter((f) => /\.m3u8?$/i.test(f.name || ''));
                 if (!files.length) return;
                 for (const f of files) {
