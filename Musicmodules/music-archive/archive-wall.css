@@ -331,10 +331,10 @@ body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel > *
 .archive-layouts .archive-glyph-layout { display: inline-grid; grid-template-columns: 6px 6px; gap: 2px; margin-right: 12px; opacity: .8; }
 .archive-layouts .archive-glyph-layout i { width: 6px; height: 6px; border: 1px solid currentColor; box-sizing: border-box; }
 .archive-layouts .archive-glyph-layout i:first-child { grid-row: span 2; height: 14px; }
-#music-archive-view .archive-layouts > button { min-height: 28px; color: var(--ar-muted); transition: color .15s; }
-#music-archive-view .archive-layouts > button + button::before { content: "/"; display: inline-block; margin: 0 9px; color: var(--ar-muted); opacity: .6; }
-#music-archive-view .archive-layouts > button:hover { color: var(--ar-ink); }
-#music-archive-view .archive-layouts > button[aria-pressed="true"] { color: var(--ar-ink); font-weight: 600; }
+/* 视图下拉：按钮和导航里别的字一样大、不带框，只显示当前视图名和一个小箭头；悬停/展开时才出底色。点开的选项卡片用全局同款（music-fluid-select） */
+#music-archive-view .archive-layouts > button.mfs-trigger:not(#mfs-0) { min-height: 28px; padding: 2px 6px 2px 8px; margin-left: -6px; gap: 6px; border-color: transparent; background: transparent; border-radius: 8px; font-size: 14px; letter-spacing: .7px; line-height: 1; color: var(--ar-ink); }
+#music-archive-view .archive-layouts > button.mfs-trigger:not(#mfs-0):hover, #music-archive-view .archive-layouts > button.mfs-trigger.mfs-open:not(#mfs-0) { background: color-mix(in srgb, var(--ar-ink) 8%, transparent); border-color: color-mix(in srgb, var(--ar-ink) 12%, transparent); }
+#music-archive-view .archive-layouts > button.mfs-trigger .mfs-chev { opacity: .6; }
 .archive-hud.narrow .archive-layouts .archive-glyph-layout { display: none; }
 
 /* ---------- 分节网格（archive-grid.js） ---------- */

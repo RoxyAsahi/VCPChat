@@ -71,7 +71,7 @@ const FAKE = ({ n, light, covers }) => {
   await page.waitForTimeout(3500);
   const results = [];
   const check = (name, ok, extra = '') => { results.push([name, ok]); console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
-  await page.click('.archive-nav [data-layout="table"]');
+  await page.evaluate((l) => { const s = document.querySelector('.archive-layout-select'); s.value = l; s.dispatchEvent(new Event('change', { bubbles: true })); }, 'table');
   await page.waitForFunction(() => !document.querySelector('.archive-layout-sweep'), null, { timeout: 20000 }).catch(() => {});
   await page.waitForTimeout(2500);
   const run = (label) => page.evaluate((label) => new Promise((done) => {

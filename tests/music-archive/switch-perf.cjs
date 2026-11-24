@@ -86,9 +86,9 @@ const FAKE = ({ n, light, covers }) => {
     let ph = phaseNow();
     const tick = (t) => { frames.push(t - last); phases.push(ph); ph = phaseNow(); last = t; if (run) requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
-    const btn = document.querySelector('.archive-nav [data-layout="' + to + '"]');
+    const sel = document.querySelector('.archive-layout-select');
     const c0 = performance.now();
-    btn.click();
+    sel.value = to; sel.dispatchEvent(new Event('change', { bubbles: true }));
     const clickMs = performance.now() - c0;
     await new Promise((r) => setTimeout(r, 1500));
     run = false;
@@ -102,7 +102,7 @@ const FAKE = ({ n, light, covers }) => {
   for (let r = 0; r < Number(args.rounds || 2); r++) seq.push('array', 'wall', 'array', 'table', 'array', 'grid', 'wall', 'table', 'grid');
   const out = [];
   // 先落到阵列
-  await page.click('.archive-nav [data-layout="array"]'); await page.waitForTimeout(2500);
+  await page.evaluate((l) => { const s = document.querySelector('.archive-layout-select'); s.value = l; s.dispatchEvent(new Event('change', { bubbles: true })); }, 'array'); await page.waitForTimeout(2500);
   let prev = 'array';
   for (const to of seq) {
     if (to === prev) continue;

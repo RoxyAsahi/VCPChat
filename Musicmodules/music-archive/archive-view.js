@@ -39,7 +39,7 @@
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
-                <span class="archive-layouts" role="group" aria-label="视图" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><button type="button" data-act="layout" data-layout="array" title="3D 档案阵列" aria-pressed="true">阵列</button><button type="button" data-act="layout" data-layout="wall" title="平铺的封面墙，可以四处拖" aria-pressed="false">封面墙</button><button type="button" data-act="layout" data-layout="table" title="封面平放在桌面上，低机位往远处看" aria-pressed="false">平放</button><button type="button" data-act="layout" data-layout="grid" title="按首字母分节的封面网格" aria-pressed="false">网格</button></span>
+                <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option></select></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
@@ -2107,7 +2107,10 @@
          * 降低动态、窗口在后台时直接换。
          */
         let layoutSweepEl = null;
-        const markLayoutButtons = (layout) => refs.layouts.querySelectorAll('[data-layout]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.layout === layout ? 'true' : 'false'));
+        /* 视图切换是一个下拉框（音乐窗口里的 <select> 会被 music-fluid-select 换成主程序同款的选项卡片），这里只同步它的值 */
+        const layoutSelect = refs.layouts.querySelector('.archive-layout-select');
+        const markLayoutButtons = (layout) => { if (layoutSelect && layoutSelect.value !== layout) layoutSelect.value = layout; };
+        layoutSelect?.addEventListener('change', () => setLayout(layoutSelect.value));
         const revealSweep = (el, w) => {
             el.classList.remove('is-covering');
             // 纸盖着时新视图的翻入动画是暂停的（layout-holding），揭开这一刻一起放，和扫描线对得上

@@ -78,6 +78,21 @@ const FAKE = ({ n, light, covers }) => {
   let d = await dbg();
   check('封面墙开着', d.layout === 'wall' && d.wall && d.wall.on, JSON.stringify(d.wall));
   check('3D 不画', d.rendering === false && d.allowed === false);
+  // 视图切换是下拉：点按钮弹出全局同款选项卡片，四个视图，当前那个打勾
+  {
+    await page.click('.archive-layouts button.mfs-trigger');
+    await page.waitForTimeout(500);
+    const m = await page.evaluate(() => {
+      const t = document.querySelector('.archive-layouts button.mfs-trigger');
+      const menu = document.querySelector('.mfs-menu');
+      const items = menu ? [...menu.querySelectorAll('[role="option"]')].map((o) => o.textContent.trim() + (o.getAttribute('aria-selected') === 'true' ? '*' : '')) : [];
+      return { label: t && t.textContent.trim(), open: t && t.getAttribute('aria-expanded'), items, native: Boolean(document.querySelector('.archive-layouts select:not(.mfs-native)')) };
+    });
+    await shot(tag + '-0-layout-menu');
+    check('视图切换是下拉选单', m.label === '封面墙' && m.open === 'true' && m.items.length === 4 && m.items.includes('封面墙*') && !m.native, JSON.stringify(m));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
   check('有封面格', d.wall.tiles > 20, 'tiles=' + d.wall.tiles);
   await page.waitForTimeout(1500);
   await shot(tag + '-1-wall');
@@ -213,7 +228,7 @@ const FAKE = ({ n, light, covers }) => {
   await page.click('.archive-nav [data-act="list"]');
 
   // 分节网格
-  await page.click('.archive-nav [data-layout="grid"]');
+  await page.evaluate((l) => { const s = document.querySelector('.archive-layout-select'); s.value = l; s.dispatchEvent(new Event('change', { bubbles: true })); }, 'grid');
   await page.waitForTimeout(2500);
   d = await dbg();
   check('网格开着、墙关了', d.layout === 'grid' && d.grid && d.grid.on && !d.wall.on && d.allowed === false, JSON.stringify(d.grid));
@@ -272,7 +287,7 @@ const FAKE = ({ n, light, covers }) => {
   }
 
   // 平放
-  await page.click('.archive-nav [data-layout="table"]');
+  await page.evaluate((l) => { const s = document.querySelector('.archive-layout-select'); s.value = l; s.dispatchEvent(new Event('change', { bubbles: true })); }, 'table');
   // 过场先盖上（纸后面换视图），揭开时格子跟着扫描线翻
   await page.waitForTimeout(120);
   const covering = await page.evaluate(() => Boolean(document.querySelector('.archive-layout-sweep.is-covering')));
@@ -369,7 +384,7 @@ const FAKE = ({ n, light, covers }) => {
   }
 
   // 切回阵列
-  await page.click('.archive-nav [data-layout="array"]');
+  await page.evaluate((l) => { const s = document.querySelector('.archive-layout-select'); s.value = l; s.dispatchEvent(new Event('change', { bubbles: true })); }, 'array');
   await page.waitForTimeout(2500);
   d = await dbg();
   check('切回阵列', d.layout === 'array' && !d.wall.on && d.allowed === true);
