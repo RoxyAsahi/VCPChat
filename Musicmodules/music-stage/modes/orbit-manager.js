@@ -159,6 +159,27 @@ float hash12(vec2 p) {
 
 ${Utils.NOISE_GLSL}
 
+// 打光：暗房间，一块左上的暖色柔光箱（慢慢挪一点，高光会沿环走），右边一条冷色灯带，下面一点强调色反光
+vec3 keyDir() {
+    float a = -0.5 + 0.18 * sin(uTime * 0.05);
+    return normalize(vec3(sin(a) * 0.8, 0.62, 0.72));
+}
+vec3 studio(vec3 r) {
+    vec3 c = mix(uField * 0.7 + vec3(0.03), uField * 0.9 + vec3(0.12), uLight) * (0.55 + 0.45 * r.y);
+    // 头顶后方一大块柔光：倾斜的环面大多把它反过来，环身因此是亮的
+    float top = smoothstep(0.55, 0.92, dot(r, normalize(vec3(0.15, 0.75, -0.62))));
+    c += vec3(1.0, 0.9, 0.74) * top * 1.15;
+    float key = smoothstep(0.82, 0.96, dot(r, keyDir()));
+    c += vec3(1.0, 0.93, 0.82) * key * 2.4;
+    c += vec3(1.0, 0.95, 0.88) * smoothstep(0.35, 0.95, dot(r, keyDir())) * 0.2;
+    float strip = (1.0 - smoothstep(0.03, 0.12, abs(r.x - 0.72))) * smoothstep(-0.3, 0.4, r.y);
+    c += vec3(0.72, 0.84, 1.0) * strip * 0.9;
+    float stripL = (1.0 - smoothstep(0.02, 0.1, abs(r.x + 0.8))) * smoothstep(-0.5, 0.2, r.y);
+    c += vec3(1.0, 0.88, 0.7) * stripL * 0.5;
+    c += uAccent * smoothstep(0.0, -0.8, r.y) * 0.3;
+    return c;
+}
+
 void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
     float aspect = uRes.x / uRes.y;
@@ -191,22 +212,113 @@ void main() {
     float theta = atan(q.y / uAxes.y, q.x / uAxes.x);
     float depth = sin(theta);
     float front = 0.5 - depth * 0.5;
+    // 圆环所在平面：倾角 i，屏幕上半轴 B = A·cos i；R 是环上这一点朝外的方向，N 是环面法线（朝观众）
+    float ci = clamp(uAxes.y / max(uAxes.x, 1e-4), 0.05, 1.0), si = sqrt(1.0 - ci * ci);
+    vec3 R = vec3(cos(theta), sin(theta) * ci, -sin(theta) * si);
+    vec3 N = vec3(0.0, si, ci);
+    vec2 toScreen = vec2(cos(uRoll), sin(uRoll));
+    float persp = 0.75 + front * 0.5;
+
+    // 两道金属环：外环黄铜、内环钢；圆截面打光，外环面上刻着跟着转的刻度。
+    // 环、轴、中心球、小珠互相基本不重叠：先挑出这个像素最上面的那个面，最后只打一次光
+    vec3 brass = mix(vec3(0.95, 0.76, 0.42), uAccent, 0.22);
+    vec3 sN = vec3(0.0, 0.0, 1.0), sF0 = brass, sBase = vec3(0.0);
+    float sA = 0.0, sDim = 1.0, sLip = 0.0, sTop = 0.0;   // sTop：0 环后半、1 轴、2 环前半、3 小珠
     for (int k = 0; k < 2; k++) {
         float scale = k == 0 ? 1.0 : 0.82;
-        float e = length(q / (uAxes * scale));
-        float dist = abs(e - 1.0) * uAxes.y * scale;
-        float w = (k == 0 ? 0.0014 : 0.0008) * (0.6 + front * 0.8);
-        float line = 1.0 - smoothstep(w, w + aa, dist);
-        float glow = exp(-dist * dist / (0.0004 + uGlow * 0.0006 + uChange * 0.0012));
-        float strength = (k == 0 ? 1.0 : 0.45) * (0.18 + front * 0.6);
-        col = mix(col, uInk, line * strength * (0.7 + uChange * 0.3));
-        col += uAccent * glow * strength * (0.06 + uGlow * 0.12) * (1.0 - uLight * 0.5);
-        // 轨道上几颗慢慢转的点
+        vec2 ax = uAxes * scale;
+        float e = length(q / ax);
+        // 到椭圆的近似真实距离（不再用短半轴量，两侧不会变粗）
+        float d = (e - 1.0) * e / max(length(q / (ax * ax)), 1e-4);
+        float hw = (k == 0 ? 0.0062 : 0.0032) * persp * (1.0 + uChange * 0.15);
+        float cover = (1.0 - smoothstep(hw - aa * 0.5, hw + aa * 0.5, abs(d))) * (k == 0 ? 1.0 : 0.85) * (0.55 + front * 0.45);
+        // 光晕留一点，换句和低音时亮
+        float glow = exp(-d * d / (0.0004 + uGlow * 0.0006 + uChange * 0.0012));
+        col += uAccent * glow * (k == 0 ? 1.0 : 0.45) * (0.18 + front * 0.6) * (0.03 + uGlow * 0.1) * (1.0 - uLight * 0.5);
         if (k == 0) {
-            float a = theta - uSpin;
-            float bead = abs(fract(a / 6.2832 * 7.0 + 0.5) - 0.5) * 6.2832 / 7.0 * length(uAxes);
-            col = mix(col, uAccent, (1.0 - smoothstep(0.003, 0.003 + aa, length(vec2(bead, dist)))) * (0.35 + front * 0.55));
+            float g2 = exp(-d * d / (0.0016 + uGlow * 0.002 + uChange * 0.004));
+            col += uAccent * g2 * (0.18 + front * 0.6) * (0.04 + uGlow * 0.1 + uChange * 0.08) * (1.0 - uLight * 0.5);
         }
+        if (cover > sA) {
+            float u = clamp(d / hw, -1.0, 1.0);
+            // 车床纹：沿环方向的细槽，只轻轻扰动法线；环细到一两个像素时把截面压平，免得掠射反光闪成虚线
+            float groove = sin(floor((u + 1.0) * 9.0) * 12.9898 + float(k) * 4.0) * 0.5;
+            float uu = clamp(u + groove * 0.12, -1.0, 1.0) * clamp(hw / (3.0 * aa), 0.4, 1.0);
+            sN = R * uu + N * sqrt(max(1.0 - uu * uu, 0.0));
+            sN.xy = vec2(sN.x * toScreen.x - sN.y * toScreen.y, sN.x * toScreen.y + sN.y * toScreen.x);
+            sF0 = k == 0 ? brass : vec3(0.66, 0.68, 0.72);
+            sA = cover;
+            sTop = depth > 0.0 ? 0.0 : 2.0;
+            // 两边收进去一点暗边，像圆管的轮廓
+            sDim = 0.55 + 0.45 * smoothstep(1.0, 0.7, abs(u));
+            sLip = 0.0;
+            if (k == 0) {
+                // 刻度：72 格、每 6 格一道长刻，凹进去（暗槽 + 一侧亮边）
+                float a = (theta - uSpin) / 6.2832 * 72.0;
+                float f = fract(a) - 0.5;
+                float major = 1.0 - step(0.01, mod(floor(a + 0.5), 6.0));
+                float arc = 6.2832 * length(uAxes) * 0.7 / 72.0;     // 每格在屏幕上的大致弧长
+                float wTick = (major > 0.5 ? 0.0012 : 0.0006) * persp;
+                float reach = major > 0.5 ? 0.62 : 0.3;
+                float inBand = 1.0 - smoothstep(reach, reach + 0.12, abs(u));
+                float notch = (1.0 - smoothstep(wTick, wTick + aa, abs(f) * arc)) * inBand;
+                float lip = (1.0 - smoothstep(0.0, wTick + aa, abs(f * arc + wTick * 1.6))) * inBand;
+                sDim *= mix(1.0, 0.28, notch * (major > 0.5 ? 0.85 : 0.45));
+                sLip = lip * 0.25 * (1.0 - notch);
+            }
+        }
+    }
+
+    // 轴：一根抛光的细钢杆穿过圆心，中间套一颗小球；环的后半圈在杆后面，前半圈在杆前面
+    if (uAxis > 0.5) {
+        vec2 dir = vec2(-sin(uRoll), cos(uRoll));
+        float along = dot(d0, dir);
+        float perpS = dir.x * d0.y - dir.y * d0.x;
+        float reach = 0.46 + uBeat * 0.08 + uChorus * 0.06;
+        float hw = 0.0024;
+        float cover = (1.0 - smoothstep(hw - aa * 0.5, hw + aa * 0.5, abs(perpS))) * (1.0 - smoothstep(0.1, reach, abs(along))) * 0.85;
+        float rb = 0.014;
+        float sc = 1.0 - smoothstep(rb - aa, rb + aa, length(d0));
+        bool over = sTop < 1.5;
+        if (sc > 0.0 && (over || sc > sA)) {
+            vec2 v = d0 / rb;
+            sN = vec3(v, sqrt(max(1.0 - dot(v, v), 0.0)));
+            sF0 = brass; sA = sc; sTop = 1.0; sDim = 1.0; sLip = 0.0; sBase = vec3(0.0);
+        } else if (cover > 0.0 && (over || cover > sA)) {
+            float u = clamp(perpS / hw, -1.0, 1.0) * 0.7;
+            vec2 side = vec2(dir.y, -dir.x);
+            sN = vec3(-side * u, sqrt(max(1.0 - u * u, 0.0)));
+            sF0 = vec3(0.62, 0.64, 0.67); sA = cover; sTop = 1.0; sLip = 0.0;
+            sDim = 1.0 + uBeat * 0.4;
+            sBase = mix(uInk, uField, uLight) * 0.12;
+        }
+    }
+
+    // 轨道上几颗慢慢转的小珠：上釉的彩珠，盖在最上面
+    {
+        float a = theta - uSpin;
+        float idx = floor(a / 6.2832 * 7.0 + 0.5);
+        float tc = uSpin + idx * 6.2832 / 7.0;
+        vec2 cq = vec2(cos(tc), sin(tc)) * uAxes;
+        float fb = 0.5 - sin(tc) * 0.5;
+        float rb = 0.0075 * (0.75 + fb * 0.5);
+        vec2 v = (q - cq) / rb;
+        float r2 = dot(v, v);
+        float cover = (1.0 - smoothstep(1.0 - aa / rb, 1.0 + aa / rb, sqrt(r2))) * (0.6 + fb * 0.4);
+        if (cover > 0.0) {
+            sN = vec3(v, sqrt(max(1.0 - r2, 0.0)));
+            sN.xy = vec2(sN.x * toScreen.x - sN.y * toScreen.y, sN.x * toScreen.y + sN.y * toScreen.x);
+            sBase = uAccent * (0.18 + 0.82 * max(dot(sN, keyDir()), 0.0));
+            sF0 = vec3(0.04); sA = max(sA * (1.0 - cover), cover); sTop = 3.0; sDim = 1.3; sLip = 0.0;
+        }
+    }
+    if (sA > 0.0) {
+        sN = normalize(sN);
+        vec3 r = reflect(vec3(0.0, 0.0, -1.0), sN);
+        vec3 F = sF0 + (1.0 - sF0) * pow(1.0 - max(sN.z, 0.0), 5.0);
+        vec3 lit = sTop > 2.5 ? sBase + F * studio(r) * sDim
+                              : (F * studio(r) + sF0 * mix(0.05, 0.12, uLight)) * sDim + sF0 * sLip + sBase;
+        col = mix(col, lit, sA);
     }
     // 鼓点：从轨道向外推出一圈细光环
     if (uBeat > 0.01) {
@@ -214,15 +326,6 @@ void main() {
         float e = length(q / (uAxes * sc));
         float dist = abs(e - 1.0) * uAxes.y * sc;
         col += mix(uInk, uAccent, 0.5) * exp(-dist * dist / 0.00002) * uBeat * uBeat * 0.4;
-    }
-    // 轴线：穿过圆心的一根竖线，两头淡出；鼓点时伸长、变亮
-    if (uAxis > 0.5) {
-        vec2 dir = vec2(-sin(uRoll), cos(uRoll));
-        float along = dot(d0, dir);
-        float perp = abs(dir.x * d0.y - dir.y * d0.x);
-        float reach = 0.46 + uBeat * 0.08 + uChorus * 0.06;
-        float line = (1.0 - smoothstep(0.0008, 0.0008 + aa, perp)) * (1.0 - smoothstep(0.1, reach, abs(along)));
-        col = mix(col, uInk, line * (0.35 + uBeat * 0.3));
     }
 
     vec2 v = uv - 0.5;

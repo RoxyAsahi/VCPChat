@@ -218,6 +218,20 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+// 金属反射的是什么：暗的展厅，画灯在正上方（一条暖的亮带），左上远处一点天光。r 是反射方向（z 朝看的人）
+float gallery(vec3 r) {
+    float room = mix(0.08, 0.26, uLight) + 0.06 * smoothstep(-0.5, 0.8, r.y);
+    float lamp = exp(-pow((r.y - 0.72) / 0.13, 2.0)) * smoothstep(0.75, 0.1, abs(r.x)) * 2.2 * (0.35 + 0.65 * uLamp.w);
+    float sky = smoothstep(0.75, 0.95, dot(r, vec3(-0.55, 0.5, 0.67))) * 0.7;
+    return room + lamp + sky;
+}
+vec3 gilt(vec3 F0, vec3 n, float env) {
+    float fres = pow(1.0 - max(n.z, 0.0), 5.0);
+    // 金箔不是镜子：一半是镜面反射，一半是被画灯从上面照亮的漫射（朝上的面亮）
+    float lampK = 0.35 + 0.65 * uLamp.w;
+    vec3 diffuse = F0 * (mix(0.12, 0.3, uLight) + 0.42 * max(0.0, dot(n, normalize(vec3(0.0, 0.8, 0.6)))) * lampK);
+    return (F0 + (1.0 - F0) * fres) * env * 0.75 + diffuse;
+}
 vec3 grade(vec3 c) {
     c *= uBright;
     float l = luma(c);
@@ -290,6 +304,21 @@ void main() {
             float dr = abs(length(c) - uRipple.x * 0.75);
             pc *= 1.0 + exp(-dr * dr * 700.0) * uRipple.y * 0.22 * (1.0 - uRipple.x);
         }
+        // 厚涂：笔触是有厚度的颜料，按亮度差出起伏，画灯从正上方斜着打下来——笔触朝上的那一沿亮、
+        // 背光的一沿暗，凸起的地方上光油一点细的反光；整幅画上面亮、往下慢慢暗（灯在画框上沿）
+        {
+            float e = 1.3 / size;
+            float h0 = luma(paint.rgb);
+            float hx = luma(texture(uPaint, p + wob + vec2(e, 0.0)).rgb) - h0;
+            float hy = luma(texture(uPaint, p + wob + vec2(0.0, e)).rgb) - h0;
+            vec3 n = normalize(vec3(-hx * 5.0, -hy * 5.0, 1.0));
+            vec3 L = normalize(vec3((uLamp.x - frag.x) / size * 0.5, 1.1, 0.7));
+            float lampK = mix(0.35, 1.0, uLamp.w);
+            float relief = 1.0 + (dot(n, L) - L.z) * 1.4 * lampK;
+            float varnish = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 40.0) * smoothstep(0.02, 0.12, length(vec2(hx, hy)) * 5.0);
+            float fall = mix(1.0, 0.8 + 0.34 * exp(-(1.0 - p.y) * 2.2), lampK);
+            pc = pc * relief * fall + vec3(1.0, 0.92, 0.8) * varnish * 0.22 * lampK;
+        }
         // 布纹
         pc *= 1.0 + (sin(frag.x * 2.1) * sin(frag.y * 2.1)) * 0.018;
         // 没落笔的地方：打过底的画布上只有炭笔线稿
@@ -309,17 +338,42 @@ void main() {
         pc *= 1.0 - smoothstep(0.42, 0.5, max(ac.x, ac.y)) * 0.12;
         col = pc;
     } else if (fw > 0.5) {
-        // 画框：深色木框，内侧一道金边
+        // 画框：一圈有线脚的描金框。从里往外：斜的金衬条、一道串珠、一条凹的槽、圆的上沿、往外落下去的深色木边。
+        // 每段的斜率给出法线，金按展厅的反射打光（画灯在正上方，上边框的上沿最亮）；四个角是 45° 斜接，有一条细缝。
         float out_ = max(ac.x, ac.y) - 0.5;
         float t = out_ * size / fw;
         if (t < 1.0) {
-            float bevel = 0.5 + 0.5 * cos(t * 3.14159 * 1.6);
-            vec3 wood = mix(vec3(0.07, 0.05, 0.04), vec3(0.2, 0.15, 0.1), bevel);
-            vec3 gold = vec3(0.62, 0.48, 0.26) * (0.7 + 0.6 * bevel);
-            vec3 fc = mix(gold, wood, smoothstep(0.12, 0.2, t));
-            // 光从左上来
-            float lit = (c.y > abs(c.x) || -c.x > abs(c.y)) ? 1.12 : 0.82;
-            fc *= lit;
+            bool horiz = ac.y > ac.x;
+            vec2 dirOut = horiz ? vec2(0.0, sign(c.y)) : vec2(sign(c.x), 0.0);
+            vec2 dirAlong = vec2(dirOut.y, -dirOut.x);
+            float along = (horiz ? c.x : c.y) * size;
+            vec2 slope2;      // 法线的倾斜：朝外方向、沿边方向
+            float ao = 1.0;
+            float wood = 0.0;
+            if (t < 0.14) { slope2 = vec2(0.9, 0.0); ao = 0.7 + 0.3 * t / 0.14; }
+            else if (t < 0.26) {
+                // 串珠：沿着边一颗颗的小圆珠
+                float u = (t - 0.14) / 0.12 * 2.0 - 1.0;
+                float v = fract(along / (fw * 0.12)) * 2.0 - 1.0;
+                float rr = u * u + v * v;
+                slope2 = rr < 1.0 ? vec2(-u, -v) * 1.6 / sqrt(max(1.0 - rr, 0.05)) * 0.5 : vec2(0.0);
+                ao = rr < 1.0 ? 1.0 : 0.5;
+            }
+            else if (t < 0.6) { float u = (t - 0.26) / 0.34; slope2 = vec2((u - 0.5) * 2.6, 0.0); ao = 0.62 + 0.38 * abs(u - 0.5) * 2.0; }
+            else if (t < 0.84) { float u = (t - 0.6) / 0.24; slope2 = vec2((0.5 - u) * 3.0, 0.0); }
+            else { slope2 = vec2(-1.2, 0.0); wood = 1.0; ao = 0.85; }
+            vec3 n = normalize(vec3(-dirOut * slope2.x - dirAlong * slope2.y, 1.0));
+            // 展厅的反射只算一次，金、胶泥、木头共用
+            float env = gallery(reflect(vec3(0.0, 0.0, -1.0), n));
+            vec3 fc = gilt(vec3(1.0, 0.78, 0.4), n, env) * ao;
+            // 描金磨掉的地方露出底下的红色胶泥（只在圆的上沿、很少）
+            float worn = smoothstep(0.55, 0.98, sin(along * 0.11) * sin(along * 0.037 + 1.7) * sin(t * fw * 0.5 + along * 0.013)) * step(0.6, t) * step(t, 0.84);
+            fc = mix(fc, vec3(0.42, 0.14, 0.09) * (0.3 + env * 0.6), worn * 0.45);
+            vec3 woodCol = vec3(0.1, 0.065, 0.045) * (0.6 + env * 0.8);
+            woodCol *= 1.0 + sin(along * 0.05 + sin(t * 20.0 + along * 0.011) * 2.0) * 0.12;
+            fc = mix(fc, woodCol, wood);
+            // 斜接缝
+            fc *= 1.0 - (1.0 - smoothstep(0.0, 1.2, abs(ac.x - ac.y) * size)) * 0.5;
             col = mix(col, fc, 1.0 - smoothstep(0.96, 1.0, t));
         }
     }
@@ -350,9 +404,14 @@ void main() {
         vec2 bd = abs(q - vec2(0.0, hw * 0.07)) - vec2(hw, hw * 0.055);
         float bar = length(max(bd, 0.0)) + min(max(bd.x, bd.y), 0.0);
         float arm = max(abs(abs(q.x) - hw * 0.55) - 1.2, max(q.y - hw * 0.05, -q.y - hw * 0.42));
-        vec3 brass = vec3(0.5, 0.38, 0.2) * (0.75 + 0.5 * smoothstep(-hw * 0.05, hw * 0.12, q.y - hw * 0.02));
-        col = mix(col, brass * 0.8, 1.0 - smoothstep(0.0, 1.2, arm));
-        col = mix(col, brass, 1.0 - smoothstep(0.0, 1.2, bar));
+        // 灯罩是一根圆铜管、臂是两根细圆杆：按截面的法线照展厅打光
+        // （管和杆只打一次光：哪个近用哪个的截面法线）
+        float onBar = step(bar, arm);
+        float v = clamp((q.y - hw * 0.07) / (hw * 0.055), -1.0, 1.0);
+        float va = clamp((abs(q.x) - hw * 0.55) / 1.6, -1.0, 1.0);
+        vec3 nl = onBar > 0.5 ? vec3(0.0, v, sqrt(max(0.0, 1.0 - v * v))) : vec3(va, 0.0, sqrt(max(0.0, 1.0 - va * va)));
+        vec3 brass = gilt(vec3(0.92, 0.72, 0.42), nl, gallery(reflect(vec3(0.0, 0.0, -1.0), nl))) * mix(0.85, 1.0, onBar);
+        col = mix(col, brass, 1.0 - smoothstep(0.0, 1.2, min(arm, bar)));
         col += warm * exp(-pow(max(abs(q.x) - hw * 0.92, 0.0) / 3.0, 2.0) - pow((q.y - hw * 0.015) / 1.6, 2.0)) * 0.7 * uLamp.w;
     }
     col += (hash12(floor(frag / 1.5) + uGrainStep * 11.0) - 0.5) * 0.035 * uGrain;
@@ -713,7 +772,7 @@ void main() {
             const t = frame.playbackTime || 0;
             const W = canvas.width, H = canvas.height;
             let size = Math.min(H * 0.6, W * 0.4);
-            let fw = Math.max(8, size * 0.045);
+            let fw = Math.max(10, size * 0.075);
             let x0 = W * 0.33 - size / 2;
             const y0 = H * 0.5 - size / 2 + H * 0.02;
             // 窄窗口：画让开左上角的档案卡，也不压到右边的歌词
@@ -723,7 +782,7 @@ void main() {
                 if (x0 < minX) {
                     x0 = minX;
                     const room = W * 0.56 - x0 - fw;
-                    if (size > room) { size = Math.max(H * 0.25, room); fw = Math.max(8, size * 0.045); }
+                    if (size > room) { size = Math.max(H * 0.25, room); fw = Math.max(10, size * 0.075); }
                 }
             }
             const reveal = s.reducedMotion ? 1.2 : clamp((performance.now() / 1000 - paintedAt) / REVEAL_SECONDS, 0, 1.2) * 1.1;
