@@ -164,6 +164,129 @@
         return n;
     };
 
+    /* ───────────────────────── 卡片 ───────────────────────── */
+
+    // 每句字贴在一张卡片上：粉纸（深色字）、小窗（标题栏）、深色签（虚线框、胶带、编号）。
+    // 只画卡片本身和字的贴纸白边；字的颜色、唱到的时刻仍由着色器按 R/G 通道算。
+    const CARD_STYLES = Object.freeze(['paper', 'window', 'tag']);
+    const roundRect = (ctx, x, y, w, h, r) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    };
+    const tape = (ctx, cx, cy, w, h, rot, colour) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        ctx.fillStyle = colour;
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        // 胶带两头的锯齿
+        ctx.globalCompositeOperation = 'destination-out';
+        const teeth = 5;
+        for (let i = 0; i < teeth; i += 1) {
+            const y = -h / 2 + (i + 0.5) * h / teeth;
+            ctx.beginPath(); ctx.arc(-w / 2, y, h / teeth * 0.42, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(w / 2, y, h / teeth * 0.42, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        for (let x = -w / 2 + h * 0.2; x < w / 2; x += h * 0.45) ctx.fillRect(x, -h / 2, h * 0.14, h);
+        ctx.restore();
+    };
+    const dots = (ctx, x, y, w, h, step, colour) => {
+        ctx.fillStyle = colour;
+        const r = Math.max(0.8, step * 0.09);
+        for (let yy = y + step / 2; yy < y + h; yy += step) {
+            for (let xx = x + step / 2; xx < x + w; xx += step) { ctx.beginPath(); ctx.arc(xx, yy, r, 0, Math.PI * 2); ctx.fill(); }
+        }
+    };
+    const paintCard = (ctx, style, box, size, label, random, font) => {
+        const { x0, y0, x1, y1 } = box;
+        const w = x1 - x0, h = y1 - y0;
+        const radius = size * 0.22;
+        ctx.save();
+        // 落在夜空上的影子
+        ctx.shadowColor = 'rgba(6,2,18,0.55)';
+        ctx.shadowBlur = size * 0.6;
+        ctx.shadowOffsetY = size * 0.16;
+        if (style === 'paper') {
+            const rim = size * 0.12;
+            roundRect(ctx, x0 - rim, y0 - rim, w + rim * 2, h + rim * 2, radius + rim);
+            ctx.fillStyle = '#fbf6f8';
+            ctx.fill();
+            ctx.shadowColor = 'transparent';
+            roundRect(ctx, x0, y0, w, h, radius);
+            ctx.fillStyle = '#f5adc9';
+            ctx.fill();
+            ctx.save(); ctx.clip();
+            dots(ctx, x0, y0, w, h, size * 0.3, 'rgba(255,255,255,0.34)');
+            ctx.restore();
+            tape(ctx, x0 + w * 0.1, y0 - rim * 0.4, size * 1.1, size * 0.34, -0.5 + random() * 0.2, 'rgba(178,158,232,0.82)');
+            tape(ctx, x1 - w * 0.08, y1 + rim * 0.4, size * 1.1, size * 0.34, -0.5 + random() * 0.2, 'rgba(150,226,214,0.82)');
+        } else if (style === 'window') {
+            const bar = size * 0.46;
+            roundRect(ctx, x0, y0 - bar, w, h + bar, radius);
+            ctx.fillStyle = '#4d4a5e';
+            ctx.fill();
+            ctx.shadowColor = 'transparent';
+            ctx.lineWidth = Math.max(1.5, size * 0.04);
+            ctx.strokeStyle = '#f7b9d2';
+            ctx.stroke();
+            ctx.save(); roundRect(ctx, x0, y0 - bar, w, h + bar, radius); ctx.clip();
+            dots(ctx, x0, y0, w, h, size * 0.3, 'rgba(255,255,255,0.07)');
+            const grad = ctx.createLinearGradient(x0, 0, x1, 0);
+            grad.addColorStop(0, '#fbe6a6'); grad.addColorStop(1, '#f7b9d2');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x0, y0 - bar, w, bar);
+            ctx.restore();
+            ['#8fd3f4', '#a5e3b1', '#f48fb1'].forEach((c, i) => {
+                ctx.fillStyle = c;
+                ctx.beginPath(); ctx.arc(x1 - bar * (0.55 + i * 0.55), y0 - bar / 2, bar * 0.17, 0, Math.PI * 2); ctx.fill();
+            });
+            const px = size * 0.2;
+            ctx.font = font(600, px);
+            const text = `✦ ${label.file}`;
+            const tw = ctx.measureText(text).width;
+            roundRect(ctx, x0 + bar * 0.4, y0 - bar * 0.78, tw + px * 1.2, bar * 0.56, bar * 0.28);
+            ctx.fillStyle = '#fffaf6'; ctx.fill();
+            ctx.fillStyle = '#5b5068';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x0 + bar * 0.4 + px * 0.6, y0 - bar * 0.5);
+        } else {
+            roundRect(ctx, x0, y0, w, h, radius * 0.6);
+            ctx.fillStyle = '#2e2a44';
+            ctx.fill();
+            ctx.shadowColor = 'transparent';
+            ctx.save(); ctx.clip();
+            dots(ctx, x0, y0, w, h, size * 0.26, 'rgba(255,255,255,0.09)');
+            ctx.restore();
+            const inset = size * 0.14;
+            ctx.setLineDash([size * 0.1, size * 0.08]);
+            ctx.lineWidth = Math.max(1.2, size * 0.03);
+            ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            roundRect(ctx, x0 + inset, y0 + inset, w - inset * 2, h - inset * 2, radius * 0.4);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            tape(ctx, x0 + size * 0.1, y0 + size * 0.05, size * 1.0, size * 0.32, -0.75, 'rgba(190,170,240,0.85)');
+            tape(ctx, x1 - size * 0.1, y1 - size * 0.05, size * 1.0, size * 0.32, -0.75, 'rgba(150,226,214,0.85)');
+            const px = size * 0.24;
+            ctx.font = font(700, px);
+            const text = `#${String(label.number).padStart(2, '0')} ♪`;
+            const tw = ctx.measureText(text).width;
+            const bx = x0 + w * 0.5 - tw / 2 - px * 0.6, by = y1 - px * 0.7;
+            roundRect(ctx, bx, by, tw + px * 1.2, px * 1.4, px * 0.7);
+            ctx.fillStyle = '#ffd7a8'; ctx.fill();
+            ctx.fillStyle = '#3a2c40';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, bx + px * 0.6, by + px * 0.72);
+        }
+        ctx.restore();
+    };
+
     /* ───────────────────────── GL ───────────────────────── */
 
     const SKY_VERT = `#version 300 es
@@ -177,6 +300,11 @@ precision highp int;
 uniform sampler2D uText;
 uniform sampler2D uGlyph;
 uniform sampler2D uPrevText;
+uniform sampler2D uCard;      // 卡片（预乘透明度）
+uniform sampler2D uPrevCard;
+uniform vec2 uDark;           // 这句 / 上一句是不是浅色纸卡（字用深色）
+uniform float uCardIn;
+uniform float uCarded;
 uniform vec2 uRes;
 uniform vec2 uTextSize;
 uniform float uTime;
@@ -207,6 +335,7 @@ uniform vec3 uTags[4];   // 纸签的颜色
 uniform vec4 uPop;       // 鼓点小花：x, y（屏幕）, 已过时间, 色相种子
 out vec4 outColor;
 
+const vec3 DARK_INK = vec3(0.24, 0.12, 0.2);
 const float WATER = ${WATER.toFixed(3)};
 
 float hash12(vec2 p) {
@@ -303,6 +432,20 @@ void main() {
     }
     float lit = clamp(total, 0.0, 1.5);
     vec3 tint = total > 0.001 ? glow / total : vec3(1.0);
+    // 上一句（连卡片）先画，新的一句盖在上面
+    if (uPrevFade > 0.0) {
+        vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, uPrevFade * 0.0 - (1.0 - uPrevFade) * 0.02);
+        vec4 pc = texture(uPrevCard, t0) * uPrevFade;
+        col = col * (1.0 - pc.a) + pc.rgb * (0.88 + lit * 0.25);
+        float r0 = texture(uPrevText, t0).r;
+        // 上一句碎成火星：笔画先按噪点一点点熄掉，熄的边上闪一下
+        float n0 = hash12(floor(gl_FragCoord.xy / 2.0));
+        float keep = smoothstep(1.0 - uPrevFade, 1.0 - uPrevFade + 0.08, n0);
+        float ember = (1.0 - keep) * step(1.0 - uPrevFade - 0.12, n0);
+        float strong = step(0.4, r0);   // 背景大字（很淡）只淡出，不碎
+        col = mix(col, mix(uInk * (0.8 + lit * 0.45), DARK_INK, uDark.y), r0 * mix(uPrevFade, keep, strong) * 0.8);
+        col += vec3(1.0, 0.7, 0.35) * r0 * ember * strong * uPrevFade * 1.4;
+    }
     {
         vec4 tx = uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z) : texture(uText, t1);
         tx.r *= uEnter.w;
@@ -311,8 +454,12 @@ void main() {
         vec2 se = gid > 0 ? texelFetch(uGlyph, ivec2(gid, 0), 0).xy : vec2(1e9);
         float reveal = smoothstep(se.x - 0.12, se.x + 0.12, uTime);
         float singing = smoothstep(se.x - 0.1, se.x + 0.05, uTime) * (1.0 - smoothstep(se.y, se.y + 0.5, uTime));
-        float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.7 + lit * 0.4));
+        // 贴在卡片上的字没唱到也要看得清（贴纸本来就在那儿），只是浅一些
+        float body = tx.r * (max(uWaiting, uCarded * 0.45) * (1.0 - reveal) + reveal * (0.7 + lit * 0.4));
         vec3 ink = mix(uInk, uInk * mix(vec3(1.0), tint, 0.5), clamp(lit, 0.0, 1.0)) * (0.8 + lit * 0.45);
+        ink = mix(ink, mix(DARK_INK, vec3(0.86, 0.18, 0.46), singing * 0.8), uDark.x);
+        vec4 cd = (uEnter.z > 0.01 ? textureLod(uCard, t1, uEnter.z) : texture(uCard, t1)) * (uEnter.w * uCardIn);
+        col = col * (1.0 - cd.a) + cd.rgb * (1.0 + lit * 0.15);
         // 纸签：块里第一个字开唱前 0.15 秒从下往上刷出来
         ivec2 tp = clamp(ivec2(t1 * uTextSize), ivec2(2), ivec2(uTextSize) - 3);
         int sid = int(texelFetch(uText, tp, 0).b * 255.0 + 0.5);
@@ -332,19 +479,8 @@ void main() {
         }
         col = mix(col, ink, clamp(body, 0.0, 1.0));
         col += vec3(1.0, 0.96, 0.9) * uEnter2.y;   // 闪白
-        col += uAccent * tx.r * singing * 0.4;
-        col += (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5;
-    }
-    if (uPrevFade > 0.0) {
-        vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, uPrevFade * 0.0 - (1.0 - uPrevFade) * 0.02);
-        float r0 = texture(uPrevText, t0).r;
-        // 上一句碎成火星：笔画先按噪点一点点熄掉，熄的边上闪一下
-        float n0 = hash12(floor(gl_FragCoord.xy / 2.0));
-        float keep = smoothstep(1.0 - uPrevFade, 1.0 - uPrevFade + 0.08, n0);
-        float ember = (1.0 - keep) * step(1.0 - uPrevFade - 0.12, n0);
-        float strong = step(0.4, r0);   // 背景大字（很淡）只淡出，不碎
-        col = mix(col, uInk * (0.8 + lit * 0.45), r0 * mix(uPrevFade, keep, strong) * 0.8);
-        col += vec3(1.0, 0.7, 0.35) * r0 * ember * strong * uPrevFade * 1.4;
+        col += uAccent * tx.r * singing * 0.4 * (1.0 - uDark.x);
+        col += (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5 * (1.0 - cd.a * 0.8);
     }
 
     // 鼓点：天上随手炸开一朵小花（一圈小星，往外散、往下坠、变暗）
@@ -564,7 +700,7 @@ void main() {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             return t;
         };
-        const slots = Array.from({ length: 3 }, () => ({ text: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
+        const slots = Array.from({ length: 3 }, () => ({ text: texture(gl.LINEAR, true), card: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
         return {
             gl, sky: link(SKY_VERT, SKY_FRAG), spark: link(SPARK_VERT, SPARK_FRAG),
             vao: gl.createVertexArray(), slots, bursts: texture(gl.NEAREST, false), burstsKey: null
@@ -591,6 +727,7 @@ void main() {
         let creditsOn = false;
         mode.root.append(canvas, kicker, translation, credits, notice);
         const textCanvas = document.createElement('canvas');
+        const cardCanvas = document.createElement('canvas');
 
         let glState = null;
         try { glState = createGl(canvas); } catch (error) { console.error(error); }
@@ -670,7 +807,7 @@ void main() {
             const H = Math.round(W * h / w);
             if (Math.abs(H - world.H) > 8) {
                 world = { W, H: Math.min(2048, H) };
-                textCanvas.width = world.W; textCanvas.height = world.H;
+                textCanvas.width = cardCanvas.width = world.W; textCanvas.height = cardCanvas.height = world.H;
                 glState?.slots.forEach((slot) => { slot.key = null; });
             }
         };
@@ -719,6 +856,10 @@ void main() {
             ctx.globalCompositeOperation = 'source-over';
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, W, H);
+            const cctx = cardCanvas.getContext('2d');
+            cctx.setTransform(1, 0, 0, 1, 0, 0);
+            cctx.clearRect(0, 0, W, H);
+            let cardStyle = null;
             let glyphs = [];
             if (cue.kind === 'line') glyphs = buildGlyphTimeline(cue.line).map(g => ({ text: g.text, start: g.startTime, end: g.endTime }));
             else if (cue.title) {
@@ -741,6 +882,7 @@ void main() {
                 const items = [];
                 const tagged = [];
                 let tilt = 0;
+                let cols = 1;
                 if (collage) {
                     const chunks = [];
                     let cur = [];
@@ -798,16 +940,22 @@ void main() {
                         y += rowH[ri];
                     });
                 } else if (vertical) {
-                    const size = clamp(H * 0.48 / visible, H * 0.04, H * 0.08) * s.fontScale;
-                    tilt = (0.32 + random() * 0.18) * (random() < 0.7 ? 1 : -1);
-                    const ox = W * (tilt > 0 ? 0.62 + random() * 0.08 : 0.32 + random() * 0.08);
-                    let y = H * 0.1 + size;
+                    // 竖排卡片：字多时分两列，从右往左读
+                    cols = visible > 6 ? 2 : 1;
+                    const perCol = Math.ceil(visible / cols);
+                    const size = clamp(H * 0.5 / perCol, H * 0.05, H * 0.085) * s.fontScale;
+                    tilt = (0.06 + random() * 0.12) * (random() < 0.5 ? 1 : -1);
+                    const ox0 = W * (0.5 + (random() - 0.5) * 0.16) + (cols - 1) * size * 0.62;
+                    const top = H * 0.4 - perCol * size * 1.04 / 2 + size * 0.8;
+                    let col = 0, inCol = 0, y = top;
                     let chunk = 0, left = 0;
                     glyphs.forEach((g) => {
-                        if (!g.text.trim()) { left = 0; y += size * 0.35; return; }
+                        if (!g.text.trim()) { left = 0; if (inCol) y += size * 0.35; return; }
+                        if (inCol >= perCol && col < cols - 1) { col += 1; inCol = 0; y = top + size * 0.5; left = 0; }
                         if (left <= 0) { chunk += 1; left = 1 + Math.floor(random() * 3); }
-                        items.push({ g, x: ox - size / 2, baseline: y, size, chunk });
+                        items.push({ g, x: ox0 - col * size * 1.3 - size / 2, baseline: y, size, chunk });
                         left -= 1;
+                        inCol += 1;
                         y += size * 1.04;
                     });
                 } else {
@@ -829,7 +977,8 @@ void main() {
                     const lineH = size * 1.3;
                     // 字在河岸上方，留出天空给烟花
                     // 行多了往上让，最后一行不压到河岸下面的翻译
-                    const top = Math.min(H * 0.62 - rows.length * lineH / 2 + size * 0.95, H * 0.7 - (rows.length - 1) * lineH);
+                    const top = H * 0.42 - rows.length * lineH / 2 + size * 0.95;
+                    tilt = (0.06 + random() * 0.16) * (random() < 0.5 ? 1 : -1);
                     rows.forEach((r, ri) => {
                         const trimmed = r.map(g => g.text).join('').replace(/\s+$/, '');
                         let x = (W - ctx.measureText(trimmed).width) / 2;
@@ -851,23 +1000,58 @@ void main() {
                     if (word) {
                         ctx.save();
                         ctx.globalCompositeOperation = 'lighter';
-                        ctx.fillStyle = 'rgb(46,0,0)';
-                        const big = H * (0.17 + random() * 0.06);
+                        ctx.fillStyle = 'rgb(26,0,0)';
+                        const big = H * (0.15 + random() * 0.04);
                         ctx.font = `800 ${big.toFixed(1)}px ${family()}`;
-                        const rot = (random() - 0.5) * 0.5 + 0.18;
-                        for (let k = 0; k < 3; k += 1) {
-                            ctx.save();
-                            ctx.translate(W * (0.08 + k * 0.33 + random() * 0.08), H * (0.14 + random() * 0.6));
-                            ctx.rotate(rot);
-                            ctx.fillText(word, 0, 0);
-                            ctx.restore();
-                        }
+                        ctx.translate(W * (random() < 0.5 ? 0.06 : 0.62), H * (0.2 + random() * 0.12));
+                        ctx.rotate((random() - 0.5) * 0.5 + 0.18);
+                        ctx.fillText(word, 0, 0);
                         ctx.restore();
                     }
                 }
+                // 卡片：字的外框加留白；转一点角度后整张要留在天上（河岸和翻译之上）
+                const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+                let unit = 0;
+                items.forEach((it) => {
+                    ctx.font = font(it.size);
+                    it.w = ctx.measureText(it.g.text).width;
+                    box.x0 = Math.min(box.x0, it.x - (vertical ? it.size * 0.32 : 0));
+                    box.x1 = Math.max(box.x1, it.x + it.w);
+                    box.y0 = Math.min(box.y0, it.baseline - it.size * 0.92);
+                    box.y1 = Math.max(box.y1, it.baseline + it.size * 0.2);
+                    unit = Math.max(unit, it.size);
+                });
+                let style = null;
+                if (items.length && cue.kind === 'line') {
+                    const r = random();
+                    style = vertical ? (r < 0.65 ? 'tag' : 'paper') : (r < 0.5 ? 'paper' : 'window');
+                    cardStyle = style;
+                    const padX = unit * (collage ? 0.4 : 0.55), padY = unit * 0.45;
+                    box.x0 -= padX; box.x1 += padX; box.y0 -= padY; box.y1 += padY + (style === 'tag' ? unit * 0.3 : 0);
+                    const cardTilt = collage ? (random() - 0.5) * 0.12 : tilt;
+                    const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+                    const c = Math.abs(Math.cos(cardTilt)), sn = Math.abs(Math.sin(cardTilt));
+                    const hw = ((box.x1 - box.x0) * c + (box.y1 - box.y0) * sn) / 2 + unit * 0.3;
+                    const hh = ((box.x1 - box.x0) * sn + (box.y1 - box.y0) * c) / 2 + unit * 0.5 + (style === 'window' ? unit * 0.46 : 0);
+                    const dx = clamp(cx, W * 0.03 + hw, W * 0.97 - hw) - cx || 0;
+                    const dy = clamp(cy, H * 0.05 + hh, H * 0.72 - hh) - cy || 0;
+                    if (dx || dy) {
+                        const moved = new Set();
+                        items.forEach((it) => { it.x += dx; it.baseline += dy; if (it.pivot && !moved.has(it.pivot)) { moved.add(it.pivot); it.pivot[0] += dx; it.pivot[1] += dy; } });
+                        tagged.forEach((tg) => { tg.x0 += dx; tg.x1 += dx; tg.bl += dy; if (!moved.has(tg.pivot)) { moved.add(tg.pivot); tg.pivot[0] += dx; tg.pivot[1] += dy; } });
+                        box.x0 += dx; box.x1 += dx; box.y0 += dy; box.y1 += dy;
+                    }
+                    const bc = [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
+                    cctx.save();
+                    cctx.translate(bc[0], bc[1]); cctx.rotate(cardTilt); cctx.translate(-bc[0], -bc[1]);
+                    const files = ['night_sky.png', 'summer.txt', 'hanabi.jpg', 'memo_0801.txt', 'river.png'];
+                    paintCard(cctx, style, box, unit, { number: cue.number || index + 1, file: files[Math.floor(random() * files.length)] }, random,
+                        (weight, px) => `${weight} ${px.toFixed(1)}px ${family()}`);
+                    cctx.restore();
+                }
                 ctx.save();
                 const cos = Math.cos(tilt), sin = Math.sin(tilt);
-                const pivot = items.length ? [items[0].x + items[0].size / 2, (items[0].baseline + items[items.length - 1].baseline) / 2] : [W / 2, H / 2];
+                const pivot = items.length ? [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2] : [W / 2, H / 2];
                 ctx.translate(pivot[0], pivot[1]); ctx.rotate(tilt); ctx.translate(-pivot[0], -pivot[1]);
                 const toTex = (x, y) => {
                     const dx = x - pivot[0], dy = y - pivot[1];
@@ -886,9 +1070,31 @@ void main() {
                 });
                 let id = 0;
                 let chunkFirst = 0, lastChunk = -1;
+                const rim = style && style !== 'paper' ? 'rgba(18,14,30,0.92)' : null;
                 items.forEach(({ g, x, baseline, size, chunk, rot, pivot: own }) => {
                     ctx.font = font(size);
                     const w = ctx.measureText(g.text).width;
+                    // 深色卡上的字描一圈深边、带一点硬投影，像剪下来贴上去；粉纸上只留一道浅浅的压痕
+                    if (style && g.text.trim()) {
+                        cctx.save();
+                        const piv = own || pivot, ang = own ? rot : tilt;
+                        cctx.translate(piv[0], piv[1]); cctx.rotate(ang); cctx.translate(-piv[0], -piv[1]);
+                        cctx.font = font(size);
+                        cctx.lineJoin = 'round';
+                        if (rim) {
+                            cctx.fillStyle = cctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                            cctx.lineWidth = size * 0.16;
+                            cctx.strokeText(g.text, x + size * 0.045, baseline + size * 0.06);
+                            cctx.fillStyle = cctx.strokeStyle = rim;
+                            cctx.strokeText(g.text, x, baseline);
+                        } else {
+                            cctx.fillStyle = 'rgba(255,255,255,0.5)';
+                            cctx.fillText(g.text, x + size * 0.03, baseline + size * 0.04);
+                            cctx.fillStyle = 'rgba(140,50,90,0.22)';
+                        }
+                        cctx.fillText(g.text, x, baseline);
+                        cctx.restore();
+                    }
                     id = Math.min(255, id + 1);
                     if (own) {
                         ctx.save();
@@ -920,7 +1126,7 @@ void main() {
                 });
                 ctx.restore();
                 // 导火索：沿着字走一条波浪线，按唱到的位置烧过去
-                if (placed.length > 1 && cue.kind === 'line' && !collage && (vertical || Math.abs(placed[0].y - placed[placed.length - 1].y) < 0.01)) {
+                if (placed.length > 1 && cue.kind === 'line' && !collage && cols === 1 && (vertical || Math.abs(placed[0].y - placed[placed.length - 1].y) < 0.01)) {
                     const a = placed[0], b = placed[placed.length - 1];
                     const off = vertical ? [cos * a.size * 0.55 * H / W, sin * a.size * 0.55] : [0, a.size * 0.62];
                     const back = vertical ? [-sin * a.size * 0.6 * H / W, cos * a.size * 0.6] : [-a.w * 0.6, 0];
@@ -933,9 +1139,16 @@ void main() {
             gl.bindTexture(gl.TEXTURE_2D, slot.text);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textCanvas);
             gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, slot.card);
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cardCanvas);
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+            gl.generateMipmap(gl.TEXTURE_2D);
             gl.bindTexture(gl.TEXTURE_2D, slot.glyph);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 256, 1, 0, gl.RGBA, gl.FLOAT, data);
             slot.key = key;
+            slot.dark = cardStyle === 'paper' ? 1 : 0;
+            slot.carded = cardStyle ? 1 : 0;
             slot.glyphs = placed;
             slot.fuse = fuse;
             slot.used = performance.now();
@@ -983,7 +1196,7 @@ void main() {
             uploadBursts();
             stats.cue = index;
             const local = t - cue.start;
-            const prev = index > 0 && local < 0.6 ? slotFor(index - 1, false) : null;
+            const prev = index > 0 && local < 0.4 ? slotFor(index - 1, false) : null;
             // 段落进场：长间奏后的第一句。三种：从上方带着速度落下来（上升）、闪白、从大到小开花
             const enter = [0, 0, 0, 1], enter2 = [1, 0];
             if (!s.reducedMotion && cue.kind === 'line' && index > 0 && cues[index - 1].kind === 'rest' && local < ENTER) {
@@ -1001,7 +1214,7 @@ void main() {
                     enter2[0] = 1 + 0.35 * k; enter[2] = 3 * k; enter[3] = 1 - 0.85 * k;
                 }
             }
-            const prevFade = prev ? 1 - smooth(0, 0.6, local) : 0;
+            const prevFade = prev ? 1 - smooth(0, 0.4, local) : 0;
             const zoom = 1 + clamp(local / Math.max(1, cue.end - cue.start), 0, 1) * 0.03;
             const audio = frame.audio || {};
             const power = clamp(((audio.power || 0) * 0.6 + (audio.bass || 0) * 0.4) * s.audioReactivity, 0, 1.5);
@@ -1046,6 +1259,11 @@ void main() {
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(u.uText, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 1);
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(u.uPrevText, 2);
+            gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, slot.card); gl.uniform1i(u.uCard, 5);
+            gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).card); gl.uniform1i(u.uPrevCard, 6);
+            gl.uniform2f(u.uDark, slot.dark || 0, prev?.dark || 0);
+            gl.uniform1f(u.uCarded, slot.carded || 0);
+            gl.uniform1f(u.uCardIn, s.reducedMotion ? 1 : smooth(0, 0.16, local + (index === 0 ? 1 : 0)));
             Utils.bindNoise(gl, u.uNoise, 4);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uTextSize, world.W, world.H);
@@ -1172,7 +1390,7 @@ void main() {
             if (idleHandle) (global.cancelIdleCallback || global.clearTimeout)(idleHandle);
             if (glState) {
                 const { gl } = glState;
-                glState.slots.forEach((slot) => { gl.deleteTexture(slot.text); gl.deleteTexture(slot.glyph); });
+                glState.slots.forEach((slot) => { gl.deleteTexture(slot.text); gl.deleteTexture(slot.card); gl.deleteTexture(slot.glyph); });
                 gl.deleteTexture(glState.bursts);
                 gl.deleteProgram(glState.sky.program);
                 gl.deleteProgram(glState.spark.program);
