@@ -369,6 +369,8 @@
         try { global.MusicFolders?.setupMusicFolders?.(app); } catch (e) { /* 没有这个模块 */ }
         // 自己的 EQ 预设（music-eq-presets.js）
         try { global.MusicEqPresets?.setupMusicEqPresets?.(app); } catch (e) { /* 没有这个模块 */ }
+        // 声道：平衡 / 互换 / 单声道（music-channels.js，新引擎才有）
+        try { global.MusicChannels?.setupMusicChannels?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };

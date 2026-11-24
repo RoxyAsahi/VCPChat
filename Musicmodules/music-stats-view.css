@@ -335,3 +335,27 @@
 .mstats-cal-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: 6px; font-size: 11px; color: var(--ms-ink2); }
 .mstats-cal-legend i { width: 10px; }
 .mstats-cal-legend span { margin: 0 3px; }
+
+/* 声道（music-channels.js）：平衡滑块 + 两个开关 */
+.dialog-overlay.music-stats-dialog .dialog.glass-panel.mstats.mchan { width: min(460px, calc(100vw - 48px)); }
+.mchan-summary { font-size: 12px; color: var(--ms-ink2); white-space: nowrap; }
+.mchan-balance { margin-bottom: 18px; }
+.mchan-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 13px; }
+.mchan-label { color: var(--ms-ink); }
+.mchan-value { color: var(--ms-ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mchan-slider { width: 100%; margin: 0; accent-color: var(--mf-tint, #d9773f); cursor: pointer; }
+.mchan-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--ms-ink2); }
+.mchan-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.mchan-toggle {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 12px 14px; border: 0; border-radius: 14px;
+    background: var(--ms-hover); color: var(--ms-ink);
+    font: inherit; text-align: left; cursor: pointer;
+    box-shadow: inset 0 0 0 1.5px transparent;
+    transition: box-shadow .15s ease, background-color .15s ease;
+}
+.mchan-toggle b { font-size: 13px; font-weight: 600; }
+.mchan-toggle span { font-size: 11.5px; line-height: 1.45; color: var(--ms-ink2); }
+.mchan-toggle[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--mf-tint, #d9773f); background: color-mix(in srgb, var(--mf-tint, #d9773f) 12%, transparent); }
+.mchan-toggle:focus-visible { outline: 2px solid var(--ms-ink); outline-offset: 2px; }
+@media (max-width: 420px) { .mchan-toggles { grid-template-columns: 1fr; } }

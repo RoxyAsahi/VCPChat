@@ -95,6 +95,7 @@ module.exports = {
         setMusicSaturation: invoke('music-set-saturation', 'options'),
         getMusicCrossfeed: invoke('music-get-crossfeed'),
         setMusicCrossfeed: invoke('music-set-crossfeed', 'options'),
+        setMusicChannels: invoke('music-set-channels', 'options'),
         getMusicDynamicLoudness: invoke('music-get-dynamic-loudness'),
         setMusicDynamicLoudness: invoke('music-set-dynamic-loudness', 'options'),
         getMusicSettings: invoke('music-get-settings'),

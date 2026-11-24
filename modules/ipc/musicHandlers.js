@@ -1022,6 +1022,11 @@ function initialize(options) {
             return audioEngineApi('/set_saturation', 'POST', data);
         });
 
+        // --- 声道（左右平衡 / 互换 / 单声道），新引擎才有 /set_channels ---
+        ipcMain.handle('music-set-channels', (event, data) => {
+            return audioEngineApi('/set_channels', 'POST', data);
+        });
+
         // --- Crossfeed Handlers ---
         ipcMain.handle('music-get-crossfeed', async () => {
             return await audioEngineApi('/crossfeed', 'GET');
