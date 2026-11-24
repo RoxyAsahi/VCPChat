@@ -188,7 +188,7 @@ function setupUI(app) {
     // 曲库本身是空的就告诉人去哪添加，别说「没有匹配」；搜不到才说没有匹配。
     const emptyText = (songs) => {
         if (songs.length) return null;
-        if (!app.playlist.length) return '曲库里还没有歌曲，点上面的「本地」或「云端导入」添加';
+        if (!app.playlist.length) return '曲库里还没有歌曲，点上面的「本地」或「云端导入」添加，也可以把文件夹直接拖进窗口';
         if (String(app.searchInput?.value || '').trim()) return '没有匹配的曲目';
         return '这里还没有歌曲';
     };
