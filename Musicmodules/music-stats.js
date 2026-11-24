@@ -11,7 +11,7 @@
 //       app.musicStats.forgotten({ minPlays, days, limit }) → [path]（以前常听、很久没碰的）
 //       app.musicStats.lastPlayed(n) → [path]
 //       app.musicStats.resume() → { track, position, at } | null（上次没听完的那首，首页「接着听」）
-//       app.musicStats.summary({ days }) → 听歌统计页用：总秒数、次数、活跃天数、24 小时分布、按次数排的歌
+//       app.musicStats.summary({ days }) → 听歌统计页用：总秒数、次数、活跃天数、24 小时分布、按次数排的歌、daily（日期 → 秒）
 //         （days 为 0 或不填 = 全部；按天的流水从这一版开始记，之前的只有总次数）
 // 变化时在 document 上发 `music-stats-change`（detail: { path }）。
 
@@ -219,12 +219,14 @@
                 let seconds = 0;
                 let activeDays = 0;
                 let count = 0;
+                const daily = {}; // 每天听了几秒（听歌日历用）
                 const from = days > 0 ? dayKey(now() - (days - 1) * DAY) : '';
                 for (const [k, day] of Object.entries(log)) {
                     if (from && k < from) continue;
                     let daySeconds = 0;
                     (day.s || []).forEach((v, h) => { hours[h] += v; daySeconds += v; });
                     seconds += daySeconds;
+                    if (daySeconds > 0) daily[k] = Math.round(daySeconds);
                     let dayPlays = 0;
                     for (const [p, n] of Object.entries(day.p || {})) { plays.set(p, (plays.get(p) || 0) + n); dayPlays += n; }
                     count += dayPlays;
@@ -240,7 +242,7 @@
                     .map(([k, n]) => ({ path: table[k] ? table[k][4] : k, plays: n, last: table[k] ? table[k][1] : 0 }))
                     .sort((a, b) => b.plays - a.plays || b.last - a.last);
                 const firstDay = Object.keys(log).sort()[0] || '';
-                return { seconds: Math.round(seconds), plays: count, activeDays, hours: hours.map(Math.round), tracks, since: firstDay };
+                return { seconds: Math.round(seconds), plays: count, activeDays, hours: hours.map(Math.round), tracks, since: firstDay, daily };
             },
             tick,
             sync,

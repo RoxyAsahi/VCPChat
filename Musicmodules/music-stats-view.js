@@ -37,6 +37,44 @@
         if (cut > 0 && !/^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p)) for (const name of ['cover.jpg', 'folder.jpg', 'cover.png']) out.push(fileUrl(p.slice(0, cut) + '/' + name));
         return out;
     };
+    // 听歌日历：最近 weeks 周，一列一周（周一在上），今天所在那周是最后一列。
+    // daily: { 'YYYY-MM-DD': 秒 } → [[{ key, seconds, level, future }...7] ...]；level 0–4 按当天听了多久（20 分 / 1 小时 / 2 小时分档）
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const keyOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const levelOf = (sec) => (sec <= 0 ? 0 : sec < 1200 ? 1 : sec < 3600 ? 2 : sec < 7200 ? 3 : 4);
+    const calendarWeeks = (daily, today = new Date(), weeks = 53) => {
+        const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const monday = new Date(end);
+        monday.setDate(end.getDate() - ((end.getDay() + 6) % 7));
+        const start = new Date(monday);
+        start.setDate(monday.getDate() - (weeks - 1) * 7);
+        const out = [];
+        for (let w = 0; w < weeks; w++) {
+            const col = [];
+            for (let d = 0; d < 7; d++) {
+                const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d);
+                const key = keyOf(day);
+                const seconds = Number(daily?.[key]) || 0;
+                col.push({ key, seconds, level: levelOf(seconds), future: day > end, month: day.getMonth(), date: day.getDate() });
+            }
+            out.push(col);
+        }
+        return out;
+    };
+    // 连续听歌的最长天数（一天听满 1 分钟才算）
+    const longestStreak = (daily) => {
+        const keys = Object.keys(daily || {}).filter((k) => daily[k] >= 60).sort();
+        let best = 0, run = 0, prev = null;
+        for (const k of keys) {
+            const [y, m, d] = k.split('-').map(Number);
+            const t = new Date(y, m - 1, d).getTime();
+            run = prev !== null && Math.round((t - prev) / 86400000) === 1 ? run + 1 : 1;
+            best = Math.max(best, run);
+            prev = t;
+        }
+        return best;
+    };
+
     const hourName = (h) => {
         const part = h < 5 ? '凌晨' : h < 9 ? '早上' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜';
         const n = h < 5 ? h : h % 12 === 0 ? 12 : h % 12;
@@ -187,6 +225,40 @@
                 body.appendChild(chart);
             }
 
+            // 近一年、全部：画一张听歌日历（最近 53 周），看哪段时间听得多
+            if ((range === 0 || range >= 365) && s.daily && Object.keys(s.daily).length) {
+                const weeks = calendarWeeks(s.daily);
+                const cal = el('section', 'mstats-cal');
+                const listened = weeks.flat().filter((c) => c.seconds >= 60).length;
+                const streak = longestStreak(s.daily);
+                cal.appendChild(el('h4', '', `最近一年有 ${listened} 天在听歌${streak > 1 ? `，最长连着听了 ${streak} 天` : ''}`));
+                const months = el('div', 'mstats-cal-months');
+                months.setAttribute('aria-hidden', 'true');
+                weeks.forEach((col, w) => {
+                    const first = col.find((c) => c.date === 1 && !c.future);
+                    const label = el('span', '', first && w < weeks.length - 1 ? `${first.month + 1}月` : '');
+                    months.appendChild(label);
+                });
+                cal.appendChild(months);
+                const grid = el('div', 'mstats-cal-grid');
+                grid.setAttribute('role', 'img');
+                grid.setAttribute('aria-label', `听歌日历：最近一年有 ${listened} 天在听歌`);
+                for (const col of weeks) {
+                    for (const c of col) {
+                        const cell = el('i', c.future ? 'future' : `l${c.level}`);
+                        if (!c.future) cell.title = `${c.key}　${c.seconds ? '听了 ' + formatDuration(c.seconds) : '没听'}`;
+                        grid.appendChild(cell);
+                    }
+                }
+                cal.appendChild(grid);
+                const legend = el('div', 'mstats-cal-legend');
+                legend.appendChild(el('span', '', '少'));
+                for (let l = 0; l <= 4; l++) legend.appendChild(el('i', `l${l}`));
+                legend.appendChild(el('span', '', '多'));
+                cal.appendChild(legend);
+                body.appendChild(cal);
+            }
+
             const r = rank(s, app.playlist || []);
             const tops = el('div', 'mstats-tops');
             const lib = app.playlist || [];
@@ -246,7 +318,7 @@
 
     // 命令面板直接调这个：第一次用时才装上
     const open = (app) => { setupMusicStatsView(app); app?.openStatsView?.(); };
-    const exported = { setupMusicStatsView, open, rank, formatDuration, hourName, coverUrls };
+    const exported = { setupMusicStatsView, open, rank, formatDuration, hourName, coverUrls, calendarWeeks, longestStreak };
     if (typeof module !== 'undefined' && module.exports) module.exports = exported;
     global.setupMusicStatsView = setupMusicStatsView;
     global.MusicStatsView = exported;

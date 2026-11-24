@@ -36,3 +36,19 @@ test('coverUrls: embedded cover first, then folder images; remote tracks only us
     assert.deepEqual(coverUrls({ path: 'https://dav/x.flac' }), []);
     assert.deepEqual(coverUrls(null), []);
 });
+
+test('calendarWeeks ends on the current week with Monday on top and grades days by listening time', () => {
+    const { calendarWeeks, longestStreak } = require(path.join(__dirname, '../Musicmodules/music-stats-view.js'));
+    const today = new Date(2026, 10, 24); // 周二
+    const weeks = calendarWeeks({ '2026-11-24': 30, '2026-11-23': 4000, '2026-11-17': 8000, '2026-11-22': 1500 }, today, 3);
+    assert.equal(weeks.length, 3);
+    assert.equal(weeks[2][0].key, '2026-11-23'); // 最后一列从本周一开始
+    assert.equal(weeks[2][0].level, 3);
+    assert.equal(weeks[2][1].level, 1);
+    assert.equal(weeks[2][2].future, true);
+    assert.equal(weeks[1][1].key, '2026-11-17');
+    assert.equal(weeks[1][1].level, 4);
+    assert.equal(weeks[1][6].level, 2);
+    assert.equal(weeks[0][0].key, '2026-11-09');
+    assert.equal(longestStreak({ '2026-11-01': 100, '2026-11-02': 100, '2026-11-03': 100, '2026-11-05': 100, '2026-11-06': 30 }), 3);
+});
