@@ -525,5 +525,11 @@ body.music-reduce-motion .aw-locate.is-away::before, body.music-reduce-motion .a
 .aw-prev i::after { left: 2px; border-style: solid; border-width: 6px 10px 6px 0; border-color: transparent currentColor transparent transparent; }
 .aw-next i::before { right: 0; width: 2px; height: 12px; background: currentColor; }
 .aw-next i::after { right: 2px; border-style: solid; border-width: 6px 0 6px 10px; border-color: transparent transparent transparent currentColor; }
-@container awcard (max-width: 340px) { #music-archive-view .aw-panel-acts .aw-round { width: 28px; min-width: 28px; } #music-archive-view .aw-panel-acts [data-wall="stage"] { display: none; } }
+@container awcard (max-width: 340px) { #music-archive-view .aw-panel-acts .aw-round { width: 28px; min-width: 28px; } #music-archive-view .aw-panel-acts:has(.aw-round:not([hidden])) [data-wall="stage"] { display: none; } }
 #music-archive-view .aw-panel-acts .aw-primary.is-now:not(:disabled) { background: color-mix(in srgb, var(--ar-accent) 88%, #fff); color: #111; }
+
+/* 浅色主题：压暗会发脏，改成往纸色里退（变淡、去饱和），熄灯同理 */
+body.light-theme .archive-wall .aw-in { transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter .25s var(--mt-ease, ease), opacity .25s var(--mt-ease, ease); }
+body.light-theme .aw-world.aw-has-open .aw-tile:not(.is-open):not(:hover) .aw-in { filter: saturate(.72) brightness(1.04); opacity: .5; }
+body.light-theme .archive-wall.aw-dim .aw-tile:not(.is-playing) .aw-in { filter: saturate(.45) brightness(1.08); opacity: .24; transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter 1.6s ease, opacity 1.6s ease; }
+body.light-theme .aw-tile.is-open .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 18%, transparent), 0 36px 90px rgba(60, 40, 20, .26), 0 6px 18px rgba(60, 40, 20, .12); }
