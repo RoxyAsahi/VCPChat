@@ -844,7 +844,8 @@ float vnoise(vec2 p) {
     // 被上一句的字整个盖住时的颜色。三者都是平滑的，放大不会糊；真正锐利的只有字的覆盖率，
     // 合成那一遍按屏幕原生像素重新采样字形纹理，在三张图之间插值：
     //   col = base + r * (text - base) + r0 * (prev - base)
-    // 舞台给出 coverage(uv) 的 GLSL（返回当前句、上一句在这一点的覆盖率），以及它要用的 uniform。
+    // 舞台给出 coverage(uv) 的 GLSL（返回 vec4：x 当前句、y 上一句在这一点的覆盖率，zw 由舞台自用），以及它要用的 uniform；
+    // 需要在插值之后再加一笔（比如上一句碎掉时的火星）的，再给一段 post(col, c)。
     const SPLIT_OUT_GLSL = `
 layout(location = 0) out vec4 outBase;
 layout(location = 1) out vec4 outText;
@@ -875,7 +876,7 @@ void main() {
         }
         return { program, uniforms };
     };
-    const createSharpText = (gl, { coverage, label = 'stage' }) => {
+    const createSharpText = (gl, { coverage, post = 'vec3 post(vec3 col, vec4 c) { return col; }', label = 'stage' }) => {
         const frag = `#version 300 es
 precision highp float;
 precision highp int;
@@ -892,13 +893,15 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 ${coverage}
+${post}
 void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
-    vec2 c = coverage(uv);
+    vec4 c = coverage(uv);
     vec3 base = texture(uBase, uv).rgb;
     vec3 col = base;
     if (c.x > 0.002) col += c.x * (texture(uTextLayer, uv).rgb - base);
     if (c.y > 0.002) col += c.y * (texture(uPrevLayer, uv).rgb - base);
+    col = post(col, c);
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;

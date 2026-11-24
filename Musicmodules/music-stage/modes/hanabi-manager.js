@@ -18,7 +18,6 @@
 
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
-    const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const PER_BURST = Object.freeze({ 'energy-saving': 72, standard: 110, ultimate: 140 });
     const TRAIL = 10;
     const MAX_ACTIVE = 24;
@@ -324,8 +323,7 @@ uniform vec3 uSkyLow;
 uniform vec3 uInk;
 uniform vec3 uAccent;
 uniform float uWaiting;
-uniform float uGrain;
-uniform float uGrainStep;
+uniform float uLodBias;   // 字形纹理按屏幕像素，比原来 1600 宽多出来的 mip 级数
 uniform vec4 uSpark[6];
 uniform int uSparkCount;
 uniform vec4 uFuse;      // 导火索两端（纹理坐标）
@@ -333,7 +331,7 @@ uniform float uFuseAt;   // 烧到哪里（0..1），<0 不画
 uniform float uBloom;    // 副歌泛光
 uniform vec3 uTags[4];   // 纸签的颜色
 uniform vec4 uPop;       // 鼓点小花：x, y（屏幕）, 已过时间, 色相种子
-out vec4 outColor;
+${Utils.SPLIT_OUT_GLSL}
 
 const vec3 DARK_INK = vec3(0.24, 0.12, 0.2);
 const float WATER = ${WATER.toFixed(3)};
@@ -432,34 +430,33 @@ void main() {
     }
     float lit = clamp(total, 0.0, 1.5);
     vec3 tint = total > 0.001 ? glow / total : vec3(1.0);
-    // 上一句（连卡片）先画，新的一句盖在上面
+    // 上一句（连卡片）先画，新的一句盖在上面。字的颜色在这一遍按低分辨率算好三种（没有字、
+    // 被这一句的字盖住、被上一句的字盖住），覆盖率和上一句碎成火星的噪点在合成那一遍按屏幕像素算
+    vec3 prevInk = vec3(0.0);
+    float prevOn = 0.0;
     if (uPrevFade > 0.0) {
-        vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, uPrevFade * 0.0 - (1.0 - uPrevFade) * 0.02);
+        vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, -(1.0 - uPrevFade) * 0.02);
         vec4 pc = texture(uPrevCard, t0) * uPrevFade;
         col = col * (1.0 - pc.a) + pc.rgb * (0.88 + lit * 0.25);
-        float r0 = texture(uPrevText, t0).r;
-        // 上一句碎成火星：笔画先按噪点一点点熄掉，熄的边上闪一下
-        float n0 = hash12(floor(gl_FragCoord.xy / 2.0));
-        float keep = smoothstep(1.0 - uPrevFade, 1.0 - uPrevFade + 0.08, n0);
-        float ember = (1.0 - keep) * step(1.0 - uPrevFade - 0.12, n0);
-        float strong = step(0.4, r0);   // 背景大字（很淡）只淡出，不碎
-        col = mix(col, mix(uInk * (0.8 + lit * 0.45), DARK_INK, uDark.y), r0 * mix(uPrevFade, keep, strong) * 0.8);
-        col += vec3(1.0, 0.7, 0.35) * r0 * ember * strong * uPrevFade * 1.4;
+        prevInk = mix(uInk * (0.8 + lit * 0.45), DARK_INK, uDark.y);
+        prevOn = 1.0;
     }
+    vec3 under = col;
+    vec3 cText, cPrev;
     {
-        vec4 tx = uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z) : texture(uText, t1);
-        tx.r *= uEnter.w;
-        float halo = textureLod(uText, t1, 3.5).r;
+        float lod = uEnter.z > 0.01 ? uEnter.z + uLodBias : 0.0;
+        float halo = textureLod(uText, t1, 3.5 + uLodBias).r;
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         vec2 se = gid > 0 ? texelFetch(uGlyph, ivec2(gid, 0), 0).xy : vec2(1e9);
         float reveal = smoothstep(se.x - 0.12, se.x + 0.12, uTime);
         float singing = smoothstep(se.x - 0.1, se.x + 0.05, uTime) * (1.0 - smoothstep(se.y, se.y + 0.5, uTime));
         // 贴在卡片上的字没唱到也要看得清（贴纸本来就在那儿），只是浅一些
-        float body = tx.r * (max(uWaiting, uCarded * 0.45) * (1.0 - reveal) + reveal * (0.7 + lit * 0.4));
+        float body = max(uWaiting, uCarded * 0.45) * (1.0 - reveal) + reveal * (0.7 + lit * 0.4);
         vec3 ink = mix(uInk, uInk * mix(vec3(1.0), tint, 0.5), clamp(lit, 0.0, 1.0)) * (0.8 + lit * 0.45);
         ink = mix(ink, mix(DARK_INK, vec3(0.86, 0.18, 0.46), singing * 0.8), uDark.x);
-        vec4 cd = (uEnter.z > 0.01 ? textureLod(uCard, t1, uEnter.z) : texture(uCard, t1)) * (uEnter.w * uCardIn);
+        vec4 cd = (lod > 0.0 ? textureLod(uCard, t1, lod) : texture(uCard, t1)) * (uEnter.w * uCardIn);
         col = col * (1.0 - cd.a) + cd.rgb * (1.0 + lit * 0.15);
+        float keep = 1.0 - cd.a;   // 上一句的字被这一句的卡片盖掉多少
         // 纸签：块里第一个字开唱前 0.15 秒从下往上刷出来
         ivec2 tp = clamp(ivec2(t1 * uTextSize), ivec2(2), ivec2(uTextSize) - 3);
         int sid = int(texelFetch(uText, tp, 0).b * 255.0 + 0.5);
@@ -476,12 +473,15 @@ void main() {
             float on = smoothstep(st - 0.2, st, uTime);
             vec3 tag = uTags[sid % 4];
             col = mix(col, tag * (0.75 + lit * 0.35), on * 0.92);
+            keep *= 1.0 - on * 0.92;
         }
-        col = mix(col, ink, clamp(body, 0.0, 1.0));
-        col += vec3(1.0, 0.96, 0.9) * uEnter2.y;   // 闪白
-        col += uAccent * tx.r * singing * 0.4 * (1.0 - uDark.x);
-        col += (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5 * (1.0 - cd.a * 0.8);
+        vec3 add = vec3(1.0, 0.96, 0.9) * uEnter2.y   // 闪白
+            + (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5 * (1.0 - cd.a * 0.8);
+        cText = mix(col, ink, clamp(body, 0.0, 1.0)) + uAccent * singing * 0.4 * (1.0 - uDark.x) + add;
+        cPrev = col + (prevInk - under) * keep * prevOn + add;
+        col += add;
     }
+    vec3 extra = vec3(0.0);
 
     // 鼓点：天上随手炸开一朵小花（一圈小星，往外散、往下坠、变暗）
     if (uPop.z >= 0.0 && uPop.z < 1.1) {
@@ -492,10 +492,10 @@ void main() {
             float rr = 0.09 * (1.0 - exp(-age * 4.0));
             vec2 c = vec2(uPop.x * aspect, uPop.y) + vec2(cos(a), sin(a)) * rr - vec2(0.0, age * age * 0.04);
             vec2 d = p - c;
-            col += pc * exp(-dot(d, d) * 30000.0) * (1.0 - age / 1.1) * 1.4;
+            extra += pc * exp(-dot(d, d) * 30000.0) * (1.0 - age / 1.1) * 1.4;
         }
         vec2 d0 = p - vec2(uPop.x * aspect, uPop.y);
-        col += pc * exp(-dot(d0, d0) * 300.0) * exp(-age * 8.0) * 0.4;
+        extra += pc * exp(-dot(d0, d0) * 300.0) * exp(-age * 8.0) * 0.4;
     }
     if (uFuseAt >= 0.0) {
         vec2 a = vec2(uFuse.x, 1.0 - uFuse.y), b = vec2(uFuse.z, 1.0 - uFuse.w);
@@ -512,12 +512,14 @@ void main() {
         float burnt = step(k, uFuseAt);
         // 没烧的引线淡淡发亮，烧过的只剩一道浅灰的灰烬
         vec3 fresh = mix(uInk, vec3(0.55, 0.85, 1.0), 0.35) * 0.75;
-        col = mix(col, mix(fresh, uInk * 0.3, burnt), line * mix(0.85, 0.35, burnt));
-        col += vec3(0.45, 0.75, 1.0) * smoothstep(0.009, 0.0, dist) * inside * (1.0 - burnt) * 0.05;
+        vec3 fuseCol = mix(fresh, uInk * 0.3, burnt);
+        float fuseK = line * mix(0.85, 0.35, burnt);
+        col = mix(col, fuseCol, fuseK); cText = mix(cText, fuseCol, fuseK); cPrev = mix(cPrev, fuseCol, fuseK);
+        extra += vec3(0.45, 0.75, 1.0) * smoothstep(0.009, 0.0, dist) * inside * (1.0 - burnt) * 0.05;
         vec2 tip = a + (b - a) * uFuseAt;
         vec2 td = (uv - tip) * vec2(aspect, 1.0);
         float flick = 0.8 + 0.2 * sin(uTime * 47.0);
-        col += vec3(1.0, 0.72, 0.35) * (exp(-dot(td, td) * 9000.0) * 1.6 + exp(-length(td) * 60.0) * 0.35) * flick;
+        extra += vec3(1.0, 0.72, 0.35) * (exp(-dot(td, td) * 9000.0) * 1.6 + exp(-length(td) * 60.0) * 0.35) * flick;
     }
     for (int i = 0; i < 6; i++) {
         if (i >= uSparkCount) break;
@@ -525,13 +527,14 @@ void main() {
         vec2 d = (uv - s.xy) * vec2(aspect, 1.0) / s.z;
         float core = exp(-dot(d, d) * 60.0);
         float cross = exp(-abs(d.x) * 70.0) * exp(-abs(d.y) * 4.0) + exp(-abs(d.y) * 70.0) * exp(-abs(d.x) * 4.0);
-        col += mix(uInk, uAccent, 0.5) * (core * 1.3 + cross * 0.5) * s.w;
+        extra += mix(uInk, uAccent, 0.5) * (core * 1.3 + cross * 0.5) * s.w;
     }
-    col += glow * uBloom * 0.35 + mix(uSkyTop, uAccent, 0.4) * uBloom * 0.06;
+    extra += glow * uBloom * 0.35 + mix(uSkyTop, uAccent, 0.4) * uBloom * 0.06;
     vec2 v = uv - 0.5;
-    col *= 1.0 - dot(v, v) * 0.7;
-    col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
-    outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+    float edge = 1.0 - dot(v, v) * 0.7;
+    outBase = vec4(clamp((col + extra) * edge, 0.0, 1.0), 1.0);
+    outText = vec4(clamp((cText + extra) * edge, 0.0, 1.0), 1.0);
+    outPrev = vec4(clamp((cPrev + extra) * edge, 0.0, 1.0), 1.0);
 }`;
 
     // 每个点：第 slot 发烟花的第 p 颗星的第 j 个尾迹点。位置按阻力和重力的闭式解算。
@@ -662,6 +665,47 @@ void main() {
     outColor = vec4(vCol * a, 1.0);
 }`;
 
+    // 合成那一遍：按屏幕像素重新取样字形（同样的段落进场、推近），上一句按噪点一点点熄掉，熄的边上闪火星
+    const COVERAGE = `
+uniform sampler2D uText;
+uniform sampler2D uPrevText;
+uniform float uZoom;
+uniform float uPrevZoom;
+uniform vec4 uEnter;
+uniform vec2 uEnter2;
+uniform float uPrevFade;
+uniform float uLodBias;
+uniform float uCell;
+uniform sampler2D uCard;
+uniform float uCardIn;
+vec4 coverage(vec2 uv) {
+    float aspect = uRes.x / uRes.y;
+    vec2 tc = vec2(uv.x, 1.0 - uv.y);
+    vec2 t1 = (tc - 0.5) / uZoom + 0.5;
+    if (uEnter.w < 0.999 || uEnter2.y > 0.0) {
+        vec2 c1 = (tc - 0.5 - vec2(0.0, uEnter.x)) * vec2(aspect, 1.0);
+        float cr = cos(uEnter.y), sr = sin(uEnter.y);
+        c1 = mat2(cr, -sr, sr, cr) * c1 / vec2(aspect, 1.0);
+        t1 = c1 / (uZoom * uEnter2.x) + 0.5;
+    }
+    float r = (uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z + uLodBias) : texture(uText, t1)).r * uEnter.w;
+    vec4 c = vec4(r, 0.0, 0.0, 0.0);
+    if (uPrevFade > 0.0) {
+        vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, -(1.0 - uPrevFade) * 0.02);
+        float r0 = texture(uPrevText, t0).r;
+        float n0 = hash12(floor(gl_FragCoord.xy / uCell));
+        float keep = smoothstep(1.0 - uPrevFade, 1.0 - uPrevFade + 0.08, n0);
+        float ember = (1.0 - keep) * step(1.0 - uPrevFade - 0.12, n0);
+        float strong = step(0.4, r0);   // 背景大字（很淡）只淡出，不碎
+        c.y = r0 * mix(uPrevFade, keep, strong) * 0.8 * (1.0 - r);
+        // 火星在上一句的字上，被这一句的卡片盖住的地方看不见
+        float card = texture(uCard, t1).a * uEnter.w * uCardIn;
+        c.z = r0 * ember * strong * uPrevFade * 1.4 * (1.0 - card) * (1.0 - r);
+    }
+    return c;
+}`;
+    const POST = 'vec3 post(vec3 col, vec4 c) { return col + vec3(1.0, 0.7, 0.35) * c.z; }';
+
     const createGl = (canvas) => {
         const gl = canvas.getContext('webgl2', {
             alpha: false, antialias: false, depth: false, stencil: false,
@@ -703,7 +747,8 @@ void main() {
         const slots = Array.from({ length: 3 }, () => ({ text: texture(gl.LINEAR, true), card: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
         return {
             gl, sky: link(SKY_VERT, SKY_FRAG), spark: link(SPARK_VERT, SPARK_FRAG),
-            vao: gl.createVertexArray(), slots, bursts: texture(gl.NEAREST, false), burstsKey: null
+            vao: gl.createVertexArray(), slots, bursts: texture(gl.NEAREST, false), burstsKey: null,
+            sharp: Utils.createSharpText(gl, { label: 'hanabi', coverage: COVERAGE, post: POST })
         };
     };
 
@@ -750,6 +795,8 @@ void main() {
         let bursts = [];
         let cuesFor = null;
         let world = { W: 0, H: 0 };
+        let low = [1, 1];
+        let cell = 2;
         let paused = false;
         let latestFrame = null;
         let lastDraw = -Infinity;
@@ -799,14 +846,15 @@ void main() {
             const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
-            const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            const scale = Math.min(dpr, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
-            const bw = Math.max(1, Math.round(w * scale)), bh = Math.max(1, Math.round(h * scale));
-            if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
-            const W = 1600;
-            const H = Math.round(W * h / w);
-            if (Math.abs(H - world.H) > 8) {
-                world = { W, H: Math.min(2048, H) };
+            // 画布和字形纹理按屏幕原生像素，天空、烟、倒影按像素预算的低分辨率算（见 Utils.createSharpText）
+            const size = Utils.sharpSizes(w, h, PIXELS[quality] || PIXELS.standard);
+            low = [size.lw, size.lh];
+            cell = 2 * size.native / size.low;
+            if (canvas.width !== size.nw || canvas.height !== size.nh) { canvas.width = size.nw; canvas.height = size.nh; still.invalidate(); }
+            const W = Math.min(4096, size.nw);
+            const H = Math.min(4096, size.nh);
+            if (W !== world.W || H !== world.H) {
+                world = { W, H };
                 textCanvas.width = cardCanvas.width = world.W; textCanvas.height = cardCanvas.height = world.H;
                 glState?.slots.forEach((slot) => { slot.key = null; });
             }
@@ -1251,7 +1299,8 @@ void main() {
             const energy = clamp(((audio.energy || 0) - 0.55) * 2.2 * s.audioReactivity, 0, 1);
             bloom += (energy - bloom) * 0.08;
 
-            gl.viewport(0, 0, canvas.width, canvas.height);
+            const { sharp } = glState;
+            sharp.begin(low[0], low[1]);
             gl.bindVertexArray(vao);
             gl.disable(gl.BLEND);
             let u = sky.uniforms;
@@ -1263,10 +1312,13 @@ void main() {
             gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).card); gl.uniform1i(u.uPrevCard, 6);
             gl.uniform2f(u.uDark, slot.dark || 0, prev?.dark || 0);
             gl.uniform1f(u.uCarded, slot.carded || 0);
-            gl.uniform1f(u.uCardIn, s.reducedMotion ? 1 : smooth(0, 0.16, local + (index === 0 ? 1 : 0)));
+            const cardIn = s.reducedMotion ? 1 : smooth(0, 0.16, local + (index === 0 ? 1 : 0));
+            gl.uniform1f(u.uCardIn, cardIn);
             Utils.bindNoise(gl, u.uNoise, 4);
-            gl.uniform2f(u.uRes, canvas.width, canvas.height);
+            gl.uniform2f(u.uRes, low[0], low[1]);
             gl.uniform2f(u.uTextSize, world.W, world.H);
+            const lodBias = Math.log2(world.W / 1600);
+            gl.uniform1f(u.uLodBias, lodBias);
             gl.uniform1f(u.uTime, t);
             gl.uniform1f(u.uPrevFade, prevFade);
             gl.uniform1f(u.uZoom, s.reducedMotion ? 1 : zoom);
@@ -1284,8 +1336,6 @@ void main() {
             gl.uniform3fv(u.uInk, colours.ink);
             gl.uniform3fv(u.uAccent, colours.accent);
             gl.uniform1f(u.uWaiting, s.waitingOpacity);
-            gl.uniform1f(u.uGrain, s.grain);
-            gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.uniform4fv(u.uSpark, sparkBuffer);
             gl.uniform1i(u.uSparkCount, sparks);
             if (slot.fuse) gl.uniform4fv(u.uFuse, slot.fuse);
@@ -1301,6 +1351,20 @@ void main() {
             }
             gl.uniform4f(u.uPop, popAt[0], popAt[1], s.reducedMotion ? -1 : t - popTime, popAt[2]);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
+            sharp.finish(canvas.width, canvas.height, { grain: s.grain, grainStep: s.reducedMotion ? 0 : Math.floor(t * 6) % 64 }, (c, unit) => {
+                gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(c.uText, unit);
+                gl.activeTexture(gl.TEXTURE0 + unit + 1); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(c.uPrevText, unit + 1);
+                gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
+                gl.uniform1f(c.uPrevZoom, s.reducedMotion ? 1 : 1.03);
+                gl.uniform4fv(c.uEnter, enter);
+                gl.uniform2fv(c.uEnter2, enter2);
+                gl.uniform1f(c.uPrevFade, prevFade);
+                gl.uniform1f(c.uLodBias, lodBias);
+                gl.uniform1f(c.uCell, cell);
+                gl.activeTexture(gl.TEXTURE0 + unit + 2); gl.bindTexture(gl.TEXTURE_2D, slot.card); gl.uniform1i(c.uCard, unit + 2);
+                gl.uniform1f(c.uCardIn, cardIn);
+            });
+            gl.bindVertexArray(vao);
 
             if (count) {
                 const quality = mode.config.quality || 'standard';
@@ -1377,7 +1441,7 @@ void main() {
         mode.updateTheme = () => { readColours(); redraw(); };
         mode.getDebugSnapshot = () => ({
             initialized: Boolean(glState), cues: cues.length, cue: stats.cue, bursts: stats.bursts, active: stats.active,
-            builds: stats.builds, buildMs: stats.buildMs, draws: stats.draws, buffer: `${canvas.width}x${canvas.height}`
+            builds: stats.builds, buildMs: stats.buildMs, draws: stats.draws, buffer: `${canvas.width}x${canvas.height}`, effects: `${low[0]}x${low[1]}`
         });
 
         const onLost = (event) => { event.preventDefault(); lostContext = true; };

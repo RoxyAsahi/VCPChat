@@ -378,7 +378,7 @@ uniform float uPrevZoom;
 uniform float uFocus;
 uniform float uPrevFade;
 uniform float uLodBias;
-vec2 coverage(vec2 uv) {
+vec4 coverage(vec2 uv) {
     vec2 tc = vec2(uv.x, 1.0 - uv.y);
     float r = textureLod(uText, (tc - 0.5) / uZoom + 0.5, uFocus * (4.5 + uLodBias)).r * (1.0 - uFocus * 0.7);
     float r0 = 0.0;
@@ -386,7 +386,7 @@ vec2 coverage(vec2 uv) {
         float lod = (1.0 - uPrevFade) * (4.0 + uLodBias) * step(0.001, uFocus);
         r0 = textureLod(uPrevText, (tc - 0.5) / uPrevZoom + 0.5, lod).r;
     }
-    return vec2(r, r0);
+    return vec4(r, r0, 0.0, 0.0);
 }`;
 
     const createGl = (canvas) => {
