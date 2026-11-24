@@ -40,6 +40,39 @@
     };
     const mixRgb = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 
+    // 环所在平面绕 x、y 轴各转一点，从屏幕坐标反查平面坐标的 3×3 矩阵（按列给 GL）
+    const CAMERA = 6;
+    const planeMatrix = (ax, ay, out) => {
+        const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay);
+        // R = Ry · Rx
+        const r00 = cy, r01 = sy * sx, r10 = 0, r11 = cx, r20 = -sy, r21 = cy * sx;
+        const Z = CAMERA;
+        const a = [Z * r00, Z * r01, 0, Z * r10, Z * r11, 0, r20, r21, Z];
+        const det = a[0] * (a[4] * a[8] - a[5] * a[7]) - a[1] * (a[3] * a[8] - a[5] * a[6]) + a[2] * (a[3] * a[7] - a[4] * a[6]);
+        const inv = [
+            (a[4] * a[8] - a[5] * a[7]) / det, (a[2] * a[7] - a[1] * a[8]) / det, (a[1] * a[5] - a[2] * a[4]) / det,
+            (a[5] * a[6] - a[3] * a[8]) / det, (a[0] * a[8] - a[2] * a[6]) / det, (a[2] * a[3] - a[0] * a[5]) / det,
+            (a[3] * a[7] - a[4] * a[6]) / det, (a[1] * a[6] - a[0] * a[7]) / det, (a[0] * a[4] - a[1] * a[3]) / det
+        ];
+        // 行主序 inv → 列主序
+        out[0] = inv[0]; out[1] = inv[3]; out[2] = inv[6];
+        out[3] = inv[1]; out[4] = inv[4]; out[5] = inv[7];
+        out[6] = inv[2]; out[7] = inv[5]; out[8] = inv[8];
+        return out;
+    };
+    const applyPlane = (m, x, y) => {
+        const hx = m[0] * x + m[3] * y + m[6], hy = m[1] * x + m[4] * y + m[7], hz = m[2] * x + m[5] * y + m[8];
+        return [hx / hz, hy / hz];
+    };
+
+    // 副歌：整句歌词在歌里出现两次以上
+    const normLine = line => String(line?.fullText || '').replace(/[\s，。、,.!?！？…~～'"“”‘’()（）-]/g, '').toLowerCase();
+    const chorusSet = (lines) => {
+        const counts = new Map();
+        (lines || []).forEach((line) => { const k = normLine(line); if (k) counts.set(k, (counts.get(k) || 0) + 1); });
+        return new Set([...counts].filter(([, n]) => n >= 2).map(([k]) => k));
+    };
+
     /* ───────────────────────── 中线 ───────────────────────── */
 
     // 沿中线走 u（0..LOOP）到达的点：原点 →「/」右上 → 右圈顺时针 →「\」穿过原点到左上 → 左圈逆时针 →「/」回原点
@@ -88,6 +121,12 @@ uniform float uHist[${HIST}];
 uniform vec4 uHistBox;    // 中线 y、半宽、半高、开关
 uniform vec4 uBox;        // 括号框：左、下、右、上（像素）
 uniform float uGrain;
+uniform mat3 uPlane;      // 屏幕 → 环所在平面（环轻轻侧倾时的透视）
+uniform vec3 uLightP;     // 平面坐标里的光向
+uniform float uKick;      // 鼓点闪一下，很快衰减
+uniform float uCharge;    // 副歌时整只环充能
+uniform vec3 uRipple;     // 从交叉点外扩的波纹：年龄、强度、副歌加宽
+uniform float uPeaks[${BANDS}];
 uniform float uGrainStep;
 out vec4 outColor;
 
@@ -175,7 +214,7 @@ vec3 shadeTube(Hit h, float energy) {
     float rad = TR + 0.02 * collar;
     float s = clamp(h.side / rad, -1.0, 1.0);
     vec3 n = normalize(vec3(h.n * s, sqrt(max(0.0, 1.0 - s * s))));
-    vec3 L = normalize(vec3(-0.45, 0.65, 0.62));
+    vec3 L = uLightP;
     float diff = max(dot(n, L), 0.0);
     float wrap = max((dot(n, L) + 0.35) / 1.35, 0.0);
     vec3 Hv = normalize(L + vec3(0.0, 0.0, 1.0));
@@ -185,6 +224,7 @@ vec3 shadeTube(Hit h, float energy) {
     vec3 copper = vec3(0.78, 0.46, 0.26);
     float e = pulseAt(h.u);
     vec3 glowHue = mix(uAccent, vec3(1.0, 0.52, 0.2), 0.55);
+    float boost = 1.0 + 0.9 * uKick + 0.45 * uCharge;
 
     // 陶瓷管身：哑光，柔一点的高光，边上一圈暗
     vec3 col = uBody * (0.22 + 0.95 * wrap) + vec3(1.0, 0.97, 0.94) * (spec * mix(0.16, 0.3, uLight) + sheen * 0.05);
@@ -203,7 +243,7 @@ vec3 shadeTube(Hit h, float energy) {
         vec3 wire = copper * (0.28 + 0.9 * depth * (0.5 + 0.5 * diff)) + vec3(1.0, 0.82, 0.62) * pow(depth, 6.0) * 0.55;
         vec3 inside = glass;
         float core = smoothstep(0.16, 0.05, abs(s));
-        inside = mix(inside, glowHue * (0.45 + 0.3 * energy + 1.4 * e), core * 0.9);
+        inside = mix(inside, glowHue * ((0.45 + 0.3 * energy) * boost + 1.4 * e), core * 0.9);
         inside = mix(inside, wire * 0.32, backW * inSpring);
         inside = mix(inside, wire, frontW * inSpring);
         // 玻璃：边缘的反光和一道斜着的高光
@@ -215,13 +255,14 @@ vec3 shadeTube(Hit h, float energy) {
     float groove = smoothstep(0.17, 0.12, abs(s)) * (1.0 - win);
     float lip = (smoothstep(0.24, 0.17, abs(s)) - smoothstep(0.17, 0.12, abs(s))) * (1.0 - win);
     float coreG = smoothstep(0.1, 0.0, abs(s));
-    vec3 glowC = glowHue * (0.42 + 0.3 * energy + 1.5 * e) + vec3(1.0, 0.92, 0.8) * clamp(e - 0.35, 0.0, 1.0) * coreG;
+    vec3 glowC = glowHue * ((0.42 + 0.3 * energy) * boost + 1.5 * e) + vec3(1.0, 0.92, 0.8) * clamp(e - 0.35, 0.0, 1.0) * coreG;
     col *= 1.0 - lip * 0.5;
     col = mix(col, mix(glowHue * 0.25, glowC, 0.35 + 0.65 * coreG), groove);
 
     // 铜套：比管身略粗，两边各一道暗缝
     vec3 brass = copper * (0.1 + 0.62 * wrap) + vec3(1.0, 0.86, 0.7) * pow(max(dot(n, Hv), 0.0), 40.0) * 0.75;
     brass *= 1.0 - rim * 0.5;
+    brass += vec3(1.0, 0.78, 0.55) * uKick * 0.22 * (1.0 - rim);
     col = mix(col, brass, collar);
     // 铜套两边的细缝
     float edge = collar * (1.0 - collar) * 4.0;
@@ -233,7 +274,9 @@ void main() {
     vec2 frag = gl_FragCoord.xy;
     float breath = 1.0 + 0.006 * uEnergy;
     vec2 q = (frag - uCentre) / (uK * breath);
-    float aa = 1.2 / uK;
+    vec3 hp = uPlane * vec3(q, 1.0);
+    vec2 p = hp.xy / hp.z;
+    float aa = 1.2 / (uK * hp.z);
 
     vec3 col = uField;
     // 底：中间略亮，四角压暗，细网格
@@ -246,16 +289,23 @@ void main() {
     vec2 t2up = vec2(HALF * c, HALF * sn), t2dn = vec2(HALF * c, -HALF * sn);
     vec2 t1up = vec2(-HALF * c, HALF * sn), t1dn = vec2(-HALF * c, -HALF * sn);
 
+    // 波纹：换句和鼓点时从交叉点往外扩一圈细线（环后面）
+    if (uRipple.y > 0.0) {
+        float rr = uRipple.x * (3.4 + 1.2 * uRipple.z);
+        float dr = abs(length(p * vec2(0.62, 1.0)) - rr);
+        float wv = 0.012 + 0.02 * uRipple.z;
+        col += mix(uAccent, vec3(1.0, 0.55, 0.22), 0.5) * exp(-dr * dr / (wv * wv)) * uRipple.y * (1.0 - smoothstep(0.4, 1.0, uRipple.x)) * mix(0.35, 0.2, uLight);
+    }
     // 环外面的像素（大半个画面）不用算管子
-    if (abs(q.x) < D + R + TR + 0.45 && abs(q.y) < R + TR + 0.6) {
-    Hit back = nearest(nearest(seg(q, t1dn, t2up, 3.0 * HALF + 2.0 * ARC), arc(q, vec2(D, 0.0), PI / 2.0 + PHI, -1.0, HALF)), arc(q, vec2(-D, 0.0), PI / 2.0 - PHI, 1.0, 3.0 * HALF + ARC));
-    Hit front = seg(q, t2dn, t1up, HALF + ARC);
-    float crossing = smoothstep(1.0, 0.6, length(q));
+    if (abs(p.x) < D + R + TR + 0.45 && abs(p.y) < R + TR + 0.6) {
+    Hit back = nearest(nearest(seg(p, t1dn, t2up, 3.0 * HALF + 2.0 * ARC), arc(p, vec2(D, 0.0), PI / 2.0 + PHI, -1.0, HALF)), arc(p, vec2(-D, 0.0), PI / 2.0 - PHI, 1.0, 3.0 * HALF + ARC));
+    Hit front = seg(p, t2dn, t1up, HALF + ARC);
+    float crossing = smoothstep(1.0, 0.6, length(p));
     float dmin = min(back.d, front.d);
     // 影子和光晕只落在管子外面，管身盖住的像素不用算
     if (dmin > TR - 2.0 * aa) {
         // 影子：整只环往右下偏一点、软一点
-        vec2 qs = q - vec2(0.08, -0.22);
+        vec2 qs = p - vec2(0.08, -0.22);
         Hit sb = nearest(nearest(seg(qs, t1dn, t2up, 3.0 * HALF + 2.0 * ARC), arc(qs, vec2(D, 0.0), PI / 2.0 + PHI, -1.0, HALF)), arc(qs, vec2(-D, 0.0), PI / 2.0 - PHI, 1.0, 3.0 * HALF + ARC));
         Hit sf = seg(qs, t2dn, t1up, HALF + ARC);
         float sd = min(sb.d, sf.d);
@@ -290,8 +340,11 @@ void main() {
             float v = uBands[b];
             float h = max(v * uStrip.z, 1.0);
             float bar = step(fract(cell), 0.56) * step(dy, h);
+            float pk = uPeaks[b] * uStrip.z + 3.0;
+            float cap = step(fract(cell), 0.56) * step(abs(dy - pk), 0.75) * step(0.04, uPeaks[b]) * step(v + 0.03, uPeaks[b]);
             vec3 bc = mix(uInk * 0.42, mix(uAccent, vec3(1.0, 0.52, 0.2), 0.55), step(0.62, v));
             col = mix(col, bc, bar * mix(0.8, 0.5, uLight));
+            col = mix(col, mix(uAccent, vec3(1.0, 0.55, 0.22), 0.5), cap * 0.75);
             col = mix(col, uInk, (1.0 - smoothstep(0.0, 1.0, dy)) * 0.18 * step(0.56, fract(cell)));
         }
     }
@@ -323,7 +376,7 @@ void main() {
             br = max(br, step(0.0, d.x) * step(d.x, L) * step(abs(d.y), w * 0.5 + 0.5));
             br = max(br, step(0.0, d.y) * step(d.y, L) * step(abs(d.x), w * 0.5 + 0.5));
         }
-        col = mix(col, uInk, br * 0.35);
+        col = mix(col, mix(uInk, mix(uAccent, vec3(1.0, 0.55, 0.22), 0.5), uCharge), br * (0.35 + 0.35 * uCharge + 0.3 * uKick));
         vec2 m = vec2(max(28.0, uRes.x * 0.03), max(28.0, uRes.y * 0.04));
         vec2 e = min(frag - m, uRes - m - frag);
         vec2 cr = abs(vec2(frag.x < uRes.x * 0.5 ? frag.x - m.x : frag.x - (uRes.x - m.x), frag.y < uRes.y * 0.5 ? frag.y - m.y : frag.y - (uRes.y - m.y)));
@@ -374,6 +427,11 @@ void main() {
         label.innerHTML = '<i></i><span>信号监视</span><b>实时</b>';
         const lyric = createElement('div', 'signal-lyric');
         const line = createElement('div', 'signal-line');
+        // 两个槽轮流用：新句从下面滑进来，旧句往上退
+        const slots = [createElement('span', 'signal-slot'), createElement('span', 'signal-slot')];
+        line.append(...slots);
+        let slot = 0;
+        const badge = () => label.querySelector('b');
         const rule = createElement('div', 'signal-rule');
         const ruleFill = createElement('i', 'signal-rule-fill');
         rule.append(ruleFill);
@@ -410,6 +468,16 @@ void main() {
         let lastTranslation = '';
         let lastRule = '';
         let lostContext = false;
+        let kick = 0;
+        let charge = 0;
+        let inter = 0;
+        let ripple = { age: 1, str: 0, wide: 0 };
+        let lastLineKey = null;
+        let chorusFor = null;
+        let chorus = new Set();
+        const peaks = new Float32Array(BANDS);
+        const peakVel = new Float32Array(BANDS);
+        const plane = new Float32Array(9);
         const stats = { draws: 0, pulses: 0 };
 
         const settings = () => {
@@ -460,6 +528,27 @@ void main() {
             cool -= dt;
             const onset = Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets;
             if (Number.isFinite(audio.onsets)) lastOnsets = audio.onsets;
+            if (playing && onset) {
+                kick = Math.max(kick, 0.5 + 0.5 * clamp((audio.bass || 0) * 1.6, 0, 1));
+                if (ripple.age > 0.55) ripple = { age: 0, str: 0.45, wide: 0 };
+            }
+            kick *= Math.exp(-dt * 7);
+            // 换句：从交叉点放两团快的光，波纹扩一圈
+            const active = frame.activeLine;
+            const key = active ? `${active.startTime}|${active.fullText}` : null;
+            if (key !== lastLineKey) {
+                if (key && lastLineKey !== null && playing && s.pulseRate > 0) {
+                    pulses.push({ p: 0, v: 0.16, len: 0.07, a: 1.1, fast: true });
+                    pulses.push({ p: 0.5, v: 0.16, len: 0.07, a: 1.1, fast: true });
+                    ripple = { age: 0, str: 1, wide: chorus.has(normLine(active)) ? 1 : 0 };
+                }
+                lastLineKey = key;
+            }
+            if (frame.isPlaying) ripple.age = Math.min(1, ripple.age + dt / 1.6);
+            if (frame.lines !== chorusFor) { chorusFor = frame.lines; chorus = chorusSet(frame.lines); }
+            const inChorus = active && chorus.has(normLine(active)) ? 1 : 0;
+            charge += (inChorus - charge) * (1 - Math.exp(-dt * 2.5));
+            inter += ((active ? 0 : 1) - inter) * (1 - Math.exp(-dt * 0.8));
             if (playing && s.pulseRate > 0 && ((onset && cool <= 0) || pulses.length < 2)) {
                 pulses.push({ p: Math.random(), v: (0.035 + 0.05 * Math.random()) * s.pulseRate, len: 0.05 + 0.05 * energy, a: 0.6 + 0.5 * clamp((audio.bass || 0) * 1.5, 0, 1) });
                 cool = 0.38 / Math.max(0.3, s.pulseRate);
@@ -467,7 +556,7 @@ void main() {
             for (const p of pulses) {
                 if (!playing) continue;
                 p.p = (p.p + p.v * dt * (1 + 2.2 * energy)) % 1;
-                p.a *= Math.pow(0.86, dt);
+                p.a *= Math.pow(p.fast ? 0.35 : 0.86, dt);
             }
             pulses = pulses.filter(p => p.a > 0.08).slice(-7);
             stats.pulses = pulses.length;
@@ -478,6 +567,9 @@ void main() {
                 const v = clamp(raw * (0.8 + 0.4 * s.audioReactivity), 0, 1);
                 const rate = v > bands[i] ? 24 : 5;
                 if (frame.isPlaying) bands[i] += (v - bands[i]) * (1 - Math.exp(-dt * rate));
+                // 峰值小帽：顶上去停一下再往下掉
+                if (bands[i] >= peaks[i]) { peaks[i] = bands[i]; peakVel[i] = -0.35; }
+                else if (frame.isPlaying) { peakVel[i] += dt * 2.2; if (peakVel[i] > 0) peaks[i] = Math.max(bands[i], peaks[i] - peakVel[i] * dt); }
             }
             // 电平历史：每半秒记一格；换歌清空
             const id = frame.track?.path || frame.track?.title || '';
@@ -529,28 +621,71 @@ void main() {
             gl.uniform4f(u.uHistBox, H * (1 - 0.755), Math.min(W * 0.3, k * 3.2), H * 0.03, s.panel === 'history' ? 1 : 0);
             const mx = WIDTH / 2 * k + H * 0.05, myTop = HEIGHT / 2 * k + H * 0.05;
             gl.uniform4f(u.uBox, cx - mx, s.showSpectrum ? stripY - H * 0.05 : cy - myTop, cx + mx, cy + myTop);
+            gl.uniform1fv(u.uPeaks, peaks);
+            // 环慢慢侧倾：角度只跟播放时间走；间奏时摆得大一点
+            const sway = s.reducedMotion ? 0 : 1;
+            const ax = sway * (0.09 + 0.15 * inter) * Math.sin(t * 0.17 + 0.6);
+            const ay = sway * (0.13 + 0.2 * inter) * Math.sin(t * 0.11 + 2.1);
+            gl.uniformMatrix3fv(u.uPlane, false, planeMatrix(ax, ay, plane));
+            const L = [-0.45 + ay * 0.9, 0.65 - ax * 0.9, 0.62];
+            const ln = Math.hypot(...L);
+            gl.uniform3f(u.uLightP, L[0] / ln, L[1] / ln, L[2] / ln);
+            gl.uniform1f(u.uKick, s.reducedMotion ? 0 : kick);
+            gl.uniform1f(u.uCharge, charge);
+            gl.uniform3f(u.uRipple, ripple.age, s.reducedMotion || ripple.age >= 1 ? 0 : ripple.str, ripple.wide);
             gl.uniform1f(u.uGrain, s.grain);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
         };
 
+        const restart = (el, cls) => {
+            el.classList.remove('is-in', 'is-out');
+            void el.offsetWidth;
+            el.classList.add(cls);
+        };
+        const firstStart = frame => {
+            const lines = frame.lines || [];
+            for (const l of lines) if (readableText(l.fullText)) return l.startTime;
+            return Infinity;
+        };
+        let lastChorus = null;
         const updateOverlay = (frame) => {
             const s = settings();
             const next = `信号 · ${Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
+            const active = frame.activeLine;
+            const isChorus = Boolean(active && chorus.has(normLine(active)));
+            if (isChorus !== lastChorus) {
+                lastChorus = isChorus;
+                mode.root.classList.toggle('is-chorus', isChorus);
+                const b = badge();
+                if (b) b.textContent = isChorus ? '副歌' : '实时';
+            }
             const show = s.panel === 'lyrics';
             if (lyric.hidden !== !show) lyric.hidden = !show;
             if (!show) return;
-            const active = frame.activeLine;
-            const text = active && readableText(active.fullText) ? String(active.fullText).trim() : '';
-            if (text !== lastLine) { lastLine = text; line.textContent = text; }
+            let text = active && readableText(active.fullText) ? String(active.fullText).trim() : '';
+            // 第一句之前：监视窗里先打出歌名
+            let title = false;
+            if (!text && (frame.playbackTime || 0) < firstStart(frame) && frame.track?.title) { text = String(frame.track.title).trim(); title = true; }
+            if (text !== lastLine) {
+                const prev = slots[slot];
+                if (lastLine) restart(prev, 'is-out');
+                slot = 1 - slot;
+                const cur = slots[slot];
+                cur.textContent = text;
+                cur.classList.toggle('is-title', title);
+                if (text) restart(cur, 'is-in'); else cur.classList.remove('is-in', 'is-out');
+                lastLine = text;
+            }
             const tr = s.showTranslation && active ? resolveSupplementalText(active) : '';
             if (tr !== lastTranslation) { lastTranslation = tr; translation.textContent = tr; translation.hidden = !tr; }
-            const progress = text ? clamp(frame.lineProgress || 0, 0, 1) : 0;
+            const progress = text && !title ? clamp(frame.lineProgress || 0, 0, 1) : 0;
             const r = (Math.round(progress * 200) / 200).toString();
             if (r !== lastRule) { lastRule = r; ruleFill.style.transform = `scaleX(${r})`; }
         };
+
 
         mode.updateFrame = (frame) => {
             if (mode.destroyed || paused) return;
@@ -602,6 +737,6 @@ void main() {
 
     global.MusicStageSignalManager = Object.freeze({
         create: createManager,
-        _test: Object.freeze({ pointAt, bandIndex, LOOP, HALF, ARC, D, R, PHI })
+        _test: Object.freeze({ pointAt, bandIndex, planeMatrix, applyPlane, chorusSet, normLine, LOOP, HALF, ARC, D, R, PHI })
     });
 })(window);

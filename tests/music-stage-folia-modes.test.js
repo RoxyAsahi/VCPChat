@@ -168,6 +168,14 @@ test('signal: the figure-eight centreline is one closed, unbroken loop through t
     assert.ok(Math.abs(Math.hypot(onRight[0] - S.D, onRight[1]) - S.R) < 1e-9 && onRight[0] > S.D, 'right loop is a circle, outer side');
     const onLeft = S.pointAt(3 * S.HALF + S.ARC + S.ARC / 2);
     assert.ok(Math.abs(Math.hypot(onLeft[0] + S.D, onLeft[1]) - S.R) < 1e-9 && onLeft[0] < -S.D, 'left loop is a circle, outer side');
+    const m = S.planeMatrix(0, 0, new Float32Array(9));
+    const [px, py] = S.applyPlane(m, 0.7, -0.4);
+    assert.ok(Math.abs(px - 0.7) < 1e-6 && Math.abs(py + 0.4) < 1e-6, 'no tilt maps the screen straight onto the ring');
+    const tilted = S.planeMatrix(0, 0.3, new Float32Array(9));
+    const [lx] = S.applyPlane(tilted, -1, 0), [rx] = S.applyPlane(tilted, 1, 0);
+    assert.ok(Math.abs(Math.abs(lx) - Math.abs(rx)) > 0.01, 'turning about y makes one side nearer');
+    const chorus = S.chorusSet([{ fullText: '再见，夏天' }, { fullText: '别的话' }, { fullText: '再见 夏天！' }]);
+    assert.ok(chorus.has(S.normLine({ fullText: '再见夏天' })) && chorus.size === 1);
     let last = -1;
     for (let i = 0; i < 48; i += 1) {
         const b = S.bandIndex(i, 512);
