@@ -89,7 +89,9 @@
             state.plain = plain;
             el.classList.toggle('plain', Boolean(plain));
             if (plain) {
-                r.track.innerHTML = '<p class="plain-note"><em>这份歌词没有时间轴，不跟着歌走 · 滚轮翻看</em></p>'
+                const canFetch = typeof app.openLyricsFetchModal === 'function';
+                r.track.innerHTML = '<p class="plain-note"><em>没有时间轴 · 滚轮翻看</em>'
+                    + (canFetch ? '<button type="button" class="plain-fetch">换一份带时间轴的 <i aria-hidden="true">→</i></button>' : '') + '</p>'
                     + plain.map((text) => `<p class="plain"><b>${esc(text)}</b></p>`).join('');
                 clearTimeout(state.manualTimer);
                 state.manualTimer = 0;
@@ -119,7 +121,7 @@
         const fitLines = () => {
             fitRaf = 0;
             // 原文和译文各算各的（译文行 <em> 同样先缩字再省略）
-            const nodes = [...r.track.querySelectorAll('p > b, p > em')];
+            const nodes = [...r.track.querySelectorAll('p:not(.plain-note) > b, p:not(.plain-note) > em')];
             const need = nodes.map((b) => {
                 const prev = b.style.getPropertyValue('--fit');
                 if (prev) b.style.removeProperty('--fit');
@@ -354,6 +356,11 @@
         };
 
         r.track.addEventListener('click', (e) => {
+            // 纯文本歌词顶上的「换一份带时间轴的」：打开获取歌词
+            if (e.target.closest('.plain-fetch')) {
+                if (typeof app.openLyricsFetchModal === 'function') app.openLyricsFetchModal(app.currentTrackIndex);
+                return;
+            }
             const p = e.target.closest('p[data-k]');
             const line = p && state.lines[Number(p.dataset.k)];
             if (!line || typeof app.seekTo !== 'function') return;

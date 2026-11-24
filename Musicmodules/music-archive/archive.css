@@ -842,3 +842,10 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 @keyframes archive-lyrics-searching { 50% { opacity: .55; } }
 body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { animation: none; }
 @media (prefers-reduced-motion: reduce) { .archive-lyrics.searching .archive-lyrics-none span { animation: none; } }
+
+/* 纯文本歌词顶上「换一份带时间轴的」：和「获取歌词」同款文字按钮，挨着说明 */
+.archive-lyrics.plain .archive-lyrics-track p.plain-note { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; }
+.archive-lyrics.plain .archive-lyrics-track p.plain-note em { min-width: 0; }
+.archive-lyrics.plain .plain-fetch { flex: none; font-size: 12px; letter-spacing: .6px; color: var(--ar-ink); cursor: pointer; }
+.archive-lyrics.plain .plain-fetch i { margin-left: 6px; font-style: normal; font-size: 10px; color: var(--ar-muted); }
+.archive-lyrics.plain .plain-fetch:hover, .archive-lyrics.plain .plain-fetch:hover i { color: var(--ar-accent-text, var(--ar-accent)); }
