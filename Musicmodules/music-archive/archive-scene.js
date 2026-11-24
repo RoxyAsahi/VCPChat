@@ -886,9 +886,12 @@ vec3 archiveUntone(vec3 y) {
             const untone = fittingsMat.onBeforeCompile;
             fittingsMat.onBeforeCompile = (sh, r) => {
                 sh.uniforms.uKeyHero = glowUniforms.uHero;
+                sh.uniforms.uFitQ = glowUniforms.uQuality;
                 sh.vertexShader = 'attribute float keySpec;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.vertexShader.replace('#include <project_vertex>',
                     '#include <project_vertex>\nvKeySpec = keySpec;\nvKeyW = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvKeyN = mat3(modelMatrix) * normal;');
-                sh.fragmentShader = 'uniform float uKeyHero;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `if (uKeyHero > 0.0) {
+                sh.fragmentShader = 'uniform float uKeyHero;\nuniform float uFitQ;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `// 参考播放器非实例部件（flags 2）按 quality 做抖动显现：卡抬起时一点点长出来，不是一下子贴上
+    if (uFitQ <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+    if (uKeyHero > 0.0) {
         vec3 kn = normalize(vKeyN);
         const vec3 KEY = vec3(0.0, 0.5477, 0.8367);
         vec3 kv = normalize(cameraPosition - vKeyW);
@@ -905,7 +908,6 @@ vec3 archiveUntone(vec3 y) {
         fittings.visible = false;
         scene.add(fittings);
         // 刻线跟着选中卡一直在（参考播放器只给焦点卡画 Case_Engraving，浏览时也画），不再等取出才淡入
-        etchMat.opacity = 1;
         fittings.add(etchMesh);
         const paintFittings = () => {
             const c = [new THREE.Color(lighting.fit[0]), new THREE.Color(lighting.fit[1]), new THREE.Color(lighting.fit[1]).multiplyScalar(0.62)];
@@ -1107,6 +1109,7 @@ vec3 archiveUntone(vec3 y) {
         const glowMat4 = new THREE.Matrix4();
         const cardAim = new THREE.Vector3();
         let snapCardAim = true;
+        let fitQ = 0;   // 选中卡的 quality = smooth(lift / 0.4)：倾斜收平、装配件和刻线显现都用它
         let pulseGain = 1;
         const camDir = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), detailAim = new THREE.Vector3(), camAim = new THREE.Vector3();
         const WORLD_UP = new THREE.Vector3(0, 1, 0);
@@ -1274,7 +1277,7 @@ vec3 archiveUntone(vec3 y) {
             }
             {
                 // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
-                const fromLift = detailOn ? smooth((lift.v - 0.8) / 2.4) : smooth((lift.v - 0.7) / (DETAIL_LIFT - 0.7));
+                const fromLift = detailOn ? smoother((lift.v - 0.8) / 2.4) : smoother((lift.v - 0.7) / (DETAIL_LIFT - 0.7));   // 参考 SceneMotion::smooth 是五次的
                 const goal = detailOn ? Math.max(fromLift, Math.min(detailK, 1)) : fromLift;
                 detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 2.8));   // 镜头推近的跟随速度，参考播放器 blend 2.8
                 if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
@@ -1315,6 +1318,7 @@ vec3 archiveUntone(vec3 y) {
             const baseRow = Math.round(camRow.v);
             for (const w of labelWanted.values()) wantSpare.push(w);
             labelWanted.clear();
+            fitQ = smoother(lift.v / 0.4);
             let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
                 let upper = fieldAt(baseRow + ROWS_AFTER - 0.5, baseLane + li);   // 行从后往前走，这一行的下半格就是上一行的上半格，复用省掉三分之一的采样
@@ -1336,10 +1340,10 @@ vec3 archiveUntone(vec3 y) {
                     if (isTarget) y += lift.v;
                     let backRot = 0;
                     let backQ = 0;
-                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; backQ = smooth(r.v / 0.4); } }
+                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; backQ = smoother(r.v / 0.4); } }
                     dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17 - 28 * (1 - reveal));
                     // 参考播放器：坡度倾斜 × (1 − quality)，quality = smooth(lift / 0.4)；落回中的卡也一样，抬着时不跟坡度晃
-                    dummy.rotation.x = tilt * (1 - (isTarget ? smooth(lift.v / 0.4) : backQ));
+                    dummy.rotation.x = tilt * (1 - (isTarget ? fitQ : backQ));
                     dummy.rotation.y = isTarget ? inspect.v : backRot;
                     if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
@@ -1405,7 +1409,8 @@ vec3 archiveUntone(vec3 y) {
             }
             glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
             glowUniforms.uHero.value = detailK;
-            glowUniforms.uQuality.value = smoother(lift.v / 0.4);
+            glowUniforms.uQuality.value = fitQ;
+            etchMat.opacity = fitQ;
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
             glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
