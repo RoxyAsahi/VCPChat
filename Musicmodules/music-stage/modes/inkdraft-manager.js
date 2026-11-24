@@ -1060,8 +1060,10 @@
             let t = cue.start;
             let k = 0;
             while (t < cue.end - 0.5) {
-                const fig = figures.length && cuts && k % 2 === 1 ? figures[Math.floor(random() * figures.length)] : null;
-                const shot = push(t, fig ? 'figure' : (k % 3 === 2 ? 'far' : 'wide'), k === 0);
+                // 开场那段（带歌名）一直让歌名在画里：全景和近景交替，不切去只拍线稿（Folia 开场也是大字压着图）
+                const titled = cue.title && placed.length;
+                const fig = !titled && figures.length && cuts && k % 2 === 1 ? figures[Math.floor(random() * figures.length)] : null;
+                const shot = push(t, fig ? 'figure' : titled ? (k % 2 === 1 ? 'close' : 'wide') : (k % 3 === 2 ? 'far' : 'wide'), k === 0);
                 shot.fig = fig;
                 t += 4.5 + random() * 3.5;
                 k += 1;
@@ -1955,7 +1957,7 @@ void main() {
             const current = latestFrame;
             const data = prepareCue(cues[index], index, {
                 W: world.W, H: world.H, aspect: world.aspect, family: fontFamily(), settings: settings(),
-                trackKey: trackKey(current || {}), title: current?.track?.title || '',
+                trackKey: trackKey(current || {}), title: String(current?.track?.title || '').replace(/\.(flac|mp3|wav|m4a|ogg|opus|ape|aac|wma|alac|dsf)$/i, ''),   // 没有标签时标题是文件名，去掉扩展名
                 prevCue: cues[index - 1] || null,
                 scene: sceneFor(trackKey(current || {}), settings().scene),
                 mainCanvas, idsCanvas
