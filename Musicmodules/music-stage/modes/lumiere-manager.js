@@ -215,7 +215,19 @@ vec3 lightAt(vec2 p, float aspect, out float total) {
         float cone = smoothstep(b.w * 1.35, 0.0, ang);
         cone *= cone;
         float fall = 1.0 / (1.0 + along * along * 0.35);
-        float k = cone * fall * 0.75;
+        // 光里的放射细纹：灯的反光碗和镜片不完美，光束里有从灯口散开的明暗细条（按角度的一维噪声，纯算术）
+        float ra = ang / max(b.w, 0.01) * 9.0 * sign(perp) + float(i) * 13.7 + uSeed * 5.0;
+        float rf = fract(ra), ri = floor(ra);
+        float rn = mix(fract(sin(ri * 78.233) * 43758.55), fract(sin((ri + 1.0) * 78.233) * 43758.55), rf * rf * (3.0 - 2.0 * rf));
+        float ra2 = ra * 2.7 + 3.1;
+        float rf2 = fract(ra2), ri2 = floor(ra2);
+        float rn2 = mix(fract(sin(ri2 * 41.7) * 23421.6), fract(sin((ri2 + 1.0) * 41.7) * 23421.6), rf2 * rf2 * (3.0 - 2.0 * rf2));
+        float rays = 0.62 + 0.55 * (rn * 0.65 + rn2 * 0.35) * smoothstep(0.0, 0.25, along);
+        // 灯口附近更亮更集中（亮芯），锥边带一点冷色的色散
+        float core = smoothstep(b.w * 0.55, 0.0, ang) * exp(-along * 1.6);
+        float rim = smoothstep(b.w * 0.5, b.w * 1.0, ang) * cone;
+        float k = (cone * rays + core * 0.6) * fall * 0.75;
+        col += uBeamCol[i].rgb * rim * fall * vec3(-0.05, 0.02, 0.12) * 0.9;
         if (uRig == 1) {
             // 百叶：沿光束横向切成条，条随距离变宽
             float stripes = smoothstep(0.35, 0.55, fract(perp / (along * 0.06 + 0.02) + uSeed));
@@ -255,9 +267,30 @@ void main() {
     float total;
     vec3 light = lightAt(p, aspect, total) * uLights * (0.85 + uPower * 0.3);
     // 烟：慢慢翻滚的两层噪点，只有被光照到才看得见
+    // 烟用一层慢噪声把坐标扭开再取样：大团之间有拉长、卷起来的细缕，不是均匀的一团团
     vec2 sp = p * 2.2 + vec2(uTime * 0.03, -uTime * 0.012);
-    float smoke = vnoise(sp) * 0.65 + vnoise(sp * 2.7 + 5.0) * 0.35;
-    vec3 air = light * (0.12 + smoke * 0.42 * uSmoke);
+    float warp = vnoise(sp * 0.6 - vec2(uTime * 0.02, 0.0) + 9.0);
+    vec2 sw = sp + vec2(warp * 1.6, -warp * 0.9);
+    float body = vnoise(sw);
+    float wisp = vnoise(vec2(sw.x * 1.4 + sw.y * 2.2, sw.y * 4.8 - sw.x) + 5.0);
+    float smoke = body * 0.6 + wisp * 0.4;
+    float strands = smoothstep(0.35, 0.75, wisp) * smoothstep(0.25, 0.6, body);
+    vec3 air = light * (0.1 + smoke * 0.4 * uSmoke + strands * 0.3 * uSmoke);
+    // 字挡光：从这一点朝主光的灯口走几步，路上碰到字（取模糊过的字形），烟里就留下一道字的影子，
+    // 像光从字后面穿过来。只算第一束光，五次等距取样都走糊的那一级贴图（影子边是软的，不加抖动免得出颗粒）
+    if (uBeamCount > 0) {
+        vec2 o = vec2(uBeam[0].x * aspect, uBeam[0].y);
+        vec2 toO = o - p;
+        float len = length(toO);
+        float occ = 0.0;
+        for (int j = 0; j < 5; j++) {
+            float f = 0.02 + float(j) * 0.065;
+            vec2 sp2 = p + toO * min(f, 0.6) * min(1.0, 0.9 / max(len, 0.001));
+            vec2 st = (vec2(sp2.x / aspect, 1.0 - sp2.y) - 0.5) / uZoom + 0.5;
+            occ = max(occ, textureLod(uText, st, 3.5 + uLodBias).r * (1.0 - float(j) * 0.14));
+        }
+        air *= 1.0 - smoothstep(0.05, 0.55, occ) * 0.7 * uLights;
+    }
     // 浮尘：一格一粒，慢慢飘，只在光里亮
     vec2 grid = vec2(aspect * 44.0, 44.0);
     vec2 dp = uv + vec2(uTime * 0.004, uTime * 0.007);
