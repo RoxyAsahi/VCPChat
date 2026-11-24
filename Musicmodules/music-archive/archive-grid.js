@@ -104,6 +104,7 @@
             st.heads.clear();
             thumbs.clearQueue();
             emptyEl.hidden = st.secs.length > 0;
+            if (!st.secs.length && Wall && Wall.fillEmpty) Wall.fillEmpty(emptyEl, '');
             // 换一组：这一屏的格子按行列依次落下（从左上往右下一波）
             st.enterUntil = reduced() ? 0 : performance.now() + 700;
             st.revealOk = false;
@@ -214,6 +215,8 @@
                         n.src = url;
                         if (url) { n.img.src = url; n.el.classList.add('has-art'); } else { n.img.removeAttribute('src'); n.el.classList.remove('has-art'); }
                     }
+                    const wait = Boolean(src && !url && thumbs.failed && !thumbs.failed(src));
+                    if (wait !== n.wait) { n.wait = wait; n.el.classList.toggle('is-wait', wait); }
                     const cls = (i === st.sel ? 'is-focus ' : '') + (i === play.index ? (play.active ? 'is-playing' : 'is-current') : '');
                     if (cls !== n.cls) {
                         n.el.classList.remove('is-focus', 'is-playing', 'is-current');

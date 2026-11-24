@@ -200,6 +200,14 @@
         return best;
     };
 
+    // ---------- 空状态 ----------
+    /* 这一组没有歌时：一块虚线勾出的空墙（大中小几格，像还没挂上海报的展板）+ 大字题头、编号行、一句去哪儿找 */
+    const EMPTY_GHOST = '<i class="ae-a"></i><i class="ae-b"></i><i class="ae-c"></i><i class="ae-d"></i><i class="ae-e"></i><i class="ae-f"></i>';
+    const fillEmpty = (box, name) => {
+        if (!box.querySelector('.ae-t')) box.innerHTML = '<div class="ae-ghost" aria-hidden="true">' + EMPTY_GHOST + '</div><b class="ae-t">这一组还没有曲目</b><span class="ae-n"></span><em class="ae-h">从左边的目录换一组看看，或者把歌加进这一组</em>';
+        box.querySelector('.ae-n').textContent = '00 首' + (name ? ' · ' + name : '');
+    };
+
     // ---------- 封面缩略图 ----------
     /* 原图常有一两千像素：按显示尺寸分三档缩小后存成 blob，最多留 360 张；同时最多解 4 张 */
     const createThumbs = (onReady) => {
@@ -228,7 +236,7 @@
                     busy--;
                     entry.state = url ? 'ok' : 'fail';
                     entry.url = url || '';
-                    if (url) onReady(job.src);
+                    onReady(job.src);   // 失败也回调一次：让还在等封面的格子停掉加载微光
                     pump();
                 };
                 img.onload = () => {
@@ -440,7 +448,7 @@
             st.nodes.clear();
             thumbs.clearQueue();
             emptyEl.hidden = ids.length > 0;
-            emptyEl.textContent = ids.length ? '' : '这一组还没有曲目';
+            if (!ids.length) fillEmpty(emptyEl, st.name);
             st.focus = null;
             st.selIndex = -1;
             st.revealOk = false;
@@ -745,6 +753,9 @@
                     node.el.classList.remove('has-art');
                 }
             }
+            // 有封面但还没解出来：底色上扫过一道微光，曲名先不露，免得先闪字再换图
+            const wait = Boolean(src && !url && !thumbs.failed(src));
+            if (wait !== node.wait) { node.wait = wait; node.el.classList.toggle('is-wait', wait); }
         };
 
         const layout = () => {
@@ -1131,5 +1142,5 @@
         return api;
     };
 
-    global.MusicArchiveWall = Object.freeze({ create, createThumbs, sweepTimeAt, _test: { DIM_AFTER: 30000, SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+    global.MusicArchiveWall = Object.freeze({ create, createThumbs, fillEmpty, sweepTimeAt, _test: { DIM_AFTER: 30000, SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
 })(typeof window !== 'undefined' ? window : globalThis);

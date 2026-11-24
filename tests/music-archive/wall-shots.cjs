@@ -282,6 +282,39 @@ const FAKE = ({ n, light, covers }) => {
   await shot(tag + '-10-table-open');
   await page.keyboard.press('Escape');
 
+  // 加载微光：封面都解完以后不该还有格子在闪
+  await page.waitForTimeout(1500);
+  {
+    const left = await page.evaluate(() => document.querySelectorAll('.archive-wall:not([hidden]) .aw-tile.is-wait').length);
+    check('封面解完后没有残留的加载微光', left === 0, 'left=' + left);
+  }
+  // 空状态：同一块地方另起一面空墙 / 空平放 / 空网格，看题头和虚线展板
+  for (const kind of ['wall', 'table', 'grid']) {
+    const r = await page.evaluate((kind) => {
+      const root = document.getElementById('music-archive-view');
+      const ref = document.querySelector('.archive-wall:not([hidden]), .archive-grid:not([hidden])') || document.querySelector('.archive-wall');
+      const css = ref ? ref.getAttribute('style') : '';
+      document.querySelectorAll('.archive-wall, .archive-grid').forEach((e) => { e.dataset.wasHidden = e.hidden ? '1' : ''; e.hidden = true; });
+      const base = { host: root, track: () => null, cover: () => '', selected: () => -1, playing: () => ({ index: -1, active: false }), meta: () => ({ title: '' }), pick() {}, play() {}, menu() {}, reducedMotion: () => false };
+      const x = kind === 'grid' ? window.MusicArchiveGrid.create({ ...base, sections: () => ({ key: 'e', list: [] }) })
+        : window.MusicArchiveWall.create({ ...base, items: () => ({ key: 'e', name: '空的歌单', ids: [] }), tilt: kind === 'table' });
+      if (css) x.el.setAttribute('style', css);
+      x.show(true);
+      window.__probe = x;
+      return true;
+    }, kind);
+    await page.waitForTimeout(900);
+    const e = await page.evaluate(() => {
+      const box = window.__probe.el.querySelector('.aw-empty, .ag-empty');
+      const t = box && box.querySelector('.ae-t');
+      const b = t && t.getBoundingClientRect();
+      return { shown: Boolean(box && !box.hidden && b && b.width > 40), ghost: box ? box.querySelectorAll('.ae-ghost i').length : 0, n: box?.querySelector('.ae-n')?.textContent || '' };
+    });
+    check('空状态（' + kind + '）有题头和展板', r && e.shown && e.ghost === 6, JSON.stringify(e));
+    await shot(tag + '-11-empty-' + kind);
+    await page.evaluate(() => { window.__probe.show(false); window.__probe.destroy?.(); window.__probe.el.remove(); window.__probe = null; document.querySelectorAll('.archive-wall, .archive-grid').forEach((e) => { e.hidden = e.dataset.wasHidden === '1'; }); });
+  }
+
   // 切回阵列
   await page.click('.archive-nav [data-layout="array"]');
   await page.waitForTimeout(2500);

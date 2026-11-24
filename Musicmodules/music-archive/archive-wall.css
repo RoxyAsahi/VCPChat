@@ -83,6 +83,13 @@
 .aw-art { position: absolute; inset: 0; }
 .aw-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
 .aw-tile.has-art .aw-art img { display: block; animation: aw-fade .32s var(--mt-ease, ease) both; }
+/* 封面还在解：色相底上斜着扫过一道微光，曲名先藏着，免得先闪一下字再换成图 */
+.aw-tile.is-wait .aw-art::after, .ag-cell.is-wait .ag-blank::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .16) 50%, transparent 65%) 0 0 / 260% 100% no-repeat; animation: aw-sheen 1.5s linear infinite; pointer-events: none; }
+.aw-tile.is-wait .aw-blank, .ag-cell.is-wait .ag-blank { color: transparent; }
+.aw-tile.is-wait .aw-blank::before, .ag-cell.is-wait .ag-blank::before { opacity: 0; }
+.ag-cell.is-wait .ag-blank { position: absolute; inset: 0; -webkit-line-clamp: unset; }
+@keyframes aw-sheen { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+body.music-reduce-motion .aw-tile.is-wait .aw-art::after, body.music-reduce-motion .ag-cell.is-wait .ag-blank::after { animation: none; background: rgba(255, 255, 255, .06); }
 /* 没有封面：色相底上一道短线 + 曲名（大卡字大），像海报的题头 */
 .aw-blank {
     position: absolute;
@@ -284,7 +291,24 @@ body.music-reduce-motion .aw-lyric-roll { transition: none; }
 #music-archive-view .aw-panel-acts .aw-primary:hover { background: var(--ar-accent); color: #111; }
 #music-archive-view .aw-panel-acts .aw-primary:disabled { opacity: 1; cursor: default; background: color-mix(in srgb, var(--ar-accent) 88%, #fff); color: #111; }
 
-.aw-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ar-muted); font-size: 15px; }
+/* 空状态：虚线勾出一块还没挂海报的展板（大中小六格），下面大字题头 + 编号行 + 一句去哪儿找 */
+.aw-empty, .ag-empty { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: min(440px, 82%); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: var(--ar-muted); font-size: 15px; pointer-events: none; animation: aw-fade .4s var(--mt-ease, ease) backwards; }
+.aw-empty[hidden], .ag-empty[hidden] { display: none; }
+.ae-ghost { width: 100%; aspect-ratio: 16 / 7; margin-bottom: 14px; display: grid; grid-template-columns: 3fr 2fr 2fr 3fr; grid-template-rows: 1fr 1fr; gap: 8px; }
+.ae-ghost i { border: 1px dashed color-mix(in srgb, var(--ar-ink) 22%, transparent); background: color-mix(in srgb, var(--ar-ink) 3%, transparent); animation: ae-breathe 3.6s var(--mt-ease, ease) infinite; }
+.ae-ghost .ae-a { grid-row: 1 / 3; }
+.ae-ghost .ae-d { grid-column: 4; grid-row: 1 / 3; animation-delay: .9s; }
+.ae-ghost .ae-b { animation-delay: .3s; }
+.ae-ghost .ae-c { animation-delay: .6s; }
+.ae-ghost .ae-e { grid-column: 2; grid-row: 2; animation-delay: 1.2s; }
+.ae-ghost .ae-f { grid-column: 3; grid-row: 2; animation-delay: 1.5s; }
+@keyframes ae-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.ae-t { font-size: 26px; font-weight: 600; letter-spacing: .4px; color: var(--ar-ink); line-height: 1.2; }
+.ae-n { font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: 1.2px; color: var(--ar-muted); padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--ar-ink) 14%, transparent); align-self: stretch; }
+.ae-h { font-style: normal; font-size: 13px; color: var(--ar-muted); margin-top: 2px; }
+/* 平放：空展板也放倒在桌上，字立着 */
+.aw-table .aw-empty .ae-ghost { transform: perspective(900px) rotateX(48deg); transform-origin: 50% 100%; margin-bottom: 4px; }
+body.music-reduce-motion .ae-ghost i, body.music-reduce-motion .aw-empty, body.music-reduce-motion .ag-empty { animation: none; }
 
 /* 入场：从上方落下、缩小到 .88，弹簧带一点回弹；从视野左上角沿对角线一张张到 */
 .aw-tile.aw-entering .aw-in { animation: aw-drop var(--aw-sp-enter-ms, .5s) var(--aw-sp-enter, cubic-bezier(.2, .9, .25, 1)) backwards; }
@@ -371,7 +395,6 @@ body.music-reduce-motion .ag-cell > *, body.music-reduce-motion .ag-head > * { a
 #music-archive-view .ag-cell:hover .ag-play, #music-archive-view .ag-cell.is-focus .ag-play { opacity: 1; transform: none; }
 #music-archive-view .ag-play:hover { background: var(--ar-ink); }
 #music-archive-view .ag-play:hover::before { border-left-color: var(--ar-paper); }
-.ag-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ar-muted); font-size: 15px; }
 body.music-reduce-motion .ag-art, body.music-reduce-motion #music-archive-view .ag-play { transition: none; }
 
 /* ---------- 平放（archive-wall.js tilt）：封面平躺在桌面上，低机位往远处看，远处没进纸色的雾里 ---------- */
