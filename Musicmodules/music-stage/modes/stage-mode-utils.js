@@ -876,16 +876,56 @@ void main() {
         }
         return { program, uniforms };
     };
+    // 泛光（可选）：从合成好的颜色里取亮的部分，在 1/2 到 1/32 的小图上逐级缩小再放大（双滤波），
+    // 加回合成那一遍。只在小图上算，开销远小于再画一遍全屏；亮度阈值以下的不泛。
+    const BLOOM_LEVELS = 5;
+    const BLOOM_DOWN = `#version 300 es
+precision mediump float;
+uniform sampler2D uSrc;
+uniform vec2 uHalf;   // 源图半个像素（uv）
+uniform vec2 uDst;
+out vec4 outColor;
+void main() {
+    vec2 uv = gl_FragCoord.xy / uDst;
+    vec3 c = texture(uSrc, uv).rgb * 4.0;
+    c += texture(uSrc, uv + vec2(-uHalf.x, -uHalf.y)).rgb;
+    c += texture(uSrc, uv + vec2(uHalf.x, -uHalf.y)).rgb;
+    c += texture(uSrc, uv + vec2(-uHalf.x, uHalf.y)).rgb;
+    c += texture(uSrc, uv + vec2(uHalf.x, uHalf.y)).rgb;
+    outColor = vec4(c / 8.0, 1.0);
+}`;
+    const BLOOM_UP = `#version 300 es
+precision mediump float;
+uniform sampler2D uSrc;
+uniform vec2 uHalf;
+uniform vec2 uDst;
+out vec4 outColor;
+void main() {
+    vec2 uv = gl_FragCoord.xy / uDst;
+    vec2 h = uHalf;
+    vec3 c = texture(uSrc, uv + vec2(-h.x * 2.0, 0.0)).rgb;
+    c += texture(uSrc, uv + vec2(-h.x, h.y)).rgb * 2.0;
+    c += texture(uSrc, uv + vec2(0.0, h.y * 2.0)).rgb;
+    c += texture(uSrc, uv + vec2(h.x, h.y)).rgb * 2.0;
+    c += texture(uSrc, uv + vec2(h.x * 2.0, 0.0)).rgb;
+    c += texture(uSrc, uv + vec2(h.x, -h.y)).rgb * 2.0;
+    c += texture(uSrc, uv + vec2(0.0, -h.y * 2.0)).rgb;
+    c += texture(uSrc, uv + vec2(-h.x, -h.y)).rgb * 2.0;
+    outColor = vec4(c / 12.0, 1.0);
+}`;
     const createSharpText = (gl, { coverage, post = 'vec3 post(vec3 col, vec4 c) { return col; }', label = 'stage' }) => {
-        const frag = `#version 300 es
+        const frag = (seed) => `#version 300 es
 precision highp float;
 precision highp int;
 uniform sampler2D uBase;
 uniform sampler2D uTextLayer;
 uniform sampler2D uPrevLayer;
+uniform sampler2D uBloomTex;
 uniform vec2 uRes;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform float uBloom;
+uniform vec2 uKnee;     // 泛光阈值、过渡宽度
 out vec4 outColor;
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -902,12 +942,28 @@ void main() {
     if (c.x > 0.002) col += c.x * (texture(uTextLayer, uv).rgb - base);
     if (c.y > 0.002) col += c.y * (texture(uPrevLayer, uv).rgb - base);
     col = post(col, c);
+${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    outColor = vec4(col * smoothstep(uKnee.x, uKnee.x + uKnee.y, lum), 1.0);
+}` : `    // 金字塔逐级相加，五级叠起来约是原亮度的五倍
+    if (uBloom > 0.0) col += texture(uBloomTex, uv).rgb * (uBloom / ${BLOOM_LEVELS}.0);
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-}`;
-        const { program, uniforms } = compileProgram(gl, SPLIT_VERT, frag, `${label}:sharp`);
-        const fbo = gl.createFramebuffer();
-        const layers = Array.from({ length: 3 }, () => {
+}`}`;
+        const { program, uniforms } = compileProgram(gl, SPLIT_VERT, frag(false), `${label}:sharp`);
+        let bloomGl = null;
+        const bloomPrograms = () => {
+            if (bloomGl) return bloomGl;
+            const half = Boolean(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+            bloomGl = {
+                seed: compileProgram(gl, SPLIT_VERT, frag(true), `${label}:bloom-seed`),
+                down: compileProgram(gl, SPLIT_VERT, BLOOM_DOWN, `${label}:bloom-down`),
+                up: compileProgram(gl, SPLIT_VERT, BLOOM_UP, `${label}:bloom-up`),
+                format: half ? [gl.RGBA16F, gl.HALF_FLOAT] : [gl.RGBA8, gl.UNSIGNED_BYTE],
+                levels: [], fbos: [], size: [0, 0]
+            };
+            return bloomGl;
+        };
+        const linearTexture = () => {
             const t = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, t);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -915,9 +971,71 @@ void main() {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             return t;
-        });
+        };
+        const fbo = gl.createFramebuffer();
+        const layers = Array.from({ length: 3 }, linearTexture);
         const vao = gl.createVertexArray();
         let size = [0, 0];
+        const bindLayers = (u) => {
+            layers.forEach((t, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); });
+            gl.uniform1i(u.uBase, 0);
+            gl.uniform1i(u.uTextLayer, 1);
+            gl.uniform1i(u.uPrevLayer, 2);
+        };
+        // 泛光金字塔：第 0 级是低分辨率图的一半，逐级再减半
+        const runBloom = (knee, bind) => {
+            const B = bloomPrograms();
+            const w0 = Math.max(1, size[0] >> 1), h0 = Math.max(1, size[1] >> 1);
+            if (B.size[0] !== w0 || B.size[1] !== h0) {
+                B.size = [w0, h0];
+                for (let i = 0; i < BLOOM_LEVELS; i += 1) {
+                    if (!B.levels[i]) { B.levels[i] = linearTexture(); B.fbos[i] = gl.createFramebuffer(); }
+                    gl.bindTexture(gl.TEXTURE_2D, B.levels[i]);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, B.format[0], Math.max(1, w0 >> i), Math.max(1, h0 >> i), 0, gl.RGBA, B.format[1], null);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, B.fbos[i]);
+                    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, B.levels[i], 0);
+                }
+            }
+            const dims = i => [Math.max(1, w0 >> i), Math.max(1, h0 >> i)];
+            gl.bindVertexArray(vao);
+            gl.disable(gl.BLEND);
+            // 取亮部：按第 0 级的像素重新合成一次（字的覆盖率在这个尺寸上自动取 mip）
+            gl.bindFramebuffer(gl.FRAMEBUFFER, B.fbos[0]);
+            gl.viewport(0, 0, w0, h0);
+            gl.useProgram(B.seed.program);
+            bindLayers(B.seed.uniforms);
+            gl.uniform2f(B.seed.uniforms.uRes, w0, h0);
+            gl.uniform2f(B.seed.uniforms.uKnee, knee[0], knee[1]);
+            bind?.(B.seed.uniforms, 3);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            gl.useProgram(B.down.program);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(B.down.uniforms.uSrc, 0);
+            for (let i = 1; i < BLOOM_LEVELS; i += 1) {
+                const [sw, sh] = dims(i - 1), [dw, dh] = dims(i);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, B.fbos[i]);
+                gl.viewport(0, 0, dw, dh);
+                gl.bindTexture(gl.TEXTURE_2D, B.levels[i - 1]);
+                gl.uniform2f(B.down.uniforms.uHalf, 0.5 / sw, 0.5 / sh);
+                gl.uniform2f(B.down.uniforms.uDst, dw, dh);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+            }
+            gl.useProgram(B.up.program);
+            gl.uniform1i(B.up.uniforms.uSrc, 0);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.ONE, gl.ONE);
+            for (let i = BLOOM_LEVELS - 1; i > 0; i -= 1) {
+                const [sw, sh] = dims(i), [dw, dh] = dims(i - 1);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, B.fbos[i - 1]);
+                gl.viewport(0, 0, dw, dh);
+                gl.bindTexture(gl.TEXTURE_2D, B.levels[i]);
+                gl.uniform2f(B.up.uniforms.uHalf, 0.5 / sw, 0.5 / sh);
+                gl.uniform2f(B.up.uniforms.uDst, dw, dh);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+            }
+            gl.disable(gl.BLEND);
+            return B.levels[0];
+        };
         return {
             program, uniforms,
             get size() { return size; },
@@ -936,19 +1054,23 @@ void main() {
                 gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
                 gl.viewport(0, 0, w, h);
             },
-            // 合成那一遍：按屏幕像素画到画布上。bind(uniforms, firstFreeUnit) 绑舞台自己的纹理和参数
-            finish(w, h, { grain = 0, grainStep = 0 } = {}, bind = null) {
+            // 合成那一遍：按屏幕像素画到画布上。bind(uniforms, firstFreeUnit) 绑舞台自己的纹理和参数。
+            // bloom > 0 时先在小图上算泛光（knee：亮度阈值、过渡宽度）
+            finish(w, h, { grain = 0, grainStep = 0, bloom = 0, knee = [0.6, 0.3] } = {}, bind = null) {
+                const glowTex = bloom > 0 ? runBloom(knee, bind) : null;
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                 gl.viewport(0, 0, w, h);
                 gl.useProgram(program);
                 gl.bindVertexArray(vao);
-                layers.forEach((t, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); });
-                gl.uniform1i(uniforms.uBase, 0);
-                gl.uniform1i(uniforms.uTextLayer, 1);
-                gl.uniform1i(uniforms.uPrevLayer, 2);
+                bindLayers(uniforms);
                 gl.uniform2f(uniforms.uRes, w, h);
                 gl.uniform1f(uniforms.uGrain, grain);
                 gl.uniform1f(uniforms.uGrainStep, grainStep);
+                gl.uniform1f(uniforms.uBloom, bloom);
+                // 泛光图固定放在 15 号单元，不和舞台自己的纹理抢
+                gl.activeTexture(gl.TEXTURE15);
+                gl.bindTexture(gl.TEXTURE_2D, glowTex || layers[0]);
+                gl.uniform1i(uniforms.uBloomTex, 15);
                 bind?.(uniforms, 3);
                 gl.drawArrays(gl.TRIANGLES, 0, 3);
             }

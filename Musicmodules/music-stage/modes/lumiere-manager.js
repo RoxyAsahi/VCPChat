@@ -17,6 +17,7 @@
     const { resolveSupplementalText, buildGlyphTimeline, readableText } = Runtime;
 
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
+    const BLOOM = 0.5;   // 泛光强度（见 Utils.createSharpText）
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
     const MAX_BEAMS = 5;
     const MAX_SPARKS = 6;
@@ -294,9 +295,9 @@ void main() {
         vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.3), clamp(lit, 0.0, 1.0));
         // 字压在光上要读得清：字周围的光和烟压暗一圈（光越亮压得越多），字本身比光亮
         col *= 1.0 - clamp(halo * (0.25 + lit * 0.35), 0.0, 0.6);
-        // 唱过的字自己也发一点白光（光外也看得出字在亮），正在唱的那个字光晕更大
-        vec3 glowAdd = (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55
-            + uInk * halo * reveal * 0.16 + uAccent * textureLod(uText, t1, 4.5 + uLodBias).r * singing * 0.5;
+        // 唱过的字自己也发一点白光（光外也看得出字在亮）。正在唱的那个字的大光晕交给泛光：
+        // 原来按字框乘一层大模糊，字框的边会露出一块方形的金色
+        vec3 glowAdd = (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55 + uInk * halo * reveal * 0.16;
         cText = mix(col, ink * (0.82 + lit * 0.75), clamp(body, 0.0, 1.0)) + uAccent * singing * 0.35 + glowAdd;
         col += glowAdd;
     }
@@ -801,7 +802,7 @@ vec4 coverage(vec2 uv) {
             gl.uniform1f(u.uFocus, focus);
             gl.uniform1f(u.uStarfall, !s.reducedMotion && cue.kind === 'rest' && cue.title ? smooth(0, 1.2, local) * (1 - smooth(cue.end - 1.5, cue.end, t)) : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
-            sharp.finish(canvas.width, canvas.height, { grain: s.grain, grainStep: s.reducedMotion ? 0 : Math.floor(t * 6) % 64 }, (c, unit) => {
+            sharp.finish(canvas.width, canvas.height, { grain: s.grain, grainStep: s.reducedMotion ? 0 : Math.floor(t * 6) % 64, bloom: BLOOM * (1 + beat * 0.4), knee: [0.62, 0.3] }, (c, unit) => {
                 gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(c.uText, unit);
                 gl.activeTexture(gl.TEXTURE0 + unit + 1); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(c.uPrevText, unit + 1);
                 gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
