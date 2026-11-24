@@ -284,6 +284,7 @@
                 { key: 'cameraCuts', label: '踩词硬切（多机位分镜）', type: 'toggle' },
                 { key: 'figures', label: '演算纸线稿', type: 'toggle' },
                 { key: 'collisions', label: '墨团对撞', type: 'toggle' },
+                { key: 'keywords', label: '关键词套色（反复出现的意象词用强调色）', type: 'toggle' },
                 { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'cloud', label: '墨云浓度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'grain', label: '砂纸颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

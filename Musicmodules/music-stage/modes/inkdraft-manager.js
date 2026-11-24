@@ -96,7 +96,41 @@
             }
         });
         if (cues.length && cues[0].start > 0) cues[0].start = 0;
+        markKeywords(cues, sung);
         return cues;
+    };
+
+    // 关键词：在歌里不同的句子里反复出现的词（意象），每句最多挑两个上强调色；
+    // 一句里没有这样的词时，有一半的机会挑这句最长的实词。
+    const STOP = new Set(['的', '了', '着', '过', '是', '在', '有', '不', '也', '就', '都', '和', '与', '把', '被', '这', '那', '一个', '我们', '你们', '他们', '自己', '没有', '什么', '怎么', '还是', '只是', '就是', '可是', '如果', '因为', '所以', '已经', 'the', 'and', 'that', 'this', 'with', 'from', 'your', 'have', 'will', 'what', 'when', 'just', 'into', 'like', 'been', 'were', 'they', 'there', 'their', 'about', 'would', 'could']);
+    const plainWord = text => String(text || '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+    const wordsOf = (text) => {
+        const raw = String(text || '');
+        const list = wordSegmenter
+            ? Array.from(wordSegmenter.segment(raw)).filter(seg => seg.isWordLike !== false).map(seg => seg.segment)
+            : raw.split(/\s+/);
+        return list.map(plainWord).filter(Boolean);
+    };
+    const contentWord = w => !STOP.has(w) && (CJK.test(w) ? Array.from(w).length >= 2 : w.length >= 4);
+    const markKeywords = (cues, sung) => {
+        const seen = new Set();
+        const freq = new Map();
+        sung.forEach((line) => {
+            const k = plainWord(line.fullText);
+            if (!k || seen.has(k)) return;
+            seen.add(k);
+            new Set(wordsOf(line.fullText).filter(contentWord)).forEach(w => freq.set(w, (freq.get(w) || 0) + 1));
+        });
+        cues.forEach((cue) => {
+            if (cue.kind !== 'line') return;
+            const words = Array.from(new Set(wordsOf(cue.line.fullText).filter(contentWord)));
+            const ranked = words.map(w => ({ w, f: freq.get(w) || 0 })).sort((a, b) => b.f - a.f || b.w.length - a.w.length);
+            const motif = ranked.filter(r => r.f >= 2).slice(0, 2).map(r => r.w);
+            if (motif.length) cue.keys = motif;
+            else if (ranked.length && seededRandom(`inkdraft:key:${plainWord(cue.line.fullText)}`)() < 0.5) {
+                cue.keys = [ranked.slice().sort((a, b) => b.w.length - a.w.length)[0].w];
+            } else cue.keys = [];
+        });
     };
     const findCue = (cues, time) => {
         let low = 0, high = cues.length - 1, result = 0;
@@ -315,12 +349,14 @@
         main.textBaseline = 'alphabetic';
         main.fillStyle = 'rgb(255,0,0)';
         main.globalCompositeOperation = 'lighter';
+        const keys = new Set(cue.keys || []);
         placed.forEach((p, i) => {
             const id = Math.min(MAX_GLYPHS, i + 1);
             main.font = fontFor(p.size, CJK.test(p.g.text));
             main.fillText(p.g.text, p.x, p.baseline);
             glyphData[id * 4] = p.g.start;
             glyphData[id * 4 + 1] = p.g.end;
+            glyphData[id * 4 + 2] = keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0;
             ids.fillStyle = `rgb(${id},0,0)`;
             const pad = p.size * 0.2;
             ids.fillRect(Math.floor((p.box[0] - pad) * ID_SCALE), Math.floor((p.box[1] - pad) * ID_SCALE),
@@ -722,6 +758,7 @@ precision highp int;
 uniform sampler2D uMain;
 uniform sampler2D uIds;
 uniform sampler2D uGlyph;
+uniform float uKeywords;
 uniform sampler2D uPrev;
 uniform vec2 uRes;
 uniform vec2 uWorld;
@@ -798,8 +835,11 @@ void main() {
     float ghost = 0.0;
     float pre = 0.0;
     float swell = 0.0;
+    float kw = 0.0;
     if (gid > 0) {
-        vec2 se = texelFetch(uGlyph, ivec2(gid, 0), 0).xy;
+        vec3 se3 = texelFetch(uGlyph, ivec2(gid, 0), 0).xyz;
+        vec2 se = se3.xy;
+        kw = se3.z * uKeywords;
         reveal = smoothstep(se.x - 0.2, se.x + 0.1, uTime);
         // 开唱前 0.6 秒，字先以半调影子浮出来；唱到时字胀一下再收回
         pre = smoothstep(se.x - 0.7, se.x - 0.1, uTime) * (1.0 - reveal);
@@ -865,7 +905,9 @@ void main() {
     col = mix(col, uAccentCol, aA);
     // 还没唱到的字：淡淡的墨，同样切阈值（毛边一致）
     float ga = smoothstep(thr - 0.05, thr + 0.05, ghost * 1.25 / max(uGhost, 0.001)) * uGhost;
-    col = mix(col, mix(ink, paper, aA), max(a, ga * 0.6 * (1.0 - a)));
+    // 关键词的字身用强调色（字周围的晕仍是墨，像套色印刷压了一道黑边）
+    vec3 inkK = mix(ink, uAccentCol, kw * smoothstep(0.3, 0.65, m.r));
+    col = mix(col, mix(inkK, paper, aA), max(a, ga * 0.6 * (1.0 - a)));
 
     if (uPrevFade > 0.0) {
         vec2 wq = flowed(worldAt(uPrevView));
@@ -1009,6 +1051,7 @@ void main() {
                 halftone: clamp(tuning.halftone ?? 0.8, 0, 1),
                 grain: clamp(tuning.grain ?? 0.5, 0, 1),
                 cloud: clamp(tuning.cloud ?? 0.75, 0, 1),
+                keywords: tuning.keywords !== false,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -1190,6 +1233,7 @@ void main() {
             gl.uniform3fv(u.uPaper, palette.paper);
             gl.uniform3fv(u.uInk, palette.ink);
             gl.uniform3fv(u.uAccentCol, palette.accent);
+            gl.uniform1f(u.uKeywords, s.keywords ? 1 : 0);
             gl.uniform3fv(u.uDot, palette.dot);
             gl.uniform1f(u.uNeg, view.neg ? 1 : 0);
             gl.uniform1f(u.uHalftone, s.halftone);
