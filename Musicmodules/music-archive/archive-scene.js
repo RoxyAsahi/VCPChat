@@ -1041,7 +1041,6 @@ vec3 archiveUntone(vec3 y) {
             lift.v = back ? back.v : 0; lift.vel = 0;
             inspect.v = back ? back.rot || 0 : 0; inspect.vel = inspect.goal = 0;
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         /*
@@ -1053,7 +1052,6 @@ vec3 archiveUntone(vec3 y) {
         const hold = (lane, row, vl = 0, vr = 0) => {
             held = { lane, row, vl, vr };
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         const unhold = () => { if (held) { held = null; invalidate(); } };
@@ -1150,7 +1148,6 @@ vec3 archiveUntone(vec3 y) {
             detailOn = on;
             if (!on) inspect.goal = 0;
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         /* 取出后拖动转卡：delta 是弧度；release 后转回正面 */
@@ -1268,7 +1265,7 @@ vec3 archiveUntone(vec3 y) {
             const idleTarget = !reduced && isPlaying && !detailOn && detailK < 0.01 && now - lastInput > 2500 ? 1 : 0;
             bounceGain += ((detailOn ? 0 : 1) - bounceGain) * (reduced ? 1 : 1 - Math.exp(-dt * 4));
             if (bounceGain < 0.001) bounceGain = 0;
-            idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 0.8 : 4));   // 参考播放器：起伏 0.8 慢慢起、4 快速收
+            idleGain += (idleTarget - idleGain) * (reduced ? 1 : 1 - Math.exp(-dt * (idleTarget ? 0.8 : 4)));   // 参考播放器：起伏 0.8 慢慢起、4 收；有操作时也是淡出，不清零
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
@@ -1479,7 +1476,7 @@ vec3 archiveUntone(vec3 y) {
             playing = cell; isPlaying = Boolean(playingNow);
             invalidate();
         };
-        const touch = () => { lastInput = performance.now(); idleGain = 0; };
+        const touch = () => { lastInput = performance.now(); };   // 起伏不清零，按 4 淡出（参考播放器），一碰键盘不会整片一下子跳平
         /* 选中卡的抬起高度，不传回到默认 0.4 */
         const raise = (amount) => {
             const goal = Number.isFinite(amount) ? amount : 0.4;
