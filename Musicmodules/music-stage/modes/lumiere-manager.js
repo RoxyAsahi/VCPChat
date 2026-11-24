@@ -287,11 +287,13 @@ void main() {
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         float reveal = glyphReveal(gid);
         float singing = glyphSinging(gid);
-        float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.66 + lit * 0.5));
+        float body = tx.r * (uWaiting * (1.0 - reveal) + reveal * (0.8 + lit * 0.5));
         vec3 ink = mix(uInk, mix(uInk, light / max(total, 0.001), 0.45), clamp(lit, 0.0, 1.0));
         col = mix(col, ink * (0.74 + lit * 0.6), clamp(body, 0.0, 1.0));
         col += uAccent * tx.r * singing * 0.35;
         col += (light * 0.9 + uAccent * singing * 0.3) * halo * reveal * 0.55;
+        // 唱过的字自己也发一点白光（光外也看得出字在亮），正在唱的那个字光晕更大
+        col += uInk * halo * reveal * 0.16 + uAccent * textureLod(uText, t1, 4.5).r * singing * 0.5;
     }
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5;

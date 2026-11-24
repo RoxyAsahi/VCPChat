@@ -241,7 +241,8 @@ void main() {
     float aspect = uRes.x / uRes.y;
     vec2 p = vec2(uv.x * aspect, uv.y);
 
-    vec3 col = mix(uSkyLow, uSkyTop, smoothstep(WATER, 1.0, uv.y));
+    vec3 col = mix(uSkyLow, uSkyTop, smoothstep(WATER, 0.95, uv.y));
+    col += vec3(0.05, 0.025, 0.085) * exp(-pow((uv.y - 0.55) * 3.2, 2.0));
     // 星：很淡，只在天上
     vec2 sc = floor(gl_FragCoord.xy / 2.0);
     float star = step(0.9965, hash12(sc)) * smoothstep(0.4, 0.8, uv.y) * (0.5 + 0.5 * sin(uTime * 1.3 + hash12(sc + 5.0) * 40.0));
@@ -362,7 +363,10 @@ void main() {
         float inside = step(0.0, k) * step(k, 1.0);
         float line = smoothstep(0.0022, 0.0006, dist) * inside;
         float burnt = step(k, uFuseAt);
-        col = mix(col, mix(uInk * 0.55, vec3(0.08, 0.06, 0.06), burnt), line * 0.85);
+        // 没烧的引线淡淡发亮，烧过的只剩一道浅灰的灰烬
+        vec3 fresh = mix(uInk, vec3(0.55, 0.85, 1.0), 0.35) * 0.75;
+        col = mix(col, mix(fresh, uInk * 0.3, burnt), line * mix(0.85, 0.35, burnt));
+        col += vec3(0.45, 0.75, 1.0) * smoothstep(0.009, 0.0, dist) * inside * (1.0 - burnt) * 0.05;
         vec2 tip = a + (b - a) * uFuseAt;
         vec2 td = (uv - tip) * vec2(aspect, 1.0);
         float flick = 0.8 + 0.2 * sin(uTime * 47.0);
@@ -623,8 +627,9 @@ void main() {
             const bg = hexRgb(p.background, [0.08, 0.09, 0.12]);
             const accent = hexRgb(p.accent, [1.0, 0.62, 0.3]);
             colours = {
-                top: mixRgb(bg, [0.012, 0.016, 0.04], 0.9),
-                low: mixRgb(bg, [0.07, 0.06, 0.1], 0.82),
+                // 夏夜：头顶深靛，往下转紫，近地平线一层梅红
+                top: mixRgb(bg, [0.016, 0.02, 0.07], 0.9),
+                low: mixRgb(bg, [0.2, 0.075, 0.19], 0.85),
                 ink: [0.97, 0.95, 0.92],
                 accent,
                 // 纸签：浴衣那几种颜色（靛、薄红、若竹、山吹）

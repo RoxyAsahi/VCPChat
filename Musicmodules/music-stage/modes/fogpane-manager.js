@@ -206,7 +206,7 @@ vec3 lights(vec2 p, float horizonY) {
         vec2 h = hash22(vec2(id, 3.0));
         if (h.x < 0.25) continue;
         vec2 center = vec2((id + 0.2 + h.y * 0.6) * cw - uT * 0.16, horizonY + 0.14 + h.x * 0.32);
-        float r = 0.025 + 0.03 * hash12(vec2(id, 9.0));
+        float r = 0.032 + 0.04 * hash12(vec2(id, 9.0));
         vec3 tint = hash12(vec2(id, 5.0)) < 0.55 ? uNeon : uNeon2;
         col += tint * disc(p, center, r) * 1.1;
     }
@@ -217,7 +217,7 @@ vec3 lights(vec2 p, float horizonY) {
     for (int k = -1; k <= 1; k++) {
         float id = c + float(k);
         vec2 center = vec2((id + 0.5) * cw - uT * 0.7, 0.8 + hash12(vec2(id, 1.0)) * 0.06);
-        col += uLamp * disc(p, center, 0.075) * 0.95;
+        col += uLamp * disc(p, center, 0.095) * 1.05;
     }
     // 对面车道的车灯（往反方向走）和同向的尾灯
     x = p.x - uT * 0.42;
@@ -495,7 +495,9 @@ void main() {
     vec3 blurred = textureLod(uScene, uv + refract * 0.4, 4.2).rgb;
     float grainy = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 180.0) - 0.5;
     float clumps = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 7.0);
-    vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25;
+    // 雾里的灯：除了透过来的模糊光斑，再往外晕开一大圈
+    vec3 wide = textureLod(uScene, uv, 6.2).rgb;
+    vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25 + max(wide - uFogCol * 0.6, 0.0) * 0.45;
     vec3 clear = textureLod(uScene, uv + refract, 0.4).rgb * 1.3;
     vec3 col = mix(fog, clear, wipe);
     // 指痕边上积着一圈水，亮一点
