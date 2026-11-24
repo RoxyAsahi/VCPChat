@@ -348,6 +348,10 @@
         el.hidden = true;
         el.innerHTML = '<div class="aw-world"></div><div class="aw-empty" hidden></div>';
         if (tilt) el.setAttribute('aria-label', '平放');
+        // 键盘：整面墙是一个 Tab 停靠点（格子本身不进 Tab 顺序），停在这里后方向键选、回车播放、Esc 收起
+        el.tabIndex = 0;
+        el.setAttribute('aria-roledescription', tilt ? '平放封面' : '封面墙');
+        el.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown ArrowLeft ArrowRight Enter Escape');
         if (global.CSS && CSS.supports && CSS.supports('transition-timing-function', SPRING_ENTER.ease)) {
             el.style.setProperty('--aw-sp-enter', SPRING_ENTER.ease);
             el.style.setProperty('--aw-sp-enter-ms', SPRING_ENTER.ms + 'ms');

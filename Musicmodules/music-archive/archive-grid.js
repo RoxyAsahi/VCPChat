@@ -28,6 +28,9 @@
         const content = el.querySelector('.ag-content');
         const sticky = el.querySelector('.ag-sticky');
         const emptyEl = el.querySelector('.ag-empty');
+        // 键盘：滚动区是一个 Tab 停靠点（每格的播放/更多键不进 Tab 顺序，免得 Tab 落到看不见的按钮上），停在这里后方向键选、回车播放
+        scroller.tabIndex = 0;
+        scroller.setAttribute('aria-label', '网格，方向键选歌，回车播放');
         // 定位正在播放：和封面墙同一个右下角圆键（样式在 archive-wall.css 的 .aw-locate）
         const locateBtn = document.createElement('button');
         locateBtn.type = 'button';
@@ -122,7 +125,7 @@
             const t = document.createElement('div');
             t.className = 'ag-cell';
             t.setAttribute('role', 'gridcell');
-            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><span class="ag-no"></span><button type="button" class="ag-play" data-grid="play" title="播放" aria-label="播放"></button><button type="button" class="ag-more" data-grid="more" title="更多操作" aria-label="更多操作"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
+            t.innerHTML = '<div class="ag-art"><img alt="" draggable="false" decoding="async"><span class="ag-blank"></span><span class="ag-no"></span><button type="button" class="ag-play" data-grid="play" tabindex="-1" title="播放" aria-label="播放"></button><button type="button" class="ag-more" data-grid="more" tabindex="-1" title="更多操作" aria-label="更多操作"></button></div><b class="ag-t"></b><span class="ag-a"></span>';
             return { el: t, img: t.querySelector('img'), blank: t.querySelector('.ag-blank'), no: t.querySelector('.ag-no'), title: t.querySelector('.ag-t'), sub: t.querySelector('.ag-a'), idx: -1, src: null, cls: '' };
         };
         const headNode = (s) => {

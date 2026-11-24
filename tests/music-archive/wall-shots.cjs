@@ -222,6 +222,25 @@ const FAKE = ({ n, light, covers }) => {
   await page.waitForTimeout(1500);
   const calls2 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'musicLoad').length);
   check('网格双击播放', calls2 > calls, calls + ' → ' + calls2);
+  // 键盘焦点：格子里的按钮不进 Tab 顺序；Tab 停到网格上后，选中那张有虚线焦点圈，方向键照样能换
+  {
+    const stops = await page.evaluate(() => ({
+      btn: [...document.querySelectorAll('#music-archive-view .ag-play, #music-archive-view .ag-more, #music-archive-view .aw-q, #music-archive-view .aw-qm')].filter((b) => b.tabIndex >= 0).length,
+      grid: document.querySelector('.ag-scroll').tabIndex, wall: document.querySelector('.archive-wall').tabIndex
+    }));
+    await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+    await page.focus('.ag-scroll');
+    const g1 = (await dbg()).selected;
+    await page.keyboard.press('ArrowRight'); await page.waitForTimeout(500);
+    const f = await page.evaluate(() => {
+      const a = document.activeElement; const c = document.querySelector('.ag-cell.is-focus .ag-art');
+      return { on: a && a.classList.contains('ag-scroll'), vis: a && a.matches(':focus-visible'), ring: c ? getComputedStyle(c).outlineStyle : 'none' };
+    });
+    const g2 = (await dbg()).selected;
+    check('网格键盘焦点：只一个停靠点、有焦点圈、方向键能换', stops.btn === 0 && stops.grid === 0 && stops.wall === 0 && f.on && f.vis && f.ring === 'dashed' && g2 !== g1, JSON.stringify({ stops, f, g1, g2 }));
+    await shot(tag + '-8c-grid-keyfocus');
+    await page.evaluate(() => document.activeElement.blur());
+  }
 
   // 平放
   await page.click('.archive-nav [data-layout="table"]');
