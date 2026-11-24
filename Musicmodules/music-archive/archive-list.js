@@ -74,7 +74,7 @@
             ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="按${zh === '全部' ? '曲名' : zh}浏览">${zh}</button>`).join('')}
             <span class="archive-list-sort">
                 <button type="button" data-l="sortBtn" aria-haspopup="menu" aria-expanded="false" title="排序方式（阵列跟着重排）"><span class="archive-glyph-sort" aria-hidden="true"></span><span data-l="sortName">标题</span></button>
-                <span class="archive-list-sort-menu" role="menu" data-l="sortMenu" hidden>
+                <span class="archive-list-sort-menu mf-glass" role="menu" data-l="sortMenu" hidden>
                     ${SORTS.map(([k, zh, en]) => `<button type="button" role="menuitemradio" data-sort="${k}" aria-checked="false"><span>${zh}</span></button>`).join('')}
                 </span>
             </span>
@@ -1665,6 +1665,8 @@
             const mode = sortMode();
             const entry = SORTS.find(([k]) => k === mode) || SORTS[0];
             r.sortName.textContent = entry[1];
+            r.sortBtn.title = `排序：${entry[1]}（阵列跟着重排）`;
+            r.sortBtn.setAttribute('aria-label', `排序：${entry[1]}`);
             el.dataset.sort = entry[0]; // 表头跟着标出按哪一列排（CSS 用）
             r.colTitle.textContent = entry[0] === 'artist' ? '歌手 / ARTIST' : '曲目 / TITLE';
             r.cols.querySelectorAll('[data-col]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.col === entry[0] || (b.dataset.col === 'title' && entry[0] === 'artist'))));

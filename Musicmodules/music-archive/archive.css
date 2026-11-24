@@ -908,3 +908,38 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list[data-sort="artist"] .archive-list-cols > button:nth-child(2) { color: var(--ar-ink); font-weight: 600; }
 .archive-list-cols > button[aria-pressed="true"] { color: var(--ar-ink); font-weight: 600; }
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button[aria-pressed] { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); font-weight: inherit; }
+/* ===== 表头去掉、排序回到分类行（Roxy 11-24：「这一行没啥存在的必要」）=====
+   分类行右端三个同样大小的小图标按钮：排序、检索、导入。悬停统一成一块 6px 圆角的浅底 + 图标变实，
+   分类项悬停在字下面浮一条细线（选中的是琥珀粗线），点下去有轻微按压。 */
+.archive-list-cols { display: none; }
+.archive-list-kinds { margin-bottom: 14px; padding-right: 62px; align-items: center; }
+.archive-list-sort { display: block; margin-left: auto; padding-left: 0; }
+.archive-list-sort > button [data-l="sortName"] { display: none; }
+.archive-list-toolbar { top: 13px; gap: 4px; height: 26px; }
+.archive-list-sort > button,
+.archive-list-search,
+.archive-list-import-toggle { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; color: var(--ar-muted); background: transparent; transition: color .14s, background-color .14s, transform .1s; }
+.archive-list-sort > button:is(:hover, :focus-visible, [aria-expanded="true"]),
+.archive-list-search:hover,
+.archive-list-import-toggle:is(:hover, :focus-visible, [aria-expanded="true"]) { color: var(--ar-ink); background: color-mix(in srgb, var(--ar-ink) 9%, transparent); border-color: transparent; }
+.archive-list-sort > button:active, .archive-list-import-toggle:active, .archive-list-search:active { transform: scale(.92); }
+.archive-list-sort > button.on { color: var(--ar-ink); font-weight: inherit; }
+.archive-list-search .archive-glyph-search { opacity: 1; }
+.archive-list-import-toggle { font-size: 17px; line-height: 1; }
+/* 检索展开后：放大镜不再是按钮样子 */
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search { display: flex; width: auto; height: 26px; place-items: initial; align-items: center; padding: 0 0 0 2px; border-radius: 0; background: transparent; transform: none; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-sort { visibility: hidden; }
+/* 分类项悬停：字变实 + 下面浮一条 1px 细线，位置和选中的琥珀线一致 */
+.archive-list-kinds > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 1px; background: currentColor; opacity: 0; transform: scaleX(.4); transition: opacity .16s, transform .2s; pointer-events: none; }
+.archive-list-kinds > button:not(.on):hover::after { opacity: .45; transform: none; }
+.archive-list-kinds > button:active { transform: translateY(.5px); }
+/* 排序菜单：和导入菜单同一套玻璃（共用 mf-glass），不再用纸面+粗顶线 */
+.archive-list-sort-menu { top: calc(100% + 8px); min-width: 140px; padding: 6px; background: none; border-top: 0; box-shadow: none; }
+.archive-list-sort-menu button { padding: 8px 12px 8px 26px; border-radius: 10px; font-size: 13px; }
+.archive-list-sort-menu button:is(:hover, :focus-visible) { background: var(--mf-hover, color-mix(in srgb, var(--ar-ink) 8%, transparent)); }
+.archive-list-sort-menu button[aria-checked="true"]::before { left: 11px; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--ar-accent); }
+.archive-list-toolbar { top: 18px; }
+.archive-list-search { grid-auto-flow: column; }
+.archive-list-row.on::after, .archive-list-row.current.on::after { right: var(--text-end-inset); }
+.archive-list-sort-menu button:focus-visible { outline: none; box-shadow: none; }
+.archive-list-sort::before { display: none; }
