@@ -126,6 +126,17 @@ const FAKE = ({ n, light, covers }) => {
   const lyr = await page.evaluate(() => { const e = document.querySelector('.aw-tile.is-open .aw-lyric'); const n = e && e.querySelector('p.is-now'); return e ? { hidden: e.hidden, now: n && n.textContent } : null; });
   check('大卡歌词', lyr && !lyr.hidden && /第 11 行/.test(lyr.now || ''), JSON.stringify(lyr));
   await shot(tag + '-2b-seek');
+  if (args.dim) {
+    // 熄灯：收起大卡后半分钟不碰，除正在播放的都暗下去；鼠标一动就亮
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(34000);
+    const dim1 = await page.evaluate(() => document.querySelector('.archive-wall:not(.aw-table)').classList.contains('aw-dim'));
+    await shot(tag + '-2c-dim');
+    await page.mouse.move(900, 400);
+    await page.waitForTimeout(300);
+    const dim2 = await page.evaluate(() => document.querySelector('.archive-wall:not(.aw-table)').classList.contains('aw-dim'));
+    check('熄灯与亮回', dim1 && !dim2, dim1 + ' → ' + dim2);
+  }
 
   // Esc 收起
   await page.keyboard.press('Escape');

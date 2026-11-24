@@ -857,7 +857,7 @@
         const panK = tilt ? { x: 1.15, y: 1 / Math.cos(TILT * Math.PI / 180) } : { x: 1, y: 1 };
         let lastClick = { id: '', t: 0 };
         el.addEventListener('pointerdown', (e) => {
-            st.touchedAt = performance.now();
+            wake();
             if (e.button !== 0 || e.target.closest('button')) return;
             st.aim = null; st.wheelAim = null;
             st.vel.x = st.vel.y = 0;
@@ -936,7 +936,7 @@
         el.addEventListener('wheel', (e) => {
             if (!st.g) return;
             e.preventDefault();
-            st.touchedAt = performance.now();
+            wake();
             st.aim = null;
             st.vel.x = st.vel.y = 0;
             let dx = e.deltaX, dy = e.deltaY;
@@ -959,6 +959,24 @@
             schedule();
         }, { passive: false });
 
+        /*
+         * 熄灯：正在放歌、没有展开的卡、这面墙半分钟没人碰时，除了正在播放的那几张，其余慢慢暗下去；
+         * 鼠标一动、滚轮、按键就亮回来。
+         */
+        const DIM_AFTER = 30000;
+        let dimTimer = 0;
+        const wake = () => {
+            st.touchedAt = performance.now();
+            if (el.classList.contains('aw-dim')) el.classList.remove('aw-dim');
+        };
+        const checkDim = () => {
+            const p = opts.playing();
+            const want = st.on && p.active && p.index >= 0 && !st.expanded && !reduced() && performance.now() - (st.touchedAt || 0) > DIM_AFTER && st.ids.includes(p.index);
+            el.classList.toggle('aw-dim', want);
+        };
+        el.addEventListener('pointermove', () => { if (el.classList.contains('aw-dim') || performance.now() - (st.touchedAt || 0) > 1000) wake(); }, { passive: true });
+        global.addEventListener('keydown', () => { if (st.on) wake(); }, true);
+
         // ---------- 对外 ----------
         const api = {
             el,
@@ -968,10 +986,15 @@
                 st.on = on;
                 el.hidden = !on;
                 if (on) {
+                    st.touchedAt = performance.now();
+                    clearInterval(dimTimer);
+                    dimTimer = setInterval(checkDim, 2000);
                     syncItems({ force: true });
                     st.dirty = true;
                     schedule();
                 } else {
+                    clearInterval(dimTimer);
+                    el.classList.remove('aw-dim');
                     cancelAnimationFrame(st.raf);
                     st.raf = 0;
                     setExpanded(null, { animate: false });
@@ -1018,6 +1041,7 @@
                 cancelAnimationFrame(st.raf);
                 clearTimeout(st.reflowTimer);
                 clearInterval(seekTimer);
+                clearInterval(dimTimer);
                 thumbs.destroy();
                 el.remove();
             },
@@ -1026,5 +1050,5 @@
         return api;
     };
 
-    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { DIM_AFTER: 30000, SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
 })(typeof window !== 'undefined' ? window : globalThis);

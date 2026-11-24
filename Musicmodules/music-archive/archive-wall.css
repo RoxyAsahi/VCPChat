@@ -465,3 +465,9 @@ body.music-reduce-motion .archive-wall.aw-table::after { display: none; }
 @container awcard (max-height: 360px) {
     .aw-lyric { display: none; }
 }
+
+/* 熄灯：除了正在播放的那张，其余慢慢暗下去（1.6 秒），亮回来快（0.25 秒） */
+.archive-wall .aw-in { transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter .25s var(--mt-ease, ease); }
+.archive-wall.aw-dim .aw-tile:not(.is-playing) .aw-in { filter: brightness(.3) saturate(.6); transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter 1.6s ease; }
+.archive-wall.aw-dim .aw-tile.is-playing .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 60%, transparent), 0 18px 60px color-mix(in srgb, var(--ar-accent) 28%, transparent); }
+.archive-wall.aw-dim::before { opacity: .4; transition: opacity 1.6s ease; }
