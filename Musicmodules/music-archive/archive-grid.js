@@ -6,7 +6,7 @@
 (function (global) {
     'use strict';
 
-    const HEAD_H = 64;       // 节标题高度
+    const HEAD_H = 92;       // 节标题高度
     const TEXT_H = 46;       // 封面下面两行字
     const GAP_X = 22, GAP_Y = 26;
     const MIN_CELL = 132, MAX_CELL = 188;
@@ -128,8 +128,10 @@
             const sec = st.secs[s];
             const h = document.createElement('div');
             h.className = 'ag-head' + (st.revealOk ? ' ag-reveal' : (performance.now() < (st.enterUntil || 0) ? ' ag-entering' : ''));
-            h.innerHTML = '<b></b><span></span><i></i>';
+            // Folia 式题头：左边一个超大的节名，右上角「第几节 / 共几节」编号，底下数量和一条结构线
+            h.innerHTML = '<b></b><span></span><em></em><i></i>';
             h.firstChild.textContent = sec.name;
+            h.children[2].textContent = String(s + 1).padStart(2, '0') + ' / ' + String(st.secs.length).padStart(2, '0');
             h.children[1].textContent = sec.ids.length + ' 首' + (sec.sub ? ' · ' + sec.sub : '');
             return h;
         };

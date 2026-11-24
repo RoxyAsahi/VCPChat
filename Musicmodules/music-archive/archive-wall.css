@@ -323,9 +323,10 @@ body.music-reduce-motion .aw-tile .aw-in, body.music-reduce-motion .aw-panel > *
 .ag-content { position: relative; }
 .ag-head, .ag-cell { position: absolute; left: 0; top: 0; }
 /* 节标题：大字 + 数量 + 一条结构线，和左边目录表的分组标题同一路 */
-.ag-head { height: 64px; display: flex; align-items: flex-end; gap: 14px; padding-bottom: 12px; box-sizing: border-box; color: var(--ar-ink); }
-.ag-head b { font-size: 26px; font-weight: 600; line-height: 1; letter-spacing: .5px; }
-.ag-head span { font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .6px; color: var(--ar-muted); padding-bottom: 3px; }
+.ag-head { height: 92px; display: flex; align-items: flex-end; gap: 16px; padding-bottom: 16px; box-sizing: border-box; color: var(--ar-ink); }
+.ag-head b { font-size: clamp(40px, 4vw, 60px); font-weight: 800; line-height: .9; letter-spacing: -.045em; max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-head em { padding-bottom: 6px; font: 600 11px/1 var(--mt-font-mono, ui-monospace, monospace); font-style: normal; letter-spacing: .8px; color: var(--ar-accent-text, var(--ar-accent)); }
+.ag-head span { font: 500 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .6px; color: var(--ar-muted); padding-bottom: 6px; }
 .ag-head.ag-reveal > * { animation: ag-pop .34s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) both; }
 .ag-head i { position: absolute; left: 0; right: 0; bottom: 4px; height: 1.5px; background: color-mix(in srgb, var(--ar-ink) 26%, transparent); }
 .ag-sticky { position: absolute; left: 0; right: 8px; top: 0; height: 34px; display: flex; align-items: center; gap: 12px; padding: 0 2px; background: linear-gradient(180deg, var(--ar-paper) 78%, rgba(var(--ar-paper-rgb), 0)); height: 40px; pointer-events: none; z-index: 2; }
