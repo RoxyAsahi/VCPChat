@@ -124,13 +124,16 @@
                 }
                 global.requestAnimationFrame?.(() => hint && hint.classList.add('visible'));
             };
-            const hideHint = () => { depth = 0; if (hint) hint.classList.remove('visible'); };
-            doc.addEventListener('dragenter', (event) => { if (!isFileDrag(event)) return; depth++; showHint(); });
-            doc.addEventListener('dragleave', (event) => { if (!isFileDrag(event)) return; depth = Math.max(0, depth - 1); if (!depth) hideHint(); });
-            doc.addEventListener('dragend', hideHint);
+            // 保险：拖着悬停时 dragover 每几十毫秒来一次；停了大半秒还没来（按了 Esc、拖到别的窗口没收到 dragleave）就收起，提示不会卡在屏幕上
+            let idle = 0;
+            const hideHint = () => { depth = 0; clearTimeout(idle); if (hint) hint.classList.remove('visible'); };
+            doc.addEventListener('dragenter', (event) => { if (!isFileDrag(event)) return; depth++; showHint(); }, true);
+            doc.addEventListener('dragover', (event) => { if (!isFileDrag(event)) return; clearTimeout(idle); idle = setTimeout(hideHint, 700); }, true);
+            doc.addEventListener('dragleave', (event) => { if (!isFileDrag(event)) return; depth = Math.max(0, depth - 1); if (!depth) hideHint(); }, true);
+            doc.addEventListener('dragend', hideHint, true);
             global.addEventListener?.('blur', hideHint);
+            doc.addEventListener('drop', hideHint, true);
             doc.addEventListener('drop', (event) => {
-                hideHint();
                 const files = Array.from(event.dataTransfer?.files || []).filter((f) => /\.m3u8?$/i.test(f.name || ''));
                 if (!files.length) return;
                 for (const f of files) {

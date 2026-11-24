@@ -40,3 +40,11 @@ test('describeTrack lists what is known and skips the rest', () => {
     const old = describeTrack({ path: 'C:\\M\\b.mp3', codec: 'MPEG 1 Layer 3', sampleRate: 44100 }, null);
     assert.deepEqual(old, [['格式', 'MP3 · MPEG 1 Layer 3'], ['规格', '44.1 kHz'], ['听过', '还没听过'], ['位置', 'C:\\M\\b.mp3']]);
 });
+
+test('adversarial: cloud paths are shown decoded, broken encodings shown as-is, empty tracks do not throw', () => {
+    const { describeTrack } = require(require('node:path').join(__dirname, '../Musicmodules/music-track-file.js'));
+    assert.deepEqual(describeTrack({ path: 'https://dav/x/%E6%AD%8C.flac' }).at(-1), ['位置', 'https://dav/x/歌.flac']);
+    assert.deepEqual(describeTrack({ path: 'https://dav/%zz.flac' }).at(-1), ['位置', 'https://dav/%zz.flac']);
+    assert.deepEqual(describeTrack({ path: 'D:\\100%\\a.flac' }).at(-1), ['位置', 'D:\\100%\\a.flac']);
+    assert.deepEqual(describeTrack(null), []);
+});

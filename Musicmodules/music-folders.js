@@ -16,49 +16,58 @@
     const isLocal = (p) => typeof p === 'string' && p !== '' && !/^[a-z][a-z0-9+.-]+:\/\//i.test(p);
 
     // → [{ path, count, remembered, exists }]：加过的在前（按原顺序），其他位置按歌数从多到少
+    // 几万首、几千个散落文件夹也要快：路径的比较键都先算好，包含关系按「往上找祖先」查表，不两两比较。
+    const ancestors = (k) => { const out = []; for (let at = k.lastIndexOf('\\'); at > 0; at = k.lastIndexOf('\\', at - 1)) out.push(k.slice(0, at)); return out; };
     const folderRows = (remembered, tracks) => {
         const rows = (remembered || []).map((f) => ({ path: f.path || f, count: 0, remembered: true, exists: f.exists !== false }));
+        const rowKeys = rows.map((r) => key(r.path));
         const others = new Map();
+        const homeOf = new Map(); // 上级目录键 → 归到哪个加过的文件夹（-1 = 都不是）
         for (const t of tracks || []) {
             const p = t && t.path;
             if (!isLocal(p) || t.isRemote) continue;
-            const home = rows.find((r) => underDir(p, r.path));
-            if (home) { home.count++; continue; }
             const dir = parentOf(p);
+            const dk = key(dir || p);
+            let home = homeOf.get(dk);
+            if (home === undefined) {
+                home = rowKeys.findIndex((rk) => dk === rk || dk.startsWith(rk + '\\'));
+                homeOf.set(dk, home);
+            }
+            if (home !== -1) { rows[home].count++; continue; }
             if (!dir) continue;
-            const k = key(dir);
-            const had = others.get(k);
-            if (had) had.count++; else others.set(k, { path: dir, count: 1 });
+            const had = others.get(dk);
+            if (had) had.count++; else others.set(dk, { path: dir, count: 1, k: dk });
         }
-        // 同一个上级下面有两个以上文件夹的，并成上级（D:\Music\歌手A、D:\Music\歌手B → D:\Music），直到不再变
-        let list = [...others.values()];
+        // 同一个上级下面有两个以上文件夹的，并成上级（D:\\Music\\歌手A、D:\\Music\\歌手B → D:\\Music），直到不再变
+        const byKey = others; // 键 → 条目
         for (let changed = true; changed;) {
             changed = false;
             const byParent = new Map();
-            for (const e of list) {
+            for (const e of byKey.values()) {
                 const up = parentOf(e.path);
                 if (!up || depth(up) < 2) continue;
                 const k = key(up);
-                if (!byParent.has(k)) byParent.set(k, { path: up, kids: [] });
+                if (!byParent.has(k)) byParent.set(k, { path: up, k, kids: [] });
                 byParent.get(k).kids.push(e);
             }
-            for (const { path, kids } of byParent.values()) {
+            for (const { path, k, kids } of byParent.values()) {
                 if (kids.length < 2) continue;
-                const merged = { path, count: kids.reduce((n, e) => n + e.count, 0) };
-                list = list.filter((e) => !kids.includes(e));
+                const merged = { path, k, count: kids.reduce((n, e) => n + e.count, 0) };
+                for (const e of kids) byKey.delete(e.k);
                 // 已有的上级本身（歌直接放在上级里）也并进来
-                const self = list.find((e) => key(e.path) === key(path));
-                if (self) { merged.count += self.count; list = list.filter((e) => e !== self); }
-                list.push(merged);
+                const self = byKey.get(k);
+                if (self) merged.count += self.count;
+                byKey.set(k, merged);
                 changed = true;
             }
-            // 被别的条目包含的（上级并出来以后）也收进去
-            for (const e of list.slice()) {
-                const outer = list.find((o) => o !== e && underDir(e.path, o.path));
-                if (outer) { outer.count += e.count; list = list.filter((x) => x !== e); changed = true; }
+            // 被别的条目包含的（上级并出来以后）也收进去：往上找最外层的那个
+            for (const e of [...byKey.values()]) {
+                if (!byKey.has(e.k)) continue;
+                const outerKey = ancestors(e.k).reverse().find((a) => byKey.has(a));
+                if (outerKey) { byKey.get(outerKey).count += e.count; byKey.delete(e.k); changed = true; }
             }
         }
-        list.sort((a, b) => b.count - a.count);
+        const list = [...byKey.values()].sort((a, b) => b.count - a.count);
         return rows.concat(list.map((e) => ({ path: e.path, count: e.count, remembered: false, exists: true })));
     };
 
@@ -97,7 +106,7 @@
         // 把这个文件夹下的歌从曲库拿掉（正在放的那首留着），然后让主进程忘掉这个文件夹
         const removeFolder = async (row) => {
             const ok = global.MusicDialog?.confirm
-                ? await global.MusicDialog.confirm({ title: '把这个文件夹移出曲库？', message: `「${row.path}」里的 ${row.count} 首会从曲库里拿掉，之后也不再自动同步。磁盘上的文件不会删除。`, confirmText: '移出曲库', danger: true })
+                ? await global.MusicDialog.confirm({ title: '把这个文件夹移出曲库？', message: `「${row.path}」里的 ${row.count} 首会从曲库里拿掉${row.remembered ? '，之后也不再自动同步' : ''}。磁盘上的文件不会删除。`, confirmText: '移出曲库', danger: true })
                 : true;
             if (!ok) return;
             const current = app.playlist?.[app.currentTrackIndex] || null;
@@ -111,13 +120,27 @@
                 try { await app.saveLibrary?.(); } catch (e) { /* 存盘失败另有提示 */ }
                 refreshViews();
             }
-            const res = await call({ op: 'forget', path: row.path }).catch((e) => ({ ok: false, message: String(e && e.message || e) }));
-            if (!res || !res.ok) toast(`文件夹没能从同步列表里去掉：${res?.message || ''}`, { kind: 'error' });
+            // 只有「自动同步」的文件夹才需要让主进程忘掉；「其他位置」本来就不在同步列表里
+            if (row.remembered) {
+                const res = await call({ op: 'forget', path: row.path }).catch((e) => ({ ok: false, message: String(e && e.message || e) }));
+                if (!res || !res.ok) toast(`文件夹没能从同步列表里去掉：${res?.message || ''}`, { kind: 'error' });
+            }
+            const gone = [...drop];
             toast(`已把「${row.path}」移出曲库：${drop.size} 首${keptPlaying ? '（正在放的那首留着）' : ''}`, {
                 kind: 'success',
                 duration: 7000,
-                // 撤销 = 把这个文件夹重新加回来（重新扫一遍，歌单里原来指向这些歌的条目会重新对上）
-                action: typeof app.api?.addMusicPaths === 'function' ? { label: '撤销', run: () => { app.api.addMusicPaths([row.path])?.catch?.(() => {}); } } : undefined
+                // 撤销：把拿掉的歌原样放回曲库（播放统计、歌单都还对得上），自动同步的文件夹再加回同步列表
+                action: { label: '撤销', run: async () => {
+                    const have = new Set((app.playlist || []).map((t) => key(t && t.path)));
+                    const back = gone.filter((t) => !have.has(key(t.path)));
+                    if (back.length) {
+                        app.playlist = (app.playlist || []).concat(back);
+                        try { await app.saveLibrary?.(); } catch (e) { /* 存盘失败另有提示 */ }
+                        refreshViews();
+                    }
+                    if (row.remembered && typeof app.api?.addMusicPaths === 'function') { try { app.api.addMusicPaths([row.path])?.catch?.(() => {}); } catch (e) { /* 下次扫描会补上 */ } }
+                    render();
+                } }
             });
             render();
         };

@@ -112,3 +112,44 @@ test('export skips cloud tracks and sends titles; palette lists one export per n
     assert.deepEqual(sent, { name: '夜里', tracks: [{ path: 'C:\\M\\a.flac', title: 'A', artist: 'X', duration: 100 }] });
     assert.deepEqual(app.m3u.commands().map((c) => c.id), ['m3u-import', 'm3u-export:1']);
 });
+
+test('adversarial: UTF-16 both byte orders, odd characters in paths, empty and comment-only files', () => {
+    const body = '#EXTM3U\r\nD:\\音乐\\a #1 100%.flac\r\nD:\\😀\\b.flac\r\n';
+    const le = Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from(body, 'utf16le')]);
+    const be = Buffer.concat([Buffer.from([0xFE, 0xFF]), Buffer.from(body, 'utf16le').swap16()]);
+    assert.equal(decodeM3u(le, 'x.m3u'), body);
+    assert.equal(decodeM3u(be, 'x.m3u'), body);
+    const r = parseM3u(decodeM3u(be, 'x.m3u'), { platform: 'win32' });
+    assert.deepEqual(r.entries.map((e) => e.path), ['D:\\音乐\\a #1 100%.flac', 'D:\\😀\\b.flac']);
+    assert.deepEqual(parseM3u('', { platform: 'win32' }), { name: '', entries: [], skipped: 0 });
+    assert.deepEqual(parseM3u('#EXTM3U\n#EXTINF:-1,x\n', { platform: 'win32' }).entries, []);
+    assert.equal(parseM3u('file:///D:/bad%zz.flac', { platform: 'win32' }).skipped, 1);
+    // 导出再导入，怪字符原样回来
+    const back = parseM3u(buildM3u('名#字', [{ path: 'D:\\😀\\b.flac', title: 'a,b', artist: '' }]), { platform: 'win32' });
+    assert.deepEqual(back.entries.map((e) => [e.path, e.title]), [['D:\\😀\\b.flac', 'a,b']]);
+});
+
+test('adversarial: import with every entry missing, or an empty list, creates nothing and says why', async () => {
+    const toasts = [];
+    globalThis.MusicToast = { show: (t) => toasts.push(t) };
+    let res = { ok: true, name: '旧电脑', skipped: 2, entries: [{ path: 'Z:\\a.flac', exists: false }] };
+    const app = { playlist: [], customPlaylists: [], api: { importMusicM3u: async () => res, exportMusicM3u: async () => ({ ok: true }) } };
+    setupMusicM3u(app);
+    assert.equal(await app.m3u.importFile(), null);
+    assert.match(toasts.at(-1).message, /3 首在这台电脑上都找不到/);
+    res = { ok: true, name: '空', skipped: 0, entries: [] };
+    assert.equal(await app.m3u.importFile(), null);
+    assert.match(toasts.at(-1).message, /是空的/);
+    res = { ok: false, canceled: true };
+    const n = toasts.length;
+    assert.equal(await app.m3u.importFile(), null);
+    assert.equal(toasts.length, n); // 取消选择文件不弹提示
+    assert.equal(app.customPlaylists.length, 0);
+    // 只有云端歌的歌单：导出给出说明，不弹保存框
+    let asked = false;
+    app.api.exportMusicM3u = async () => { asked = true; return { ok: true }; };
+    assert.equal(await app.m3u.exportPlaylist({ name: '云', tracks: ['https://dav/a.flac'] }), null);
+    assert.equal(asked, false);
+    assert.match(toasts.at(-1).message, /没有本机的歌/);
+    delete globalThis.MusicToast;
+});

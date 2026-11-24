@@ -78,3 +78,24 @@ test('cleanName trims and caps names', (t) => {
     assert.equal(cleanName(' a\nb '), 'a b');
     assert.equal(cleanName('x'.repeat(40)).length, 24);
 });
+
+test('adversarial: broken storage, names with markup, and a full list blocks new names in the dialog', async () => {
+    let s = setup('not json');
+    assert.deepEqual(s.app.eqUserPresets.list(), []);
+    s = setup([{ name: '' , bands: {} }, { name: 'ok', bands: null }, null, { name: '<b>"x"</b>', bands: { 32: 1 } }]);
+    assert.deepEqual(s.app.eqUserPresets.list().map((p) => p.name), ['<b>"x"</b>']);
+    assert.ok([...s.sel.options].some((o) => o.textContent === '<b>"x"</b>'));
+    assert.equal(s.sel.querySelector('b'), null);
+    const full = Array.from({ length: 16 }, (_, i) => ({ name: `p${i}`, bands: { 32: i, 64: 0 } }));
+    s = setup(full);
+    s.app.eqUserPresets.promptSave();
+    const input = document.querySelector('.music-eq-name input');
+    const ok = document.querySelector('.music-eq-name .dialog-btn.confirm');
+    assert.equal(ok.disabled, true);
+    assert.match(document.querySelector('.music-eq-name .music-dialog-msg').textContent, /已经存了 16 个/);
+    input.value = 'p3';
+    input.dispatchEvent(new window.Event('input'));
+    assert.equal(ok.disabled, false); // 同名可以覆盖
+    ok.click();
+    assert.equal(s.app.eqUserPresets.list().length, 16);
+});

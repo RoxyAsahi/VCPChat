@@ -39,18 +39,30 @@
         let lastPush = 0;
         let overlay = null;
 
-        const send = async () => {
-            if (typeof app.api?.setMusicChannels !== 'function') return null;
+        // 拖滑块时一秒几十次：同一时间只发一个请求，发的过程中又变了就等它回来再补发最后的值（不会乱序、不堆积）
+        let inflight = null;
+        let again = false;
+        let failures = 0;       // 引擎连续不认（比如半新不旧的引擎），重发几次就别再拉锯了
+        const send = () => {
+            if (typeof app.api?.setMusicChannels !== 'function') return Promise.resolve(null);
+            if (inflight) { again = true; return inflight; }
             sending = true;
-            try {
-                const res = await app.api.setMusicChannels({ ...wanted });
-                if (res && res.channels) engine = normalize(res.channels);
+            inflight = (async () => {
+                let res = null;
+                try {
+                    do {
+                        again = false;
+                        try { res = await app.api.setMusicChannels({ ...wanted }); } catch (e) { res = null; }
+                        if (res && res.channels) engine = normalize(res.channels);
+                    } while (again);
+                } finally {
+                    sending = false;
+                    inflight = null;
+                }
+                failures = res && res.channels && same(engine, wanted) ? 0 : failures + 1;
                 return res;
-            } catch (e) {
-                return null;
-            } finally {
-                sending = false;
-            }
+            })();
+            return inflight;
         };
 
         const originalUpdate = app.updateUIWithState;
@@ -60,7 +72,7 @@
                 if (state && state.channels && typeof state.channels === 'object') {
                     engine = normalize(state.channels);
                     // 引擎重启过（回到默认）：把存的设置再发过去；隔 5 秒以上才重发，免得来回拉锯
-                    if (!same(engine, wanted) && !sending && Date.now() - lastPush > 5000) { lastPush = Date.now(); send(); }
+                    if (!same(engine, wanted) && !sending && failures < 3 && Date.now() - lastPush > 5000) { lastPush = Date.now(); send(); }
                 }
             } catch (e) { /* 只是附加功能 */ }
             return result;
@@ -68,6 +80,7 @@
 
         const set = (patch) => {
             wanted = normalize({ ...wanted, ...patch });
+            failures = 0;
             try { storage?.setItem(KEY, JSON.stringify(wanted)); } catch (e) { /* 只是偏好 */ }
             lastPush = Date.now();
             syncDialog();

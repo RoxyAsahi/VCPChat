@@ -63,7 +63,7 @@
     };
     // 连续听歌的最长天数（一天听满 1 分钟才算）
     const longestStreak = (daily) => {
-        const keys = Object.keys(daily || {}).filter((k) => daily[k] >= 60).sort();
+        const keys = Object.keys(daily || {}).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && daily[k] >= 60).sort();
         let best = 0, run = 0, prev = null;
         for (const k of keys) {
             const [y, m, d] = k.split('-').map(Number);

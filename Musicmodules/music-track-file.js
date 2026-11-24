@@ -52,7 +52,10 @@
         } else if (stat !== undefined) {
             push('听过', '还没听过');
         }
-        push('位置', t.path);
+        // 云端地址里的中文是 %E6%AD%8C 这种，显示时还原成字（复制路径仍然复制原样）
+        let where = t.path;
+        if (!isLocal(where) && typeof where === 'string') { try { where = decodeURI(where); } catch (e) { /* 不是合法编码就原样 */ } }
+        push('位置', where);
         return rows;
     };
 

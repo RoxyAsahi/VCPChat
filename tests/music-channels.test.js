@@ -33,3 +33,31 @@ test('old engine is unsupported; new engine gets the saved setting re-sent after
     assert.deepEqual(JSON.parse(store.get('musicChannels')), { balance: -0.2, swap: true, mono: true });
     assert.equal(sent.length, 2);
 });
+
+test('adversarial: fast slider drags send one request at a time ending on the last value; a stubborn engine stops getting re-sent', async () => {
+    let open = 0, maxOpen = 0;
+    const sent = [];
+    const app = {
+        updateUIWithState: () => {},
+        api: { setMusicChannels: async (v) => { open++; maxOpen = Math.max(maxOpen, open); sent.push(v.balance); await new Promise((r) => setTimeout(r, 5)); open--; return { channels: v }; } }
+    };
+    setupMusicChannels(app, { storage: null });
+    const last = [];
+    for (let i = 1; i <= 20; i++) last.push(app.channels.set({ balance: i / 100 }));
+    await Promise.all(last);
+    assert.equal(maxOpen, 1);
+    assert.ok(sent.length <= 3, `sent ${sent.length}`);
+    assert.equal(sent.at(-1), 0.2);
+
+    // 引擎总是不认：最多补发三次
+    let tries = 0;
+    const stubborn = { updateUIWithState: () => {}, api: { setMusicChannels: async () => { tries++; return { status: 'error' }; } } };
+    setupMusicChannels(stubborn, { storage: { getItem: () => JSON.stringify({ mono: true }), setItem: () => {} } });
+    const realNow = Date.now;
+    let fake = realNow();
+    Date.now = () => fake;
+    try {
+        for (let i = 0; i < 8; i++) { fake += 6000; stubborn.updateUIWithState({ channels: { balance: 0, swap: false, mono: false } }); await new Promise((r) => setTimeout(r, 2)); }
+    } finally { Date.now = realNow; }
+    assert.equal(tries, 3);
+});

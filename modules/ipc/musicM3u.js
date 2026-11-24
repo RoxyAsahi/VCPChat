@@ -14,6 +14,7 @@ function decodeM3u(buf, fileName = '') {
     if (!Buffer.isBuffer(buf)) buf = Buffer.from(buf || '');
     if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.slice(3).toString('utf8');
     if (buf[0] === 0xFF && buf[1] === 0xFE) return buf.slice(2).toString('utf16le');
+    if (buf[0] === 0xFE && buf[1] === 0xFF) { const le = Buffer.from(buf.slice(2, buf.length - (buf.length % 2))); return le.swap16().toString('utf16le'); }
     if (/\.m3u8$/i.test(fileName) || looksUtf8(buf)) return buf.toString('utf8');
     try { return require('iconv-lite').decode(buf, 'gbk'); } catch (e) { return buf.toString('latin1'); }
 }

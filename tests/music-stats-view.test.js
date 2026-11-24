@@ -52,3 +52,10 @@ test('calendarWeeks ends on the current week with Monday on top and grades days 
     assert.equal(weeks[0][0].key, '2026-11-09');
     assert.equal(longestStreak({ '2026-11-01': 100, '2026-11-02': 100, '2026-11-03': 100, '2026-11-05': 100, '2026-11-06': 30 }), 3);
 });
+
+test('adversarial: calendar and streak survive empty, null and junk daily data', () => {
+    const { calendarWeeks, longestStreak } = require(require('node:path').join(__dirname, '../Musicmodules/music-stats-view.js'));
+    assert.equal(calendarWeeks(null, new Date(2026, 10, 24)).length, 53);
+    assert.equal(longestStreak(null), 0);
+    assert.equal(longestStreak({ junk: 999, '2026-11-20': 100, '2026-11-21': 90, '2026-11-22': 'x' }), 2);
+});
