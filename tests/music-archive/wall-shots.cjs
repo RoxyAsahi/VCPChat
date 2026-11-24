@@ -188,7 +188,11 @@ const FAKE = ({ n, light, covers }) => {
 
   // 平放
   await page.click('.archive-nav [data-layout="table"]');
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(280);
+  const flips = await page.evaluate(() => document.querySelectorAll('.aw-table .aw-tile.aw-flip').length);
+  await shot(tag + '-9a-flip');
+  check('换到平放时封面跟着扫描线翻过来', flips > 20, 'flips=' + flips);
+  await page.waitForTimeout(2700);
   d = await dbg();
   const tdbg = await page.evaluate(() => ({ on: !document.querySelector('.archive-wall.aw-table').hidden, tiles: document.querySelectorAll('.aw-table .aw-tile').length }));
   check('平放开着', d.layout === 'table' && tdbg.on && tdbg.tiles > 20 && d.allowed === false, JSON.stringify(tdbg));

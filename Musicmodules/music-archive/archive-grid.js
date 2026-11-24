@@ -156,8 +156,18 @@
                         n.el.dataset.id = id;
                         content.appendChild(n.el);
                         n.idx = -1;
-                        n.el.classList.remove('ag-entering', 'ag-reveal');
-                        if (performance.now() < (st.enterUntil || 0)) {
+                        n.el.classList.remove('ag-entering', 'ag-reveal', 'ag-flip');
+                        const sweep = performance.now() < (st.enterUntil || 0) && performance.now() - (st.shownAt || 0) < 400 && opts.host.querySelector('.archive-layout-sweep');
+                        if (sweep) {
+                            // 换视图时跟着扫描线从左往右翻过来
+                            const w = opts.host.clientWidth || global.innerWidth || 1600;
+                            const ms = Math.min(720, 380 + w * 0.16);
+                            const sx = st.room.left + st.left + c * (st.cell + GAP_X);
+                            const at = global.MusicArchiveWall?.sweepTimeAt;
+                            const u = Math.max(0, Math.min(1, sx / (w + 90)));
+                            n.el.style.setProperty('--ag-d', Math.round((at ? at(u) : u) * ms) + 'ms');
+                            n.el.classList.add('ag-flip');
+                        } else if (performance.now() < (st.enterUntil || 0)) {
                             const vr = Math.max(0, (row.y - top) / st.rowH);
                             n.el.style.setProperty('--ag-d', Math.round(Math.min(360, (vr + c * 0.6) * 45)) + 'ms');
                             n.el.classList.add('ag-entering');
@@ -317,7 +327,7 @@
                 if (on === st.on) return;
                 st.on = on;
                 el.hidden = !on;
-                if (on) { syncData(true); schedule(); }
+                if (on) { st.shownAt = performance.now(); syncData(true); schedule(); }
                 else {
                     cancelAnimationFrame(st.raf); st.raf = 0;
                     for (const n of st.nodes.values()) recycle(n);

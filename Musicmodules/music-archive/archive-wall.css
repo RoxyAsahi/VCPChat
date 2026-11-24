@@ -471,3 +471,10 @@ body.music-reduce-motion .archive-wall.aw-table::after { display: none; }
 .archive-wall.aw-dim .aw-tile:not(.is-playing) .aw-in { filter: brightness(.3) saturate(.6); transition: transform .22s var(--mt-ease, ease), box-shadow .22s var(--mt-ease, ease), filter 1.6s ease; }
 .archive-wall.aw-dim .aw-tile.is-playing .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 60%, transparent), 0 18px 60px color-mix(in srgb, var(--ar-accent) 28%, transparent); }
 .archive-wall.aw-dim::before { opacity: .4; transition: opacity 1.6s ease; }
+
+/* 换视图：扫描线扫过时，封面从侧面翻过来（左边先、右边后，时间由脚本按位置给） */
+.aw-tile.aw-flip .aw-in { transform-origin: 0 50%; animation: aw-flip .56s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)) backwards; }
+@keyframes aw-flip { from { opacity: 0; transform: perspective(900px) rotateY(-88deg); filter: brightness(1.6); } 60% { opacity: 1; } to { opacity: 1; transform: perspective(900px) rotateY(0deg); filter: none; } }
+.ag-cell.ag-flip > .ag-art { transform-origin: 0 50%; animation: aw-flip .56s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)) var(--ag-d, 0ms) backwards; }
+.ag-cell.ag-flip > .ag-t, .ag-cell.ag-flip > .ag-a { animation: ag-pop .34s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) calc(var(--ag-d, 0ms) + 120ms) backwards; }
+body.music-reduce-motion .aw-tile.aw-flip .aw-in, body.music-reduce-motion .ag-cell.ag-flip > * { animation: none; }

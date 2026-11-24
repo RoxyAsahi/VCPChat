@@ -303,6 +303,14 @@
         pts.push(1);
         return { ease: 'linear(' + pts.join(',') + ')', ms: Math.round(t * 1000) };
     };
+    /* 扫描过场用的 cubic-bezier(.5, 0, .2, 1)：给出扫描线走到 u（0~1）那一刻占总时长的比例 */
+    const sweepTimeAt = (u) => {
+        const bx = (t) => 3 * (1 - t) * (1 - t) * t * 0.5 + 3 * (1 - t) * t * t * 0.2 + t * t * t;
+        const by = (t) => 3 * (1 - t) * t * t + t * t * t;
+        let lo = 0, hi = 1;
+        for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (by(m) < u) lo = m; else hi = m; }
+        return bx((lo + hi) / 2);
+    };
     const SPRING_ENTER = springEase(360, 24);
     const SPRING_FLOW = springEase(300, 34);
     const hueOf = (str) => { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
@@ -430,6 +438,16 @@
             if (!st.focus) { st.cam.x = -st.room.width / 2 + st.g.blockW / 2; st.cam.y = -st.room.height / 2 + st.g.blockH / 2; }
             enter(firstShow ? 0 : 1);
             return true;
+        };
+        /* 档案页刚开始换视图的扫描过场：在的话入场改成跟着扫描线翻过来 */
+        let sweepCache = null;
+        const sweepAt = () => {
+            const now = performance.now();
+            if (sweepCache && now - sweepCache.t < 50) return sweepCache.v;
+            const on = opts.host.querySelector('.archive-layout-sweep');
+            const w = opts.host.clientWidth || global.innerWidth || 1600;
+            sweepCache = { t: now, v: on && now - (st.shownAt || 0) < 400 ? { w, ms: Math.round(Math.min(720, 380 + w * 0.16)) } : null };
+            return sweepCache.v;
         };
         const enter = () => {
             if (reduced()) return;
@@ -757,8 +775,14 @@
                             node.x = node.y = node.w = node.h = NaN;
                             node.el.dataset.id = inst.id;
                             world.appendChild(node.el);
-                            node.el.classList.remove('aw-entering', 'aw-reveal');
-                            if (entering) {
+                            node.el.classList.remove('aw-entering', 'aw-reveal', 'aw-flip');
+                            const sweep = entering && sweepAt();
+                            if (sweep) {
+                                // 换视图时：扫描线从左往右扫过，扫到哪张，哪张就从侧面翻过来
+                                const sx = st.room.left + (r.x - st.cam.x) * (tilt ? 0.8 : 1) + (tilt ? st.room.width * 0.1 : 0);
+                                node.inner.style.animationDelay = Math.round(sweepTimeAt(Math.max(0, Math.min(1, sx / (sweep.w + 90)))) * sweep.ms) + 'ms';
+                                node.el.classList.add('aw-flip');
+                            } else if (entering) {
                                 // 一波从视野左上角沿对角线往右下走：越靠右下越晚落下
                                 const W = st.room.width || 1, H = st.room.height || 1;
                                 const u = Math.max(0, Math.min(1, ((r.x - st.cam.x) / W + (r.y - st.cam.y) / H) / 2));
@@ -987,6 +1011,7 @@
                 el.hidden = !on;
                 if (on) {
                     st.touchedAt = performance.now();
+                    st.shownAt = performance.now();
                     clearInterval(dimTimer);
                     dimTimer = setInterval(checkDim, 2000);
                     syncItems({ force: true });
@@ -1050,5 +1075,5 @@
         return api;
     };
 
-    global.MusicArchiveWall = Object.freeze({ create, createThumbs, _test: { DIM_AFTER: 30000, SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
+    global.MusicArchiveWall = Object.freeze({ create, createThumbs, sweepTimeAt, _test: { DIM_AFTER: 30000, SPRING_ENTER, SPRING_FLOW, TEMPLATES, ORIENTED, reflowFor, partition, geometryFor, instanceAt, nearestOf } });
 })(typeof window !== 'undefined' ? window : globalThis);
