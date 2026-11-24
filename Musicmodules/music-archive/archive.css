@@ -906,3 +906,5 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button { pointer-events: none; }
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button::after { content: none; }
 .archive-list[data-sort="artist"] .archive-list-cols > button:nth-child(2) { color: var(--ar-ink); font-weight: 600; }
+.archive-list-cols > button[aria-pressed="true"] { color: var(--ar-ink); font-weight: 600; }
+.archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button[aria-pressed] { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); font-weight: inherit; }
