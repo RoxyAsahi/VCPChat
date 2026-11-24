@@ -836,3 +836,9 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 .archive-lyrics.plain .archive-lyrics-track p.plain-note em { opacity: .85; }
 .archive-lyrics.plain .archive-lyrics-track b { font-size: calc(16px * var(--fit, 1)); font-weight: 500; color: var(--ar-ink); opacity: .78; }
 .archive-lyrics.plain .archive-lyrics-track p:hover b { opacity: .78; }
+
+/* 网上还在找歌词：说明用中性的淡色，三个点慢慢呼吸 */
+.archive-lyrics.searching .archive-lyrics-none span { font-weight: 500; color: var(--ar-muted); animation: archive-lyrics-searching 1.6s ease-in-out infinite; }
+@keyframes archive-lyrics-searching { 50% { opacity: .55; } }
+body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { animation: none; }
+@media (prefers-reduced-motion: reduce) { .archive-lyrics.searching .archive-lyrics-none span { animation: none; } }

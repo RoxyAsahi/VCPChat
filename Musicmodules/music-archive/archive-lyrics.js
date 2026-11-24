@@ -180,9 +180,26 @@
         const setNone = (on) => {
             if (on === state.none) return;
             state.none = on;
+            if (!on) { clearTimeout(state.noneRefresh); state.noneRefresh = 0; el.classList.remove('searching'); }
             el.classList.toggle('none', on);
             el.hidden = !(state.shown || on);
             onChange?.();
+        };
+        /*
+         * 说明写什么（借鉴 RhinE 把「还在找」「没找到」「找到了但用不了」分开说，还在找时用中性色）：
+         * 网上还在找就写「正在找歌词…」、不给按钮，找完再自己换成结果；纯文本歌词写没有时间轴。
+         */
+        const searching = () => app.lyricsLoadingToken != null && app.lyricsLoadingToken === app.lyricsRequestToken;
+        const paintNone = () => {
+            clearTimeout(state.noneRefresh);
+            state.noneRefresh = 0;
+            const busy = searching();
+            el.classList.toggle('searching', busy);
+            r.fetch.hidden = busy || typeof app.openLyricsFetchModal !== 'function';
+            r.noneText.textContent = busy ? '正在找歌词…'
+                : app.currentLyricsPlain > 0 ? `这份歌词没有时间轴（${app.currentLyricsPlain} 行），跟不上歌` : '这首歌还没有歌词';
+            r.fetch.firstChild.textContent = app.currentLyricsPlain > 0 ? '换一份 ' : '获取歌词 ';
+            if (busy) state.noneRefresh = setTimeout(() => { if (state.none) paintNone(); }, 800);
         };
         const wantNone = () => {
             const t = current();
@@ -203,10 +220,7 @@
                 state.nonePending = null;
                 if (wantNone() !== path) return;
                 state.nonePath = path;
-                r.fetch.hidden = typeof app.openLyricsFetchModal !== 'function';
-                // 有纯文本歌词时说清楚：不是没有，是没有时间轴（借鉴 RhinE 把「没找到」和「找到了但用不了」分开说）
-                r.noneText.textContent = app.currentLyricsPlain > 0 ? `这份歌词没有时间轴（${app.currentLyricsPlain} 行），跟不上歌` : '这首歌还没有歌词';
-                r.fetch.firstChild.textContent = app.currentLyricsPlain > 0 ? '换一份 ' : '获取歌词 ';
+                paintNone();
                 setNone(true);
             }, NONE_AFTER);
         };
@@ -363,7 +377,7 @@
             tick,
             setAllowed: (on) => { state.allowed = Boolean(on); sync(); },
             get shown() { return state.shown; },
-            destroy: () => { resizeObserver.disconnect(); cancelAnimationFrame(fitRaf); if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.manualTimer); el.remove(); },
+            destroy: () => { resizeObserver.disconnect(); cancelAnimationFrame(fitRaf); if (state.timer) clearInterval(state.timer); state.timer = 0; clearTimeout(state.noneTimer); clearTimeout(state.noneRefresh); clearTimeout(state.manualTimer); el.remove(); },
             debug: () => ({ shown: state.shown, none: state.none, lines: state.lines.length, index: state.index, ticking: Boolean(state.timer) })
         };
     };
