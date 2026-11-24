@@ -19,6 +19,45 @@
      * 一支笔：main 是主画布（R 字、G 线稿、B 半调），ids 是编号画布（缩小 idScale 倍，
      * R 字的编号、G 笔序）。transform 把半径 1 的坐标放到世界像素：中心 x,y、半径 r、旋转 rot。
      */
+    // 软边的草稿：和主画布一样大、透明的两张，整个模块共用（准备一段是同步的，同一时刻只有一处在用）。
+    // 笔画先按 1/gain 的浓度不带模糊画进第一张（几笔交叠也不会顶到 255），整块模糊一次进第二张，
+    // 再叠 gain 遍回主画布：和原来每笔各自模糊、相加到 255 封顶是同一个结果（只差取整），
+    // 但不用每一笔开一层滤镜——一句的字和线稿原来要模糊上百次，换句时卡在这里
+    let soft = null;
+    const softLayer = (main) => {
+        const { width, height } = main.canvas;
+        if (!soft) {
+            const make = () => (main.canvas.ownerDocument ? main.canvas.ownerDocument.createElement('canvas') : new OffscreenCanvas(width, height));
+            soft = { canvas: make(), blurred: make(), ctx: null, bctx: null };
+        }
+        if (soft.canvas.width !== width || soft.canvas.height !== height || !soft.ctx) {
+            soft.canvas.width = width; soft.canvas.height = height;
+            soft.blurred.width = width; soft.blurred.height = height;
+            soft.ctx = soft.canvas.getContext('2d');
+            soft.bctx = soft.blurred.getContext('2d');
+        }
+        return soft;
+    };
+    // 把草稿上 box 那一块（已含模糊外沿）模糊后按 gain 倍加回主画布，再清掉草稿
+    const flushSoft = (main, layer, box, blur, gain) => {
+        const cw = main.canvas.width, ch = main.canvas.height;
+        const x = Math.max(0, Math.floor(box[0])), y = Math.max(0, Math.floor(box[1]));
+        const w = Math.min(cw, Math.ceil(box[2])) - x, h = Math.min(ch, Math.ceil(box[3])) - y;
+        if (w <= 0 || h <= 0) return;
+        const b = layer.bctx;
+        b.save();
+        b.clearRect(x, y, w, h);
+        b.filter = blur;
+        b.drawImage(layer.canvas, x, y, w, h, x, y, w, h);
+        b.restore();
+        main.save();
+        main.globalCompositeOperation = 'lighter';
+        main.filter = 'none';
+        for (let i = 0; i < gain; i += 1) main.drawImage(layer.blurred, x, y, w, h, x, y, w, h);
+        main.restore();
+        layer.ctx.clearRect(x, y, w, h);
+    };
+
     const createPen = (main, ids, idScale, options = {}) => {
         const tone = Boolean(options.tone);
         let order = options.startOrder || 1;
@@ -31,22 +70,41 @@
         const fringe = options.fringe || 0;
 
         const map = (x, y) => [x0 + (x * cos - y * sin) * radius, y0 + (x * sin + y * cos) * radius];
+        // 软边的笔先画进草稿，整支笔画完（flush）整块模糊一次叠回主画布（见 softLayer）
+        const layer = soft > 0 ? softLayer(main) : null;
+        const ink = layer ? layer.ctx : main;
+        const gain = tone ? 2 : 4;
+        let box = null;
+        let widest = 0;
+        const grow = (px, py, pad = 0) => {
+            if (!layer) return;
+            if (!box) box = [px - pad, py - pad, px + pad, py + pad];
+            else { box[0] = Math.min(box[0], px - pad); box[1] = Math.min(box[1], py - pad); box[2] = Math.max(box[2], px + pad); box[3] = Math.max(box[3], py + pad); }
+        };
+        const flush = () => {
+            if (!layer || !box) return;
+            const pad = widest / 2 + soft * 3 + 4;
+            const b = [box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad];
+            box = null;
+            flushSoft(main, layer, b, `blur(${soft.toFixed(2)}px)`, gain);
+        };
 
         const begin = () => {
-            main.save();
-            main.globalCompositeOperation = 'lighter';
-            main.lineCap = 'round';
-            main.lineJoin = 'round';
+            ink.save();
+            ink.globalCompositeOperation = 'lighter';
+            ink.lineCap = 'round';
+            ink.lineJoin = 'round';
             if (tone) {
-                const level = Math.round(255 * toneLevel);
-                main.strokeStyle = `rgb(0,0,${level})`;
-                main.fillStyle = `rgb(0,0,${level})`;
+                const level = Math.round(255 * toneLevel / (layer ? gain : 1));
+                ink.strokeStyle = `rgb(0,0,${level})`;
+                ink.fillStyle = `rgb(0,0,${level})`;
             } else {
-                main.strokeStyle = 'rgb(0,255,0)';
-                main.fillStyle = 'rgb(0,255,0)';
+                const level = layer ? Math.ceil(255 / gain) : 255;
+                ink.strokeStyle = `rgb(0,${level},0)`;
+                ink.fillStyle = `rgb(0,${level},0)`;
             }
-            main.lineWidth = width;
-            if (soft > 0) main.filter = `blur(${soft.toFixed(2)}px)`;
+            ink.lineWidth = width;
+            widest = Math.max(widest, width);
             if (ids && !tone) {
                 ids.save();
                 ids.globalCompositeOperation = 'lighten';
@@ -59,8 +117,8 @@
             }
         };
         const end = (fill = false) => {
-            if (fill) main.fill(); else main.stroke();
-            main.restore();
+            if (fill) ink.fill(); else ink.stroke();
+            ink.restore();
             if (ids && !tone) {
                 if (fill) ids.fill(); else ids.stroke();
                 ids.restore();
@@ -70,12 +128,13 @@
         // Both canvases trace the same path; the ids canvas at its own scale.
         const path = (points, closed = false) => {
             if (points.length < 2) return;
-            main.beginPath();
+            ink.beginPath();
             points.forEach(([x, y], index) => {
                 const [px, py] = map(x, y);
-                if (index) main.lineTo(px, py); else main.moveTo(px, py);
+                grow(px, py);
+                if (index) ink.lineTo(px, py); else ink.moveTo(px, py);
             });
-            if (closed) main.closePath();
+            if (closed) ink.closePath();
             if (ids && !tone) {
                 ids.beginPath();
                 points.forEach(([x, y], index) => {
@@ -86,18 +145,21 @@
             }
         };
         const segments = (pairs) => {
-            main.beginPath();
+            ink.beginPath();
             if (ids && !tone) ids.beginPath();
             pairs.forEach(([a, b]) => {
                 const [ax, ay] = map(a[0], a[1]);
                 const [bx, by] = map(b[0], b[1]);
-                main.moveTo(ax, ay); main.lineTo(bx, by);
+                grow(ax, ay); grow(bx, by);
+                ink.moveTo(ax, ay); ink.lineTo(bx, by);
                 if (ids && !tone) { ids.moveTo(ax * idScale, ay * idScale); ids.lineTo(bx * idScale, by * idScale); }
             });
         };
 
         const pen = {
             get order() { return order; },
+            // 软边的笔：画完这支笔调一次，把草稿上的笔画整块模糊叠回主画布
+            flush,
             // 换笔宽（小图用细一点的笔，不然细节多的图在特写里糊成一团）
             setWidth(w) { width = w; },
             place(x, y, r, rot = 0) { x0 = x; y0 = y; radius = r; cos = Math.cos(rot); sin = Math.sin(rot); },
@@ -147,7 +209,8 @@
                 begin();
                 const [px, py] = map(cx, cy);
                 const pr = Math.max(1, r * radius);
-                main.beginPath(); main.arc(px, py, pr, 0, TAU);
+                grow(px, py, pr);
+                ink.beginPath(); ink.arc(px, py, pr, 0, TAU);
                 if (ids && !tone) { ids.beginPath(); ids.arc(px * idScale, py * idScale, (pr + fringe) * idScale + 1, 0, TAU); }
                 end(true);
             },
@@ -1397,5 +1460,5 @@
         return pen.order;
     };
 
-    global.MusicStageInkFigures = Object.freeze({ createPen, drawFigure, KINDS, SCENES, NOTE_FONT });
+    global.MusicStageInkFigures = Object.freeze({ createPen, softLayer, flushSoft, drawFigure, KINDS, SCENES, NOTE_FONT });
 })(window);

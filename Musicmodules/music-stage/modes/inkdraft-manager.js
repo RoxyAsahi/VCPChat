@@ -640,11 +640,27 @@
         const keys = new Set(cue.keys || []);
         // 逐字层的实例先记下（世界里那一格的中心、边长、转角；开唱、唱完、关键词、是不是注记；图集里的字），注记排好以后一起建图集
         const glyphEntries = [];
+        // 同样模糊半径的一串字（一行字多半同样大）先不带模糊、按半浓度画进草稿，整串模糊一次、叠两遍回来（见 Figures.softLayer），
+        // 不用每个字开一层滤镜
+        const soft = Figures.softLayer(main);
+        soft.ctx.save();
+        soft.ctx.globalCompositeOperation = 'lighter';
+        soft.ctx.fillStyle = 'rgb(128,0,0)';
+        soft.ctx.textBaseline = 'alphabetic';
+        let softBlur = '', softBox = null;
+        const flushSoft = () => {
+            if (softBox) Figures.flushSoft(main, soft, softBox, softBlur, 2);
+            softBox = null;
+        };
         placed.concat(rubies).forEach((p) => {
-            main.font = fontFor(p.size);
-            main.filter = `blur(${Math.max(0.8, p.size * 0.02).toFixed(2)}px)`;
-            main.fillText(p.g.text, p.x, p.baseline);
-            main.filter = 'none';
+            const blur = `blur(${Math.max(0.8, p.size * 0.02).toFixed(2)}px)`;
+            if (blur !== softBlur) { flushSoft(); softBlur = blur; }
+            soft.ctx.font = fontFor(p.size);
+            soft.ctx.fillText(p.g.text, p.x, p.baseline);
+            // 字可能伸出排版框（斜体、长撇）：框外再留一个字高，加上模糊的三倍半径
+            const pad = p.size + Math.max(0.8, p.size * 0.02) * 3 + 4;
+            const b = [p.x - pad, p.baseline - p.size - pad, p.x + p.w + pad, p.baseline + pad];
+            softBox = softBox ? [Math.min(softBox[0], b[0]), Math.min(softBox[1], b[1]), Math.max(softBox[2], b[2]), Math.max(softBox[3], b[3])] : b;
             const s = p.size / GLYPH_EM;
             glyphEntries.push({
                 key: p.g.text, cx: p.x + p.w / 2, cy: p.baseline - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * s + GLYPH_CELL * s / 2,
@@ -652,6 +668,8 @@
                 kw: keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0, note: 0
             });
         });
+        flushSoft();
+        soft.ctx.restore();
         main.globalCompositeOperation = 'source-over';
         // 飞溅的墨点（Folia 没有）：关键词落笔、或者拖长的那个字，墨甩出去一摊——一块墨、几道甩出去的细线、线头的墨珠、几颗散点。
         // 每句最多两摊，按字边的像素画（图集里一格），关键词溅出来的是强调色
@@ -884,6 +902,7 @@
                 Figures.drawFigure(tonePen, scene.tone[Math.floor(random() * scene.tone.length)],
                     wideC[0] + side * W * (0.3 + random() * 0.12), wideC[1] + (random() - 0.5) * H * 0.4, H * (0.22 + random() * 0.08), random() * TAU, random);
             }
+            tonePen.flush();
         }
 
         // 版面零件（规线、裁切标记、行号、时间码）和线稿，一笔一笔冒出来。
@@ -964,6 +983,7 @@
                 figures.push({ x: fx, y: fy, r, o0: order0, o1: order1 });
             });
         }
+        pen.flush();
         const strokes = Math.max(1, pen.order - 1);
         const length = cue.end - cue.start;
         const strokeStep = clamp(length * 0.6 / strokes, 0.04, 0.2);
@@ -1459,6 +1479,21 @@
         return { blobs: n, accents: a };
     };
 
+    // 画面外的墨团：着色器里离得比 √500 倍半径还远的墨团本来就不算（见 SMOOTH_FRAG），
+    // 离这一镜看得到的整块都那么远的，先在这里拿掉，省得每个像素再去比一遍。保持原来的顺序，结果逐位一样
+    const cullBlobs = (buf, count, view, aspect) => {
+        const reach = view.h * (0.5 * Math.hypot(aspect, 1) + 0.05);   // 画面外接圆 + 流场推开的余量
+        let n = 0;
+        for (let i = 0; i < count; i += 1) {
+            const o = i * 4;
+            const d = Math.hypot(buf[o] - view.c[0], buf[o + 1] - view.c[1]) - reach;
+            if (d > 0 && d * d > buf[o + 2] * buf[o + 2] * 520) continue;
+            if (n !== i) { buf[n * 4] = buf[o]; buf[n * 4 + 1] = buf[o + 1]; buf[n * 4 + 2] = buf[o + 2]; buf[n * 4 + 3] = buf[o + 3]; }
+            n += 1;
+        }
+        return n;
+    };
+
     /* ───────────────────────── GL ───────────────────────── */
 
     const VERT = `#version 300 es
@@ -1652,6 +1687,8 @@ void main() {
         vec4 b = uAccent[i];
         float R = b.z / 0.55;
         vec2 d = wp - b.xy;
+        // 边被噪声推开最多 0.24 倍半轴：再远的像素这一团是 0，不用取噪声
+        if (dot(d, d) > R * R * 1.5625) continue;
         vec2 wob = vec2(vnoise(wp / (R * 0.45) + float(i) * 7.3), vnoise(wp / (R * 0.45) + 31.0 - float(i) * 3.1)) - 0.5;
         vec2 q = (d + wob * R * 0.34) / R;
         float kk = max(0.0, 1.0 - dot(q, q));
@@ -2248,6 +2285,7 @@ void main() {
             }
             const beatAge = t >= beatTime ? t - beatTime : Infinity;
             const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass, s.reducedMotion ? Infinity : beatAge, cloudBuffer);
+            counts.blobs = cullBlobs(blobBuffer, counts.blobs, view, canvas.width / canvas.height);
 
             let prevFade = 0;
             let prevSlot = null;
