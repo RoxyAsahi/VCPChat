@@ -33,6 +33,13 @@
     };
     const mixRgb = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
     const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    // 副歌：歌词里出现两次以上的句子（歌词自己标了 isChorus 的也算）
+    const normLine = line => String(line?.fullText || line?.original || '').replace(/[\s，。、,.!?！？…~～'"“”‘’()（）-]/g, '').toLowerCase();
+    const chorusSet = (lines) => {
+        const counts = new Map();
+        (lines || []).forEach((line) => { const k = normLine(line); if (k) counts.set(k, (counts.get(k) || 0) + 1); });
+        return new Set([...counts].filter(([, n]) => n >= 2).map(([k]) => k));
+    };
 
     /* ───────────────────────── 轨道 ───────────────────────── */
 
@@ -258,21 +265,27 @@ uniform sampler2D uAtlas;
 uniform vec3 uInk;
 uniform vec3 uAccent;
 uniform float uWaiting;
+uniform float uChorusLine; // 0..1 这一句是副歌（重复出现的句子）
 in vec2 vTex;
 in vec3 vInfo;
 in float vBlur;
 out vec4 outColor;
 void main() {
     float alpha = vInfo.x;
-    float singing = vInfo.y;
+    // vInfo.y = 正在唱 + 起字闪光（大于 1 的部分）
+    float singing = min(vInfo.y, 1.0);
+    float flash = max(vInfo.y - 1.0, 0.0);
     float sung = vInfo.z;
     // 景深：轨道后半圈的字虚一点
     float m = textureLod(uAtlas, vTex, vBlur * 1.8).r * (1.0 + vBlur * 0.25);
     float halo = textureLod(uAtlas, vTex, 3.0).r;
     vec3 col = mix(uInk, uAccent, singing);
     float body = m * mix(uWaiting, 1.0, max(sung, singing));
-    float a = clamp(body + halo * singing * 0.6, 0.0, 1.0) * alpha;
+    // 副歌：外面再套一圈更大的光晕，字心发白（像相机闪光）
+    float wide = uChorusLine > 0.01 ? textureLod(uAtlas, vTex, 4.3).r * uChorusLine : 0.0;
+    float a = clamp(body + halo * singing * (0.6 + flash) + wide * singing * 0.55, 0.0, 1.0) * alpha;
     vec3 c = mix(col, uAccent, (1.0 - step(0.02, m)) * singing);
+    c = mix(c, uInk, clamp(m * singing * (0.4 * uChorusLine + flash * 0.6), 0.0, 0.75));
     outColor = vec4(c * a, a);
 }`;
 
@@ -360,6 +373,8 @@ void main() {
         let chorus = 0;
         let lastOnsets = -1;
         let beatTime = -Infinity;
+        let chorusFor = null;
+        let chorusKeys = new Set();
         const stats = { builds: 0, buildMs: 0, draws: 0, index: -2, glyphs: 0 };
 
         const settings = () => {
@@ -467,7 +482,7 @@ void main() {
         };
 
         // 把一句的字排上轨道，写进 bufA/bufB 的 [from, …)，返回写了几个
-        const place = (line, t, geo, fade, from, rest) => {
+        const place = (line, t, geo, fade, from, rest, chorusAmt = 0) => {
             const { items, centres } = line;
             const g = rest ? items.length : singingPosition(items, t);
             const turn = arcAt(centres, g - 0.5);
@@ -482,6 +497,11 @@ void main() {
                 const pt = project(theta, geo.A, geo.B, geo.roll);
                 const singing = !rest && t >= item.start - 0.05 && t < Math.max(item.end, item.start + 0.2) + 0.3 ? 1 - smooth(item.end, item.end + 0.3, t) : 0;
                 const sungAmount = t >= item.start ? 1 : 0;
+                // 起字的一下闪光：前 40% 的时长里光晕放大再收回
+                const charP = (t - item.start) / Math.max(0.05, item.end - item.start);
+                const flash = !rest && !geo.still && charP >= 0 && charP < 0.4 ? Math.pow(1 - charP / 0.4, 2) * 0.65 : 0;
+                // 副歌：单双字上下错开，随低音起伏
+                const stagger = chorusAmt * geo.size * shrink * pt.s * (0.06 + geo.power * 0.12) * (i % 2 ? -1 : 1);
                 const back = smooth(-0.2, 1, pt.z);
                 const alpha = fade * (1 - back * 0.72);
                 // 字跟着轨道的切线稍微转一点，最多 ±15°
@@ -493,8 +513,8 @@ void main() {
                 const outward = rest ? (1 - fade) * 0.06 : 0;
                 list.push({
                     z: pt.z,
-                    a: [geo.cx + pt.x * (1 + outward), geo.cy + pt.y * (1 + outward), geo.size * shrink * pt.s * (1 + singing * 0.12), rot],
-                    b: [item.cell + clamp(back, 0, 1) * 0.9, alpha, singing, sungAmount]
+                    a: [geo.cx + pt.x * (1 + outward), geo.cy + pt.y * (1 + outward) + stagger, geo.size * shrink * pt.s * (1 + singing * 0.12), rot],
+                    b: [item.cell + clamp(back, 0, 1) * 0.9, alpha, singing + flash * singing, sungAmount]
                 });
             });
             list.sort((p, q) => q.z - p.z);
@@ -509,7 +529,7 @@ void main() {
             return n;
         };
 
-        const drawGlyphs = (slot, count) => {
+        const drawGlyphs = (slot, count, chorusLine = 0) => {
             if (!count) return;
             const { gl, glyph } = glState;
             const u = glyph.uniforms;
@@ -522,6 +542,7 @@ void main() {
             gl.uniform3fv(u.uInk, colours.ink);
             gl.uniform3fv(u.uAccent, colours.accent);
             gl.uniform1f(u.uWaiting, settings().waitingOpacity);
+            gl.uniform1f(u.uChorusLine, chorusLine);
             gl.drawArrays(gl.TRIANGLES, 0, count * 6);
         };
 
@@ -547,6 +568,12 @@ void main() {
             geo.perimeter = ellipseTable(geo.A, geo.B, arcTable);
             const audio = frame.audio || {};
             const bass = clamp((audio.bass || 0) * s.audioReactivity, 0, 1.5);
+            geo.power = s.reducedMotion ? 0 : clamp(bass, 0, 1);
+            geo.still = s.reducedMotion;
+            if (frame.lines !== chorusFor) { chorusFor = frame.lines; chorusKeys = chorusSet(frame.lines); }
+            const isChorus = (line) => Boolean(line && (line.isChorus || chorusKeys.has(normLine(line))));
+            const chorusNow = index >= 0 && isChorus(sung[index]) ? smooth(0, 0.5, since) : 0;
+            const chorusPrev = index > 0 && isChorus(sung[index - 1]) ? 1 : 0;
             glow = frame.isPlaying ? Math.max(bass, glow * 0.86) : glow;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
@@ -585,11 +612,11 @@ void main() {
 
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            if (prev?.line) drawGlyphs(prev, place(prev.line, t, geo, 1 - smooth(0, FADE, since), 0, true));
+            if (prev?.line) drawGlyphs(prev, place(prev.line, t, geo, 1 - smooth(0, FADE, since), 0, true, s.reducedMotion ? 0 : chorusPrev), chorusPrev);
             const fadeIn = index >= 0 ? smooth(-0.1, 0.35, since) : smooth(0, 0.8, t);
-            const n = place(slot.line, t, geo, fadeIn, 0, false);
+            const n = place(slot.line, t, geo, fadeIn, 0, false, s.reducedMotion ? 0 : chorusNow);
             stats.glyphs = n;
-            drawGlyphs(slot, n);
+            drawGlyphs(slot, n, chorusNow);
             gl.disable(gl.BLEND);
             stats.draws += 1;
             scheduleNext(index);
