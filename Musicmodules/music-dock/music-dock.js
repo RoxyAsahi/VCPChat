@@ -1135,6 +1135,21 @@
                 + '</div>';
         }
 
+        // 首页（档案页）右侧歌词栏开着：歌词已经在那里了，面板的「歌词」页签不再把整份重复列一遍。
+        const leftLyricsBtn = () => document.querySelector('#music-archive-view [data-act="lyrics"]');
+        const leftLyricsShown = () => !stageActive() && app.archiveView?.mode === 'archive'
+            && leftLyricsBtn()?.getAttribute('aria-pressed') === 'true';
+        let lyrWatch = null;
+        let lyrWatched = null;
+        const watchLeftLyrics = () => {
+            const btn = leftLyricsBtn();
+            if (!btn || btn === lyrWatched || typeof MutationObserver !== 'function') return;
+            lyrWatch?.disconnect();
+            lyrWatched = btn;
+            lyrWatch = new MutationObserver(() => { if (state.panelOpen && state.tab === '歌词' && !state.destroyed) renderBody(); });
+            lyrWatch.observe(btn, { attributes: true, attributeFilter: ['aria-pressed'] });
+        };
+        cleanups.push(() => { lyrWatch?.disconnect(); lyrWatch = null; lyrWatched = null; });
         function renderBody() {
             prebuilt = null;
             const oldScroller = state.tab === '播放列表' ? el.body.querySelector('.md-ql') : null;
@@ -1186,7 +1201,12 @@
             } else if (tab === '歌词') {
                 const lines = Array.isArray(app.currentLyrics) ? app.currentLyrics : [];
                 html += lyricsBar(lines);
-                html += lines.length
+                watchLeftLyrics();
+                state.lyricsDup = leftLyricsShown();
+                if (state.lyricsDup) html += '<div class="md-lyr-else"><p class="md-empty">歌词已经在旁边的首页歌词栏里，这里就不重复列一遍了。</p>'
+                    + '<p class="md-lyr-else-acts" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0"><button class="md-chip" type="button" data-act="lyr-here">收起首页歌词，在这里看</button>'
+                    + '<button class="md-chip" type="button" data-act="lyr-ctl">去控制</button></p></div>';
+                else html += lines.length
                     ? `<div class="md-lyrl">${lines.map((line, index) => `<p data-i="${index}" data-time="${Number(line.time) || 0}">${escapeHtml(line.text || line.original || '') || '&nbsp;'}`
                         + `${line.translation ? `<small class="md-tr">${escapeHtml(line.translation)}</small>` : ''}</p>`).join('')}</div>`
                     : '<p class="md-empty">这首歌还没有歌词。</p>';
@@ -1464,13 +1484,15 @@
         }
 
         function syncLyricHighlight(force = false) {
+            if (state.panelOpen && state.tab === '歌词' && leftLyricsShown() !== Boolean(state.lyricsDup)) { renderBody(); return; }
             const box = el.body.querySelector('.md-lyrl');
             if (!box) {
                 if (state.lyricsSource !== app.currentLyrics && Array.isArray(app.currentLyrics) && app.currentLyrics.length) renderBody();
                 return;
             }
             if (state.lyricsSource !== app.currentLyrics) { renderBody(); return; }
-            let index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            // 当前句按进度自己算：首页（档案页）开着时经典歌词那套动画循环是停的，app.currentLyricIndex 不会往前走
+            let index = typeof app.lyricIndexAt === 'function' ? app.lyricIndexAt(currentTime()) : (Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1);
             // 暂停着打开（比如重开窗口停在 0:08）时歌词模块不更新当前行，这里按进度自己找一次，不然一行都不亮
             if (index < 0 && !app.isPlaying && typeof app.lyricIndexAt === 'function' && currentTime() > 0) {
                 const at = app.lyricIndexAt(currentTime());
@@ -1561,6 +1583,8 @@
             else if (act === 'lyr-tr') { app.setLyricsTranslation?.(app.lyricsTranslation === false); renderBody(); }
             else if (act === 'lyr-off') { app.shiftLyrics?.(Number(target.dataset.d) || 0); renderBody(); }
             else if (act === 'lyr-off0') { app.setLyricOffset?.(0); renderBody(); }
+            else if (act === 'lyr-here') { if (leftLyricsShown()) leftLyricsBtn()?.click(); renderBody(); }
+            else if (act === 'lyr-ctl') { state.tab = '控制'; el.pnl.scrollTop = 0; renderTabs(); renderBody(); }
             else if (act === 'q-save') saveQueueAsPlaylist();
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
@@ -1773,6 +1797,8 @@
         let panelReturn = null;
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
+            // 首页右侧已经在显示歌词：打开面板时不停在重复的歌词页签上，改到「控制」
+            else if (!state.panelOpen && state.tab === '歌词' && leftLyricsShown()) state.tab = '控制';
             if (!state.panelOpen) {
                 state.panelOpen = true;
                 el.pnl.classList.add('md-open');
