@@ -217,3 +217,34 @@
 @media (prefers-reduced-motion: reduce) {
     .mstats-range button { transition: none; }
 }
+
+/* 歌曲信息（music-track-file.js）：借这套对话框，窄一点，左标签右内容 */
+.dialog-overlay.music-stats-dialog .dialog.glass-panel.mstats.minfo { width: min(520px, calc(100vw - 48px)); }
+.dialog-overlay .mstats.minfo .mstats-head h3.minfo-title { overflow: hidden; text-overflow: ellipsis; }
+.minfo-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 20px;
+    row-gap: 10px;
+    margin: 0 0 20px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.minfo-list dt { color: var(--ms-ink2); white-space: nowrap; }
+.minfo-list dd { margin: 0; color: var(--ms-ink); overflow-wrap: anywhere; user-select: text; }
+.minfo-list dd.minfo-path { font-size: 12px; color: var(--ms-ink2); }
+.minfo-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.minfo-btn {
+    height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--ms-hover);
+    color: var(--ms-ink);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color .15s ease;
+}
+.minfo-btn:hover { background: color-mix(in srgb, var(--ms-ink) 14%, transparent); }
+.minfo-btn:focus-visible { outline: 2px solid var(--ms-ink); outline-offset: 2px; }

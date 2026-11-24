@@ -28,3 +28,15 @@ test('showTrackInFolder sends local paths and reports failures', async () => {
     assert.deepEqual(toasts, ['云端的歌没有本机文件', '文件已经不在原来的位置了']);
     delete globalThis.MusicToast;
 });
+
+test('describeTrack lists what is known and skips the rest', () => {
+    const { describeTrack } = require(path.join(__dirname, '../Musicmodules/music-track-file.js'));
+    const rows = describeTrack({ path: 'C:\\M\\a.flac', artist: 'Aki', codec: 'FLAC', lossless: true, sampleRate: 96000, bitsPerSample: 24, numberOfChannels: 2, bitrate: 2950000, duration: 245.4, size: 90 * 1024 * 1024, mtimeMs: new Date(2026, 10, 3).getTime() },
+        { plays: 3, skips: 1, last: new Date(2026, 10, 20).getTime() });
+    assert.deepEqual(rows, [
+        ['歌手', 'Aki'], ['格式', 'FLAC · 无损'], ['规格', '96 kHz · 24 bit · 立体声 · 2950 kbps'], ['时长', '4:05'],
+        ['大小', '90.0 MB'], ['改动时间', '2026-11-03'], ['听过', '3 次 · 上次 2026-11-20 · 跳过 1 次'], ['位置', 'C:\\M\\a.flac']
+    ]);
+    const old = describeTrack({ path: 'C:\\M\\b.mp3', codec: 'MPEG 1 Layer 3', sampleRate: 44100 }, null);
+    assert.deepEqual(old, [['格式', 'MP3 · MPEG 1 Layer 3'], ['规格', '44.1 kHz'], ['听过', '还没听过'], ['位置', 'C:\\M\\b.mp3']]);
+});
