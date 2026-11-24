@@ -1851,6 +1851,29 @@
                 kickProgress();
             });
             listen(el.handle, 'pointercancel', (event) => finish(event, false));
+            // 指针停在播放头上滚轮：一格跳 5 秒（往上是往后），触控板按累计距离算；只认播放头，别处滚轮不碰进度。
+            // 停手 0.3 秒或换方向就清零累计，免得上一回剩下的零头吞掉下一格。
+            let seekWheelAcc = 0;
+            let seekWheelAt = -1e9;
+            listen(el.handle, 'wheel', (event) => {
+                if (ringMode !== 'playhead' || state.panelOpen || state.dragging) return;
+                const d = duration();
+                if (!(d > 0)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+                const delta = (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
+                if (event.timeStamp - seekWheelAt > 300 || Math.sign(delta) !== Math.sign(seekWheelAcc)) seekWheelAcc = 0;
+                seekWheelAt = event.timeStamp;
+                seekWheelAcc += delta;
+                const steps = Math.trunc(seekWheelAcc / 100);
+                if (!steps) return;
+                seekWheelAcc -= steps * 100;
+                state.ringHover = true;
+                syncSolid();
+                app.seekTo?.(Math.min(Math.max(0, d - 0.5), Math.max(0, currentTime() - steps * 5)));
+                kickProgress();
+            }, { passive: false });
             listen(el.handle, 'click', (event) => {
                 if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
                 togglePanel();
