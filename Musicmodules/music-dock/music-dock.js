@@ -444,6 +444,9 @@
             if (key !== lastRange) { lastRange = key; fluid?.setProgressRange(a, b); }
             return [a, b];
         };
+        // 胶囊里的总时长点一下换成剩余时间（−03:12），再点换回；记在 localStorage musicDockRemain。
+        let remainMode = false;
+        try { remainMode = global.localStorage?.getItem('musicDockRemain') === '1'; } catch (e) {}
         const renderProgress = () => {
             const d = duration();
             const t = currentTime();
@@ -459,17 +462,19 @@
             }
             fluid?.setProgress(fraction);
             const timeText = formatClock(t);
-            const durText = formatClock(d);
+            const totalText = formatClock(d);
+            const durText = remainMode && d > 0 ? `−${formatClock(Math.max(0, d - t))}` : totalText;
             if (timeText !== state.lastTimeText) {
                 state.lastTimeText = timeText;
                 for (const node of el.t1) node.textContent = timeText;
             }
-            const tipText = `${timeText} / ${durText}`;
+            const tipText = `${timeText} / ${totalText}`;
             if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             if (durText !== state.lastDurText) {
                 state.lastDurText = durText;
                 for (const node of el.t2) node.textContent = durText;
-                for (const trk of el.tracks) trk.setAttribute('aria-valuemax', String(Math.round(d)));
+                const max = String(Math.round(d));
+                for (const trk of el.tracks) if (trk.getAttribute('aria-valuemax') !== max) trk.setAttribute('aria-valuemax', max);
             }
             if (state.panelOpen && state.tab === '歌词') syncLyricHighlight();
         };
@@ -721,6 +726,18 @@
                 syncExpanded();
             }, HOVER_COLLAPSE_MS);
         });
+        const remainTitle = () => (remainMode ? '点一下换回总时长' : '点一下换成剩余时间');
+        for (const node of el.t2) {
+            node.style.cursor = 'pointer';
+            node.title = remainTitle();
+            listen(node, 'click', (event) => {
+                event.stopPropagation();
+                remainMode = !remainMode;
+                try { global.localStorage?.setItem('musicDockRemain', remainMode ? '1' : '0'); } catch (e) {}
+                for (const n of el.t2) n.title = remainTitle();
+                renderProgress();
+            });
+        }
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button')) return;
             // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
