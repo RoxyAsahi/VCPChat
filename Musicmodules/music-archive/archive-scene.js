@@ -945,7 +945,8 @@ vec3 archiveUntone(vec3 y) {
             stickerKey = at;
             const info = labelFor ? labelFor(target.lane, target.row) : null;
             targetPath = info && typeof info.key === 'string' ? info.key.slice(info.key.indexOf(':') + 1) : '';
-            stickerInfo = info ? { title: info.title || '', artist: (coverPath && coverPath === targetPath && coverInfo.artist) || info.code || '' } : { title: '', artist: '' };
+            const no = info && typeof info.key === 'string' ? parseInt(info.key, 10) : NaN;   // 标题 key 是「序号:路径」，序号从 0 起
+            stickerInfo = info ? { title: info.title || '', artist: (coverPath && coverPath === targetPath && coverInfo.artist) || info.code || '', no: Number.isFinite(no) ? String(no + 1).padStart(3, '0') : '' } : { title: '', artist: '' };
             drawSticker();
         };
         const drawSticker = () => {
@@ -978,7 +979,8 @@ vec3 archiveUntone(vec3 y) {
             g.globalAlpha = 0.62;
             g.font = `500 18px ${fontStack}`;
             if ('letterSpacing' in g) g.letterSpacing = '3px';
-            g.fillText('MUSIC ARCHIVE', 24, 176);
+            // 照参考那行「档案 / 编号」：编号是这首在目录里的序号
+            g.fillText(stickerInfo.no ? `MUSIC ARCHIVE / ${stickerInfo.no}` : 'MUSIC ARCHIVE', 24, 176);
             g.globalAlpha = 1;
             if ('letterSpacing' in g) g.letterSpacing = '0px';
             stickerMap.needsUpdate = true;
