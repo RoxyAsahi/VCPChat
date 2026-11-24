@@ -322,7 +322,8 @@
             });
             state.rows = out.rows;
             state.count = out.count;
-            setBrand(state.query.trim() ? '检索结果' : (BRAND_TITLES[state.kind] || '全部曲目'));
+            // 检索时栏名写检索词本身：下面分组头已经写着「检索结果 N 首」，栏名再写一遍是重复
+            setBrand(state.query.trim() ? `「${state.query.trim()}」` : (BRAND_TITLES[state.kind] || '全部曲目'));
             state.offsets = new Array(out.rows.length + 1);
             state.ord = new Array(out.rows.length);
             state.ordWidth = Math.max(2, String(out.count || 0).length);
@@ -620,10 +621,14 @@
             if (!box) return;
             const cur = box.lastElementChild;
             if (cur && cur.textContent === text && !cur.classList.contains('out')) return;
-            const reduce = document.body.classList.contains('music-reduce-motion') || !cur || !cur.textContent;
+            // 打字时检索词一直在变，只换字不滚动；系统或设置里减少动效时也直接换
+            const typing = cur && cur.textContent.startsWith('「') && text.startsWith('「');
+            const reduce = typing || !cur || !cur.textContent || document.body.classList.contains('music-reduce-motion')
+                || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
             box.querySelectorAll('.out').forEach((n) => n.remove());
             const next = document.createElement('span');
             next.textContent = text;
+            if (text.startsWith('「')) next.classList.add('q'); // 全角括号左半边是空白，靠 CSS 往左挂出去，字和下面对齐
             if (reduce) { box.replaceChildren(next); return; }
             cur.classList.add('out');
             next.classList.add('in');
