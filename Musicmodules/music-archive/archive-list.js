@@ -10,7 +10,7 @@
     const LETTER_H = 34;  // 首字母分组的行内小标题（字母 + 首数，上面压一条结构线）
     const EDGE_FADE = 26; // 和 archive.css 里 .archive-list-viewport 上下渐隐的高度一致
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
-    const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
+    const ROW_H = 48;     // 曲目行高（58 → 52 → 48：去掉表头后行再收一点，两行字上下各留约 6px）
     // 分组标题都在行内（档案目录表的排法），左侧外边距不再放吸附的大字母，也不画跟着它走的液态记号
     const INLINE_HEADS = true;
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）

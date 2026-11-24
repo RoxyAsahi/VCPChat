@@ -943,3 +943,15 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-row.on::after, .archive-list-row.current.on::after { right: var(--text-end-inset); }
 .archive-list-sort-menu button:focus-visible { outline: none; box-shadow: none; }
 .archive-list-sort::before { display: none; }
+/* ===== 间距统一（Roxy 11-24：「边距什么的细节再微调打磨」）=====
+   竖向按 4 的倍数走：栏名 → 小字 10，小字 → 分类行 28，分类行 → 第一组 8，组头 → 行 0，行高 48；
+   序号列和标题列之间 12；分组头导轨对准字的中线；滚动条离表格右缘 4px，不再贴窗边；底部计数和列表空一拍。 */
+.archive-list-row { height: 48px; column-gap: 12px; }
+.archive-list-row .tx { gap: 2px; }
+.archive-hud:not(.narrow):not(.squeeze) .archive-list-brand { bottom: calc(100% + 10px); }
+.archive-list-brand-sub { margin-top: 8px; }
+.archive-list-kinds { margin-top: 18px; margin-bottom: 8px; }
+.archive-list-group .rail { align-self: flex-end; margin: 0 0 7px; }
+.archive-list-thumb { right: -11px; }
+.archive-list-foot { padding-top: 16px; }
+.archive-hud.list-open .archive-list-foot { padding-top: 12px; }
