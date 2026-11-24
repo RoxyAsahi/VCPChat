@@ -595,12 +595,16 @@ body.light-theme .aw-tile.is-open .aw-in { box-shadow: 0 0 0 1px color-mix(in sr
 #music-archive-view .archive-wall.is-grabbing .aw-qm { opacity: 0 !important; }
 
 /* ---------- 键盘焦点：和全局按钮同一种「强调色虚线、外扩 4px」 ---------- */
-.archive-wall:focus, .ag-scroll:focus { outline: none; }
+/* 主题和播放器皮肤里的全局焦点框带 :not(#messageInput)（算一个 id），这里也用 :not(#_) 抬到两个 id 才盖得过 */
+#music-archive-view :is(.archive-wall, .ag-scroll):focus:not(#_) { outline: none; }
 /* Tab 停在墙/网格上：选中的那张多一圈虚线，表示方向键现在管它 */
 .archive-wall:focus-visible .aw-tile.is-focus .aw-in,
 .ag-scroll:focus-visible .ag-cell.is-focus .ag-art { outline: 1px dashed var(--ar-accent); outline-offset: 5px; }
 /* 还没选中任何一张：整块区域内侧描一圈虚线 */
-.archive-wall:focus-visible:not(:has(.is-focus)), .ag-scroll:focus-visible:not(:has(.is-focus)) { outline: 1px dashed var(--ar-accent); outline-offset: -6px; }
+#music-archive-view :is(.archive-wall, .ag-scroll):focus-visible:not(:has(.is-focus)):not(#_) { outline: 1px dashed var(--ar-accent); outline-offset: -6px; }
 /* 定位圆键：焦点圈贴近一点，跟着圆走 */
 #music-archive-view .aw-locate:focus-visible { outline-offset: 3px; }
 
+/* 大卡进度条可以 Tab 到：焦点时进度条外描一圈虚线 */
+#music-archive-view .aw-seek:focus:not(#_) { outline: none; }
+#music-archive-view .aw-seek:focus-visible .aw-seek-bar { outline: 1px dashed var(--ar-accent); outline-offset: 5px; }

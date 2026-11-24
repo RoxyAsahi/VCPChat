@@ -627,7 +627,7 @@
         const panel = document.createElement('div');
         panel.className = 'aw-panel';
         panel.innerHTML = '<div class="aw-lyric" hidden><div class="aw-lyric-roll"></div></div><div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
-            + '<div class="aw-seek" data-wall="seek" hidden><span class="aw-seek-t">0:00</span><div class="aw-seek-bar"><i></i></div><span class="aw-seek-d">0:00</span></div>'
+            + '<div class="aw-seek" data-wall="seek" role="slider" tabindex="0" aria-label="播放进度" hidden><span class="aw-seek-t">0:00</span><div class="aw-seek-bar"><i></i></div><span class="aw-seek-d">0:00</span></div>'
             + '<div class="aw-panel-acts"><button type="button" data-wall="prev" class="aw-round aw-prev" title="上一首" aria-label="上一首" hidden><i></i></button><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="next" class="aw-round aw-next" title="下一首" aria-label="下一首" hidden><i></i></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
         const fillPanel = (i) => {
             const t = opts.track(i);
@@ -697,6 +697,10 @@
             seekFill.style.transform = 'scaleX(' + (p.d ? Math.min(1, t / p.d) : 0).toFixed(4) + ')';
             seekEl.firstChild.textContent = fmt(t);
             seekEl.lastChild.textContent = fmt(p.d);
+            seekEl.setAttribute('aria-valuemin', '0');
+            seekEl.setAttribute('aria-valuemax', String(Math.round(p.d)));
+            seekEl.setAttribute('aria-valuenow', String(Math.round(t)));
+            seekEl.setAttribute('aria-valuetext', fmt(t) + ' / ' + fmt(p.d));
             if (st.expanded && st.expanded.w >= 0) paintLyric(t);
         };
         const syncSeek = () => {
@@ -728,6 +732,23 @@
         seekEl.addEventListener('pointerup', seekEnd);
         seekEl.addEventListener('pointercancel', seekEnd);
         seekEl.addEventListener('click', (e) => e.stopPropagation());
+        // 键盘：焦点在进度条上时左右键快退/快进 5 秒（Shift 15 秒），Home/End 到头尾；不让墙拿去换选中
+        seekEl.addEventListener('keydown', (e) => {
+            if (!opts.seek || !opts.progress || e.altKey || e.ctrlKey || e.metaKey) return;
+            const p = opts.progress();
+            if (!(p.d > 0)) return;
+            const step = e.shiftKey ? 15 : 5;
+            let t = null;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') t = p.t - step;
+            else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') t = p.t + step;
+            else if (e.key === 'Home') t = 0;
+            else if (e.key === 'End') t = p.d - 1;
+            if (t === null) return;
+            e.preventDefault();
+            e.stopPropagation();
+            opts.seek(Math.max(0, Math.min(p.d - 0.5, t)));
+            paintSeek();
+        });
 
         const fillContent = (node, idx, px) => {
             const i = st.ids[idx];
@@ -762,7 +783,14 @@
             if (wait !== node.wait) { node.wait = wait; node.el.classList.toggle('is-wait', wait); }
         };
 
+        /* 焦点在大卡/定位键上时，大卡收起或那一格被回收，按钮离开文档，焦点会掉回 body：拉回墙本身，方向键接着能用 */
         const layout = () => {
+            const a = document.activeElement;
+            const had = Boolean(a && a !== el && el.contains(a));
+            layoutTiles();
+            if (had && st.on && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+        };
+        const layoutTiles = () => {
             st.dirty = false;
             if (!st.g || !st.ids.length || !st.room.width) {
                 locateBtn.hidden = true;

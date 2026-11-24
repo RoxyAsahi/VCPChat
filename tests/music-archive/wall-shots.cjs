@@ -151,11 +151,31 @@ const FAKE = ({ n, light, covers }) => {
     check('熄灯与亮回', dim1 && !dim2, dim1 + ' → ' + dim2);
   }
 
+  // 进度条键盘：Tab 到进度条，右键快进 5 秒（不换选中）
+  let seekKey = null;
+  if (!args.dim) {
+    await page.evaluate(() => { window.__seeks = []; window.app.seekTo = (t) => window.__seeks.push(t); });
+    await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+    await page.focus('.aw-tile.is-open .aw-seek');
+    const sel0 = (await dbg()).selected;
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(200);
+    seekKey = await page.evaluate(() => ({ seeks: window.__seeks.slice(), role: document.querySelector('.aw-tile.is-open .aw-seek')?.getAttribute('role'), text: document.querySelector('.aw-tile.is-open .aw-seek')?.getAttribute('aria-valuetext'), vis: document.activeElement.matches(':focus-visible'), ol: getComputedStyle(document.activeElement).outlineStyle, bar: getComputedStyle(document.activeElement.querySelector('.aw-seek-bar')).outlineStyle }));
+    seekKey.sameSel = (await dbg()).selected === sel0;
+    check('大卡进度条可用键盘快进', seekKey.seeks.length === 1 && seekKey.seeks[0] > 50 && seekKey.sameSel && seekKey.role === 'slider' && seekKey.ol === 'none' && seekKey.bar === 'dashed', JSON.stringify(seekKey));
+    await shot(tag + '-2d-seek-key');
+  }
   // Esc 收起
   await page.keyboard.press('Escape');
   await page.waitForTimeout(900);
   d = await dbg();
   check('Esc 收起', !d.wall.expanded);
+  if (seekKey) {
+    const fo = await page.evaluate(() => { const a = document.activeElement; return { wall: Boolean(a && a.classList.contains('archive-wall')), ol: a ? getComputedStyle(a).outlineStyle : '', ring: getComputedStyle(document.querySelector('.archive-wall .aw-tile.is-focus .aw-in') || document.body).outlineStyle }; });
+    check('收起后焦点回到墙上（墙外框不描粗框，选中那张描虚线）', fo.wall && fo.ol === 'none' && fo.ring === 'dashed', JSON.stringify(fo));
+    await shot(tag + '-2e-wall-keyfocus');
+    await page.evaluate(() => document.activeElement.blur());
+  }
 
   // 拖动
   const r = await page.evaluate(() => { const b = document.querySelector('.archive-wall').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
