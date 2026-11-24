@@ -790,6 +790,24 @@
             layoutTiles();
             if (had && st.on && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
         };
+        /*
+         * 平放：屏幕上一点 (xs, ys) 对应桌面上哪一点。和 CSS 一致：perspective 1500px、透视原点 (50%, 8%)，
+         * 桌面 = translate(W/2, H·TILT_EYE) rotateX(TILT) translate(-cam)。反解出相对 cam 的 (u, v)。
+         */
+        const TILT_D = 1500, TILT_OY = 0.08;
+        const tiltBounds = (W, H) => {
+            const c = Math.cos(TILT * Math.PI / 180), sn = Math.sin(TILT * Math.PI / 180);
+            const oy = H * TILT_OY;
+            const at = (xs, ys) => {
+                const a = ys - oy;
+                const v = TILT_D * (a - (H * TILT_EYE - oy)) / (TILT_D * c + a * sn);
+                const k = TILT_D / (TILT_D - v * sn);
+                return { u: W / 2 + (xs - W / 2) / k, v: H / 2 + v };   // 相对 cam（视口左上对应的桌面点）
+            };
+            const pts = [at(0, 0), at(W, 0), at(0, H), at(W, H)];
+            const us = pts.map((p) => p.u), vs = pts.map((p) => p.v);
+            return { u0: Math.min(...us), u1: Math.max(...us), v0: Math.min(...vs), v1: Math.max(...vs) };
+        };
         const layoutTiles = () => {
             st.dirty = false;
             if (!st.g || !st.ids.length || !st.room.width) {
@@ -802,10 +820,12 @@
             const over = g.pitch * 3;
             let vx0 = st.cam.x - over, vy0 = st.cam.y - over, vx1 = st.cam.x + st.room.width + over, vy1 = st.cam.y + st.room.height + over;
             if (tilt) {
-                // 倒下去的桌面：远处（上方）看得很远、也更宽，近处（下方）出画快
-                const W = st.room.width, H = st.room.height;
-                vx0 = st.cam.x - W * 0.9; vx1 = st.cam.x + W * 1.9;
-                vy0 = st.cam.y - H * 1.9; vy1 = st.cam.y + H * 1.05;
+                // 倒下去的桌面：把视口四个角按透视反投到桌面上，得到真正看得见的那块梯形的外接框，再留一格余量。
+                // 以前按经验框了 2.8×3 个视口那么大，屏幕外的格子是看得见的三四倍，大幅滚动时全在白白合成。
+                const b = tiltBounds(st.room.width, st.room.height);
+                const m = g.pitch * 1.25;
+                vx0 = st.cam.x + b.u0 - m; vx1 = st.cam.x + b.u1 + m;
+                vy0 = st.cam.y + b.v0 - m; vy1 = st.cam.y + b.v1 + m;
             }
             const c0 = Math.floor(vx0 / g.blockW), c1 = Math.floor(vx1 / g.blockW);
             const r0 = Math.floor(vy0 / g.blockH), r1 = Math.floor(vy1 / g.blockH);
@@ -906,6 +926,17 @@
             if (!st.laidAt || !g || Math.abs(st.cam.x - st.laidAt.x) > g.pitch * 1.5 || Math.abs(st.cam.y - st.laidAt.y) > g.pitch * 1.5) st.dirty = true;
         };
 
+        /* 镜头在动（滚轮、拖动、惯性、飞过去）时挂 aw-moving：格子不接悬停（不然光标底下一张张立起又放下）、
+           平放的景深模糊先关掉；停下 180ms 后恢复，免得滚轮一格一格时来回闪 */
+        let movingOff = 0;
+        const setMoving = (on) => {
+            if (on) {
+                if (movingOff) { clearTimeout(movingOff); movingOff = 0; }
+                if (!el.classList.contains('aw-moving')) el.classList.add('aw-moving');
+            } else if (!movingOff && el.classList.contains('aw-moving')) {
+                movingOff = setTimeout(() => { movingOff = 0; el.classList.remove('aw-moving'); }, 180);
+            }
+        };
         const tick = (now) => {
             st.raf = 0;
             if (!st.on) return;
@@ -936,6 +967,7 @@
                 moving = true;
             } else if (!st.drag) { st.vel.x = st.vel.y = 0; }
             applyCamera();
+            setMoving(moving || Boolean(st.drag && st.drag.moved));
             if (st.dirty || st.coverDirty) { st.coverDirty = false; layout(); }
             if (moving || st.drag || performance.now() < st.enterUntil) { st.last = now; st.raf = requestAnimationFrame(tick); }
             else st.last = 0;

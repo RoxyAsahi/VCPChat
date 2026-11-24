@@ -620,3 +620,9 @@ body.light-theme .aw-tile.is-open .aw-in { box-shadow: 0 0 0 1px color-mix(in sr
 .archive-wall.aw-table::after { transition: opacity .4s var(--mt-ease, ease); }
 #music-archive-view.layout-revealing .archive-wall.aw-table::after { opacity: 0; transition: none; }
 
+
+/* ---------- 镜头在动（archive-wall.js setMoving） ---------- */
+/* 滚动、拖动、惯性滑行时格子不接悬停：内容在光标下滑过时不会一张张立起又放下 */
+.archive-wall.aw-moving .aw-world { pointer-events: none; }
+/* 平放滚动时景深模糊先撤掉（它要每帧重算下面滑过的内容），停下再淡回来 */
+#music-archive-view .archive-wall.aw-table.aw-moving::after { opacity: 0; transition: opacity .12s linear; }
