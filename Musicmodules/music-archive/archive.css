@@ -849,3 +849,6 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
 .archive-lyrics.plain .plain-fetch { flex: none; font-size: 12px; letter-spacing: .6px; color: var(--ar-ink); cursor: pointer; }
 .archive-lyrics.plain .plain-fetch i { margin-left: 6px; font-style: normal; font-size: 10px; color: var(--ar-muted); }
 .archive-lyrics.plain .plain-fetch:hover, .archive-lyrics.plain .plain-fetch:hover i { color: var(--ar-accent-text, var(--ar-accent)); }
+/* 分组名太长时先让「组 n / N」退场，名字最后才省略（借鉴 RhinE 标题栏「名字始终显示，旁边的数字先让位」） */
+.archive-lanes-name > span { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.archive-lanes-name > b { flex: 0 1 auto; min-width: 3em; }
