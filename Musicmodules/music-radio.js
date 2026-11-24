@@ -361,6 +361,8 @@
         try { global.MusicSpectrum?.setupMusicSpectrum?.(app); } catch (e) { /* 没有频谱模块 */ }
         // 按输出设备记住 EQ（music-device-sound.js，同样在本文件之后加载）
         try { global.MusicDeviceSound?.setupMusicDeviceSound?.(app); } catch (e) { /* 没有这个模块 */ }
+        // 歌单导入导出 .m3u8（music-m3u.js，同样在本文件之后加载）
+        try { global.MusicM3u?.setupMusicM3u?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };

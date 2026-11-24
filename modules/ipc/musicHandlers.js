@@ -19,6 +19,7 @@ const { createMusicThumbar } = require('../musicThumbar');
 const { createLyricsTranslator } = require('../musicLyricsTranslate');
 const { createLibraryWatch } = require('../musicLibraryWatch');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
+const m3u = require('./musicM3u');
 const { randomUUID } = require('crypto');
 let fetch;
 
@@ -783,6 +784,56 @@ function initialize(options) {
                 if (stat.size > 400 * 1024 * 1024) return { ok: false, message: '文件太大（超过 400 MB），没法在窗口里分析' };
                 const data = await fs.readFile(file);
                 return { ok: true, data, size: stat.size };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
+
+        // 歌单导出 / 导入 .m3u8（和别的播放器互通）。只给音乐窗口；导出走保存对话框，导入走打开对话框或拖进来的文件。
+        const fromMusicWindow = (event) => musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents;
+        ipcMain.handle('music-m3u-export', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导出' };
+            const name = String(payload?.name || '');
+            const tracks = Array.isArray(payload?.tracks) ? payload.tracks.slice(0, 50000) : [];
+            if (!tracks.length) return { ok: false, message: '这个歌单是空的' };
+            const result = await dialog.showSaveDialog(musicWindow, {
+                title: '导出歌单',
+                defaultPath: m3u.safeFileName(name) + '.m3u8',
+                filters: [{ name: 'M3U8 歌单', extensions: ['m3u8'] }, { name: 'M3U 歌单', extensions: ['m3u'] }]
+            });
+            if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+            try {
+                const text = m3u.buildM3u(name, tracks);
+                // .m3u 给老播放器用：带 BOM 让它们认出是 UTF-8
+                await fs.writeFile(result.filePath, /\.m3u$/i.test(result.filePath) ? '\uFEFF' + text : text, 'utf8');
+                return { ok: true, file: result.filePath, count: tracks.length };
+            } catch (err) {
+                return { ok: false, message: '写不进去：' + (err && err.message || err) };
+            }
+        });
+        ipcMain.handle('music-m3u-import', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导入' };
+            let file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file) {
+                const result = await dialog.showOpenDialog(musicWindow, {
+                    title: '导入歌单',
+                    filters: [{ name: '歌单', extensions: ['m3u8', 'm3u'] }],
+                    properties: ['openFile']
+                });
+                if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true };
+                file = result.filePaths[0];
+            }
+            if (!path.isAbsolute(file) || !/\.m3u8?$/i.test(file)) return { ok: false, message: '只认 .m3u / .m3u8 歌单' };
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile() || stat.size > 20 * 1024 * 1024) return { ok: false, message: '这个文件不像歌单' };
+                const parsed = m3u.parseM3u(m3u.decodeM3u(await fs.readFile(file), file), { baseDir: path.dirname(file) });
+                const entries = [];
+                for (const entry of parsed.entries.slice(0, 50000)) {
+                    const s = await fs.stat(entry.path).catch(() => null);
+                    entries.push({ ...entry, exists: Boolean(s && s.isFile()) });
+                }
+                return { ok: true, file, name: parsed.name || path.basename(file).replace(/\.m3u8?$/i, ''), entries, skipped: parsed.skipped };
             } catch (err) {
                 return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
             }
