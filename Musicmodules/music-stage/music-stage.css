@@ -4351,3 +4351,115 @@ body.light-theme .music-stage-mode-groupchat {
 @media (prefers-reduced-motion: reduce) {
     .gc-list, .gc-row, .gc-bubble, .gc-echo { transition: none !important; animation: none !important; }
 }
+
+/* 印象（impression）：封面重画成油画挂在墙上；歌词在右边像展签一样走。 */
+.music-stage-mode-impression {
+    isolation: isolate;
+    background: #0e0d0c;
+}
+body.light-theme .music-stage-mode-impression { background: #efece6; }
+.music-stage-mode-impression > .impression-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+    pointer-events: none;
+}
+.impression-rail {
+    position: absolute;
+    z-index: 2;
+    left: 58%;
+    right: max(5%, 40px);
+    top: 16%;
+    bottom: 24%;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 72%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 72%, transparent 100%);
+    pointer-events: none;
+}
+.impression-track {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1em;
+    transition: transform 0.75s cubic-bezier(0.25, 0.8, 0.25, 1);
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+    font-size: calc(clamp(17px, 1.35vw, 24px) * var(--impression-scale, 1));
+    color: var(--stage-ink);
+}
+.impression-line {
+    opacity: 0.34;
+    font-size: 0.92em;
+    transition: opacity 0.6s ease, font-size 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.6s ease;
+    filter: blur(0.6px);
+}
+.impression-line.is-near { opacity: 0.55; filter: none; }
+.impression-line.is-past { opacity: 0.22; }
+.impression-line.is-current {
+    opacity: 1;
+    font-size: 1.36em;
+    filter: none;
+}
+.impression-text {
+    line-height: 1.45;
+    letter-spacing: 0.06em;
+    overflow-wrap: anywhere;
+}
+.impression-line.is-current .impression-text > span {
+    color: color-mix(in srgb, var(--stage-ink) 38%, transparent);
+    transition: color 0.35s ease, text-shadow 0.6s ease;
+}
+.impression-line.is-current .impression-text > span.is-sung {
+    color: var(--stage-ink);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--stage-accent) 28%, transparent);
+}
+.impression-line.is-chorus.is-current .impression-text > span.is-sung {
+    color: color-mix(in srgb, var(--stage-accent) 55%, var(--stage-ink));
+}
+.impression-tr {
+    margin-top: 0.3em;
+    font-size: 0.62em;
+    font-style: italic;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--stage-ink) 60%, transparent);
+}
+.impression-label {
+    position: absolute;
+    z-index: 2;
+    left: 58%;
+    bottom: max(calc(12% + 26px), 128px);
+    display: grid;
+    gap: 3px;
+    padding: 10px 14px 10px 12px;
+    border-left: 2px solid color-mix(in srgb, var(--stage-accent) 70%, transparent);
+    color: var(--stage-ink);
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+    pointer-events: none;
+}
+.impression-label > b { font-size: 15px; font-weight: 600; }
+.impression-label > span { font-size: 12px; color: color-mix(in srgb, var(--stage-ink) 60%, transparent); }
+.impression-medium { letter-spacing: 0.12em; transition: color 1.2s ease; }
+.impression-kicker {
+    position: absolute;
+    z-index: 2;
+    top: calc(max(5%, 42px) + 26px);
+    right: calc(max(4%, 36px) + 2px);
+    color: color-mix(in srgb, var(--stage-ink) 50%, transparent);
+    font: 600 10px/1.2 "SFMono-Regular", Consolas, monospace;
+    letter-spacing: 0.24em;
+    pointer-events: none;
+}
+.impression-notice[hidden] { display: none; }
+.impression-notice {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    color: color-mix(in srgb, var(--stage-ink) 66%, transparent);
+    font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .impression-track, .impression-line { transition: none; }
+}

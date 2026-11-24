@@ -1887,6 +1887,7 @@
             orbit: ['tilt', 'roll', 'axisLine', 'showTranslation'],
             signal: ['panel', 'showSpectrum', 'pulseRate', 'showTranslation'],
             groupchat: ['echoes', 'voiceNotes', 'fontScale', 'showTranslation'],
+            impression: ['timeOfDay', 'flecks', 'frame', 'showTranslation'],
             clockwork: ['secondHand', 'fontScale', 'waitingOpacity', 'showTranslation'],
             hanabi: ['density', 'trails', 'reflection', 'showTranslation'],
             lumiere: ['smoke', 'dust', 'fontScale', 'showTranslation'],

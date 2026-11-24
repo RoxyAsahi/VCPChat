@@ -210,3 +210,21 @@ test('groupchat: a deterministic thread with typing lead, voice notes in long br
     assert.equal(a[G.messageIndexAt(a, lines[2].start + 0.1)], lines[2]);
     assert.equal(G.messageIndexAt(a, -1), -1);
 });
+
+require(path.join(stage, 'modes', 'impression-manager.js'));
+test('impression: sections turn at long breaks and chorus entries, and never closer than eight seconds', () => {
+    const I = window.MusicStageImpressionManager._test;
+    const song = window.MusicStageRuntime.normalizeLines([
+        { time: 10, original: '第一段第一句' }, { time: 14, original: '第一段第二句' },
+        { time: 18, original: '副歌来了' }, { time: 22, original: '副歌第二句' },
+        { time: 40, original: '第二段开头' }, { time: 44, original: '副歌来了' }, { time: 46, original: '副歌第二句' }
+    ]);
+    const { starts, isChorus } = I.buildSections(song);
+    assert.deepEqual(starts, [10, 18, 40, 48].filter(x => x !== 48));
+    assert.ok(isChorus(song[2]) && !isChorus(song[0]));
+    assert.equal(I.sectionAt(starts, 5), 0);
+    assert.equal(I.sectionAt(starts, 19), 1);
+    assert.equal(I.sectionAt(starts, 41), 2);
+    assert.equal(I.PHASES.length, 4);
+    assert.equal(I.fileUrl('C:\\a b\\c#.jpg'), 'file:///C:/a%20b/c%23.jpg');
+});

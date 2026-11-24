@@ -15,7 +15,8 @@
         clockwork: global.MusicStageClockworkManager,
         orbit: global.MusicStageOrbitManager,
         signal: global.MusicStageSignalManager,
-        groupchat: global.MusicStageGroupchatManager
+        groupchat: global.MusicStageGroupchatManager,
+        impression: global.MusicStageImpressionManager
     };
 
     const definitions = [
@@ -32,7 +33,8 @@
         { id: 'clockwork', label: '时计', manager: managers.clockwork },
         { id: 'orbit', label: '回环', manager: managers.orbit },
         { id: 'signal', label: '信号', manager: managers.signal },
-        { id: 'groupchat', label: '群唱', manager: managers.groupchat }
+        { id: 'groupchat', label: '群唱', manager: managers.groupchat },
+        { id: 'impression', label: '印象', manager: managers.impression }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({

@@ -2,9 +2,9 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 13;
+    const VERSION = 14;
     // 后来加的模式：旧版本存下的启用列表里没有它们，读到旧版本时补上。
-    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7, lumiere: 8, hanabi: 9, clockwork: 10, orbit: 11, signal: 12, groupchat: 13 });
+    const ADDED_IN = Object.freeze({ kowloon: 5, inkdraft: 6, fogpane: 7, lumiere: 8, hanabi: 9, clockwork: 10, orbit: 11, signal: 12, groupchat: 13, impression: 14 });
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -31,7 +31,8 @@
         { id: 'clockwork', label: '时计', description: '一组咬合的齿轮，歌词像指针从轴心伸出，每唱一句齿轮转一格' },
         { id: 'orbit', label: '回环', description: '一圈斜着的椭圆轨道，歌词排在轨道上，唱到的字转到最前面' },
         { id: 'signal', label: '信号', description: '一条∞形的信号环，脉冲沿环流动，频谱和电平跟着音乐跳，歌词在监视窗里' },
-        { id: 'groupchat', label: '群唱', description: '歌词变成一个群聊：大家轮流发消息、一字一字打出来，副歌一起唱，间奏发语音' }
+        { id: 'groupchat', label: '群唱', description: '歌词变成一个群聊：大家轮流发消息、一字一字打出来，副歌一起唱，间奏发语音' },
+        { id: 'impression', label: '印象', description: '封面重画成一幅油画挂在墙上，每段换一个时辰的光，歌词像展签一样走' }
     ]);
 
     const PIXI_DEFAULTS = Object.freeze({
@@ -46,7 +47,7 @@
         rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
     });
     const DEFAULTS = Object.freeze({
-        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane', 'lumiere', 'hanabi', 'clockwork', 'orbit', 'signal', 'groupchat'],
+        enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn', 'tunnel', 'kowloon', 'inkdraft', 'fogpane', 'lumiere', 'hanabi', 'clockwork', 'orbit', 'signal', 'groupchat', 'impression'],
         quality: 'standard',
         animationIntensity: 1,
         edgeSpectrum: true,
@@ -251,6 +252,15 @@
                 grain: 0.3,
                 showTranslation: true
             },
+            impression: {
+                fontScale: 1,
+                flecks: 1,
+                frame: true,
+                timeOfDay: true,
+                audioReactivity: 1,
+                grain: 0.3,
+                showTranslation: true
+            },
             groupchat: {
                 fontScale: 1,
                 voiceNotes: true,
@@ -372,6 +382,9 @@
             secondHand: fallback.secondHand === undefined ? source.secondHand : bool(source.secondHand, fallback.secondHand),
             tilt: fallback.tilt === undefined ? source.tilt : clamp(source.tilt, 0.15, 0.6, fallback.tilt),
             roll: fallback.roll === undefined ? source.roll : clamp(source.roll, -30, 30, fallback.roll),
+            flecks: fallback.flecks === undefined ? source.flecks : clamp(source.flecks, 0, 2, fallback.flecks),
+            frame: fallback.frame === undefined ? source.frame : bool(source.frame, fallback.frame),
+            timeOfDay: fallback.timeOfDay === undefined ? source.timeOfDay : bool(source.timeOfDay, fallback.timeOfDay),
             voiceNotes: fallback.voiceNotes === undefined ? source.voiceNotes : bool(source.voiceNotes, fallback.voiceNotes),
             echoes: fallback.echoes === undefined ? source.echoes : bool(source.echoes, fallback.echoes),
             reactions: fallback.reactions === undefined ? source.reactions : bool(source.reactions, fallback.reactions),

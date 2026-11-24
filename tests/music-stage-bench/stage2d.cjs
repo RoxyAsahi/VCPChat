@@ -92,6 +92,8 @@ const shots = async (browser, origin, mode, dir, times, config) => {
     await page.waitForTimeout(600);
     // LIGHT=1: the app's light theme.
     if (process.env.LIGHT) await page.evaluate(() => { __h.app.currentTheme = 'light'; document.body.classList.add('light-theme'); });
+    // COVER=/assets/x.jpg: give the track that cover.
+    if (process.env.COVER) await page.evaluate(c => { const tr = __h.app.playlist?.[__h.app.currentTrackIndex]; if (tr) tr.albumArt = location.origin + c; }, process.env.COVER);
     await page.evaluate(() => __h.app.stageHost.enter());
     await page.addStyleTag({ content: '#music-intro-cover{display:none!important}*,*::before,*::after{animation-play-state:paused!important;transition:none!important}' });
     await page.waitForTimeout(3000);
