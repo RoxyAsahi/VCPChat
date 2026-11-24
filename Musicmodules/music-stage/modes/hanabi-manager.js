@@ -28,6 +28,7 @@
     const KIND = Object.freeze({ kiku: 0, botan: 1, yanagi: 2, ring: 3, kamuro: 4, senrin: 5, pop: 6 });
     // 每种烟花的寿命（秒），CPU 用它判断哪些还在燃烧；和着色器里的表一致
     const LIFE = Object.freeze([2.1, 1.5, 3.6, 1.6, 3.6, 1.8, 1.0]);
+    const ENTER = 1.1;
     const SECTION_KINDS = Object.freeze(['kiku', 'botan', 'ring', 'kamuro', 'senrin', 'kiku']);
     const PALETTE = Object.freeze([
         [1.0, 0.78, 0.38], // 金
@@ -182,6 +183,8 @@ uniform float uTime;
 uniform float uPrevFade;
 uniform float uZoom;
 uniform float uPrevZoom;
+uniform vec4 uEnter;      // 段落进场：纵移、旋转、模糊（mip 级）、不透明度
+uniform vec2 uEnter2;     // 段落进场：缩放、闪白
 uniform vec4 uLight[${MAX_LIGHTS}];
 uniform vec3 uLightCol[${MAX_LIGHTS}];
 uniform int uLightCount;
@@ -292,10 +295,17 @@ void main() {
     // 字
     vec2 tc = vec2(uv.x, 1.0 - uv.y);
     vec2 t1 = (tc - 0.5) / uZoom + 0.5;
+    if (uEnter.w < 0.999 || uEnter2.y > 0.0) {
+        vec2 c1 = (tc - 0.5 - vec2(0.0, uEnter.x)) * vec2(aspect, 1.0);
+        float cr = cos(uEnter.y), sr = sin(uEnter.y);
+        c1 = mat2(cr, -sr, sr, cr) * c1 / vec2(aspect, 1.0);
+        t1 = c1 / (uZoom * uEnter2.x) + 0.5;
+    }
     float lit = clamp(total, 0.0, 1.5);
     vec3 tint = total > 0.001 ? glow / total : vec3(1.0);
     {
-        vec4 tx = texture(uText, t1);
+        vec4 tx = uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z) : texture(uText, t1);
+        tx.r *= uEnter.w;
         float halo = textureLod(uText, t1, 3.5).r;
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         vec2 se = gid > 0 ? texelFetch(uGlyph, ivec2(gid, 0), 0).xy : vec2(1e9);
@@ -321,6 +331,7 @@ void main() {
             col = mix(col, tag * (0.75 + lit * 0.35), on * 0.92);
         }
         col = mix(col, ink, clamp(body, 0.0, 1.0));
+        col += vec3(1.0, 0.96, 0.9) * uEnter2.y;   // 闪白
         col += uAccent * tx.r * singing * 0.4;
         col += (glow * 0.6 + uAccent * singing * 0.25 + uInk * 0.04) * halo * reveal * 0.5;
     }
@@ -972,6 +983,23 @@ void main() {
             stats.cue = index;
             const local = t - cue.start;
             const prev = index > 0 && local < 0.6 ? slotFor(index - 1, false) : null;
+            // 段落进场：长间奏后的第一句。三种：从上方带着速度落下来（上升）、闪白、从大到小开花
+            const enter = [0, 0, 0, 1], enter2 = [1, 0];
+            if (!s.reducedMotion && cue.kind === 'line' && index > 0 && cues[index - 1].kind === 'rest' && local < ENTER) {
+                const p = clamp(local / ENTER, 0, 1);
+                const launch = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * x * (2 - x));
+                const kinds = ['ascend', 'ascend', 'flash', 'bloom'];
+                const kind = kinds[Math.floor(seededRandom(`enter:${cuesFor?.key}:${index}`)() * kinds.length)];
+                if (kind === 'ascend') {
+                    const k = launch(1 - p);
+                    enter[0] = -0.22 * k; enter[1] = -0.22 * k; enter[2] = 3.5 * k; enter[3] = 1 - 0.8 * k;
+                } else if (kind === 'flash') {
+                    enter2[1] = 0.3 * Math.pow(1 - p, 2.4); enter[3] = smooth(0, 0.35, p);
+                } else {
+                    const k = 1 - smooth(0, 1, p);
+                    enter2[0] = 1 + 0.35 * k; enter[2] = 3 * k; enter[3] = 1 - 0.85 * k;
+                }
+            }
             const prevFade = prev ? 1 - smooth(0, 0.6, local) : 0;
             const zoom = 1 + clamp(local / Math.max(1, cue.end - cue.start), 0, 1) * 0.03;
             const audio = frame.audio || {};
@@ -1024,6 +1052,8 @@ void main() {
             gl.uniform1f(u.uPrevFade, prevFade);
             gl.uniform1f(u.uZoom, s.reducedMotion ? 1 : zoom);
             gl.uniform1f(u.uPrevZoom, s.reducedMotion ? 1 : 1.03);
+            gl.uniform4fv(u.uEnter, enter);
+            gl.uniform2fv(u.uEnter2, enter2);
             gl.uniform4fv(u.uLight, lights);
             gl.uniform3fv(u.uLightCol, lightColours);
             gl.uniform1i(u.uLightCount, lightCount);
