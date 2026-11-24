@@ -304,6 +304,108 @@
         return { style: 'rows', placed };
     };
 
+    /* ───────────────────────── 逐字图集 ───────────────────────── */
+
+    // 每个字在 2D 画布上单独画一次，取透明度做两遍模糊，存成一格两个通道：
+    //   紧的（只糊一两个像素）：放大后切阈值，边还是干净的，和距离场一个道理，大特写不用更大的图；
+    //   宽的（糊一圈）：字周围的一团。开唱时墨先是这一团、很快收成字形；没唱到的字和唱过的字周围的网点也从它来。
+    // 字是一个个四边形按屏幕原生像素画进墨场的（不再整句烤进一张世界图里再放大），所以边不会被放糊、也不会被邻字的编号框切掉。
+    // 模糊自己算（三遍盒式模糊近似高斯），结果和画布的 filter 无关。
+    const GLYPH_EM = 96;
+    const GLYPH_PAD = 37;
+    const GLYPH_CELL = GLYPH_EM + GLYPH_PAD * 2;
+    const GLYPH_BASE = 0.86;
+    const TIGHT_R = 1;
+    const WIDE_R = 8;
+    // 笔画密的字（汉字、假名、谚文）宽的那团淡一些：墨是切阈值切出来的，本来就比字形胖一圈，团太浓笔画会糊到一起
+    const WIDE_GAIN = 1.5;
+    const DENSE_WIDE = 0.6;
+    // 字重：细的一档。墨切出来比字形胖一圈，细字切完正好；粗字一胖，密的笔画就糊成一团
+    const INK_WEIGHT = 300;
+    const GLYPH_FLOATS = 12;
+
+    const blurLines = (src, dst, r, step, lineStep) => {
+        const win = r * 2 + 1;
+        for (let line = 0; line < GLYPH_CELL; line += 1) {
+            const base = line * lineStep;
+            let sum = 0;
+            for (let i = 0; i <= r; i += 1) sum += src[base + i * step];
+            for (let i = 0; i < GLYPH_CELL; i += 1) {
+                dst[base + i * step] = sum / win;
+                const add = i + r + 1, drop = i - r;
+                if (add < GLYPH_CELL) sum += src[base + add * step];
+                if (drop >= 0) sum -= src[base + drop * step];
+            }
+        }
+    };
+    const boxBlur = (buf, tmp, r) => {
+        for (let pass = 0; pass < 3; pass += 1) {
+            blurLines(buf, tmp, r, 1, GLYPH_CELL);
+            blurLines(tmp, buf, r, GLYPH_CELL, 1);
+        }
+    };
+
+    const createGlyphSource = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = GLYPH_CELL; canvas.height = GLYPH_CELL;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const n = GLYPH_CELL * GLYPH_CELL;
+        const tight = new Float32Array(n), wide = new Float32Array(n), tmp = new Float32Array(n);
+        const cells = new Map();
+        return {
+            clear() { cells.clear(); },
+            cell(char, family) {
+                const key = `${family}|${char}`;
+                const hit = cells.get(key);
+                if (hit) return hit;
+                ctx.clearRect(0, 0, GLYPH_CELL, GLYPH_CELL);
+                ctx.font = `${INK_WEIGHT} ${GLYPH_EM}px ${family}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(char, GLYPH_CELL / 2, GLYPH_PAD + GLYPH_EM * GLYPH_BASE);
+                const px = ctx.getImageData(0, 0, GLYPH_CELL, GLYPH_CELL).data;
+                for (let i = 0; i < n; i += 1) { tight[i] = px[i * 4 + 3] / 255; wide[i] = tight[i]; }
+                boxBlur(tight, tmp, TIGHT_R);
+                boxBlur(wide, tmp, WIDE_R);
+                const gain = CJK.test(char) ? WIDE_GAIN * DENSE_WIDE : WIDE_GAIN;
+                const out = new Uint8Array(n * 2);
+                for (let i = 0; i < n; i += 1) {
+                    out[i * 2] = Math.round(Math.min(1, tight[i]) * 255);
+                    out[i * 2 + 1] = Math.round(Math.min(1, wide[i] * gain) * 255);
+                }
+                if (cells.size > 400) cells.clear();
+                cells.set(key, out);
+                return out;
+            }
+        };
+    };
+    // 第一次用时才建（测试里没有 document）
+    let glyphSourceInstance = null;
+    const glyphSource = {
+        clear() { glyphSourceInstance?.clear(); },
+        cell(char, family) { glyphSourceInstance = glyphSourceInstance || createGlyphSource(); return glyphSourceInstance.cell(char, family); }
+    };
+
+    // 一句的字拼成一张两通道图集（R 紧、G 宽），同一个字只占一格；返回每个字那一格的 uv 框（左、上、右、下）
+    const buildAtlas = (chars, family) => {
+        const unique = Array.from(new Set(chars));
+        const cols = Math.max(1, Math.min(16, Math.ceil(Math.sqrt(unique.length))));
+        const rows = Math.max(1, Math.ceil(unique.length / cols));
+        const width = cols * GLYPH_CELL, height = rows * GLYPH_CELL;
+        const data = new Uint8Array(width * height * 2);
+        const rects = new Map();
+        unique.forEach((char, order) => {
+            const col = order % cols, row = Math.floor(order / cols);
+            const cell = glyphSource.cell(char, family);
+            for (let y = 0; y < GLYPH_CELL; y += 1) {
+                data.set(cell.subarray(y * GLYPH_CELL * 2, (y + 1) * GLYPH_CELL * 2), ((row * GLYPH_CELL + y) * width + col * GLYPH_CELL) * 2);
+            }
+            rects.set(char, [col / cols, row / rows, (col + 1) / cols, (row + 1) / rows]);
+        });
+        return { data, width, height, rects };
+    };
+
     /* ───────────────────────── 一段的准备 ───────────────────────── */
 
     const rectsOverlap = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
@@ -313,8 +415,8 @@
     const prepareCue = (cue, index, ctx) => {
         const { W, H, aspect, family, settings, trackKey, title, mainCanvas, idsCanvas } = ctx;
         const random = seededRandom(`inkdraft:${trackKey}:${index}:${cue.kind}:${cue.start.toFixed(2)}`);
-        // 笔画密的字（汉字、假名、谚文）只用 500：墨是切阈值切出来的，比字形胖一圈，粗体的密字一胖就糊成一团；西文用 800
-        const fontFor = (size, cjk) => `${cjk ? 500 : 800} ${size.toFixed(1)}px ${family}`;
+        // 字都用细的一档（INK_WEIGHT）：墨切阈值后比字形胖一圈，细字切完正好
+        const fontFor = size => `${INK_WEIGHT} ${size.toFixed(1)}px ${family}`;
         const main = mainCanvas.getContext('2d', { alpha: false });
         const ids = idsCanvas.getContext('2d', { alpha: false });
         main.globalCompositeOperation = 'source-over';
@@ -346,27 +448,30 @@
             placed.forEach((p) => { p.box = [p.x, p.baseline - p.size * 0.88, p.x + p.w, p.baseline + p.size * 0.2]; });
             textBox = unionBox(placed.map(p => p.box));
         }
-        // 字形进 R 通道，编号（1..255）进编号图的 R 通道；编号框比字大一圈，盖住字周围的晕。
-        const glyphData = new Float32Array(256 * 4);
+        // 字形还烤进 R 通道一份：只给换句时上一句的残影、墨漫的口子用；这一句的字由逐字层按屏幕像素画。
+        // 逐字层：每个字一个实例（世界里那一格的中心、边长、种子；开唱、唱完、是不是关键词；图集里的 uv 框）
         main.textBaseline = 'alphabetic';
         main.fillStyle = 'rgb(255,0,0)';
         main.globalCompositeOperation = 'lighter';
         const keys = new Set(cue.keys || []);
+        const atlas = buildAtlas(placed.map(p => p.g.text), family);
+        const glyphInst = new Float32Array(placed.length * GLYPH_FLOATS);
         placed.forEach((p, i) => {
-            const id = Math.min(MAX_GLYPHS, i + 1);
-            main.font = fontFor(p.size, CJK.test(p.g.text));
-            // 字形先按字号的比例轻轻模糊一下：边缘变成一道和字号成比例的缓坡，
-            // 着色器在坡上切阈值，大字小字的毛边才一样细，放大的特写也还是干净的边
-            main.filter = `blur(${Math.max(0.8, p.size * 0.022).toFixed(2)}px)`;
+            main.font = fontFor(p.size);
+            main.filter = `blur(${Math.max(0.8, p.size * 0.02).toFixed(2)}px)`;
             main.fillText(p.g.text, p.x, p.baseline);
             main.filter = 'none';
-            glyphData[id * 4] = p.g.start;
-            glyphData[id * 4 + 1] = p.g.end;
-            glyphData[id * 4 + 2] = keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0;
-            ids.fillStyle = `rgb(${id},0,0)`;
-            const pad = p.size * 0.2;
-            ids.fillRect(Math.floor((p.box[0] - pad) * ID_SCALE), Math.floor((p.box[1] - pad) * ID_SCALE),
-                Math.ceil((p.box[2] - p.box[0] + pad * 2) * ID_SCALE), Math.ceil((p.box[3] - p.box[1] + pad * 2) * ID_SCALE));
+            const s = p.size / GLYPH_EM;
+            const rect = atlas.rects.get(p.g.text);
+            const o = i * GLYPH_FLOATS;
+            glyphInst[o] = p.x + p.w / 2;
+            glyphInst[o + 1] = p.baseline - (GLYPH_PAD + GLYPH_EM * GLYPH_BASE) * s + GLYPH_CELL * s / 2;
+            glyphInst[o + 2] = GLYPH_CELL * s;
+            glyphInst[o + 3] = random();
+            glyphInst[o + 4] = p.g.start;
+            glyphInst[o + 5] = p.g.end;
+            glyphInst[o + 6] = keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0;
+            glyphInst.set(rect, o + 8);
         });
         main.globalCompositeOperation = 'source-over';
 
@@ -571,7 +676,7 @@
             : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]) : 'cut';
         const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect }, random, settings, transition);
         return {
-            index, cue, glyphData, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
+            index, cue, atlas, glyphInst, glyphCount: placed.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
             strokeStart: cue.start + 0.12, strokeStep,
             transition,
             flood: [0.2 + random() * 0.6, 0.25 + random() * 0.5],
@@ -884,12 +989,62 @@ void main() {
     vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
     gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
+    // 逐字层：每个字一个四边形，按镜头投到屏幕上，画进墨场（半浮点离屏图，加法混合）。
+    // 墨场 R 是字的墨、G 是网点的浓淡、B 是关键词的墨。
+    const GLYPH_VERT = `#version 300 es
+precision highp float;
+layout(location = 0) in vec4 iA;  // 那一格的中心 x, y（世界像素），边长，种子
+layout(location = 1) in vec4 iB;  // 开唱、唱完、关键词
+layout(location = 2) in vec4 iR;  // 图集 uv 框：左、上、右、下
+uniform vec4 uView;
+uniform float uAspect;
+uniform float uTime;
+uniform float uPop;
+out vec2 vUv;
+out vec3 vT;
+void main() {
+    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+    float dt = uTime - iB.x;
+    float on = step(0.0, dt);
+    // 开唱的一下鼓起来、慢慢收回；还没唱到的略小一点
+    float scale = mix(0.94, 1.0 + uPop * 0.18 * exp(-max(dt, 0.0) * 2.2), on);
+    vec2 w = iA.xy + (corner - 0.5) * iA.z * scale;
+    vec2 d = w - uView.xy;
+    float c = cos(uView.w), s = sin(uView.w);
+    vec2 q = vec2(d.x * c + d.y * s, -d.x * s + d.y * c);
+    vec2 p = vec2(q.x / (uAspect * uView.z), -q.y / uView.z);
+    gl_Position = vec4(p * 2.0, 0.0, 1.0);
+    vUv = vec2(mix(iR.x, iR.z, corner.x), mix(iR.y, iR.w, corner.y));
+    vT = iB.xyz;
+}`;
+    const GLYPH_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uAtlas;
+uniform float uTime;
+uniform float uReveal;
+in vec2 vUv;
+in vec3 vT;
+out vec4 outColor;
+void main() {
+    vec2 g = texture(uAtlas, vUv).rg;
+    float dt = uTime - vT.x;
+    float on = step(0.0, dt);
+    float age = max(dt, 0.0);
+    // 墨凝出来：先是一团（宽通道），很快收紧成字形（紧通道）
+    float set = on * (1.0 - exp(-age * 4.5));
+    float bulge = on * exp(-age * 1.5);
+    float ink = g.r * set + g.g * (bulge * 1.25 + 0.3 * set);
+    // 没唱到的字只是一层网点的影子；唱过的字周围留一圈网点
+    float tone = (g.r * (1.0 - set) * 0.85 + g.g * (0.3 + 0.45 * set)) * uReveal;
+    outColor = vec4(ink * (1.0 - vT.z), tone, ink * vT.z, 0.0);
+}`;
     const FRAG = `#version 300 es
 precision highp float;
 precision highp int;
 uniform sampler2D uMain;
 uniform sampler2D uIds;
-uniform sampler2D uGlyph;
+uniform sampler2D uGlyphF;
+uniform float uFlowT;
 uniform float uKeywords;
 uniform sampler2D uPrev;
 uniform vec2 uRes;
@@ -901,7 +1056,6 @@ uniform float uPrevFade; // 0 = 不画上一段
 uniform float uAspect;
 uniform float uTime;
 uniform vec2 uStroke;    // 第一笔的时刻、笔间隔
-uniform float uGhost;
 uniform float uTone;
 uniform vec4 uBlobs[${MAX_BLOBS}];
 uniform int uBlobCount;
@@ -925,7 +1079,6 @@ uniform vec3 uDot;
 uniform float uNeg;
 uniform float uHalftone;
 uniform float uGrain;
-uniform float uHalo;
 out vec4 outColor;
 
 // 不带 sin 的散列（在大整数坐标上也不出条纹）
@@ -935,48 +1088,36 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 ${Utils.NOISE_GLSL}
-vec2 worldAt(vec4 view) {
-    vec2 p = gl_FragCoord.xy / uRes - 0.5;
+vec2 worldAt(vec4 view, vec2 suv) {
+    vec2 p = suv - 0.5;
     vec2 q = vec2(p.x * uAspect, -p.y) * view.z;
     float c = cos(view.w), s = sin(view.w);
     return view.xy + vec2(q.x * c - q.y * s, q.x * s + q.y * c);
 }
-vec2 flowed(vec2 w) {
-    float k = uWorld.y;
-    // 手抖：一层大的慢慢推（整个字跟着弯）、一层小的抖（笔画边上起伏），每秒跳 8 格
-    vec2 n = vec2(vnoise(w / (k * 0.31) + uFlow * 0.37), vnoise(w / (k * 0.31) + 17.0 - uFlow * 0.29)) - 0.5;
-    vec2 m = vec2(vnoise(w / (k * 0.11) + uFlow * 1.3), vnoise(w / (k * 0.11) - 9.0 + uFlow)) - 0.5;
-    return w + n * k * 0.02 + m * k * 0.007;
+// 流场：按屏幕算（大特写也不会把字推出一大截），每秒跳 8 格（uFlowT 是取整过的时间）。一层大的慢慢推，一层小的抖
+vec2 warped() {
+    vec2 suv = gl_FragCoord.xy / uRes;
+    vec2 p = vec2(suv.x * uAspect, suv.y);
+    vec2 warp = (vec2(vnoise(p * 3.2 + vec2(0.0, uFlowT * 0.16)), vnoise(p * 3.2 + vec2(17.3, -uFlowT * 0.13))) - 0.5) * 0.024
+        + (vec2(vnoise(p * 9.0 + vec2(uFlowT * 0.3, 3.0)), vnoise(p * 9.0 + vec2(31.7, -uFlowT * 0.27))) - 0.5) * 0.007;
+    warp.x /= uAspect;
+    return suv + warp;
 }
 
 void main() {
-    vec2 w = flowed(worldAt(uView));
+    vec2 suv = warped();
+    vec2 w = worldAt(uView, suv);
+    // 这一句的字：逐字层画好的墨场（R 墨、G 网点浓淡、B 关键词的墨）
+    vec4 gf = texture(uGlyphF, suv);
+    float gInk = gf.r + gf.b;
+    float kwShare = gf.b / max(gInk, 0.0001) * uKeywords;
     vec2 uv = w / uWorld;
     bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
     vec4 m = inside ? texture(uMain, uv) : vec4(0.0);
     vec2 haloRG = inside ? textureLod(uMain, uv, 4.0).rg : vec2(0.0);
-    float halo = haloRG.r;
     vec4 idv = inside ? texelFetch(uIds, min(ivec2(uv * uIdSize), ivec2(uIdSize) - 1), 0) : vec4(0.0);
-    int gid = int(idv.r * 255.0 + 0.5);
     float so = floor(idv.g * 255.0 + 0.5);
 
-    float reveal = 0.0;
-    float ghost = 0.0;
-    float pre = 0.0;
-    float swell = 0.0;
-    float kw = 0.0;
-    if (gid > 0) {
-        vec3 se3 = texelFetch(uGlyph, ivec2(gid, 0), 0).xyz;
-        vec2 se = se3.xy;
-        kw = se3.z * uKeywords;
-        reveal = smoothstep(se.x - 0.2, se.x + 0.1, uTime);
-        // 开唱前 0.6 秒，字先以半调影子浮出来；唱到时字胀一下再收回
-        pre = smoothstep(se.x - 0.7, se.x - 0.1, uTime) * (1.0 - reveal);
-        float ds = uTime - se.x - 0.08;
-        swell = exp(-ds * ds / 0.018);
-    }
-    float glyphInk = m.r * reveal;
-    ghost = m.r * (1.0 - reveal) * uGhost;
     float lineOn = so > 0.5 ? smoothstep(0.0, 0.12, uTime - (uStroke.x + (so - 1.0) * uStroke.y)) : 0.0;
     float lineInk = m.g * lineOn;
 
@@ -1010,9 +1151,7 @@ void main() {
     // 阈值被噪点搅过：墨边像砂纸上蹭出来的，颗粒按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳
     vec2 px = gl_FragCoord.xy / max(uRes.y / 900.0, 0.5);
     float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (hash12(floor(px * 0.9)) - 0.5) * 0.08) * (0.5 + uGrain);
-    // 字的墨只来自字形本身（不把大晕加进来，不然字会胖一圈、笔画糊在一起）；大晕只进网点的浓淡。
-    // 唱到的那一下字胀一点点再收回。
-    float F = glyphInk * (0.8 + swell * 0.22) + halo * reveal * swell * 0.2 + lineInk * 1.1 + field * 0.5 + ring;
+    float F = gInk + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
     // 段尾硬切之前，字从边上一块块散掉，散的方向朝外
     if (uExit > 0.0) thr += uExit * (0.25 + vnoise(wp / (k * 0.03)) * 0.9 + length(gl_FragCoord.xy / uRes - 0.5) * 0.8);
@@ -1041,12 +1180,8 @@ void main() {
     // 线稿两边一圈网点：线不是干干净净浮在纸上的，跟着这一笔一起出现
     T = max(T, clamp(haloRG.g * 2.6, 0.0, 0.6) * lineOn * smoothstep(0.3, 0.0, a));
     T = max(T, max(cloud * 0.72, vig * 0.6 * uCloud));
-    // 字周围那团晕只取靠近笔画的那部分：编号框的边上晕已经很淡，不然框边会切出一块方的灰
-    float haloNear = smoothstep(0.12, 0.6, halo);
-    T = max(T, (haloNear * 1.1 + m.r * 0.5) * pre * uGhost / max(uGhost, 0.001) * 0.9);
-    T = max(T, haloNear * reveal * 0.55 * uCloud);
-    // 还没唱到的字只是一层网点的影子（不是一块平的灰）
-    T = max(T, ghost / max(uGhost, 0.001) * 0.85 * min(1.0, uGhost * 3.0));
+    // 字周围的网点：没唱到的字的影子、唱过的字周围那一圈、墨边阈值以下的那一截（Folia 隐喻的做法）
+    T = max(T, clamp(gf.g * 0.9 + gInk * 0.5, 0.0, 1.0));
     // 网点格钉在屏幕上（7 个 CSS 像素一格，大特写也不会放出一颗颗大圆片），每个镜头换一个网角
     float ca = cos(uDotAngle), sa = sin(uDotAngle);
     vec2 sf = gl_FragCoord.xy / uDotPx;
@@ -1062,18 +1197,14 @@ void main() {
     col = mix(col, uDot, dots * 0.85);
     col = mix(col, uBlobCol, aA);
     // 灰墨团盖着还没唱到的字：字的网点影子压在它上面，照样看得见
-    col = mix(col, mix(uBlobCol, ink, 0.45), dots * aA * smoothstep(0.02, 0.2, ghost + pre * (m.r + haloNear)));
-    // 还没唱到的字：淡淡的墨，同样切阈值（毛边一致）
-    float gF = ghost / max(uGhost, 0.001);
-    float gW = max(fwidth(gF), 0.0001) * 0.75;
-    float ga = smoothstep(thr - gW, thr + gW, gF) * uGhost;
-    // 关键词的字身用强调色（字周围的晕仍是墨，像套色印刷压了一道黑边）
-    vec3 inkK = mix(ink, uAccentCol, kw * smoothstep(0.3, 0.65, m.r));
+    col = mix(col, mix(uBlobCol, ink, 0.45), dots * aA * smoothstep(0.3, 0.8, gf.g));
+    // 关键词的字身用强调色
+    vec3 inkK = mix(ink, uAccentCol, kwShare);
     // 墨最后画：灰墨团漂到字上时，字压在它上面照样读得出来
-    col = mix(col, inkK, max(a, ga * 0.18 * (1.0 - a)));
+    col = mix(col, inkK, a);
 
     if (uPrevFade > 0.0) {
-        vec2 wq = flowed(worldAt(uPrevView));
+        vec2 wq = worldAt(uPrevView, suv);
         // 碎开：屏幕切成不规则的块，每块沿自己的方向飞散，一块块消失
         vec2 cell = floor(gl_FragCoord.xy / uRes.y * 5.0 + vnoise(gl_FragCoord.xy / uRes.y * 3.0) * 1.6);
         float h = hash12(cell);
@@ -1130,19 +1261,31 @@ void main() {
             premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'default'
         });
         if (!gl) return null;
-        const program = gl.createProgram();
-        gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERT));
-        gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAG));
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`[inkdraft] link: ${gl.getProgramInfoLog(program)}`);
-        const uniforms = {};
-        const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-        for (let i = 0; i < count; i += 1) {
-            const info = gl.getActiveUniform(program, i);
-            const name = info.name.replace(/\[0\]$/, '');
-            uniforms[name] = gl.getUniformLocation(program, info.name);
-        }
+        const link = (vs, fs) => {
+            const prog = gl.createProgram();
+            gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vs));
+            gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fs));
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`[inkdraft] link: ${gl.getProgramInfoLog(prog)}`);
+            const uni = {};
+            const count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+            for (let i = 0; i < count; i += 1) {
+                const info = gl.getActiveUniform(prog, i);
+                uni[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(prog, info.name);
+            }
+            return { prog, uni };
+        };
+        const { prog: program, uni: uniforms } = link(VERT, FRAG);
+        const { prog: glyphProgram, uni: glyphUniforms } = link(GLYPH_VERT, GLYPH_FRAG);
         const vao = gl.createVertexArray();
+        // 墨场：和画布一样大；能渲染半浮点就用半浮点（几个字的墨叠起来能超过 1）
+        const halfFloat = Boolean(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+        const field = { tex: gl.createTexture(), fbo: gl.createFramebuffer(), w: 0, h: 0, half: halfFloat };
+        gl.bindTexture(gl.TEXTURE_2D, field.tex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -1155,10 +1298,20 @@ void main() {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             return texture;
         };
-        const slots = Array.from({ length: 3 }, () => ({
-            main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), glyph: makeTexture(gl.NEAREST), key: null, data: null, used: 0
-        }));
-        return { gl, program, uniforms, vao, slots };
+        const slots = Array.from({ length: 3 }, () => {
+            const glyphVao = gl.createVertexArray();
+            const glyphBuf = gl.createBuffer();
+            gl.bindVertexArray(glyphVao);
+            gl.bindBuffer(gl.ARRAY_BUFFER, glyphBuf);
+            for (let a = 0; a < 3; a += 1) {
+                gl.enableVertexAttribArray(a);
+                gl.vertexAttribPointer(a, 4, gl.FLOAT, false, GLYPH_FLOATS * 4, a * 16);
+                gl.vertexAttribDivisor(a, 1);
+            }
+            gl.bindVertexArray(null);
+            return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR), glyphVao, glyphBuf, key: null, data: null, used: 0 };
+        });
+        return { gl, program, uniforms, glyphProgram, glyphUniforms, field, vao, slots };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -1281,7 +1434,7 @@ void main() {
             cuesFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; });
             // 字体分片还没下载完：下载完把字图作废重画（字宽变了，分镜也要重排）
-            Utils.loadLyricFont(frame.lines, [500, 800], () => { glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; }); redraw(); }, frame.track?.title || '');
+            Utils.loadLyricFont(frame.lines, [INK_WEIGHT], () => { glyphSource.clear(); glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; }); redraw(); }, frame.track?.title || '');
         };
 
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
@@ -1312,8 +1465,11 @@ void main() {
             gl.generateMipmap(gl.TEXTURE_2D);
             gl.bindTexture(gl.TEXTURE_2D, slot.ids);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, idsCanvas);
-            gl.bindTexture(gl.TEXTURE_2D, slot.glyph);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 256, 1, 0, gl.RGBA, gl.FLOAT, data.glyphData);
+            gl.bindTexture(gl.TEXTURE_2D, slot.atlas);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, data.atlas.width, data.atlas.height, 0, gl.RG, gl.UNSIGNED_BYTE, data.atlas.data);
+            gl.bindBuffer(gl.ARRAY_BUFFER, slot.glyphBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, data.glyphInst, gl.STATIC_DRAW);
+            data.atlas = { width: data.atlas.width, height: data.atlas.height };
             slot.key = key;
             slot.data = data;
             slot.used = performance.now();
@@ -1369,12 +1525,44 @@ void main() {
             const flooding = data.transition === 'flood' && since >= 0 && since < 0.6 && !s.reducedMotion;
             const floodR = flooding ? 1.9 * (1 - Math.pow(1 - since / 0.6, 2.4)) : 0;
 
+            // 逐字层画进墨场
+            const fieldTarget = glState.field;
+            if (fieldTarget.w !== canvas.width || fieldTarget.h !== canvas.height) {
+                fieldTarget.w = canvas.width; fieldTarget.h = canvas.height;
+                gl.bindTexture(gl.TEXTURE_2D, fieldTarget.tex);
+                if (fieldTarget.half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, fieldTarget.w, fieldTarget.h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+                else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, fieldTarget.w, fieldTarget.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fieldTarget.fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fieldTarget.tex, 0);
+            }
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fieldTarget.fbo);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            if (data.glyphCount) {
+                const gu = glState.glyphUniforms;
+                gl.useProgram(glState.glyphProgram);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.ONE, gl.ONE);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.atlas); gl.uniform1i(gu.uAtlas, 0);
+                gl.uniform4f(gu.uView, view.c[0], view.c[1], view.h, view.roll);
+                gl.uniform1f(gu.uAspect, canvas.width / canvas.height);
+                gl.uniform1f(gu.uTime, t);
+                gl.uniform1f(gu.uPop, s.reducedMotion ? 0 : 1);
+                const local0 = t - data.cue.start;
+                gl.uniform1f(gu.uReveal, Math.min(1, s.waitingOpacity / 0.35) * smooth(0, 0.35, local0));
+                gl.bindVertexArray(slot.glyphVao);
+                gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.glyphCount);
+                gl.disable(gl.BLEND);
+            }
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(program);
             gl.bindVertexArray(vao);
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.main); gl.uniform1i(u.uMain, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.ids); gl.uniform1i(u.uIds, 1);
-            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 2);
+            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, fieldTarget.tex); gl.uniform1i(u.uGlyphF, 2);
             gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, (prevSlot || slot).main); gl.uniform1i(u.uPrev, 3);
             Utils.bindNoise(gl, u.uNoise, 4);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
@@ -1387,7 +1575,6 @@ void main() {
             gl.uniform1f(u.uTime, t);
             gl.uniform2f(u.uStroke, data.strokeStart, data.strokeStep);
             const local = t - data.cue.start;
-            gl.uniform1f(u.uGhost, s.waitingOpacity * smooth(0, 0.35, local));
             gl.uniform1f(u.uTone, smooth(0.05, 0.9, local));
             gl.uniform4fv(u.uBlobs, blobBuffer);
             gl.uniform1i(u.uBlobCount, counts.blobs);
@@ -1407,6 +1594,7 @@ void main() {
             // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
             const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
             gl.uniform1f(u.uFlow, flowStep * 0.13);
+            gl.uniform1f(u.uFlowT, flowStep / 8);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.uniform3fv(u.uPaper, palette.paper);
             gl.uniform3fv(u.uInk, palette.ink);
@@ -1416,7 +1604,6 @@ void main() {
             gl.uniform1f(u.uNeg, view.neg ? 1 : 0);
             gl.uniform1f(u.uHalftone, s.halftone);
             gl.uniform1f(u.uGrain, s.grain);
-            gl.uniform1f(u.uHalo, 0.5 + (audio.vocal || 0) * 0.15 * s.audioReactivity);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
@@ -1485,7 +1672,8 @@ void main() {
             if (idleHandle) (global.cancelIdleCallback || global.clearTimeout)(idleHandle);
             if (glState) {
                 const { gl } = glState;
-                glState.slots.forEach((slot) => { gl.deleteTexture(slot.main); gl.deleteTexture(slot.ids); gl.deleteTexture(slot.glyph); });
+                glState.slots.forEach((slot) => { gl.deleteTexture(slot.main); gl.deleteTexture(slot.ids); gl.deleteTexture(slot.atlas); gl.deleteBuffer(slot.glyphBuf); gl.deleteVertexArray(slot.glyphVao); });
+                gl.deleteTexture(glState.field.tex); gl.deleteFramebuffer(glState.field.fbo); gl.deleteProgram(glState.glyphProgram);
                 gl.deleteProgram(glState.program);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
