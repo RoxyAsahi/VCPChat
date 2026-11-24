@@ -447,17 +447,16 @@ test('window keymap: space without repeat, seek, track and volume keys, help, in
     }
 });
 
-test('clicking the capsule body enters the stage; inside the stage it does nothing, search only opens with Ctrl+K', () => {
+test('the bar body is not a stage button: clicking blank space does nothing, the stage slot enters, search only opens with Ctrl+K', () => {
     const { window, doc, app, dock, calls } = setup();
     try {
         const cap = doc.querySelector('.md-cap');
         cap.click();
-        assert.equal(calls.pop(), 'enter');
-        app.isStageActive = true;
-        doc.body.classList.add('music-stage-active');
-        cap.click();
+        assert.ok(!calls.includes('enter'), 'blank space no longer enters the stage');
+        assert.equal(cap.getAttribute('title'), null, 'no "click to enter the stage" hint left on the bar');
+        doc.querySelector('[data-md="stage"]').click();
+        assert.equal(calls.pop(), 'stage', 'the stage slot is the way in');
         assert.ok(!doc.body.classList.contains('music-dock-cmd-open'), 'no accidental search popup');
-        assert.ok(!calls.includes('enter'));
         assert.equal(doc.querySelector('[data-q="panel"]'), null, 'quick row has no search button');
         doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
         assert.ok(doc.body.classList.contains('music-dock-cmd-open'));
@@ -467,18 +466,74 @@ test('clicking the capsule body enters the stage; inside the stage it does nothi
     }
 });
 
-test('hovering the title edges previews the real previous and next track', () => {
-    const { window, doc, app, dock } = setup();
+test('hovering the title edges keeps the title; prev / next are plain buttons with honest tooltips', () => {
+    const { window, doc, app, dock, calls } = setup();
     try {
-        const c = { path: 'C:/c.flac', title: 'Gamma.flac', artist: 'C' };
-        app.getUpNext = () => ({ manual: [c], context: [app.playlist[1]] });
-        app.peekPrevious = () => app.playlist[1];
-        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerenter'));
-        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Gamma', 'queued track comes first');
-        assert.ok(doc.querySelector('.md-tnav').classList.contains('md-previewing'));
-        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerleave'));
+        const title = doc.querySelector('[data-md="title"]').textContent;
         doc.querySelector('.md-zone.md-l').dispatchEvent(new window.Event('pointerenter'));
-        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Beta');
+        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerenter'));
+        assert.ok(!doc.querySelector('.md-tnav').classList.contains('md-previewing'), 'no title swap on hover');
+        assert.equal(doc.querySelector('[data-md="title"]').textContent, title);
+        const prev = doc.querySelector('[data-md="prev"]');
+        app.prevRestarts = () => true;
+        prev.dispatchEvent(new window.Event('pointerenter'));
+        assert.match(prev.title, /回到本曲开头/);
+        app.prevRestarts = () => false;
+        prev.dispatchEvent(new window.Event('pointerenter'));
+        assert.equal(prev.title, '上一首');
+        doc.querySelector('[data-md="next"]').click();
+        assert.equal(calls.pop(), 'next');
+    } finally {
+        dock.destroy();
+    }
+});
+
+test('the progress strip is its own control: press jumps, drag follows, works with the panel open, and the ring is only the panel button', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const cap = doc.querySelector('.md-cap');
+        const trk = doc.querySelector('.md-trk');
+        const rect = (left, width, top = 0, height = 64) => () => ({ left, width, right: left + width, top, height, bottom: top + height, x: left, y: top });
+        cap.getBoundingClientRect = rect(0, 1000);
+        trk.getBoundingClientRect = rect(0, 1000, 47, 14);
+        cap.querySelector('.md-txt').getBoundingClientRect = rect(100, 300, 12, 22);
+        cap.querySelector('.md-slots').getBoundingClientRect = rect(814, 170, 15, 34);
+        app.lastKnownDuration = 200;
+        app.lastKnownCurrentTime = 20;
+        app.lastStateUpdateTime = Date.now();
+        const popSeek = () => { const c = calls.pop(); return Array.isArray(c) ? [c[0], Math.round(c[1])] : c; };
+        const ptr = (type, x) => trk.dispatchEvent(new window.MouseEvent(type, { clientX: x, button: 0, bubbles: true, cancelable: true }));
+        // 0% 在歌名左缘（100px），100% 在按钮组前 14px（800px）
+        ptr('pointerdown', 450);
+        ptr('pointerup', 450);
+        assert.deepEqual(popSeek(), ['seek', 100], 'a plain press jumps to that point');
+        ptr('pointerdown', 100);
+        ptr('pointermove', 800);
+        assert.equal(doc.querySelector('[data-md="seek-tip"]').textContent, '03:20');
+        ptr('pointerup', 800);
+        assert.deepEqual(popSeek(), ['seek', 200]);
+        assert.ok(!calls.includes('enter') && !calls.includes('stage'), 'seeking never opens the stage');
+
+        // 面板开着照样能拖
+        doc.querySelector('[data-md="panel"]').click();
+        assert.equal(dock.panelOpen, true);
+        assert.equal(doc.querySelector('[data-md="panel"]').getAttribute('aria-expanded'), 'true');
+        ptr('pointerdown', 275);
+        ptr('pointerup', 275);
+        assert.deepEqual(popSeek(), ['seek', 50]);
+        assert.equal(dock.panelOpen, true, 'seeking leaves the panel alone');
+
+        // 白环只是面板的关闭键；不再当播放头
+        const handle = doc.querySelector('[data-md="handle"]');
+        assert.equal(dock.ringMode, 'tucked');
+        assert.equal(handle.hasAttribute('aria-describedby'), false);
+        handle.click();
+        assert.equal(dock.panelOpen, false);
+        assert.equal(doc.querySelector('[data-md="panel"]').getAttribute('aria-expanded'), 'false');
+
+        // 键盘：进度细轨本身是 slider，方向键 ±5 秒
+        trk.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+        assert.deepEqual(popSeek(), ['seek', 25]);
     } finally {
         dock.destroy();
     }
@@ -518,26 +573,16 @@ test('lyrics tab: translation toggle and ±0.5 s offset buttons drive the player
     } finally { dock.destroy(); }
 });
 
-test('fluid bar: up-next titles on the bar, volume drop rail, ring docking and the energy-saving fallback', () => {
+test('fluid bar: no up-next titles on the bar, volume drop rail, ring docking and the energy-saving fallback', () => {
     const { window, doc, app, dock, calls } = setup();
     try {
         const root = doc.getElementById('music-dock-root');
         assert.ok(root.classList.contains('md-fl-on'), 'fluid layer is on by default');
         assert.ok(doc.querySelector('.md-fluid'), 'svg layer mounted');
-        assert.equal(dock.ringMode, 'playhead', 'the ring is the playhead by default');
-        assert.equal(doc.querySelector('[data-md="nx1"]').textContent, 'Beta', 'next title comes from the list when there is no queue api');
-
-        // 有队列接口时：手动层优先，点「再下一首」把它从队列里拿掉再播放
-        const [a, b] = app.playlist;
-        app.getUpNext = () => ({ manual: [b, a], context: [] });
-        app.queueRemove = (i) => calls.push(['qremove', i]);
-        doc.dispatchEvent(new window.Event('music-queue-change'));
-        assert.equal(doc.querySelector('[data-md="nx2"]').textContent, 'Alpha');
-        doc.querySelector('[data-md="nx2"]').click();
-        assert.deepEqual(calls.pop(), ['load', 0]);
-        assert.deepEqual(calls.pop(), ['qremove', 1]);
-        doc.querySelector('[data-md="nx1"]').click();
-        assert.equal(calls.pop(), 'next');
+        assert.equal(dock.ringMode, 'tucked', 'the ring hides in the panel button until the panel opens');
+        assert.equal(doc.querySelector('.md-nx, [data-md="nx1"], [data-md="nx2"]'), null, 'next / after-next titles are gone');
+        const slots = [...doc.querySelectorAll('.md-slots > button:not([hidden])')].map((b) => b.dataset.md);
+        assert.deepEqual(slots, ['mode', 'stage', 'more', 'panel'], 'play order, stage, more and panel sit on the bar');
 
         // 音量：滚轮直接分裂出水滴和竖条；单击仍然是静音
         const slot = doc.querySelector('[data-md="vol"]');
@@ -783,21 +828,20 @@ test('fluid layer schedules no animation frames once it is at rest, when hidden,
     } finally { fluid.destroy(); }
 });
 
-test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, the playhead seeks and is described', () => {
+test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, the progress strip seeks', () => {
     const { window, doc, app, dock, calls } = setup();
     try {
         const handle = doc.querySelector('[data-md="handle"]');
         const key = (node, k, extra = {}) => node.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
 
-        // 播放头：有说明文字，方向键跳转
-        assert.equal(handle.getAttribute('aria-describedby'), 'music-dock-playhead-tip');
-        assert.match(doc.getElementById('music-dock-playhead-tip').textContent, /\d+:\d+ \/ \d+:\d+/);
+        // 进度细轨：方向键跳转（白环不再当播放头）
+        const trk = doc.querySelector('.md-trk');
         app.lastKnownCurrentTime = 50;
         app.lastStateUpdateTime = Date.now();
-        handle.focus();
-        key(handle, 'ArrowRight');
+        trk.focus();
+        key(trk, 'ArrowRight');
         assert.deepEqual(calls.pop(), ['seek', 55]);
-        key(handle, 'ArrowLeft');
+        key(trk, 'ArrowLeft');
         assert.deepEqual(calls.pop(), ['seek', 45]);
 
         // 打开：焦点进抽屉，落在选中的页签上；页签是 tablist，只有选中的那个能 Tab 到
@@ -808,7 +852,6 @@ test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, t
         assert.equal(doc.querySelector('[data-md="tabs"]').getAttribute('aria-label'), '面板页签');
         assert.equal(doc.activeElement.textContent, '控制');
         assert.deepEqual(tabs().map((t) => t.tabIndex), [-1, -1, 0, -1, -1]);
-        assert.equal(handle.hasAttribute('aria-describedby'), false, 'as the close button it is no longer described as a playhead');
         key(doc.activeElement, 'ArrowRight');
         assert.equal(doc.activeElement.textContent, '播放列表');
         assert.equal(doc.activeElement.getAttribute('aria-selected'), 'true');
@@ -836,15 +879,15 @@ test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, t
     } finally { dock.destroy(); }
 });
 
-test('the bar keeps one "more" button on the right; the quick row above it holds mode, queue, stage, effects and volume', () => {
+test('the bar keeps play order, stage, more and panel on the right; the quick row above "more" holds queue, effects and volume', () => {
     const { window, doc, dock } = setup();
     try {
         const bar = doc.querySelector('.md-cap');
         const more = doc.querySelector('[data-md="more"]');
         const quick = doc.querySelector('.md-quick');
-        // 喜欢的接口不在时心形不出现；底栏上就只剩「更多」
-        assert.deepEqual([...bar.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['more'], 'no duplicate buttons left on the bar');
-        assert.deepEqual([...quick.querySelectorAll('button')].map((b) => b.dataset.md || b.dataset.q), ['mode', 'queue', 'stage', 'fx', 'vol']);
+        // 播放顺序、舞台、更多、面板常驻条上；喜欢的接口不在时心形不出现
+        assert.deepEqual([...bar.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['mode', 'stage', 'more', 'panel']);
+        assert.deepEqual([...quick.querySelectorAll('button')].filter((b) => !b.hidden).map((b) => b.dataset.md || b.dataset.q), ['queue', 'fx', 'vol']);
         assert.equal(more.getAttribute('aria-expanded'), 'false');
 
         more.click();
@@ -853,7 +896,7 @@ test('the bar keeps one "more" button on the right; the quick row above it holds
         // 点过算钉住：指针离开底栏也不收
         doc.querySelector('.md-dock-in').dispatchEvent(new window.Event('pointerleave'));
         assert.ok(quick.classList.contains('md-show'), 'pinned by the click');
-        quick.querySelector('[data-md="mode"]').click();
+        bar.querySelector('[data-md="mode"]').click();
         assert.ok(quick.classList.contains('md-show'), 'changing the mode keeps the row open');
         more.click();
         assert.ok(!quick.classList.contains('md-show'), 'a second click closes it');
