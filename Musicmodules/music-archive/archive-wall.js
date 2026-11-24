@@ -586,7 +586,7 @@
         };
         const panel = document.createElement('div');
         panel.className = 'aw-panel';
-        panel.innerHTML = '<div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
+        panel.innerHTML = '<div class="aw-lyric" hidden><div class="aw-lyric-roll"></div></div><div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
             + '<div class="aw-seek" data-wall="seek" hidden><span class="aw-seek-t">0:00</span><div class="aw-seek-bar"><i></i></div><span class="aw-seek-d">0:00</span></div>'
             + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
         const fillPanel = (i) => {
@@ -615,14 +615,44 @@
             if (!opts.progress || !panel.parentNode || !st.expanded) return false;
             return opts.playing().index === Number(panel.dataset.item);
         };
+        /*
+         * 卡里的歌词：展开的是正在播放的那首、而且有带时间的词时，大卡上半部分滚三四行，
+         * 当前这行亮、前后几行淡；换行时整卷往上推一行。
+         */
+        const lyricEl = panel.querySelector('.aw-lyric');
+        const lyricRoll = lyricEl.firstChild;
+        let lyricSrc = null, lyricAt = -2;
+        const paintLyric = (t) => {
+            const lines = opts.lyrics ? opts.lyrics() : [];
+            const timed = lines.length > 1 && lines.some((l) => Number(l.time) > 0);
+            if (!timed) { lyricEl.hidden = true; lyricSrc = null; lyricAt = -2; return; }
+            if (lines !== lyricSrc) {
+                lyricSrc = lines;
+                lyricAt = -2;
+                lyricRoll.innerHTML = lines.map((l) => '<p>' + esc(l.original || l.fullText || l.text || '') + (l.translation ? '<small>' + esc(l.translation) + '</small>' : '') + '</p>').join('');
+            }
+            lyricEl.hidden = false;
+            let at = -1;
+            for (let k = 0; k < lines.length; k++) { if ((Number(lines[k].time) || 0) <= t + 0.15) at = k; else break; }
+            if (at === lyricAt) return;
+            const prev = lyricRoll.children[lyricAt];
+            if (prev) prev.classList.remove('is-now');
+            lyricAt = at;
+            const cur = lyricRoll.children[Math.max(0, at)];
+            if (cur && at >= 0) cur.classList.add('is-now');
+            const before = cur && cur.previousElementSibling;
+            const y = cur ? Math.max(0, cur.offsetTop - (before ? before.offsetHeight : 0)) : 0;
+            lyricRoll.style.transform = 'translateY(' + (-y) + 'px)';
+        };
         const paintSeek = () => {
-            if (!seekIsLive()) { seekEl.hidden = true; clearInterval(seekTimer); seekTimer = 0; return; }
+            if (!seekIsLive()) { seekEl.hidden = true; lyricEl.hidden = true; clearInterval(seekTimer); seekTimer = 0; return; }
             const p = opts.progress();
             const t = seekDrag ? seekDrag.t : p.t;
             seekEl.hidden = !(p.d > 0);
             seekFill.style.transform = 'scaleX(' + (p.d ? Math.min(1, t / p.d) : 0).toFixed(4) + ')';
             seekEl.firstChild.textContent = fmt(t);
             seekEl.lastChild.textContent = fmt(p.d);
+            if (st.expanded && st.expanded.w >= 0) paintLyric(t);
         };
         const syncSeek = () => {
             paintSeek();

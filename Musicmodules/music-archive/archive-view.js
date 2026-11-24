@@ -2047,6 +2047,7 @@
                 return { t: d ? Math.min(d, t) : t, d };
             },
             seek: (t) => app.seekTo?.(t),
+            lyrics: () => (Array.isArray(app.currentLyrics) ? app.currentLyrics : []),
             reducedMotion
         };
         wall = WallLib ? WallLib.create(wallOpts) : null;

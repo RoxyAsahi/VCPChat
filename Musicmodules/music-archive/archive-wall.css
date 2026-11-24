@@ -249,6 +249,14 @@
     text-shadow: 0 2px 24px rgba(0, 0, 0, .35);
 }
 .aw-panel-sub { font-size: clamp(13px, calc(var(--tw, 400px) * .036), 17px); font-weight: 650; color: rgba(255, 255, 255, .84); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 卡里的歌词：压在标题上方，四行窗口，当前行亮、其余淡，上下边缘淡出 */
+.aw-lyric { position: absolute; left: 0; right: 0; bottom: calc(100% + 22px); padding: 0 clamp(18px, calc(var(--tw, 400px) * .06), 34px); height: 6.4em; overflow: hidden; font-size: clamp(13px, calc(var(--tw, 400px) * .036), 16px); line-height: 1.35; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 70%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 70%, transparent 100%); }
+.aw-lyric[hidden] { display: none; }
+.aw-lyric-roll { transition: transform .42s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)); }
+.aw-lyric p { margin: 0; padding: 2px 0; font-weight: 650; color: rgba(255, 255, 255, .42); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .3s, opacity .3s; }
+.aw-lyric p small { display: block; font-size: .82em; font-weight: 500; opacity: .8; }
+.aw-lyric p.is-now { color: #fff; font-size: 1.22em; letter-spacing: -.01em; text-shadow: 0 1px 14px rgba(0, 0, 0, .4); }
+body.music-reduce-motion .aw-lyric-roll { transition: none; }
 .aw-seek { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-top: 8px; font: 600 11px/1 var(--mt-font-mono, ui-monospace, monospace); letter-spacing: .4px; color: rgba(255, 255, 255, .78); cursor: pointer; touch-action: none; }
 .aw-seek[hidden] { display: none; }
 .aw-seek-bar { position: relative; height: 16px; }
@@ -426,3 +434,20 @@ body.music-reduce-motion .aw-table .aw-tile.is-open .aw-in { animation: none; }
     -webkit-mask-image: linear-gradient(90deg, transparent, #000);
     mask-image: linear-gradient(90deg, transparent, #000);
 }
+
+/* 平放的景深：远处那一截（画面上方）透过一层渐进的模糊看，越远越糊；近处清楚 */
+.archive-wall.aw-table::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 34%;
+    z-index: 2;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(2.4px);
+    backdrop-filter: blur(2.4px);
+    -webkit-mask-image: linear-gradient(180deg, #000 0, rgba(0, 0, 0, .7) 45%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0, rgba(0, 0, 0, .7) 45%, transparent 100%);
+}
+body.music-reduce-motion .archive-wall.aw-table::after { display: none; }

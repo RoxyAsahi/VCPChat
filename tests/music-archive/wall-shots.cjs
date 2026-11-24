@@ -113,6 +113,7 @@ const FAKE = ({ n, light, covers }) => {
   // 大卡进度条：展开的是正在播放的那首时出现
   const seek = await page.evaluate(async () => {
     const a = window.app;
+    a.currentLyrics = Array.from({ length: 40 }, (_, k) => ({ time: k * 5, original: '第 ' + (k + 1) + ' 行歌词，海风吹过站台', translation: k % 3 ? '' : 'line ' + (k + 1) }));
     a.lastKnownDuration = 200; a.lastKnownCurrentTime = 50; a.lastStateUpdateTime = Date.now(); a.isPlaying = true;
     const sel = a.__archiveSel ?? null;
     window.__wallRefresh?.();
@@ -122,6 +123,8 @@ const FAKE = ({ n, light, covers }) => {
     return el ? { hidden: el.hidden, t: el.firstChild.textContent, d: el.lastChild.textContent, cur: a.currentTrackIndex } : null;
   });
   check('大卡进度条', seek && !seek.hidden && seek.d === '3:20', JSON.stringify(seek));
+  const lyr = await page.evaluate(() => { const e = document.querySelector('.aw-tile.is-open .aw-lyric'); const n = e && e.querySelector('p.is-now'); return e ? { hidden: e.hidden, now: n && n.textContent } : null; });
+  check('大卡歌词', lyr && !lyr.hidden && /第 11 行/.test(lyr.now || ''), JSON.stringify(lyr));
   await shot(tag + '-2b-seek');
 
   // Esc 收起
