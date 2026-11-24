@@ -30,9 +30,75 @@
     ]);
     const ME = Object.freeze({ name: '我', hue: -1, me: true });
     const REACTIONS = Object.freeze(['♥', '＋1', '☆', '哈', '♪']);
-    // 长间奏里有人回一个表情
-    const STICKERS = Object.freeze(['ヽ(✿ﾟ▽ﾟ)ノ', '♪(´▽｀)', '(๑•̀ㅂ•́)و✧', '(っ˘ω˘ς )', '٩(ˊᗜˋ*)و', '(*´∀`)~♥', '( ˘ ³˘)♪', '(ﾉ´ヮ`)ﾉ*:･ﾟ✧']);
-    const STICKER_GAP = 9;           // 间奏长过这么久，语音之后再来一个表情
+    // 长间奏里有人回一个表情：用发的人自己的脸做的表情包（label 给读屏）
+    const STICKERS = Object.freeze([
+        { eyes: 'happy', mouth: 'open', prop: 'notes', label: '开心地唱' },
+        { eyes: 'heart', mouth: 'cat', prop: 'heart', label: '喜欢' },
+        { eyes: 'star', mouth: 'open', prop: 'sparkle', label: '好听' },
+        { eyes: 'closed', mouth: 'o', prop: 'zzz', label: '听睡着了' },
+        { eyes: 'wink', mouth: 'cat', prop: 'notes', label: '眨眼' },
+        { eyes: 'happy', mouth: 'cat', prop: 'sweat', label: '嘿嘿' }
+    ]);
+    const STICKER_GAP = 9;
+
+    // 群唱头像和表情：每个人一张自己画的小脸（SVG），发型、发色、肤色不同；表情换眼睛、嘴和小道具
+    const LOOKS = Object.freeze({
+        '阿澈': { hair: 'messy', hairCol: '#2b3550', skin: '#f6d7c3', bg: 205 },
+        '小满': { hair: 'long', hairCol: '#6b3a3f', skin: '#f8dccb', bg: 340 },
+        '栗子': { hair: 'bun', hairCol: '#8a4f2a', skin: '#f3d2b8', bg: 28 },
+        '七七': { hair: 'twin', hairCol: '#1f2b2a', skin: '#f7dfcf', bg: 150 },
+        '老周': { hair: 'short', hairCol: '#3a3a40', skin: '#eac7ad', bg: 262, glasses: true },
+        '我': { hair: 'short', hairCol: '#2a2a2e', skin: '#f4d6c2', bg: -1, phones: true }
+    });
+    const HAIR_BACK = {
+        long: c => `<path d="M9 26 C8 12 40 12 39 26 L41 44 C34 47 14 47 7 44 Z" fill="${c}"/>`,
+        twin: c => `<path d="M8 22 C2 26 3 36 6 42 C9 38 11 32 11 26 Z M40 22 C46 26 45 36 42 42 C39 38 37 32 37 26 Z" fill="${c}"/>`,
+        bun: c => `<circle cx="24" cy="9" r="6.5" fill="${c}"/>`
+    };
+    const HAIR_FRONT = {
+        messy: c => `<path d="M10 27 C8 14 17 9 25 10 C33 9 41 15 38 27 C36 22 33 19 30 18 L31 23 C27 19 22 18 18 19 L19 23 C15 21 12 23 10 27 Z" fill="${c}"/>`,
+        long: c => `<path d="M10 28 C9 15 17 10 24 10 C31 10 39 15 38 28 C35 23 33 20 31 18 C26 21 19 21 15 18 C13 21 11 24 10 28 Z" fill="${c}"/>`,
+        bun: c => `<path d="M10 26 C10 15 17 11 24 11 C31 11 38 15 38 26 C34 20 29 18 24 18 C19 18 14 20 10 26 Z" fill="${c}"/>`,
+        twin: c => `<path d="M10 27 C9 15 17 10 24 10 C31 10 39 15 38 27 C36 23 34 21 32 20 L30 24 L27 20 L24 24 L21 20 L18 24 L16 20 C13 21 11 24 10 27 Z" fill="${c}"/><circle cx="9" cy="22" r="2.4" fill="#ff8fa8"/><circle cx="39" cy="22" r="2.4" fill="#ff8fa8"/>`,
+        short: c => `<path d="M10 25 C10 13 18 10 24 10 C31 10 38 13 38 25 C37 21 35 19 33 18 C27 20 20 20 15 18 C13 19 11 21 10 25 Z" fill="${c}"/>`
+    };
+    const EYES = {
+        open: `<g class="gcf-eyes"><ellipse cx="19" cy="28" rx="1.9" ry="2.4" fill="#2a2230"/><ellipse cx="29" cy="28" rx="1.9" ry="2.4" fill="#2a2230"/><circle cx="19.6" cy="27.2" r="0.7" fill="#fff"/><circle cx="29.6" cy="27.2" r="0.7" fill="#fff"/></g>`,
+        happy: `<path d="M16.6 28.6 Q19 25.6 21.4 28.6 M26.6 28.6 Q29 25.6 31.4 28.6" stroke="#2a2230" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+        closed: `<path d="M16.6 28.4 Q19 30.2 21.4 28.4 M26.6 28.4 Q29 30.2 31.4 28.4" stroke="#2a2230" stroke-width="1.4" fill="none" stroke-linecap="round"/>`,
+        wink: `<ellipse cx="19" cy="28" rx="1.9" ry="2.4" fill="#2a2230"/><circle cx="19.6" cy="27.2" r="0.7" fill="#fff"/><path d="M26.6 28.6 Q29 25.8 31.4 28.6" stroke="#2a2230" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+        heart: `<path d="M19 30.4 L16.6 27.9 A1.35 1.35 0 0 1 19 26.3 A1.35 1.35 0 0 1 21.4 27.9 Z M29 30.4 L26.6 27.9 A1.35 1.35 0 0 1 29 26.3 A1.35 1.35 0 0 1 31.4 27.9 Z" fill="#e8436a"/>`,
+        star: `<path d="M19 25.4 L19.8 27.4 L21.9 27.6 L20.3 28.9 L20.8 31 L19 29.9 L17.2 31 L17.7 28.9 L16.1 27.6 L18.2 27.4 Z M29 25.4 L29.8 27.4 L31.9 27.6 L30.3 28.9 L30.8 31 L29 29.9 L27.2 31 L27.7 28.9 L26.1 27.6 L28.2 27.4 Z" fill="#f2b51e"/>`
+    };
+    const MOUTH = {
+        smile: `<path class="gcf-m-smile" d="M21.6 33.4 Q24 35.6 26.4 33.4" stroke="#8a3a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,
+        sing: `<path class="gcf-m-smile" d="M21.6 33.4 Q24 35.6 26.4 33.4" stroke="#8a3a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/><ellipse class="gcf-m-open" cx="24" cy="34.2" rx="2.2" ry="2.4" fill="#8a3a3a"/>`,
+        open: `<path d="M21 33 Q24 38.5 27 33 Z" fill="#8a3a3a"/><path d="M22.2 35.2 Q24 36.6 25.8 35.2" fill="#e7787f"/>`,
+        cat: `<path d="M21.4 33.4 Q22.7 35 24 33.6 Q25.3 35 26.6 33.4" stroke="#8a3a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,
+        o: `<ellipse cx="24" cy="34.2" rx="1.6" ry="1.9" fill="#8a3a3a"/>`
+    };
+    const PROPS = {
+        heart: `<path d="M40 14 L36.4 10.4 A2.2 2.2 0 0 1 40 7.6 A2.2 2.2 0 0 1 43.6 10.4 Z" fill="#e8436a"/>`,
+        notes: `<path d="M38 6 L44 4.6 L44 11.6 A1.8 1.5 0 1 1 42.6 10.2 L42.6 7.2 L39.4 8 L39.4 13 A1.8 1.5 0 1 1 38 11.6 Z" fill="currentColor"/>`,
+        sparkle: `<path d="M41 4 L42 8 L46 9 L42 10 L41 14 L40 10 L36 9 L40 8 Z" fill="#f2b51e"/><path d="M6 8 L6.6 10.4 L9 11 L6.6 11.6 L6 14 L5.4 11.6 L3 11 L5.4 10.4 Z" fill="#f2b51e"/>`,
+        zzz: `<text x="35" y="12" font-size="7" font-weight="700" fill="currentColor" font-family="sans-serif">z</text><text x="40" y="7" font-size="5" font-weight="700" fill="currentColor" font-family="sans-serif">z</text>`,
+        sweat: `<path d="M38 18 Q40 22 38.6 23.6 Q36.6 24.4 36.4 22.4 Q36.6 20.6 38 18 Z" fill="#8fd3ff"/>`
+    };
+    const face = (name, { eyes = 'open', mouth = 'sing', prop = null, bg = true } = {}) => {
+        const L = LOOKS[name] || LOOKS['阿澈'];
+        const bgFill = L.bg < 0 ? 'var(--stage-accent, #e0a030)' : `hsl(${L.bg} 46% 78%)`;
+        const back = HAIR_BACK[L.hair]?.(L.hairCol) || '';
+        const front = HAIR_FRONT[L.hair](L.hairCol);
+        const glasses = L.glasses ? `<g fill="none" stroke="#2a2230" stroke-width="1"><circle cx="19" cy="28" r="3.6"/><circle cx="29" cy="28" r="3.6"/><path d="M22.6 28 L25.4 28"/></g>` : '';
+        const phones = L.phones ? `<path d="M9 27 C9 12 39 12 39 27" stroke="#2a2a2e" stroke-width="2.2" fill="none"/><rect x="6.4" y="24" width="5" height="8" rx="2.2" fill="#2a2a2e"/><rect x="36.6" y="24" width="5" height="8" rx="2.2" fill="#2a2a2e"/>` : '';
+        return `<svg class="gcf" viewBox="0 0 48 48" aria-hidden="true">${bg ? `<circle cx="24" cy="24" r="24" fill="${bgFill}"/>` : ''}`
+            + `${back}<path d="M15 40 Q24 36 33 40 L34 48 L14 48 Z" fill="hsl(${L.bg < 0 ? 40 : L.bg} 30% 40%)"/>`
+            + `<circle cx="10.6" cy="29" r="2.4" fill="${L.skin}"/><circle cx="37.4" cy="29" r="2.4" fill="${L.skin}"/>`
+            + `<ellipse cx="24" cy="28" rx="13.4" ry="12.6" fill="${L.skin}"/>`
+            + `<ellipse cx="15.6" cy="32" rx="2.4" ry="1.4" fill="#ff8a8a" opacity="0.35"/><ellipse cx="32.4" cy="32" rx="2.4" ry="1.4" fill="#ff8a8a" opacity="0.35"/>`
+            + `${front}<path d="M15.5 16.5 Q19 13.6 23 13.8" stroke="#fff" stroke-opacity="0.28" stroke-width="1.6" fill="none" stroke-linecap="round"/>${EYES[eyes]}${glasses}${MOUTH[mouth]}${phones}${prop ? PROPS[prop] : ''}</svg>`;
+    };
+           // 间奏长过这么久，语音之后再来一个表情
 
     const unit = (...parts) => (hashString(parts.join('|')) >>> 0) / 4294967295;
     const normLine = line => String(line?.fullText || '').replace(/[\s，。、,.!?！？…~～'"“”‘’()（）-]/g, '').toLowerCase();
@@ -69,7 +135,7 @@
                         const from = others[Math.floor(unit('sticker-who', i) * others.length)];
                         messages.push({
                             kind: 'sticker', start: start + (end - start) * 0.55, sender: from, side: 'left',
-                            text: STICKERS[Math.floor(unit('sticker', i, line.startTime) * STICKERS.length)]
+                            sticker: STICKERS[Math.floor(unit('sticker', i, line.startTime) * STICKERS.length)]
                         });
                     }
                 }
@@ -193,9 +259,12 @@
         const applyScale = () => mode.root.style.setProperty('--gc-scale', String(settings().fontScale));
         applyScale();
 
+        // 头像：每人一张自己的小脸；眨眼错开（每人不同的延迟），正在唱的那句的人张嘴
         const avatar = (sender, cls = 'gc-avatar') => {
-            const a = createElement('div', `${cls}${sender.me ? ' is-me' : ''}`, sender.me ? '我' : splitGraphemes(sender.name)[1] || sender.name);
-            if (!sender.me) a.style.cssText = avatarStyle(sender);
+            const a = createElement('div', `${cls}${sender.me ? ' is-me' : ''}`);
+            a.innerHTML = face(sender.me ? '我' : sender.name);
+            a.title = sender.name;
+            a.style.cssText = `${avatarStyle(sender)};--gc-blink:${(-unit('blink', sender.name) * 5).toFixed(2)}s`;
             return a;
         };
 
@@ -211,7 +280,11 @@
                 el.classList.add('is-sticker');
                 el.append(avatar(message.sender));
                 const body = createElement('div', 'gc-body');
-                body.append(createElement('div', 'gc-name', message.sender.name), createElement('div', 'gc-sticker', message.text));
+                const sticker = createElement('div', 'gc-sticker');
+                sticker.innerHTML = face(message.sender.name, { ...message.sticker, bg: false });
+                sticker.setAttribute('role', 'img');
+                sticker.setAttribute('aria-label', message.sticker.label);
+                body.append(createElement('div', 'gc-name', message.sender.name), sticker);
                 el.append(body);
                 return { message, el };
             }
