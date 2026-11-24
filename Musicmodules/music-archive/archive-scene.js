@@ -753,7 +753,7 @@ vec3 archiveUntone(vec3 y) {
             labelEpoch++;
             drawEtch();
             paintFittings();
-            drawSticker();
+            stickerKey = '';
             frameMat.color.set(lighting.mat[0]);
             const to = lookOf(lighting);
             accentIdx = -1;
@@ -794,7 +794,7 @@ vec3 archiveUntone(vec3 y) {
         frameGeo.translate(0.78, 1.86, FRONT + 0.005);
         const coverMat = (extra) => keepColors(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra }));
         const frameMat = coverMat({ color: '#ffffff' });
-        const artMat = coverMat({});
+        const artMat = coverMat({ polygonOffset: false });   // 浏览时也会隐约露出，深度偏移在掠射角下会透过前排卡
         const captionGeo = new THREE.PlaneGeometry(1.54, 2.32);
         captionGeo.translate(-1.54, 1.36, FRONT + 0.009);
         const captionCanvas = document.createElement('canvas');
@@ -934,7 +934,20 @@ vec3 archiveUntone(vec3 y) {
         const stickerMesh = new THREE.Mesh(stickerGeo, stickerMat);
         stickerMesh.visible = false;
         fittings.add(stickerMesh);
+        // 标签纸跟着当前选中格走（浏览时也在），曲名取卡面标题；歌手只有取出过这首、知道是谁时才写，否则写时长
         let stickerInfo = { title: '', artist: '' };
+        let coverInfo = { title: '', artist: '' };
+        let stickerKey = '';
+        let coverPath = '', targetPath = '';   // 封面是哪首（setCover 的 key 第一项是路径）、选中格是哪首（标题 key 是「序号:路径」）
+        const syncSticker = () => {
+            const at = `${target.lane},${target.row},${labelEpoch},${coverPath}`;
+            if (at === stickerKey) return;
+            stickerKey = at;
+            const info = labelFor ? labelFor(target.lane, target.row) : null;
+            targetPath = info && typeof info.key === 'string' ? info.key.slice(info.key.indexOf(':') + 1) : '';
+            stickerInfo = info ? { title: info.title || '', artist: (coverPath && coverPath === targetPath && coverInfo.artist) || info.code || '' } : { title: '', artist: '' };
+            drawSticker();
+        };
         const drawSticker = () => {
             const title = String(stickerInfo.title || '').trim(), artist = String(stickerInfo.artist || '').trim();
             stickerMesh.visible = Boolean(title);
@@ -1019,8 +1032,8 @@ vec3 archiveUntone(vec3 y) {
             if (key === coverKey && artMat.map) return;
             coverKey = key;
             freeCoverTex();
-            stickerInfo = { title: info.title || '', artist: info.artist || '' };
-            drawSticker();
+            coverInfo = { title: info.title || '', artist: info.artist || '' };
+            try { coverPath = String(JSON.parse(key)[0] || ''); } catch (e) { coverPath = ''; }
             captionMesh.visible = Boolean(source || info.format || info.bitrate);
             if (captionMesh.visible) drawCaption(info, Boolean(source));
             let img = source;
@@ -1221,13 +1234,15 @@ vec3 archiveUntone(vec3 y) {
         };
         const placeCover = (targetVisible) => {
             const appear = targetVisible && artMat.map ? smooth((lift.v - 1.2) / 1.6) : 0;
-            const show = appear > 0.001;
+            // 参考播放器浏览时选中卡的半透面板后面隐约透出唱片；我们透出封面，按面板透光 0.38 再打个折
+            const through = targetVisible && artMat.map && coverPath && coverPath === targetPath ? 0.22 * fitQ : 0;
+            const show = Math.max(appear, through) > 0.001;
             coverGroup.visible = show;
             if (!show) return;
             coverGroup.position.copy(targetPos);
             coverGroup.rotation.set(0, inspect.v, 0);
             frameMat.opacity = lighting.mat[1] * appear;
-            artMat.opacity = appear;
+            artMat.opacity = Math.max(appear, through);
             captionMat.opacity = appear;
         };
         const setDetailRoom = (bounds) => {
@@ -1452,6 +1467,7 @@ vec3 archiveUntone(vec3 y) {
 
             // 选中格可以一帧跳过好几张卡，镜头的瞄准点随画面平滑移动。
             const targetVisible = targetIdx >= 0;
+            if (targetVisible) syncSticker();
             if (targetVisible) {
                 if (snapCardAim || reduced || detailK < 0.001) cardAim.copy(targetPos);
                 else cardAim.lerp(targetPos, 1 - Math.exp(-dt * 10));
