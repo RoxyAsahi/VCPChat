@@ -451,3 +451,18 @@ body.music-reduce-motion .aw-table .aw-tile.is-open .aw-in { animation: none; }
     mask-image: linear-gradient(180deg, #000 0, rgba(0, 0, 0, .7) 45%, transparent 100%);
 }
 body.music-reduce-motion .archive-wall.aw-table::after { display: none; }
+
+/* 窗口窄、大卡小的时候：歌词收起，按钮缩小排成一行，标题也小一号 */
+.aw-tile.is-open .aw-in { container-type: size; container-name: awcard; }
+@container awcard (max-width: 340px) {
+    .aw-lyric { display: none; }
+    .aw-panel { gap: 6px; padding: 0 16px 14px; }
+    .aw-panel-title { font-size: 28px; }
+    .aw-panel-acts { margin-top: 4px; gap: 6px; flex-wrap: nowrap; }
+    #music-archive-view .aw-panel-acts button { min-height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
+    #music-archive-view .aw-panel-acts .aw-primary { padding: 0 12px 0 10px; gap: 7px; }
+    .aw-seek { margin-top: 2px; }
+}
+@container awcard (max-height: 360px) {
+    .aw-lyric { display: none; }
+}
