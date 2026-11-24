@@ -742,6 +742,7 @@ uniform vec4 uRings[${MAX_RINGS}];
 uniform vec4 uFlood;     // 屏幕 x, y, 半径, 0 = 不漫
 uniform float uSmash;    // 0..1 上一段碎开
 uniform float uCloud;    // 墨云浓度
+uniform float uExit;     // 段尾：字向外散开
 uniform float uFlow;
 uniform float uGrainStep;
 uniform vec3 uPaper;
@@ -836,6 +837,8 @@ void main() {
     float rough = (vnoise(wp / (k * 0.006) + uFlow * 1.7) - 0.5) * 0.3 + (hash12(floor(gl_FragCoord.xy / 2.0) + uFlow * 7.0) - 0.5) * 0.08;
     float F = glyphInk * (1.25 + swell * 0.35) + halo * reveal * (uHalo + swell * 0.9) + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
+    // 段尾硬切之前，字从边上一块块散掉，散的方向朝外
+    if (uExit > 0.0) thr += uExit * (0.25 + vnoise(wp / (k * 0.03)) * 0.9 + length(gl_FragCoord.xy / uRes - 0.5) * 0.8);
     float a = smoothstep(thr - 0.05, thr + 0.05, F);
     float aA = smoothstep(0.42 + rough * 0.6, 0.52 + rough * 0.6, accent * 0.5);
 
@@ -1177,6 +1180,9 @@ void main() {
             gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
             gl.uniform1f(u.uSmash, smash);
             gl.uniform1f(u.uCloud, s.cloud);
+            const nextSlotData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
+            const exiting = !s.reducedMotion && (!nextSlotData || nextSlotData.transition === 'cut') && data.cue.kind === 'line';
+            gl.uniform1f(u.uExit, exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0);
             // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
             const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
             gl.uniform1f(u.uFlow, flowStep * 0.13);

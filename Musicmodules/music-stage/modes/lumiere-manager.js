@@ -79,6 +79,7 @@
                 cue.seed = cues[i - 1].seed;
             }
             cue.section = section;
+            cue.focusPull = !cue.sectionStart && cue.kind === 'line' && seededRandom(`lumiere:${seedKey}:focus:${i}`)() < 0.5;
             if (cue.kind === 'line') count += 1;
         });
         return cues;
@@ -181,6 +182,8 @@ uniform vec4 uSpark[${MAX_SPARKS}];  // 屏幕 uv、大小、强度：唱到的�
 uniform int uSparkCount;
 uniform vec4 uFlare;     // 光源屏幕位置、强度、闪白
 uniform float uBokeh;
+uniform float uFocus;     // 焦点拉：新句从虚到实（0 = 实）
+uniform float uStarfall;  // 片头星落
 out vec4 outColor;
 
 float hash12(vec2 p) {
@@ -283,8 +286,9 @@ void main() {
     vec2 t1 = (tc - 0.5) / uZoom + 0.5;
     float lit = clamp(total, 0.0, 1.6);
     {
-        vec4 tx = texture(uText, t1);
-        float halo = textureLod(uText, t1, 3.5).r;
+        vec4 tx = textureLod(uText, t1, uFocus * 4.5);
+        tx.r *= 1.0 - uFocus * 0.35;
+        float halo = textureLod(uText, t1, 3.5 + uFocus).r;
         int gid = int(texelFetch(uText, clamp(ivec2(t1 * uTextSize), ivec2(0), ivec2(uTextSize) - 1), 0).g * 255.0 + 0.5);
         float reveal = glyphReveal(gid);
         float singing = glyphSinging(gid);
@@ -296,7 +300,7 @@ void main() {
     }
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5;
-        float r0 = texture(uPrevText, t0).r;
+        float r0 = textureLod(uPrevText, t0, (1.0 - uPrevFade) * 4.0 * step(0.001, uFocus)).r;
         float h0 = textureLod(uPrevText, t0, 3.5).r;
         vec3 ink = uInk * (0.6 + lit * 0.7);
         // 旧句化成光散开：往上飘一点、变淡
@@ -338,6 +342,20 @@ void main() {
         }
     }
     col += vec3(1.0, 0.95, 0.88) * uFlare.w;
+    // 片头：几十颗星拖着光尾从上往下落
+    if (uStarfall > 0.0) {
+        for (int i = 0; i < 24; i++) {
+            float fi = float(i);
+            float h1 = hash12(vec2(fi, 1.7)), h2 = hash12(vec2(fi, 8.3));
+            float speed = 0.25 + h2 * 0.35;
+            vec2 head = vec2(h1 * aspect, 1.15 - fract(uLocal * speed + h2) * 1.4);
+            vec2 d = p - head;
+            float along = d.y;
+            float tail = smoothstep(0.18, 0.0, along) * step(0.0, along) * exp(-abs(d.x) * 900.0);
+            float core = exp(-dot(d, d) * 9000.0);
+            col += mix(uInk, uAccent, h1 * 0.5) * (tail * 0.35 + core * 1.2) * uStarfall;
+        }
+    }
     vec2 v = uv - 0.5;
     col *= 1.0 - dot(v, v) * 0.8;
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
@@ -742,6 +760,10 @@ void main() {
             gl.uniform1i(u.uSparkCount, sparks);
             gl.uniform4f(u.uFlare, flare[0], flare[1], flare[2], flash);
             gl.uniform1f(u.uBokeh, s.reducedMotion ? 0 : s.bokeh);
+            // 焦点拉：段内换句时新句从虚到实，旧句跟着虚掉（每段约一半的句子用）
+            const focus = !s.reducedMotion && cue.focusPull && local < 0.55 ? 1 - smooth(0, 0.55, local) : 0;
+            gl.uniform1f(u.uFocus, focus);
+            gl.uniform1f(u.uStarfall, !s.reducedMotion && cue.kind === 'rest' && cue.title ? smooth(0, 1.2, local) * (1 - smooth(cue.end - 1.5, cue.end, t)) : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);

@@ -196,6 +196,7 @@ uniform vec4 uFuse;      // 导火索两端（纹理坐标）
 uniform float uFuseAt;   // 烧到哪里（0..1），<0 不画
 uniform float uBloom;    // 副歌泛光
 uniform vec3 uTags[4];   // 纸签的颜色
+uniform vec4 uPop;       // 鼓点小花：x, y（屏幕）, 已过时间, 色相种子
 out vec4 outColor;
 
 const float WATER = ${WATER.toFixed(3)};
@@ -319,6 +320,20 @@ void main() {
         col = mix(col, uInk * (0.8 + lit * 0.45), r0 * uPrevFade * 0.75);
     }
 
+    // 鼓点：天上随手炸开一朵小花（一圈小星，往外散、往下坠、变暗）
+    if (uPop.z >= 0.0 && uPop.z < 1.1) {
+        float age = uPop.z;
+        vec3 pc = 0.5 + 0.5 * cos(6.2832 * (uPop.w + vec3(0.0, 0.33, 0.67)));
+        for (int i = 0; i < 20; i++) {
+            float a = float(i) / 20.0 * 6.2832 + uPop.w * 3.0;
+            float rr = 0.09 * (1.0 - exp(-age * 4.0));
+            vec2 c = vec2(uPop.x * aspect, uPop.y) + vec2(cos(a), sin(a)) * rr - vec2(0.0, age * age * 0.04);
+            vec2 d = p - c;
+            col += pc * exp(-dot(d, d) * 30000.0) * (1.0 - age / 1.1) * 1.4;
+        }
+        vec2 d0 = p - vec2(uPop.x * aspect, uPop.y);
+        col += pc * exp(-dot(d0, d0) * 300.0) * exp(-age * 8.0) * 0.4;
+    }
     if (uFuseAt >= 0.0) {
         vec2 a = vec2(uFuse.x, 1.0 - uFuse.y), b = vec2(uFuse.z, 1.0 - uFuse.w);
         a = (a - 0.5) * uZoom + 0.5; b = (b - 0.5) * uZoom + 0.5;
@@ -551,6 +566,9 @@ void main() {
         const lightColours = new Float32Array(MAX_LIGHTS * 3);
         const sparkBuffer = new Float32Array(24);
         let bloom = 0;
+        let lastOnsets = -1;
+        let popTime = -Infinity;
+        let popAt = [0.5, 0.7, 0];
         const lightPick = [];
         let cues = [];
         let bursts = [];
@@ -912,6 +930,14 @@ void main() {
             gl.uniform1f(u.uFuseAt, slot.fuse ? fuseAt : -1);
             gl.uniform1f(u.uBloom, s.reducedMotion ? 0 : bloom * s.bloom);
             gl.uniform3fv(u.uTags, colours.tags);
+            if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {
+                if (lastOnsets >= 0 && frame.isPlaying && s.audioReactivity > 0 && t - popTime > 0.6) {
+                    popTime = t;
+                    popAt = [0.15 + Math.random() * 0.7, 0.55 + Math.random() * 0.35, Math.random()];
+                }
+                lastOnsets = audio.onsets;
+            }
+            gl.uniform4f(u.uPop, popAt[0], popAt[1], s.reducedMotion ? -1 : t - popTime, popAt[2]);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 
             if (count) {

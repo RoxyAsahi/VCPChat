@@ -299,6 +299,7 @@
                 { key: 'rain', label: '窗外的雨', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
                 { key: 'drops', label: '玻璃上的水珠', type: 'toggle' },
                 { key: 'drips', label: '往下淌的水痕', type: 'toggle' },
+                { key: 'fireflies', label: '窗外萤火', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'cameraSpeed', label: '车速', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -318,6 +319,7 @@
             clockwork: [
                 { key: 'secondHand', label: '秒针', type: 'toggle' },
                 { key: 'wireframe', label: '蓝图线稿层', type: 'toggle' },
+                { key: 'perspective', label: '表盘透视（随歌换角度）', type: 'toggle' },
                 { key: 'smoke', label: '背景烟纹', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'waitingOpacity', label: '其他句可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

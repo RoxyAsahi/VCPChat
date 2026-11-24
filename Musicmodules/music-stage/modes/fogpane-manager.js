@@ -298,6 +298,8 @@ uniform float uTime;
 uniform vec4 uDrips[6];   // x, 开始时刻, 速度, 种子
 uniform float uDripTop[6]; // 从哪儿开始淌（字底下的积水，或窗顶）
 uniform vec4 uSpot;      // 正在写的字：x, y, 半径, 强度
+uniform vec3 uBreath;    // 停唱时对着窗呵一口气：x, y, 浓度
+uniform float uFireflies;
 uniform int uDripCount;
 uniform vec3 uFogCol;
 uniform float uFogDensity;
@@ -380,6 +382,25 @@ void main() {
     col = mix(col, clear * 1.2 + fog * 0.45, drop * 0.8);
     col += drop * smoothstep(radius * 0.5, 0.0, length(d + vec2(radius * 0.35, -radius * 0.35))) * 0.35;
     col = mix(col, clear * 1.2 + fog * 0.5, bead * 0.9);
+    // 呵气：一团白雾慢慢晕开，把附近写过的字也蒙上
+    if (uBreath.z > 0.0) {
+        vec2 bd = (uv - uBreath.xy) * vec2(uRes.x / uRes.y * 0.75, 1.0);
+        float edge = vnoise(uv * 7.0 + uTime * 0.2) * 0.12;
+        float b = smoothstep(0.34 + edge, 0.05, length(bd)) * uBreath.z;
+        col = mix(col, uFogCol * 1.22 + blurred * 0.3, b * 0.75);
+    }
+    // 窗外飘着几只萤火（透过写开的地方看得更清楚）
+    if (uFireflies > 0.0) {
+        for (int i = 0; i < 7; i++) {
+            float fi = float(i);
+            vec2 c = vec2(fract(0.13 + fi * 0.37 + sin(uTime * 0.07 + fi * 2.1) * 0.08 + uTime * 0.004),
+                          0.25 + fract(fi * 0.53) * 0.5 + sin(uTime * 0.31 + fi * 4.0) * 0.05);
+            vec2 fd = (uv - c) * vec2(uRes.x / uRes.y, 1.0);
+            float blink = smoothstep(0.2, 1.0, sin(uTime * (0.9 + fract(fi * 0.71)) + fi * 3.0));
+            float g = exp(-dot(fd, fd) * mix(9000.0, 60000.0, wipe)) * blink;
+            col += vec3(1.0, 0.86, 0.4) * g * mix(0.35, 1.1, wipe) * uFireflies;
+        }
+    }
     // 大水珠边上一圈暗边（折射把背景压进去）
     col *= 1.0 - big * drop * smoothstep(radius * 0.55, radius, dl) * 0.45;
     // 正在写的那个字：指尖那一带的雾被呵暖，透出一点窗外的光
@@ -490,6 +511,7 @@ void main() {
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 fog: clamp(tuning.fog ?? 1, 0.5, 1.5),
                 drops: tuning.drops !== false,
+                fireflies: clamp(tuning.fireflies ?? 1, 0, 2),
                 drips: tuning.drips !== false,
                 rain: tuning.rain || 'light',
                 cameraSpeed: clamp(tuning.cameraSpeed ?? 1, 0.55, 1.85),
@@ -759,6 +781,21 @@ void main() {
                 }
             }
             gl.uniform4f(u.uSpot, spot[0], spot[1], spot[2], s.reducedMotion ? 0 : spot[3]);
+            // 呵气：一句唱完、下一句还没开始（空当超过 2 秒）时
+            let breath = 0;
+            let bx = 0.5, by = 0.35;
+            if (!s.reducedMotion && plan?.length) {
+                let last = null, next = null;
+                for (const p of plan) { if (p.end <= t) last = p; else if (p.start > t) { next = p; break; } else { last = null; next = null; break; } }
+                if (last && (!next || next.start - last.end > 2)) {
+                    const gapEnd = next ? next.start : last.end + 20;
+                    breath = smooth(last.end + 0.4, last.end + 1.6, t) * (1 - smooth(gapEnd - 1.4, gapEnd - 0.3, t)) * 0.85;
+                    const r = seededRandom(`breath:${last.index}`);
+                    bx = 0.3 + r() * 0.4; by = 0.3 + r() * 0.3;
+                }
+            }
+            gl.uniform3f(u.uBreath, bx, by, breath);
+            gl.uniform1f(u.uFireflies, s.reducedMotion ? 0 : s.fireflies);
             gl.uniform1i(u.uDripCount, drips);
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));

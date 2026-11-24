@@ -97,6 +97,7 @@ uniform float uSmoke;     // 背景烟纹
 uniform float uWire;      // 蓝图线稿层
 uniform vec2 uShake;
 uniform float uDrift;     // 视差：转过的句数
+uniform vec2 uTilt;       // 表盘透视：绕竖轴、横轴的倾角
 out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -164,6 +165,19 @@ void main() {
     vec2 p = vec2(uv.x * aspect, uv.y);
     float aa = 1.5 / uRes.y;
     vec2 hubC = vec2(min(0.3, aspect * 0.16), 0.5) + uShake;
+    // 表盘透视：把屏幕点反投影回倾斜的表盘平面（先绕竖轴，再绕横轴）
+    {
+        const float D = 1.6;
+        vec2 sp = p - vec2(aspect * 0.5, 0.5);
+        float cy = cos(uTilt.x), sy = sin(uTilt.x);
+        float X = sp.x * D / (D * cy - sp.x * sy);
+        float Y = sp.y * (D + X * sy) / D;
+        float cx = cos(uTilt.y), sx = sin(uTilt.y);
+        float Y2 = Y * D / (D * cx - Y * sx);
+        float X2 = X * (D + Y2 * sx) / D;
+        p = vec2(X2, Y2) + vec2(aspect * 0.5, 0.5);
+        aa *= 1.0 + abs(sp.x * sy) + abs(sp.y * sx);
+    }
 
     // 两个小齿轮都咬着主齿轮：左下一个，左上一个。转角按齿数比算，齿正好错开半个齿
     const float PHI2 = 4.0, PHI3 = 2.1;
@@ -408,6 +422,7 @@ void main() {
                 secondHand: tuning.secondHand !== false,
                 smoke: clamp(tuning.smoke ?? 1, 0, 2),
                 wireframe: tuning.wireframe !== false,
+                tilt: tuning.perspective !== false,
                 audioReactivity: clamp(tuning.audioReactivity ?? 1, 0, 2),
                 grain: clamp(tuning.grain ?? 0.3, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -569,6 +584,8 @@ void main() {
             gl.uniform1f(u.uWire, s.wireframe ? 1 : 0);
             gl.uniform2f(u.uShake, Math.sin(t * 91) * shake, Math.cos(t * 77) * shake);
             gl.uniform1f(u.uDrift, turned);
+            // 镜头随歌慢慢换角度：每句转一格时表盘的倾角也跟着漂
+            gl.uniform2f(u.uTilt, s.reducedMotion || !s.tilt ? 0 : 0.26 * Math.sin(turned * 0.42 + 0.6), s.reducedMotion || !s.tilt ? 0 : 0.12 * Math.sin(turned * 0.29 + 2.1));
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
