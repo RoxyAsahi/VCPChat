@@ -302,7 +302,6 @@
                 { key: 'drops', label: '玻璃上的水珠', type: 'toggle' },
                 { key: 'drips', label: '往下淌的水痕', type: 'toggle' },
                 { key: 'fireflies', label: '窗外萤火', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'spotlights', label: '聚光灯', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'cameraSpeed', label: '车速', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },

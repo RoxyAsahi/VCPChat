@@ -202,7 +202,7 @@
                 drops: true,
                 drips: true,
                 fireflies: 1,
-                spotlights: 1,
+                spotlights: 0,
                 cameraSpeed: 1,
                 grain: 0.4,
                 showTranslation: true

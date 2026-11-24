@@ -45,6 +45,100 @@
     const overlap = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
 
     // 整首一次排好（只用 measureText），和准备顺序无关：拖进度到哪都一样。
+    /* ───────────────────────── 字的骨架（手指写的笔画） ───────────────────────── */
+
+    // 手指在起雾的玻璃上写字：笔画是一样粗的，圆头。做法是把字画成小图、细化成一像素宽的骨架，
+    // 再把骨架连成一笔一笔（从左上往右下排先后），每个点记下它在整个字里写到的进度（0..1）。
+    // 结果按「字|字重」缓存，点的坐标是相对字号的（0..1，原点在字框左上）。
+    const SKEL = 72;
+    const skeletonCache = new Map();
+    let skelCanvas = null;
+    const thin = (img, w, h) => {
+        // Zhang–Suen 细化
+        const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : img[y * w + x]);
+        let changed = true;
+        const kill = [];
+        while (changed) {
+            changed = false;
+            for (let pass = 0; pass < 2; pass += 1) {
+                kill.length = 0;
+                for (let y = 0; y < h; y += 1) {
+                    for (let x = 0; x < w; x += 1) {
+                        if (!img[y * w + x]) continue;
+                        const n = [at(x, y - 1), at(x + 1, y - 1), at(x + 1, y), at(x + 1, y + 1), at(x, y + 1), at(x - 1, y + 1), at(x - 1, y), at(x - 1, y - 1)];
+                        const b = n.reduce((sum, v) => sum + v, 0);
+                        if (b < 2 || b > 6) continue;
+                        let a = 0;
+                        for (let k = 0; k < 8; k += 1) if (!n[k] && n[(k + 1) % 8]) a += 1;
+                        if (a !== 1) continue;
+                        if (pass === 0 ? (n[0] * n[2] * n[4] || n[2] * n[4] * n[6]) : (n[0] * n[2] * n[6] || n[0] * n[4] * n[6])) continue;
+                        kill.push(y * w + x);
+                    }
+                }
+                if (kill.length) { changed = true; kill.forEach((i) => { img[i] = 0; }); }
+            }
+        }
+        return img;
+    };
+    const skeletonOf = (ch, font) => {
+        const key = `${ch}|${font}`;
+        if (skeletonCache.has(key)) return skeletonCache.get(key);
+        if (!skelCanvas) { skelCanvas = document.createElement('canvas'); skelCanvas.width = SKEL; skelCanvas.height = SKEL; }
+        const c = skelCanvas.getContext('2d', { willReadFrequently: true });
+        c.clearRect(0, 0, SKEL, SKEL);
+        c.fillStyle = '#fff';
+        c.textBaseline = 'alphabetic';
+        const px = SKEL * 0.72;
+        c.font = font(px);
+        const w = c.measureText(ch).width;
+        const ox = (SKEL - w) / 2, base = SKEL * 0.78;
+        c.fillText(ch, ox, base);
+        const raw = c.getImageData(0, 0, SKEL, SKEL).data;
+        const img = new Uint8Array(SKEL * SKEL);
+        for (let i = 0; i < img.length; i += 1) img[i] = raw[i * 4 + 3] > 110 ? 1 : 0;
+        thin(img, SKEL, SKEL);
+        // 连笔：从还没走过的点里挑「端点里最靠左上的」开始，沿着邻点一直走（优先不拐弯），走不动就断成一笔
+        const on = (x, y) => x >= 0 && y >= 0 && x < SKEL && y < SKEL && img[y * SKEL + x] === 1;
+        const nbrs = (x, y) => { const out = []; for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if ((dx || dy) && on(x + dx, y + dy)) out.push([x + dx, y + dy]); return out; };
+        const seen = new Uint8Array(SKEL * SKEL);
+        const pts = [];
+        for (let y = 0; y < SKEL; y += 1) for (let x = 0; x < SKEL; x += 1) if (img[y * SKEL + x]) pts.push([x, y]);
+        const strokes = [];
+        const rank = ([x, y]) => y * 0.7 + x * 0.3;
+        while (true) {
+            const left = pts.filter(([x, y]) => !seen[y * SKEL + x]);
+            if (!left.length) break;
+            const free = ([x, y]) => nbrs(x, y).filter(([a, b]) => !seen[b * SKEL + a]).length;
+            const ends = left.filter(q => free(q) <= 1);
+            const start = (ends.length ? ends : left).reduce((m, q) => (rank(q) < rank(m) ? q : m));
+            const stroke = [start];
+            seen[start[1] * SKEL + start[0]] = 1;
+            let cur = start, dir = [0, 0];
+            while (true) {
+                const next = nbrs(cur[0], cur[1]).filter(([a, b]) => !seen[b * SKEL + a]);
+                if (!next.length) break;
+                next.sort((p, q) => {
+                    const dp = (p[0] - cur[0]) * dir[0] + (p[1] - cur[1]) * dir[1];
+                    const dq = (q[0] - cur[0]) * dir[0] + (q[1] - cur[1]) * dir[1];
+                    return dq - dp || (Math.abs(p[0] - cur[0]) + Math.abs(p[1] - cur[1])) - (Math.abs(q[0] - cur[0]) + Math.abs(q[1] - cur[1]));
+                });
+                const n = next[0];
+                dir = [n[0] - cur[0], n[1] - cur[1]];
+                seen[n[1] * SKEL + n[0]] = 1;
+                stroke.push(n);
+                cur = n;
+            }
+            if (stroke.length >= 3) strokes.push(stroke);
+        }
+        const total = strokes.reduce((sum, st) => sum + st.length, 0) || 1;
+        let done = 0;
+        const out = strokes.map((st) => st.map(([x, y]) => { done += 1; return [(x - ox) / px, (y - base) / px, done / total]; }));
+        const result = { strokes: out, width: w / px };
+        skeletonCache.set(key, result);
+        if (skeletonCache.size > 600) skeletonCache.delete(skeletonCache.keys().next().value);
+        return result;
+    };
+
     const planSong = (lines, W, H, fontScale, measure, seedKey, avoid = null) => {
         const sung = lines.filter(line => readableText(line.fullText));
         const placed = [];
@@ -56,10 +150,16 @@
             if (!visible.length) return;
             const cjk = visible.filter(g => CJK.test(g.text)).length / visible.length > 0.5;
             const n = visible.length;
-            const perRow = cjk ? 9 : 20;
-            const rows = Math.min(3, Math.max(1, Math.ceil(n / perRow)));
+            const credit = line.credits || '';
+            // 三种写法：一两行；大小不一、按词分两三行错开写（像 Folia 那样占满玻璃）；竖着一列列往下写
+            const style = credit ? 'rows' : cjk && n <= 14 && random() < 0.25 ? 'vertical' : random() < 0.7 ? 'mixed' : 'rows';
+            const perRow = style === 'mixed' ? (cjk ? 4.2 : 11) : cjk ? 9 : 20;
+            const rows = Math.min(3, Math.max(1, Math.round(n / perRow)));
+            // 词的边界：中文也只在词与词之间换行
+            const wordEnd = new Set();
+            Utils.wordPlan(glyphs, `fogpane:${seedKey}:${index}`).forEach(w => wordEnd.add(w.to - 1));
             // 字号：一行占窗宽六成上下，手写的字不会太整齐
-            let base = clamp((W * (0.4 + random() * 0.14)) / Math.ceil(n / rows) / (cjk ? 1 : 0.55), H * 0.055, H * 0.13) * fontScale;
+            let base = clamp((W * (0.46 + random() * 0.14)) / Math.ceil(n / rows) / (cjk ? 1 : 0.55), Math.max(26, H * 0.065), H * 0.14) * fontScale;
             // 按行切开（拉丁字母在空格处换行）
             const rowsOf = [];
             let row = [];
@@ -68,18 +168,15 @@
                 const count = row.filter(x => x.text.trim()).length;
                 const target = Math.ceil(n / rows);
                 // 西文在空格、连字符处换行；一个词长得放不下时硬断
-                const breakable = cjk || !g.text.trim() || /^[-–—/]$/.test(g.text) || count >= target * 1.6;
+                const breakable = (cjk && wordEnd.has(i)) || !g.text.trim() || /^[-–—/]$/.test(g.text) || count >= target * 1.6;
                 if (rowsOf.length < rows - 1 && count >= target && breakable) { rowsOf.push(row); row = []; }
                 else if (i === glyphs.length - 1) rowsOf.push(row);
             });
             if (row.length && !rowsOf.includes(row)) rowsOf.push(row);
             const items = [];
             let width = 0;
-            // 三种写法：一两行；大小不一（有的词写得大）；竖着一列列往下写（从右往左）
-            const credit = line.credits || '';
             // 片尾的曲名、歌手：一律横着写，曲名大、歌手小
             if (credit) base = clamp(credit === 'title' ? W * 0.56 / Math.ceil(n / rows) / (cjk ? 1 : 0.55) : H * 0.05, H * 0.045, credit === 'title' ? H * 0.12 : H * 0.06) * fontScale;
-            const style = credit ? 'rows' : cjk && n <= 14 && random() < 0.28 ? 'vertical' : random() < 0.42 ? 'mixed' : 'rows';
             if (style === 'vertical') {
                 const cols = n > 7 ? 2 : 1;
                 const perCol = Math.ceil(n / cols);
@@ -97,15 +194,11 @@
             }
             const sizes = style === 'mixed' ? rowsOf.map(r => r.map(() => 1)) : null;
             if (sizes) {
-                // 每 1~3 个字一个词块，词块放大或缩小
-                rowsOf.forEach((r, ri) => {
-                    let left = 0, k = 1;
-                    r.forEach((g, gi) => {
-                        if (left <= 0) { left = 1 + Math.floor(random() * 3); k = random() < 0.35 ? 1.35 + random() * 0.2 : 0.72 + random() * 0.2; }
-                        sizes[ri][gi] = k;
-                        left -= 1;
-                    });
-                });
+                // 按词分主次：重点词写得大，「的」「着」这些写得小
+                const words = Utils.wordPlan(glyphs, `fogpane:${seedKey}:${index}`);
+                const scaleAt = new Map();
+                words.forEach(w => glyphs.slice(w.from, w.to).forEach(g => scaleAt.set(g, w.scale)));
+                rowsOf.forEach((r, ri) => r.forEach((g, gi) => { sizes[ri][gi] = scaleAt.get(g) ?? 1; }));
             }
             if (style !== 'vertical') rowsOf.forEach((r, ri) => {
                 let x = (random() - 0.5) * base * 0.6 + ri * base * (random() * 0.5);
@@ -464,11 +557,12 @@ float written(sampler2D atlas, sampler2D data, vec4 info, vec2 uv) {
     if (id <= 0) return 0.0;
     vec4 tw = texelFetch(data, ivec2(id, 0), 0);
     vec4 box = texelFetch(data, ivec2(id, 1), 0);
-    // 书写方向：从左上往右下扫（大多数字的笔顺大致如此）
+    // 写到哪：B 是骨架上这一点在字里的进度（笔画一笔一笔写出来）；没有骨架的字从左上往右下扫
+    float stroke = texelFetch(atlas, min(ivec2(au * uAtlasSize), ivec2(uAtlasSize) - 1), 0).b;
     vec2 local = (au - box.xy) / max(box.zw - box.xy, vec2(1e-4));
-    float s = clamp(dot(local, vec2(0.42, 0.58)) + (vnoise(local * 6.0 + info.z) - 0.5) * 0.18, 0.0, 1.0);
+    float s = stroke > 0.0 ? stroke : clamp(dot(local, vec2(0.42, 0.58)) + (vnoise(local * 6.0 + info.z) - 0.5) * 0.18, 0.0, 1.0);
     float prog = clamp((uTime - tw.x) / max(tw.y, 0.05), 0.0, 1.0) * 1.12;
-    float w = cov * smoothstep(s - 0.08, s, prog);
+    float w = cov * smoothstep(s - 0.03, s, prog);
     // 雾漫回来：边上先回，一块一块地
     float n = vnoise(uv * vec2(9.0, 6.0) + info.z) * 0.6 + vnoise(uv * 40.0) * 0.4;
     float back = smoothstep(info.x, info.x + ${FOG_RETURN.toFixed(1)}, uTime + (n - 0.5) * 2.2 + (1.0 - cov) * 0.8);
@@ -662,6 +756,8 @@ void main() {
         mode.scope.add(() => card.destroy());
 
         const atlasCanvas = document.createElement('canvas');
+
+        let strokeCanvas = null;
         const measureCtx = document.createElement('canvas').getContext('2d');
         let glState = null;
         try { glState = createGl(canvas); } catch (error) { console.error(error); }
@@ -694,7 +790,7 @@ void main() {
                 fog: clamp(tuning.fog ?? 1, 0.5, 1.5),
                 drops: tuning.drops !== false,
                 fireflies: clamp(tuning.fireflies ?? 1, 0, 2),
-                spotlights: clamp(tuning.spotlights ?? 1, 0, 2),
+                spotlights: 0,   // 追光拿掉了：抢字、显廉价（着色器里的分支留着，强度恒为 0 就不走）
                 drips: tuning.drips !== false,
                 rain: tuning.rain || 'light',
                 view: ['street', 'aquarium', 'alternate'].includes(tuning.view) ? tuning.view : 'alternate',
@@ -801,23 +897,37 @@ void main() {
                 ctx.fillStyle = `rgb(0,${id},0)`;
                 ctx.fillRect(Math.floor(it.box[0]), Math.floor(it.box[1]), Math.ceil(it.box[2] - it.box[0]), Math.ceil(it.box[3] - it.box[1]));
             });
-            // 手指擦过的形状：字描粗、圆头，只加进 R
-            ctx.globalCompositeOperation = 'lighter';
+            // 手指擦过的形状：沿字的骨架一笔一笔、一样粗、圆头；R 是形状，B 是这一点在字里写到的进度。
+            // 先画在单独一层（后写的笔画盖住先写的），再整层加到字图上，不碰 G 的编号。
+            if (!strokeCanvas || strokeCanvas.width !== world.W || strokeCanvas.height !== world.H) {
+                strokeCanvas = document.createElement('canvas');
+                strokeCanvas.width = world.W; strokeCanvas.height = world.H;
+            }
+            const sc = strokeCanvas.getContext('2d');
+            sc.clearRect(0, 0, world.W, world.H);
+            sc.lineJoin = 'round';
+            sc.lineCap = 'round';
             entry.items.forEach((it, i) => {
                 const id = Math.min(MAX_GLYPHS, i + 1);
-                const cjk = CJK.test(it.g.text);
-                ctx.save();
-                ctx.translate(it.x + it.w / 2, it.baseline - it.size * 0.35);
-                ctx.rotate(it.rot);
-                ctx.translate(-(it.x + it.w / 2), -(it.baseline - it.size * 0.35));
-                ctx.font = fontFor(it.size, cjk);
-                const colour = 'rgb(255,0,0)';
-                ctx.strokeStyle = colour;
-                ctx.fillStyle = colour;
-                ctx.lineWidth = Math.max(2, it.size * (cjk ? 0.075 : 0.06));
-                ctx.strokeText(it.g.text, it.x, it.baseline);
-                ctx.fillText(it.g.text, it.x, it.baseline);
-                ctx.restore();
+                const skel = skeletonOf(it.g.text, fontFor);
+                const px = it.size;
+                const x0 = it.x + (it.w - skel.width * px) / 2;
+                sc.save();
+                sc.translate(it.x + it.w / 2, it.baseline - it.size * 0.35);
+                sc.rotate(it.rot);
+                sc.translate(-(it.x + it.w / 2), -(it.baseline - it.size * 0.35));
+                sc.lineWidth = Math.max(4, px * 0.13);   // 一根手指的宽度
+                skel.strokes.forEach((st) => {
+                    for (let k = 1; k < st.length; k += 1) {
+                        const a = st[k - 1], b = st[k];
+                        sc.strokeStyle = `rgb(255,0,${Math.max(1, Math.round(b[2] * 255))})`;
+                        sc.beginPath();
+                        sc.moveTo(x0 + a[0] * px, it.baseline + a[1] * px);
+                        sc.lineTo(x0 + b[0] * px, it.baseline + b[1] * px);
+                        sc.stroke();
+                    }
+                });
+                sc.restore();
                 const dur = clamp(it.g.end - it.g.start, 0.22, 0.85);
                 data[id * 4] = it.g.start;
                 data[id * 4 + 1] = dur;
@@ -825,6 +935,8 @@ void main() {
                 data[o] = it.box[0] / world.W; data[o + 1] = it.box[1] / world.H;
                 data[o + 2] = it.box[2] / world.W; data[o + 3] = it.box[3] / world.H;
             });
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.drawImage(strokeCanvas, 0, 0);
             const { gl } = glState;
             const busy = new Set(stats.visibleKeys || []);
             const slot = glState.slots.filter(s => !busy.has(s.key)).sort((a, b) => a.used - b.used)[0] || glState.slots[0];
