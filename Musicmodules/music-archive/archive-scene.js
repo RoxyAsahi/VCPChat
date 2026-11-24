@@ -1033,7 +1033,7 @@ vec3 archiveUntone(vec3 y) {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
             // 旧卡从当时的高度落回去，不瞬间掉下（参考播放器 NativeScene::select：抬起高于 0.0001 就进归位队列）
-            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v });
+            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v, hold: detailOn });
             // 选回一张还在落的卡：从它当时的高度和角度接着走，不先掉到底再升起
             const back = returning.get(lane + ':' + row);
             returning.delete(lane + ':' + row);
@@ -1230,10 +1230,14 @@ vec3 archiveUntone(vec3 y) {
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
             liftRate = reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8;
             if (reveal < 1) { reveal += (1 - reveal) * (reduced ? 1 : 1 - Math.exp(-dt * 2.8)); if (1 - reveal < 0.0005) reveal = 1; }
-            damp(lift, detailOn ? DETAIL_LIFT : liftGoal * reveal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
+            // 放回时卡若还转着：先在原高度转回正面再落下（参考播放器 returnY：m_rotation 回到 0 之前 lift 不动）
+            if (!detailOn && inspect.v !== 0 && lift.v > liftGoal) lift.vel = 0;
+            else damp(lift, detailOn ? DETAIL_LIFT : liftGoal * reveal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
-                r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
+                // 取出时换下的、还转着的卡：先转回正面再落（参考播放器 returning actor 的 returnY）
+                if (!(r.hold && r.rot)) r.v *= Math.exp(-dt * (reduced ? 35 : 4.5));
+                r.vel = 0;
                 // 转着看的卡被换下时边落边转回正面（参考播放器 returning actor 的 returnStep，速率 7）
                 r.rot = Math.abs(r.rot || 0) <= 0.001 ? 0 : r.rot * Math.exp(-dt * (reduced ? 35 : 7));
                 if (Math.abs(r.v) < 0.002 && !r.rot) returning.delete(k);
