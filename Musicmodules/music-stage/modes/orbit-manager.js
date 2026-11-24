@@ -17,7 +17,10 @@
 
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
-    const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
+    const RATIO = Object.freeze({ 'energy-saving': 1, standard: 2, ultimate: 2 });
+    // 泛光：轨道、正在唱的字和副歌闪光的亮部向外晕开（浅色主题不做，底色本来就亮）
+    const BLOOM = 0.55;
+    const KNEE = [0.5, 0.3];
     const MAX_GLYPHS = 64;
     const CELL = 128;
     const GRID = 16;
@@ -141,8 +144,6 @@ uniform float uLight;
 uniform vec3 uField;
 uniform vec3 uInk;
 uniform vec3 uAccent;
-uniform float uGrain;
-uniform float uGrainStep;
 uniform float uBeat;
 uniform float uChorus;
 uniform float uTime;
@@ -226,7 +227,6 @@ void main() {
 
     vec2 v = uv - 0.5;
     col *= 1.0 - dot(v, v) * mix(0.6, 0.2, uLight);
-    col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 11.0) - 0.5) * 0.025 * uGrain;
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
@@ -240,10 +240,11 @@ uniform vec2 uRes;
 out vec2 vTex;
 out vec3 vInfo;
 out float vBlur;
+out vec2 vLocal;
 void main() {
     int g = gl_VertexID / 6;
     int k = gl_VertexID - g * 6;
-    if (g >= uCount) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vTex = vec2(0.0); vInfo = vec3(0.0); vBlur = 0.0; return; }
+    if (g >= uCount) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vTex = vec2(0.0); vInfo = vec3(0.0); vBlur = 0.0; vLocal = vec2(0.0); return; }
     vec2 corner = vec2(k == 1 || k == 2 || k == 4 ? 1.0 : 0.0, k == 2 || k == 4 || k == 5 ? 1.0 : 0.0);
     vec4 a = uA[g];
     vec4 b = uB[g];
@@ -258,6 +259,7 @@ void main() {
     vec2 inCell = vec2(corner.x, 1.0 - corner.y);
     vTex = (cellXY + inCell) / ${GRID}.0;
     vInfo = b.yzw;
+    vLocal = corner - 0.5;
 }`;
     const GLYPH_FRAG = `#version 300 es
 precision highp float;
@@ -266,9 +268,11 @@ uniform vec3 uInk;
 uniform vec3 uAccent;
 uniform float uWaiting;
 uniform float uChorusLine; // 0..1 这一句是副歌（重复出现的句子）
+uniform float uHalo;       // 字自带光晕的强度：有泛光时只留一点，外圈交给泛光
 in vec2 vTex;
 in vec3 vInfo;
 in float vBlur;
+in vec2 vLocal;
 out vec4 outColor;
 void main() {
     float alpha = vInfo.x;
@@ -278,11 +282,13 @@ void main() {
     float sung = vInfo.z;
     // 景深：轨道后半圈的字虚一点
     float m = textureLod(uAtlas, vTex, vBlur * 1.8).r * (1.0 + vBlur * 0.25);
-    float halo = textureLod(uAtlas, vTex, 3.0).r;
+    // 光晕取字图的模糊层，到四边形边上淡到 0，免得切出方块
+    float fall = smoothstep(0.5, 0.32, max(abs(vLocal.x), abs(vLocal.y)));
+    float halo = textureLod(uAtlas, vTex, 3.0).r * fall * uHalo;
     vec3 col = mix(uInk, uAccent, singing);
     float body = m * mix(uWaiting, 1.0, max(sung, singing));
     // 副歌：外面再套一圈更大的光晕，字心发白（像相机闪光）
-    float wide = uChorusLine > 0.01 ? textureLod(uAtlas, vTex, 4.3).r * uChorusLine : 0.0;
+    float wide = uChorusLine > 0.01 ? textureLod(uAtlas, vTex, 4.3).r * uChorusLine * fall * uHalo : 0.0;
     float a = clamp(body + halo * singing * (0.6 + flash) + wide * singing * 0.55, 0.0, 1.0) * alpha;
     vec3 c = mix(col, uAccent, (1.0 - step(0.02, m)) * singing);
     c = mix(c, uInk, clamp(m * singing * (0.4 * uChorusLine + flash * 0.6), 0.0, 0.75));
@@ -330,7 +336,9 @@ void main() {
         const slots = Array.from({ length: 3 }, () => ({ atlas: texture(), key: null, used: 0, line: null }));
         return {
             gl, field: link(FIELD_VERT, FIELD_FRAG), glyph: link(GLYPH_VERT, GLYPH_FRAG),
-            vao: gl.createVertexArray(), slots
+            vao: gl.createVertexArray(), slots,
+            scene: Utils.createTarget(gl), over: Utils.createTarget(gl),
+            bloom: Utils.createBloom(gl, { label: 'orbit' })
         };
     };
 
@@ -362,6 +370,7 @@ void main() {
         let sung = [];
         let sungFor = null;
         let paused = false;
+        let low = [1, 1];
         let latestFrame = null;
         let lastDraw = -Infinity;
         let colours = null;
@@ -410,10 +419,10 @@ void main() {
             const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
-            const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            const scale = Math.min(dpr, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
-            const bw = Math.max(1, Math.round(w * scale)), bh = Math.max(1, Math.round(h * scale));
-            if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
+            // 画面（星云、轨道）按像素预算画在小图上再放大；字按屏幕原生像素画，边缘才清楚
+            const size = Utils.sharpSizes(w, h, PIXELS[quality] || PIXELS.standard, RATIO[quality] || 2);
+            low = [size.lw, size.lh];
+            if (canvas.width !== size.nw || canvas.height !== size.nh) { canvas.width = size.nw; canvas.height = size.nh; still.invalidate(); }
         };
 
         const ensureLines = (frame) => {
@@ -544,6 +553,7 @@ void main() {
             gl.uniform3fv(u.uAccent, colours.accent);
             gl.uniform1f(u.uWaiting, settings().waitingOpacity);
             gl.uniform1f(u.uChorusLine, chorusLine);
+            gl.uniform1f(u.uHalo, colours.light || !BLOOM ? 1 : 0.35);
             gl.drawArrays(gl.TRIANGLES, 0, count * 6);
         };
 
@@ -577,13 +587,14 @@ void main() {
             const chorusPrev = index > 0 && isChorus(sung[index - 1]) ? 1 : 0;
             glow = frame.isPlaying ? Math.max(bass, glow * 0.86) : glow;
 
-            gl.viewport(0, 0, canvas.width, canvas.height);
+            const { scene, over, bloom } = glState;
+            scene.bind(low[0], low[1]);
             gl.bindVertexArray(vao);
             gl.disable(gl.BLEND);
             const u = field.uniforms;
             gl.useProgram(field.program);
             Utils.bindNoise(gl, field.uniforms.uNoise, 1);
-            gl.uniform2f(u.uRes, canvas.width, canvas.height);
+            gl.uniform2f(u.uRes, low[0], low[1]);
             gl.uniform2f(u.uCentre, geo.cx, geo.cy);
             gl.uniform2f(u.uAxes, geo.A, geo.B);
             gl.uniform1f(u.uRoll, geo.roll);
@@ -607,18 +618,32 @@ void main() {
             gl.uniform3fv(u.uField, colours.field);
             gl.uniform3fv(u.uInk, colours.ink);
             gl.uniform3fv(u.uAccent, colours.accent);
-            gl.uniform1f(u.uGrain, s.grain);
-            gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
+            const grainStep = s.reducedMotion ? 0 : Math.floor(t * 6) % 64;
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            if (prev?.line) drawGlyphs(prev, place(prev.line, t, geo, 1 - smooth(0, FADE, since), 0, true, s.reducedMotion ? 0 : chorusPrev), chorusPrev);
             const fadeIn = index >= 0 ? smooth(-0.1, 0.35, since) : smooth(0, 0.8, t);
-            const n = place(slot.line, t, geo, fadeIn, 0, false, s.reducedMotion ? 0 : chorusNow);
-            stats.glyphs = n;
-            drawGlyphs(slot, n, chorusNow);
-            gl.disable(gl.BLEND);
+            const drawText = () => {
+                gl.bindVertexArray(vao);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                if (prev?.line) drawGlyphs(prev, place(prev.line, t, geo, 1 - smooth(0, FADE, since), 0, true, s.reducedMotion ? 0 : chorusPrev), chorusPrev);
+                const n = place(slot.line, t, geo, fadeIn, 0, false, s.reducedMotion ? 0 : chorusNow);
+                stats.glyphs = n;
+                drawGlyphs(slot, n, chorusNow);
+                gl.disable(gl.BLEND);
+            };
+            // 泛光的种子：字也在小图上画一遍（透明底），和画面合起来取亮部
+            const strength = colours.light ? 0 : BLOOM * (1 + glow * 0.5 + chorusNow * 0.6);
+            let bloomTex = null;
+            if (strength > 0) {
+                over.bind(Math.max(1, low[0] >> 2), Math.max(1, low[1] >> 2));
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                drawText();
+                bloomTex = bloom.run(scene, over, KNEE, 2);
+            }
+            bloom.present(scene, bloomTex, canvas.width, canvas.height, { bloom: strength, grain: s.grain, grainStep });
+            drawText();
             stats.draws += 1;
             scheduleNext(index);
         };
@@ -672,6 +697,8 @@ void main() {
                 glState.slots.forEach((slot) => gl.deleteTexture(slot.atlas));
                 gl.deleteProgram(glState.field.program);
                 gl.deleteProgram(glState.glyph.program);
+                gl.deleteTexture(glState.scene.tex);
+                gl.deleteTexture(glState.over.tex);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
             glState = null;
