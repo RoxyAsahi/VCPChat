@@ -31,6 +31,7 @@
     const TAU = Math.PI * 2;
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
+    const NATIVE = Object.freeze({ 'energy-saving': 1.6e6, standard: 3.4e6, ultimate: 5.2e6 });
     const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const REST_PART = 20;
     const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
@@ -1038,12 +1039,127 @@ void main() {
     float tone = (g.r * (1.0 - set) * 0.85 + g.g * (0.3 + 0.45 * set)) * uReveal;
     outColor = vec4(ink * (1.0 - vT.z), tone, ink * vT.z, 0.0);
 }`;
+    // 低分辨率那一遍：墨团的场、冲击环、强调色墨团、网点云（都平滑，放大不糊）。存的时候缩一下，八位的图也装得下
+    const SMOOTH_FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+uniform sampler2D uMain;
+uniform sampler2D uIds;
+uniform sampler2D uGlyphF;
+uniform sampler2D uSmooth;
+uniform float uFlowT;
+uniform float uKeywords;
+uniform sampler2D uPrev;
+uniform vec2 uRes;
+uniform vec2 uWorld;
+uniform vec2 uIdSize;
+uniform vec4 uView;      // cx, cy, h, roll
+uniform vec4 uPrevView;  // cx, cy, h, roll
+uniform float uPrevFade; // 0 = 不画上一段
+uniform float uAspect;
+uniform float uTime;
+uniform vec2 uStroke;    // 第一笔的时刻、笔间隔
+uniform float uTone;
+uniform vec4 uBlobs[${MAX_BLOBS}];
+uniform int uBlobCount;
+uniform vec4 uAccent[${MAX_ACCENT}];
+uniform int uAccentCount;
+uniform vec4 uRings[${MAX_RINGS}];
+uniform vec4 uClouds[${MAX_CLOUDS}];
+uniform vec3 uBlobCol;
+uniform float uDotPx;
+uniform float uDotAngle;
+uniform vec4 uFlood;     // 屏幕 x, y, 半径, 0 = 不漫
+uniform float uSmash;    // 0..1 上一段碎开
+uniform float uCloud;    // 墨云浓度
+uniform float uExit;     // 段尾：字向外散开
+uniform float uFlow;
+uniform float uGrainStep;
+uniform vec3 uPaper;
+uniform vec3 uInk;
+uniform vec3 uAccentCol;
+uniform vec3 uDot;
+uniform float uNeg;
+uniform float uHalftone;
+uniform float uGrain;
+layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outWarp;
+
+// 不带 sin 的散列（在大整数坐标上也不出条纹）
+float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+${Utils.NOISE_GLSL}
+vec2 worldAt(vec4 view, vec2 suv) {
+    vec2 p = suv - 0.5;
+    vec2 q = vec2(p.x * uAspect, -p.y) * view.z;
+    float c = cos(view.w), s = sin(view.w);
+    return view.xy + vec2(q.x * c - q.y * s, q.x * s + q.y * c);
+}
+// 流场：按屏幕算（大特写也不会把字推出一大截），每秒跳 8 格（uFlowT 是取整过的时间）。一层大的慢慢推，一层小的抖
+vec2 warped() {
+    vec2 suv = gl_FragCoord.xy / uRes;
+    vec2 p = vec2(suv.x * uAspect, suv.y);
+    vec2 warp = (vec2(vnoise(p * 3.2 + vec2(0.0, uFlowT * 0.16)), vnoise(p * 3.2 + vec2(17.3, -uFlowT * 0.13))) - 0.5) * 0.024
+        + (vec2(vnoise(p * 9.0 + vec2(uFlowT * 0.3, 3.0)), vnoise(p * 9.0 + vec2(31.7, -uFlowT * 0.27))) - 0.5) * 0.007;
+    warp.x /= uAspect;
+    return suv + warp;
+}
+
+void main() {
+    vec2 suv = warped();
+    vec2 w = worldAt(uView, suv);
+    vec2 wp = w;
+    float field = 0.0;
+    for (int i = 0; i < ${MAX_BLOBS}; i++) {
+        if (i >= uBlobCount) break;
+        vec4 b = uBlobs[i];
+        vec2 d = wp - b.xy;
+        float dd = dot(d, d);
+        // 远处的墨团贡献不到 0.2%，不算
+        if (dd > b.z * b.z * 500.0) continue;
+        field += b.z * b.z / (dd + 1.0) * b.w;
+    }
+    float ring = 0.0;
+    for (int i = 0; i < ${MAX_RINGS}; i++) {
+        vec4 r = uRings[i];
+        if (r.w <= 0.0) continue;
+        float d = (length(wp - r.xy) - r.z) / r.w;
+        ring += exp(-d * d) * 0.9;
+    }
+    float accent = 0.0;
+    for (int i = 0; i < ${MAX_ACCENT}; i++) {
+        if (i >= uAccentCount) break;
+        vec4 b = uAccent[i];
+        vec2 d = wp - b.xy;
+        accent += b.z * b.z / (dot(d, d) + 1.0);
+    }
+
+    float k = uWorld.y;
+    float cl = vnoise(wp / (k * 0.42) + uFlow * 0.08) * 0.62 + vnoise(wp / (k * 0.17) - uFlow * 0.11) * 0.38;
+    // 网点云：几团大的灰慢慢漂，中间浓、边上平滑落到没有，挨近了连成一片
+    float cloudT = 0.0;
+    for (int i = 0; i < ${MAX_CLOUDS}; i++) {
+        vec4 c = uClouds[i];
+        if (c.w <= 0.0) continue;
+        vec2 d = (wp - c.xy) / c.z;
+        float q = max(0.0, 1.0 - dot(d, d));
+        cloudT += q * q * c.w;
+    }
+    float clouds = max(min(cloudT, 0.85), smoothstep(0.5, 0.95, cl) * 0.72);
+    outColor = vec4(field * 0.25, ring * 0.5, accent * 0.25, clouds);
+    // 流场也是平滑的：这里算好，原生分辨率那一遍只取一次（存成 0.5 为零点、±0.05 的范围）
+    outWarp = vec4((suv - gl_FragCoord.xy / uRes) * 10.0 + 0.5, 0.0, 1.0);
+}`;
     const FRAG = `#version 300 es
 precision highp float;
 precision highp int;
 uniform sampler2D uMain;
 uniform sampler2D uIds;
 uniform sampler2D uGlyphF;
+uniform sampler2D uSmooth;
 uniform float uFlowT;
 uniform float uKeywords;
 uniform sampler2D uPrev;
@@ -1104,8 +1220,9 @@ vec2 warped() {
     return suv + warp;
 }
 
+uniform sampler2D uWarp;
 void main() {
-    vec2 suv = warped();
+    vec2 suv = gl_FragCoord.xy / uRes + (texture(uWarp, gl_FragCoord.xy / uRes).rg - 0.5) * 0.1;
     vec2 w = worldAt(uView, suv);
     // 这一句的字：逐字层画好的墨场（R 墨、G 网点浓淡、B 关键词的墨）
     vec4 gf = texture(uGlyphF, suv);
@@ -1122,30 +1239,11 @@ void main() {
     float lineInk = m.g * lineOn;
 
     vec2 wp = w;
-    float field = 0.0;
-    for (int i = 0; i < ${MAX_BLOBS}; i++) {
-        if (i >= uBlobCount) break;
-        vec4 b = uBlobs[i];
-        vec2 d = wp - b.xy;
-        float dd = dot(d, d);
-        // 远处的墨团贡献不到 0.2%，不算
-        if (dd > b.z * b.z * 500.0) continue;
-        field += b.z * b.z / (dd + 1.0) * b.w;
-    }
-    float ring = 0.0;
-    for (int i = 0; i < ${MAX_RINGS}; i++) {
-        vec4 r = uRings[i];
-        if (r.w <= 0.0) continue;
-        float d = (length(wp - r.xy) - r.z) / r.w;
-        ring += exp(-d * d) * 0.9;
-    }
-    float accent = 0.0;
-    for (int i = 0; i < ${MAX_ACCENT}; i++) {
-        if (i >= uAccentCount) break;
-        vec4 b = uAccent[i];
-        vec2 d = wp - b.xy;
-        accent += b.z * b.z / (dot(d, d) + 1.0);
-    }
+    // 墨团的场、冲击环、强调色墨团、网点云：都是平滑的，在低分辨率那一遍算好（uSmooth），这里按屏幕取
+    vec4 sm = texture(uSmooth, gl_FragCoord.xy / uRes);
+    float field = sm.r * 4.0;
+    float ring = sm.g * 2.0;
+    float accent = sm.b * 4.0;
 
     float k = uWorld.y;
     // 阈值被噪点搅过：墨边像砂纸上蹭出来的，颗粒按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳
@@ -1163,23 +1261,12 @@ void main() {
     // 半调：网点格在世界里（跟着镜头放大），网点大小随浓淡
     vec2 sp = gl_FragCoord.xy / uRes - 0.5;
     // 墨云：大尺度的浓淡，每秒跳 8 格地翻涌；四角压暗；字周围的晕、墨团的场也算进浓淡
-    float cl = vnoise(wp / (k * 0.42) + uFlow * 0.08) * 0.62 + vnoise(wp / (k * 0.17) - uFlow * 0.11) * 0.38;
-    float cloud = smoothstep(0.5, 0.95, cl) * uCloud;
     float vig = smoothstep(0.4, 0.85, length(sp * vec2(1.0, 0.8)));
     float T = m.b * uTone + clamp(field * 0.18, 0.0, 0.35) * smoothstep(0.2, 0.0, a);
-    // 网点云：几团大的灰慢慢漂，中间浓、边上平滑落到没有，挨近了连成一片
-    float cloudT = 0.0;
-    for (int i = 0; i < ${MAX_CLOUDS}; i++) {
-        vec4 c = uClouds[i];
-        if (c.w <= 0.0) continue;
-        vec2 d = (wp - c.xy) / c.z;
-        float q = max(0.0, 1.0 - dot(d, d));
-        cloudT += q * q * c.w;
-    }
-    T = max(T, min(cloudT, 0.85) * uCloud);
+    T = max(T, sm.a * uCloud);
     // 线稿两边一圈网点：线不是干干净净浮在纸上的，跟着这一笔一起出现
     T = max(T, clamp(haloRG.g * 2.6, 0.0, 0.6) * lineOn * smoothstep(0.3, 0.0, a));
-    T = max(T, max(cloud * 0.72, vig * 0.6 * uCloud));
+    T = max(T, vig * 0.6 * uCloud);
     // 字周围的网点：没唱到的字的影子、唱过的字周围那一圈、墨边阈值以下的那一截（Folia 隐喻的做法）
     T = max(T, clamp(gf.g * 0.9 + gInk * 0.5, 0.0, 1.0));
     // 网点格钉在屏幕上（7 个 CSS 像素一格，大特写也不会放出一颗颗大圆片），每个镜头换一个网角
@@ -1234,11 +1321,13 @@ void main() {
         float band = (1.0 - smoothstep(0.0, 0.09, abs(edge + 0.05))) * (1.0 - inked);
         col = mix(col, ink, max(inked, band * dots));
     }
-    float gr = hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 17.0) - 0.5;
-    float fibre = vnoise(gl_FragCoord.xy / 3.0 + uGrainStep * 5.0) - 0.5;
+    // 颗粒按 CSS 像素算：画面按原生分辨率画了，颗粒大小不跟着屏幕像素密度变
+    vec2 cssPx = gl_FragCoord.xy / max(uDotPx, 0.5);
+    float gr = hash12(floor(cssPx / 1.5) + uGrainStep * 17.0) - 0.5;
+    float fibre = vnoise(cssPx / 3.0 + uGrainStep * 5.0) - 0.5;
     col *= 1.0 + (gr * 0.44 + fibre * 0.2) * uGrain;
     // 杂点：纸上是墨色的点，墨里是纸色的点（印刷没压实的地方）
-    float speck = step(0.988, hash12(floor(gl_FragCoord.xy / 2.2) + uGrainStep * 3.7 + 0.5));
+    float speck = step(0.988, hash12(floor(cssPx / 2.2) + uGrainStep * 3.7 + 0.5));
     col = mix(col, mix(ink, paper, a), speck * 0.55 * min(uGrain * 2.0, 1.0));
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
@@ -1277,15 +1366,23 @@ void main() {
         };
         const { prog: program, uni: uniforms } = link(VERT, FRAG);
         const { prog: glyphProgram, uni: glyphUniforms } = link(GLYPH_VERT, GLYPH_FRAG);
+        const { prog: smoothProgram, uni: smoothUniforms } = link(VERT, SMOOTH_FRAG);
         const vao = gl.createVertexArray();
         // 墨场：和画布一样大；能渲染半浮点就用半浮点（几个字的墨叠起来能超过 1）
         const halfFloat = Boolean(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
-        const field = { tex: gl.createTexture(), fbo: gl.createFramebuffer(), w: 0, h: 0, half: halfFloat };
-        gl.bindTexture(gl.TEXTURE_2D, field.tex);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const makeTarget = () => {
+            const target = { tex: gl.createTexture(), fbo: gl.createFramebuffer(), w: 0, h: 0, half: halfFloat };
+            gl.bindTexture(gl.TEXTURE_2D, target.tex);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            return target;
+        };
+        const field = makeTarget();
+        // 平滑的场（墨团、冲击环、强调色墨团、网点云）：按像素预算的低分辨率
+        const smooth = makeTarget();
+        smooth.warp = makeTarget();
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -1311,7 +1408,7 @@ void main() {
             gl.bindVertexArray(null);
             return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR), glyphVao, glyphBuf, key: null, data: null, used: 0 };
         });
-        return { gl, program, uniforms, glyphProgram, glyphUniforms, field, vao, slots };
+        return { gl, program, uniforms, glyphProgram, glyphUniforms, smoothProgram, smoothUniforms, field, smooth, vao, slots };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -1350,6 +1447,7 @@ void main() {
         let cuesFor = null;
         let world = { W: 0, H: 0, aspect: 0 };
         let size = { w: 0, h: 0 };
+        let smoothSize = [1, 1];
         let paused = false;
         let latestFrame = null;
         let lastDraw = -Infinity;
@@ -1410,9 +1508,12 @@ void main() {
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
             const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            const scale = Math.min(dpr, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
+            // 画面（字边、网点、颗粒）按原生像素画，上限 NATIVE；平滑的场按 PIXELS 的预算
+            const scale = Math.min(dpr, Math.sqrt((NATIVE[quality] || NATIVE.standard) / (w * h)));
             const bw = Math.max(1, Math.round(w * scale));
             const bh = Math.max(1, Math.round(h * scale));
+            const smoothScale = Math.min(scale, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
+            smoothSize = [Math.max(1, Math.round(w * smoothScale)), Math.max(1, Math.round(h * smoothScale))];
             if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
             size = { w, h };
             const aspect = w / h;
@@ -1565,45 +1666,74 @@ void main() {
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, fieldTarget.tex); gl.uniform1i(u.uGlyphF, 2);
             gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, (prevSlot || slot).main); gl.uniform1i(u.uPrev, 3);
             Utils.bindNoise(gl, u.uNoise, 4);
-            gl.uniform2f(u.uRes, canvas.width, canvas.height);
-            gl.uniform2f(u.uWorld, world.W, world.H);
-            gl.uniform2f(u.uIdSize, idsCanvas.width, idsCanvas.height);
-            gl.uniform4f(u.uView, view.c[0], view.c[1], view.h, view.roll);
-            if (prevView) gl.uniform4f(u.uPrevView, prevView.c[0], prevView.c[1], prevView.h, prevView.roll);
-            gl.uniform1f(u.uPrevFade, prevSlot ? prevFade : 0);
-            gl.uniform1f(u.uAspect, canvas.width / canvas.height);
-            gl.uniform1f(u.uTime, t);
-            gl.uniform2f(u.uStroke, data.strokeStart, data.strokeStep);
-            const local = t - data.cue.start;
-            gl.uniform1f(u.uTone, smooth(0.05, 0.9, local));
-            gl.uniform4fv(u.uBlobs, blobBuffer);
-            gl.uniform1i(u.uBlobCount, counts.blobs);
-            gl.uniform4fv(u.uAccent, accentBuffer);
-            gl.uniform1i(u.uAccentCount, counts.accents);
-            gl.uniform4fv(u.uRings, ringBuffer);
-            gl.uniform4fv(u.uClouds, cloudBuffer);
-            gl.uniform3fv(u.uBlobCol, palette.blob);
-            gl.uniform1f(u.uDotPx, canvas.height / Math.max(1, size.h));
-            gl.uniform1f(u.uDotAngle, view.angle ?? 0.26);
-            gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
-            gl.uniform1f(u.uSmash, smash);
-            gl.uniform1f(u.uCloud, s.cloud);
-            const nextSlotData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
-            const exiting = !s.reducedMotion && (!nextSlotData || nextSlotData.transition === 'cut') && data.cue.kind === 'line';
-            gl.uniform1f(u.uExit, exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0);
-            // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
-            const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
-            gl.uniform1f(u.uFlow, flowStep * 0.13);
-            gl.uniform1f(u.uFlowT, flowStep / 8);
-            gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
-            gl.uniform3fv(u.uPaper, palette.paper);
-            gl.uniform3fv(u.uInk, palette.ink);
-            gl.uniform3fv(u.uAccentCol, palette.accent);
-            gl.uniform1f(u.uKeywords, s.keywords ? 1 : 0);
-            gl.uniform3fv(u.uDot, palette.dot);
-            gl.uniform1f(u.uNeg, view.neg ? 1 : 0);
-            gl.uniform1f(u.uHalftone, s.halftone);
-            gl.uniform1f(u.uGrain, s.grain);
+            const applyUniforms = (u, rw, rh) => {
+                gl.uniform2f(u.uRes, rw, rh);
+                gl.uniform2f(u.uWorld, world.W, world.H);
+                gl.uniform2f(u.uIdSize, idsCanvas.width, idsCanvas.height);
+                gl.uniform4f(u.uView, view.c[0], view.c[1], view.h, view.roll);
+                if (prevView) gl.uniform4f(u.uPrevView, prevView.c[0], prevView.c[1], prevView.h, prevView.roll);
+                gl.uniform1f(u.uPrevFade, prevSlot ? prevFade : 0);
+                gl.uniform1f(u.uAspect, rw / rh);
+                gl.uniform1f(u.uTime, t);
+                gl.uniform2f(u.uStroke, data.strokeStart, data.strokeStep);
+                const local = t - data.cue.start;
+                gl.uniform1f(u.uTone, smooth(0.05, 0.9, local));
+                gl.uniform4fv(u.uBlobs, blobBuffer);
+                gl.uniform1i(u.uBlobCount, counts.blobs);
+                gl.uniform4fv(u.uAccent, accentBuffer);
+                gl.uniform1i(u.uAccentCount, counts.accents);
+                gl.uniform4fv(u.uRings, ringBuffer);
+                gl.uniform4fv(u.uClouds, cloudBuffer);
+                gl.uniform3fv(u.uBlobCol, palette.blob);
+                gl.uniform1f(u.uDotPx, canvas.height / Math.max(1, size.h));
+                gl.uniform1f(u.uDotAngle, view.angle ?? 0.26);
+                gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
+                gl.uniform1f(u.uSmash, smash);
+                gl.uniform1f(u.uCloud, s.cloud);
+                const nextSlotData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
+                const exiting = !s.reducedMotion && (!nextSlotData || nextSlotData.transition === 'cut') && data.cue.kind === 'line';
+                gl.uniform1f(u.uExit, exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0);
+                // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
+                const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
+                gl.uniform1f(u.uFlow, flowStep * 0.13);
+                gl.uniform1f(u.uFlowT, flowStep / 8);
+                gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
+                gl.uniform3fv(u.uPaper, palette.paper);
+                gl.uniform3fv(u.uInk, palette.ink);
+                gl.uniform3fv(u.uAccentCol, palette.accent);
+                gl.uniform1f(u.uKeywords, s.keywords ? 1 : 0);
+                gl.uniform3fv(u.uDot, palette.dot);
+                gl.uniform1f(u.uNeg, view.neg ? 1 : 0);
+                gl.uniform1f(u.uHalftone, s.halftone);
+                gl.uniform1f(u.uGrain, s.grain);
+            };
+            // 低分辨率那一遍：平滑的场
+            const smoothT = glState.smooth;
+            const [sw, sh] = smoothSize;
+            if (smoothT.w !== sw || smoothT.h !== sh) {
+                smoothT.w = sw; smoothT.h = sh;
+                gl.bindTexture(gl.TEXTURE_2D, smoothT.tex);
+                if (smoothT.half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, sh, 0, gl.RGBA, gl.HALF_FLOAT, null);
+                else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, smoothT.fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, smoothT.tex, 0);
+                gl.bindTexture(gl.TEXTURE_2D, smoothT.warp.tex);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, smoothT.warp.tex, 0);
+            }
+            gl.bindFramebuffer(gl.FRAMEBUFFER, smoothT.fbo);
+            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+            gl.viewport(0, 0, sw, sh);
+            gl.useProgram(glState.smoothProgram);
+            Utils.bindNoise(gl, glState.smoothUniforms.uNoise, 4);
+            applyUniforms(glState.smoothUniforms, sw, sh);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.useProgram(program);
+            applyUniforms(u, canvas.width, canvas.height);
+            gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.tex); gl.uniform1i(u.uSmooth, 5);
+            gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
@@ -1674,6 +1804,7 @@ void main() {
                 const { gl } = glState;
                 glState.slots.forEach((slot) => { gl.deleteTexture(slot.main); gl.deleteTexture(slot.ids); gl.deleteTexture(slot.atlas); gl.deleteBuffer(slot.glyphBuf); gl.deleteVertexArray(slot.glyphVao); });
                 gl.deleteTexture(glState.field.tex); gl.deleteFramebuffer(glState.field.fbo); gl.deleteProgram(glState.glyphProgram);
+                gl.deleteTexture(glState.smooth.tex); gl.deleteTexture(glState.smooth.warp.tex); gl.deleteFramebuffer(glState.smooth.fbo); gl.deleteProgram(glState.smoothProgram);
                 gl.deleteProgram(glState.program);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
