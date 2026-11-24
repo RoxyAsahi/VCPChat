@@ -98,6 +98,7 @@ uniform float uWire;      // 蓝图线稿层
 uniform vec2 uShake;
 uniform float uDrift;     // 视差：转过的句数
 uniform vec2 uTilt;       // 表盘透视：绕竖轴、横轴的倾角
+uniform sampler2D uSmokeTex;
 out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -111,16 +112,24 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+${Utils.NOISE_GLSL}
 float fbm(vec2 p) {
     float v = 0.0, a = 0.5;
     for (int i = 0; i < 4; i++) { v += vnoise(p) * a; p = p * 2.03 + 7.1; a *= 0.5; }
     return v;
+}
+
+// 表盘透视：把屏幕点反投影回倾斜的表盘平面（先绕竖轴，再绕横轴）
+vec2 dialPoint(vec2 p, float aspect) {
+    const float D = 1.6;
+    vec2 sp = p - vec2(aspect * 0.5, 0.5);
+    float cy = cos(uTilt.x), sy = sin(uTilt.x);
+    float X = sp.x * D / (D * cy - sp.x * sy);
+    float Y = sp.y * (D + X * sy) / D;
+    float cx = cos(uTilt.y), sx = sin(uTilt.y);
+    float Y2 = Y * D / (D * cx - Y * sx);
+    float X2 = X * (D + Y2 * sx) / D;
+    return vec2(X2, Y2) + vec2(aspect * 0.5, 0.5);
 }
 
 // 一个齿轮：返回 (覆盖, 斜面, 刷纹坐标)。teeth 齿数，spokes 辐条数，ang 转角
@@ -167,16 +176,9 @@ void main() {
     vec2 hubC = vec2(min(0.3, aspect * 0.16), 0.5) + uShake;
     // 表盘透视：把屏幕点反投影回倾斜的表盘平面（先绕竖轴，再绕横轴）
     {
-        const float D = 1.6;
         vec2 sp = p - vec2(aspect * 0.5, 0.5);
-        float cy = cos(uTilt.x), sy = sin(uTilt.x);
-        float X = sp.x * D / (D * cy - sp.x * sy);
-        float Y = sp.y * (D + X * sy) / D;
-        float cx = cos(uTilt.y), sx = sin(uTilt.y);
-        float Y2 = Y * D / (D * cx - Y * sx);
-        float X2 = X * (D + Y2 * sx) / D;
-        p = vec2(X2, Y2) + vec2(aspect * 0.5, 0.5);
-        aa *= 1.0 + abs(sp.x * sy) + abs(sp.y * sx);
+        p = dialPoint(p, aspect);
+        aa *= 1.0 + abs(sp.x * sin(uTilt.x)) + abs(sp.y * sin(uTilt.y));
     }
 
     // 两个小齿轮都咬着主齿轮：左下一个，左上一个。转角按齿数比算，齿正好错开半个齿
@@ -191,9 +193,8 @@ void main() {
 
     // 背景：慢慢流动的大理石烟纹，亮的地方叠一层细网点
     if (uSmoke > 0.0) {
-        vec2 sp = p * 1.3 + vec2(uTime * 0.012, uDrift * 0.05);
-        vec2 w = vec2(fbm(sp + uTime * 0.02), fbm(sp + 5.2 - uTime * 0.015));
-        float m = fbm(sp + w * 2.2);
+        // 烟纹的场很平滑，在 1/4 边长的图上先算好（smokeFrag），这里双线性取样
+        float m = texture(uSmokeTex, uv).r;
         float vein = smoothstep(0.42, 0.75, m) * (0.6 + 0.4 * smoothstep(0.3, 1.2, p.x));
         vec3 tone = mix(uInk, uSteel, 0.4);
         col += tone * vein * mix(0.09, 0.05, uLight) * uSmoke;
@@ -366,6 +367,31 @@ void main() {
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
+    // 烟纹场：低分辨率单独一遍
+    const SMOKE_FRAG = `#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform float uTime;
+uniform float uDrift;
+uniform vec2 uTilt;
+out vec4 outColor;
+${Utils.NOISE_GLSL}
+float fbm(vec2 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { v += vnoise(p) * a; p = p * 2.03 + 7.1; a *= 0.5; }
+    return v;
+}
+${FRAG.slice(FRAG.indexOf('// 表盘透视：把屏幕点'), FRAG.indexOf('// 一个齿轮：'))}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uRes;
+    float aspect = uRes.x / uRes.y;
+    vec2 p = dialPoint(vec2(uv.x * aspect, uv.y), aspect);
+    vec2 sp = p * 1.3 + vec2(uTime * 0.012, uDrift * 0.05);
+    vec2 w = vec2(fbm(sp + uTime * 0.02), fbm(sp + 5.2 - uTime * 0.015));
+    outColor = vec4(fbm(sp + w * 2.2), 0.0, 0.0, 1.0);
+}`;
+    const SMOKE_SCALE = 4;
+
     const createGl = (canvas) => {
         const gl = canvas.getContext('webgl2', {
             alpha: false, antialias: false, depth: false, stencil: false,
@@ -379,17 +405,22 @@ void main() {
             if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(`[clockwork] shader: ${gl.getShaderInfoLog(shader)}`);
             return shader;
         };
-        const program = gl.createProgram();
-        gl.attachShader(program, compile(gl.VERTEX_SHADER, VERT));
-        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAG));
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`[clockwork] link: ${gl.getProgramInfoLog(program)}`);
-        const uniforms = {};
-        const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-        for (let i = 0; i < count; i += 1) {
-            const info = gl.getActiveUniform(program, i);
-            uniforms[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(program, info.name);
-        }
+        const link = (frag) => {
+            const program = gl.createProgram();
+            gl.attachShader(program, compile(gl.VERTEX_SHADER, VERT));
+            gl.attachShader(program, compile(gl.FRAGMENT_SHADER, frag));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`[clockwork] link: ${gl.getProgramInfoLog(program)}`);
+            const uniforms = {};
+            const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+            for (let i = 0; i < count; i += 1) {
+                const info = gl.getActiveUniform(program, i);
+                uniforms[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(program, info.name);
+            }
+            return { program, uniforms };
+        };
+        const { program, uniforms } = link(FRAG);
+        const smoke = link(SMOKE_FRAG);
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         const texture = (filter, mip) => {
@@ -402,7 +433,9 @@ void main() {
             return t;
         };
         const slots = Array.from({ length: 2 }, () => ({ text: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
-        return { gl, program, uniforms, vao: gl.createVertexArray(), slots };
+        const smokeTex = texture(gl.LINEAR, false);
+        const smokeFbo = gl.createFramebuffer();
+        return { gl, program, uniforms, smoke, smokeTex, smokeFbo, smokeSize: [0, 0], vao: gl.createVertexArray(), slots };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -585,11 +618,36 @@ void main() {
             const beat = !s.reducedMotion && t >= beatTime ? Math.exp(-(t - beatTime) * 5) * Math.min(1, s.audioReactivity) : 0;
             const shake = beat * 0.0025;
 
+            gl.bindVertexArray(vao);
+            const tiltX = s.reducedMotion || !s.tilt ? 0 : 0.26 * Math.sin(turned * 0.42 + 0.6);
+            const tiltY = s.reducedMotion || !s.tilt ? 0 : 0.12 * Math.sin(turned * 0.29 + 2.1);
+            if (s.smoke > 0) {
+                const sw = Math.max(16, Math.ceil(canvas.width / SMOKE_SCALE)), sh = Math.max(9, Math.ceil(canvas.height / SMOKE_SCALE));
+                if (glState.smokeSize[0] !== sw || glState.smokeSize[1] !== sh) {
+                    gl.bindTexture(gl.TEXTURE_2D, glState.smokeTex);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, glState.smokeFbo);
+                    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, glState.smokeTex, 0);
+                    glState.smokeSize = [sw, sh];
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, glState.smokeFbo);
+                gl.viewport(0, 0, sw, sh);
+                const su = glState.smoke.uniforms;
+                gl.useProgram(glState.smoke.program);
+                Utils.bindNoise(gl, su.uNoise, 2);
+                gl.uniform2f(su.uRes, sw, sh);
+                gl.uniform1f(su.uTime, t);
+                gl.uniform1f(su.uDrift, turned);
+                gl.uniform2f(su.uTilt, tiltX, tiltY);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            }
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(program);
-            gl.bindVertexArray(vao);
+            gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, glState.smokeTex); gl.uniform1i(u.uSmokeTex, 3);
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(u.uText, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 1);
+            Utils.bindNoise(gl, u.uNoise, 2);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform1f(u.uTime, t);
             gl.uniform1f(u.uTurn, (turned - Math.max(index, -1)) * STEP);
@@ -613,7 +671,7 @@ void main() {
             gl.uniform2f(u.uShake, Math.sin(t * 91) * shake, Math.cos(t * 77) * shake);
             gl.uniform1f(u.uDrift, turned);
             // 镜头随歌慢慢换角度：每句转一格时表盘的倾角也跟着漂
-            gl.uniform2f(u.uTilt, s.reducedMotion || !s.tilt ? 0 : 0.26 * Math.sin(turned * 0.42 + 0.6), s.reducedMotion || !s.tilt ? 0 : 0.12 * Math.sin(turned * 0.29 + 2.1));
+            gl.uniform2f(u.uTilt, tiltX, tiltY);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             stats.draws += 1;
             scheduleNext(index);
@@ -666,6 +724,9 @@ void main() {
                 const { gl } = glState;
                 glState.slots.forEach((slot) => { gl.deleteTexture(slot.text); gl.deleteTexture(slot.glyph); });
                 gl.deleteProgram(glState.program);
+                gl.deleteProgram(glState.smoke.program);
+                gl.deleteTexture(glState.smokeTex);
+                gl.deleteFramebuffer(glState.smokeFbo);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
             glState = null;

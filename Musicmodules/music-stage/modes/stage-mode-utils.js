@@ -643,7 +643,59 @@
         return `${pad(Math.min(count, index + 1))} / ${pad(count)}`;
     };
 
+    // 值噪声查表：格点上的 hash12 预先算进一张 512×512 的浮点纹理，
+    // 着色器里按平滑后的小数位做一次线性取样，结果与逐像素算四次 hash 的值噪声相同，
+    // 省下大部分运算。纹理按 WebGL 上下文缓存。
+    const NOISE_SIZE = 512;
+    const NOISE_OFF = 128;
+    const NOISE_GLSL = `
+uniform sampler2D uNoise;
+float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = p - i;
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return textureLod(uNoise, (i + u + ${NOISE_OFF}.5) / ${NOISE_SIZE}.0, 0.0).r;
+}`;
+    const noiseTextures = new WeakMap();
+    let noiseData = null;
+    const noiseTexture = (gl) => {
+        const cached = noiseTextures.get(gl);
+        if (cached && gl.isTexture(cached)) return cached;
+        if (!noiseData) {
+            const f = Math.fround;
+            const fract = x => x - Math.floor(x);
+            noiseData = new Float32Array(NOISE_SIZE * NOISE_SIZE);
+            for (let j = 0; j < NOISE_SIZE; j += 1) {
+                for (let i = 0; i < NOISE_SIZE; i += 1) {
+                    const x = i - NOISE_OFF, y = j - NOISE_OFF;
+                    let a = f(fract(f(x * 0.1031))), b = f(fract(f(y * 0.1031))), c = a;
+                    const d = f(f(a * f(b + 33.33)) + f(b * f(c + 33.33)) + f(c * f(a + 33.33)));
+                    a = f(a + d); b = f(b + d); c = f(c + d);
+                    noiseData[j * NOISE_SIZE + i] = fract(f(f(a + b) * c));
+                }
+            }
+        }
+        const t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, NOISE_SIZE, NOISE_SIZE, 0, gl.RED, gl.FLOAT, noiseData);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        noiseTextures.set(gl, t);
+        return t;
+    };
+    // 把噪声纹理绑到 unit 号纹理单元，并告诉 program 的 uNoise
+    const bindNoise = (gl, location, unit) => {
+        if (!location) return;
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, noiseTexture(gl));
+        gl.uniform1i(location, unit);
+    };
+
     global.MusicStageModeUtils = Object.freeze({
+        NOISE_GLSL, noiseTexture, bindNoise,
         lineCounter,
         watchOverlay, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,

@@ -149,12 +149,7 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+${Utils.NOISE_GLSL}
 
 void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
@@ -557,6 +552,7 @@ void main() {
             gl.disable(gl.BLEND);
             const u = field.uniforms;
             gl.useProgram(field.program);
+            Utils.bindNoise(gl, field.uniforms.uNoise, 1);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uCentre, geo.cx, geo.cy);
             gl.uniform2f(u.uAxes, geo.A, geo.B);

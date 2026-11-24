@@ -171,12 +171,7 @@ vec2 hash22(vec2 p) {
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.xx + p3.yz) * p3.zy);
 }
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-}`;
+${Utils.NOISE_GLSL}`;
 
     // 窗外：x 按窗宽高比，y 朝上 0..1。车往前开，近处的东西走得快。
     const SCENE_FRAG = `#version 300 es
@@ -480,6 +475,8 @@ void main() {
     for (int i = 0; i < 6; i++) {
         if (i >= uDripCount) break;
         vec4 dr = uDrips[i];
+        // 离这道水痕横向超过 0.03 屏宽的像素，水痕和水头都碰不到
+        if (abs(uv.x - dr.x) > 0.03) continue;
         float x = dr.x + sin(uv.y * 23.0 + dr.w * 6.0) * 0.004 + sin(uv.y * 61.0 + dr.w) * 0.0015;
         float top = uDripTop[i];
         float headY = top - (uTime - dr.y) * dr.z;
@@ -888,6 +885,7 @@ void main() {
             gl.bindFramebuffer(gl.FRAMEBUFFER, glState.fbo);
             gl.viewport(0, 0, sw, sh);
             gl.useProgram(scene.program);
+            Utils.bindNoise(gl, scene.uniforms.uNoise, 0);
             const su = scene.uniforms;
             const clock = t * s.cameraSpeed;
             // 车偶尔颠一下
@@ -919,6 +917,7 @@ void main() {
             gl.useProgram(main.program);
             const u = main.uniforms;
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex); gl.uniform1i(u.uScene, 0);
+            Utils.bindNoise(gl, u.uNoise, 7);
             const lineInfo = new Float32Array(LINE_SLOTS * 4);
             for (let i = 0; i < LINE_SLOTS; i += 1) {
                 const slot = slots[i];

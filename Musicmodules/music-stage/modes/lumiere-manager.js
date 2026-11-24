@@ -196,12 +196,7 @@ vec2 hash22(vec2 p) {
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.xx + p3.yz) * p3.zy);
 }
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+${Utils.NOISE_GLSL}
 
 // 光照：每束光是一个锥，越远越散越暗；百叶窗把锥切成条，焦散在光里织网
 vec3 lightAt(vec2 p, float aspect, out float total) {
@@ -312,6 +307,8 @@ void main() {
         if (i >= uSparkCount) break;
         vec4 s = uSpark[i];
         vec2 d = (uv - s.xy) * vec2(aspect, 1.0) / s.z;
+        // 十字芒两条臂之外、离核较远的地方，三项加起来都不到 1/500
+        if (min(abs(d.x), abs(d.y)) > 0.1 && dot(d, d) > 0.4) continue;
         float core = exp(-dot(d, d) * 60.0);
         float cross = exp(-abs(d.x) * 70.0) * exp(-abs(d.y) * 3.5) + exp(-abs(d.y) * 70.0) * exp(-abs(d.x) * 3.5);
         float diag = (exp(-abs(d.x - d.y) * 90.0) + exp(-abs(d.x + d.y) * 90.0)) * exp(-length(d) * 9.0) * 0.4;
@@ -741,6 +738,7 @@ void main() {
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(u.uText, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 1);
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(u.uPrevText, 2);
+            Utils.bindNoise(gl, u.uNoise, 3);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uTextSize, world.W, world.H);
             gl.uniform1f(u.uTime, t);

@@ -798,14 +798,7 @@ float hash12(vec2 p) {
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
 }
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    float a = hash12(i), b = hash12(i + vec2(1.0, 0.0));
-    float c = hash12(i + vec2(0.0, 1.0)), d = hash12(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
+${Utils.NOISE_GLSL}
 vec2 worldAt(vec4 view) {
     vec2 p = gl_FragCoord.xy / uRes - 0.5;
     vec2 q = vec2(p.x * uAspect, -p.y) * view.z;
@@ -856,7 +849,10 @@ void main() {
         if (i >= uBlobCount) break;
         vec4 b = uBlobs[i];
         vec2 d = wp - b.xy;
-        field += b.z * b.z / (dot(d, d) + 1.0) * b.w;
+        float dd = dot(d, d);
+        // 远处的墨团贡献不到 0.2%，不算
+        if (dd > b.z * b.z * 500.0) continue;
+        field += b.z * b.z / (dd + 1.0) * b.w;
     }
     float ring = 0.0;
     for (int i = 0; i < ${MAX_RINGS}; i++) {
@@ -1203,6 +1199,7 @@ void main() {
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.ids); gl.uniform1i(u.uIds, 1);
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 2);
             gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, (prevSlot || slot).main); gl.uniform1i(u.uPrev, 3);
+            Utils.bindNoise(gl, u.uNoise, 4);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uWorld, world.W, world.H);
             gl.uniform2f(u.uIdSize, idsCanvas.width, idsCanvas.height);

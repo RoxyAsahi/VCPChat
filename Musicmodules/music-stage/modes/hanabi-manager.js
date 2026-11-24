@@ -211,12 +211,7 @@ float hash12(vec2 p) {
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
 }
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+${Utils.NOISE_GLSL}
 
 // 烟花闪光：每发一个近处的光团和一层铺满天的微光
 vec3 glowAt(vec2 p, float aspect, out float total) {
@@ -1006,6 +1001,7 @@ void main() {
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(u.uText, 0);
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.glyph); gl.uniform1i(u.uGlyph, 1);
             gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (prev || slot).text); gl.uniform1i(u.uPrevText, 2);
+            Utils.bindNoise(gl, u.uNoise, 4);
             gl.uniform2f(u.uRes, canvas.width, canvas.height);
             gl.uniform2f(u.uTextSize, world.W, world.H);
             gl.uniform1f(u.uTime, t);
