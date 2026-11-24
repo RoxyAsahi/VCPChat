@@ -832,3 +832,13 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 @keyframes archive-list-rail-live { 50% { opacity: .45; } }
 body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 @media (prefers-reduced-motion: reduce) { .archive-list-group.live-on .rail { animation: none; } }
+/* 拖动落点线：从编号列尾部起画，和表格正文对齐，不再顶到最左边 */
+.archive-list .archive-list-row.drop-before::before, .archive-list .archive-list-row.drop-after::after { left: calc(var(--no-w) - 10px); }
+/* 分组名优先完整显示：挤的时候先缩导轨和首数，不先把名字截成「海边…」 */
+.archive-list-group > span:first-child { flex: 0 0 auto; max-width: 62%; }
+.archive-list-group > i { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-list-group .rail { flex: 0 1 auto; min-width: 0; }
+@media (hover: hover) {
+  .archive-list-group:not(:hover):not(:focus-within) :is(.gplay, .acts) { position: absolute; right: 0; bottom: 6px; }
+  .archive-list-group:is(:hover, :focus-within) .rail { display: none; }
+}
