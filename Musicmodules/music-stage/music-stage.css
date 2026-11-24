@@ -4220,24 +4220,28 @@ body.light-theme .music-stage-mode-groupchat {
 }
 .gc-bubble {
     position: relative;
-    padding: 0.55em 0.85em;
-    border-radius: 4px 16px 16px 16px;
+    padding: 0.66em 1em;
+    font-size: 0.94em;
+    border-radius: 1.3em 1.3em 1.3em 0.38em;
+    border: 1px solid color-mix(in srgb, var(--stage-ink) 7%, transparent);
     background: var(--gc-bubble);
     color: var(--stage-ink);
-    line-height: 1.5;
+    line-height: 1.45;
     box-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
     transition: font-size 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease, box-shadow 0.4s ease, background-color 0.4s ease;
     overflow-wrap: anywhere;
 }
 .gc-row.is-right .gc-bubble {
-    border-radius: 16px 4px 16px 16px;
+    border-radius: 1.3em 1.3em 0.38em 1.3em;
     background: var(--gc-me);
 }
+/* 正在唱的那条明显大一号（字 1.34 倍、内边距更宽），唱过的缩小变淡：一眼看出唱到哪 */
 .gc-row.is-active .gc-bubble {
-    font-size: 1.24em;
-    box-shadow: 0 6px 26px color-mix(in srgb, var(--stage-accent) 22%, transparent), 0 1px 0 rgb(0 0 0 / 0.12);
+    font-size: 1.4em;
+    padding: 0.62em 0.95em;
+    box-shadow: 0 14px 40px color-mix(in srgb, var(--stage-accent) 26%, transparent), 0 1px 0 rgb(0 0 0 / 0.12);
 }
-.gc-row.is-past .gc-bubble { opacity: 0.84; }
+.gc-row.is-past .gc-bubble { opacity: 0.8; }
 .gc-row.is-past .gc-avatar { opacity: 0.8; }
 .gc-row.is-chorus .gc-bubble {
     background:
@@ -4414,7 +4418,7 @@ body.light-theme .music-stage-mode-groupchat {
     60%, 100% { transform: translateX(260%) skewX(-12deg); opacity: 0; }
 }
 .gc-body { transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); transform-origin: inherit; }
-.gc-row.is-past .gc-body { transform: scale(0.97); }
+.gc-row.is-past .gc-body { transform: scale(0.92); }
 .music-stage-mode-groupchat.is-live .gc-row.is-enter .gc-avatar {
     animation: gc-spring 0.62s cubic-bezier(0.3, 1.8, 0.5, 1) both;
 }
