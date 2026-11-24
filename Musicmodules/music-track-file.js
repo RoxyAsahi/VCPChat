@@ -33,6 +33,12 @@
         const push = (k, v) => { if (v !== undefined && v !== null && String(v) !== '') rows.push([k, String(v)]); };
         push('歌手', t.artist);
         push('专辑', t.album);
+        if (t.albumArtist && t.albumArtist !== t.artist) push('专辑歌手', t.albumArtist);
+        const disc = Number(t.discNo) > 0 ? Number(t.discNo) : 0;
+        const no = Number(t.trackNo) > 0 ? Number(t.trackNo) : 0;
+        push('曲目', no ? (disc ? `第 ${disc} 碟 · 第 ${no} 首` : `第 ${no} 首`) : '');
+        push('年份', Number(t.year) > 0 ? String(t.year) : '');
+        push('流派', t.genre);
         const fmt = extOf(t.path);
         const codec = t.codec && String(t.codec).toUpperCase() !== fmt ? String(t.codec) : '';
         push('格式', [fmt, codec, t.lossless === true ? '无损' : t.lossless === false ? '有损' : ''].filter(Boolean).join(' · '));
