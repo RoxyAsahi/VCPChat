@@ -181,6 +181,32 @@ const FAKE = ({ n, light, covers }) => {
   d = await dbg();
   const tdbg = await page.evaluate(() => ({ on: !document.querySelector('.archive-wall.aw-table').hidden, tiles: document.querySelectorAll('.aw-table .aw-tile').length }));
   check('平放开着', d.layout === 'table' && tdbg.on && tdbg.tiles > 20 && d.allowed === false, JSON.stringify(tdbg));
+  // 平放连续滚动 90 帧（触控板式小步），量每帧耗时（无头环境只看相对值）
+  const perf = await page.evaluate(() => new Promise((done) => {
+    const el = document.querySelector('.archive-wall.aw-table');
+    const r = el.getBoundingClientRect();
+    const times = []; let last = performance.now(), n = 0;
+    const step = () => {
+      el.dispatchEvent(new WheelEvent('wheel', { deltaX: 9, deltaY: 6, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
+      requestAnimationFrame(() => { const now = performance.now(); times.push(now - last); last = now; if (++n < 90) step(); else { times.sort((a, b) => a - b); done({ med: +times[45].toFixed(1), p90: +times[81].toFixed(1), tiles: el.querySelectorAll('.aw-tile').length }); } });
+    };
+    step();
+  }));
+  console.log('PERF 平放滚动帧', JSON.stringify(perf));
+  if (args.perf) {
+    for (const [name, css] of [['无景深', '.archive-wall.aw-table::after{display:none!important}'], ['无景深无遮罩', '.archive-wall.aw-table::after{display:none!important}.archive-wall.aw-table{-webkit-mask-image:none!important;mask-image:none!important}'], ['再无徽标模糊', '.aw-no{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}']]) {
+      await page.addStyleTag({ content: css });
+      const p2 = await page.evaluate(() => new Promise((done) => {
+        const el = document.querySelector('.archive-wall.aw-table');
+        const r = el.getBoundingClientRect();
+        const times = []; let last = performance.now(), n = 0;
+        const step = () => { el.dispatchEvent(new WheelEvent('wheel', { deltaX: 9, deltaY: 6, clientX: r.left + 50, clientY: r.top + 50, bubbles: true, cancelable: true }));
+          requestAnimationFrame(() => { const now = performance.now(); times.push(now - last); last = now; if (++n < 90) step(); else { times.sort((a, b) => a - b); done({ med: +times[45].toFixed(1), p90: +times[81].toFixed(1) }); } }); };
+        step();
+      }));
+      console.log('PERF ' + name, JSON.stringify(p2));
+    }
+  }
   await shot(tag + '-9-table');
   const tb = await page.evaluate(() => {
     const el = document.querySelector('.aw-table');
