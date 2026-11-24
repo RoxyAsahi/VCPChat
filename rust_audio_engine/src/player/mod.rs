@@ -806,6 +806,18 @@ impl AudioPlayer {
     }
 
     /// Set crossfeed enabled
+    /// Stereo channel stage: balance (-1 = only left, 1 = only right), swap L/R, mono fold.
+    pub fn set_channel_mode(&self, balance: f64, swap_channels: bool, mono: bool) {
+        self.lockfree_volume_params.set_channel_mode(balance, swap_channels, mono);
+        log::info!("Channel stage: balance {:.2}, swap {}, mono {}", balance, swap_channels, mono);
+    }
+
+    /// Current stereo channel stage as (balance, swap, mono).
+    pub fn channel_mode(&self) -> (f64, bool, bool) {
+        let s = self.lockfree_volume_params.read();
+        (s.balance, s.swap_channels, s.mono)
+    }
+
     pub fn set_crossfeed_enabled(&self, enabled: bool) {
         self.lockfree_crossfeed_params.set_enabled(enabled);
         log::info!("Crossfeed {}", if enabled { "enabled" } else { "disabled" });

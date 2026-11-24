@@ -123,6 +123,7 @@ impl TransparencyProbe {
     fn chain_is_identity(&self) -> bool {
         let eq = self.eq.read();
         self.volume.effective_volume() == 1.0
+            && !self.volume.read().has_channel_ops()
             && (!eq.enabled || eq.gains.iter().all(|g| *g == 0.0))
             && !self.saturation.is_enabled()
             && !self.crossfeed.is_enabled()

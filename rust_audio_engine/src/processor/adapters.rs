@@ -1466,6 +1466,36 @@ impl VolumeProcessor {
     }
 }
 
+/// Stereo channel stage that rides on the volume processor: mono fold, then
+/// swap, then balance. Balance only turns one side down (never boosts), so
+/// it cannot clip. Anything other than two channels passes through.
+#[inline]
+pub(crate) fn apply_channel_stage<T>(buffer: &mut [T], channels: usize, snapshot: &VolumeParamsSnapshot)
+where
+    T: Copy + std::ops::Add<Output = T> + std::ops::Mul<Output = T> + From<f32>,
+{
+    if channels != 2 || !snapshot.has_channel_ops() {
+        return;
+    }
+    let half = T::from(0.5);
+    let b = snapshot.balance.clamp(-1.0, 1.0);
+    let left_gain = T::from(if b > 0.0 { (1.0 - b) as f32 } else { 1.0 });
+    let right_gain = T::from(if b < 0.0 { (1.0 + b) as f32 } else { 1.0 });
+    for frame in buffer.chunks_exact_mut(2) {
+        let (mut l, mut r) = (frame[0], frame[1]);
+        if snapshot.mono {
+            let m = (l + r) * half;
+            l = m;
+            r = m;
+        }
+        if snapshot.swap_channels {
+            std::mem::swap(&mut l, &mut r);
+        }
+        frame[0] = l * left_gain;
+        frame[1] = r * right_gain;
+    }
+}
+
 impl StreamingProcessor for VolumeProcessor {
     fn name(&self) -> &'static str {
         "Volume"
@@ -1474,8 +1504,10 @@ impl StreamingProcessor for VolumeProcessor {
     fn process(&mut self, buffers: ProcessBuffers<'_>) -> Result<ProcessProgress, ProcessError> {
         self.lifecycle.ensure_processing("Volume")?;
         self.sync_params();
+        let channel_stage = self.cached;
 
         process_fixed_1_to_1("Volume", true, None, buffers, |buffer, channels| {
+            apply_channel_stage(buffer, channels, &channel_stage);
             // Volume is always active. Muting is a smoothed gain transition,
             // not a transparent bypass.
             if self.cached.muted {
