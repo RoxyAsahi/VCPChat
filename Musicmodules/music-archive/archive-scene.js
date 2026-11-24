@@ -928,7 +928,8 @@ vec3 archiveUntone(vec3 y) {
         const stickerMap = new THREE.CanvasTexture(stickerCanvas);
         stickerMap.colorSpace = THREE.SRGBColorSpace;
         stickerMap.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-        const stickerMat = coverMat({ map: stickerMap });
+        // 标签纸本身就离面板 0.006，不再做深度偏移：偏移在掠射角下很大，浏览时会透过前一排卡露出来
+        const stickerMat = coverMat({ map: stickerMap, polygonOffset: false });
         const stickerMesh = new THREE.Mesh(stickerGeo, stickerMat);
         stickerMesh.visible = false;
         fittings.add(stickerMesh);
