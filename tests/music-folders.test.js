@@ -92,3 +92,22 @@ test('removing an "other location" does not touch the sync list, and undo puts t
     assert.ok(saves >= 2);
     delete g.window; delete g.document;
 });
+
+test('an open folders dialog refreshes counts when the library changes underneath it', async () => {
+    const { JSDOM } = require('jsdom');
+    const dom = new JSDOM('<body></body>');
+    const g = globalThis;
+    const MOD = path.join(__dirname, '../Musicmodules/music-folders.js');
+    g.window = dom.window; g.document = dom.window.document;
+    delete require.cache[MOD];
+    const { setupMusicFolders } = require(MOD);
+    const app = { playlist: [{ path: 'D:\\M\\a.flac' }], api: { musicLibraryFolders: async (p) => (p.op === 'list' ? { ok: true, folders: [{ path: 'D:\\M', exists: true }] } : { ok: true }) } };
+    setupMusicFolders(app);
+    app.openLibraryFolders();
+    await new Promise((r) => setTimeout(r, 30));
+    assert.match(document.querySelector('.mfold-meta').textContent, /^1 首/);
+    app.playlist = app.playlist.concat([{ path: 'D:\\M\\b.flac' }, { path: 'D:\\M\\c.flac' }]);
+    await new Promise((r) => setTimeout(r, 1700));
+    assert.match(document.querySelector('.mfold-meta').textContent, /^3 首/);
+    delete g.window; delete g.document;
+});

@@ -89,11 +89,16 @@
 
         let overlay = null;
         let previousFocus = null;
+        // 开着的时候曲库变了（加文件夹、重扫、后台同步在扫）就跟着刷新歌数，不用关掉再开
+        let watchTimer = 0;
+        let seen = null;
+        const libraryMark = () => { const l = app.playlist || []; return `${l.length}:${l[0]?.path || ''}:${l[l.length - 1]?.path || ''}`; };
         const close = () => {
             if (!overlay) return;
             const o = overlay;
             overlay = null;
             global.removeEventListener('keydown', onKey, true);
+            clearInterval(watchTimer);
             o.classList.remove('visible');
             setTimeout(() => o.remove(), 320);
             const back = previousFocus;
@@ -229,6 +234,9 @@
             global.addEventListener('keydown', onKey, true);
             global.requestAnimationFrame?.(() => overlay && overlay.classList.add('visible'));
             try { x.focus({ preventScroll: true }); } catch (e) { /* 没关系 */ }
+            seen = libraryMark();
+            watchTimer = setInterval(() => { const m = libraryMark(); if (m !== seen) { seen = m; render(); } }, 1500);
+            watchTimer?.unref?.(); // node 测试里不拖住进程
             render();
         };
     }
