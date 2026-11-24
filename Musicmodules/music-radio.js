@@ -363,6 +363,8 @@
         try { global.MusicDeviceSound?.setupMusicDeviceSound?.(app); } catch (e) { /* 没有这个模块 */ }
         // 歌单导入导出 .m3u8（music-m3u.js，同样在本文件之后加载）
         try { global.MusicM3u?.setupMusicM3u?.(app); } catch (e) { /* 没有这个模块 */ }
+        // 右键「在文件夹中显示」（music-track-file.js）
+        try { global.MusicTrackFile?.setupMusicTrackFile?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };

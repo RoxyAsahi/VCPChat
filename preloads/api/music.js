@@ -23,6 +23,7 @@ module.exports = {
         readMusicAudioFile: invoke('music-read-audio-file', 'payload'),
         exportMusicM3u: invoke('music-m3u-export', 'payload'),
         importMusicM3u: invoke('music-m3u-import', 'payload'),
+        showMusicInFolder: invoke('music-show-in-folder', 'payload'),
         // 新版 / 旧版（上游原版）音乐界面
         getMusicLegacyUI: invoke('music-get-legacy-ui'),
         setMusicLegacyUI: invoke('music-set-legacy-ui', 'enabled'),

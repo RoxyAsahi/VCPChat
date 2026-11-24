@@ -789,6 +789,17 @@ function initialize(options) {
             }
         });
 
+        // 右键「在文件夹中显示」：只接受曲库里那种本机绝对路径，文件得还在
+        ipcMain.handle('music-show-in-folder', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file)) return { ok: false, message: '这首没有本机文件' };
+            const stat = await fs.stat(file).catch(() => null);
+            if (!stat || !stat.isFile()) return { ok: false, message: '文件已经不在原来的位置了' };
+            electron.shell.showItemInFolder(file);
+            return { ok: true };
+        });
+
         // 歌单导出 / 导入 .m3u8（和别的播放器互通）。只给音乐窗口；导出走保存对话框，导入走打开对话框或拖进来的文件。
         const fromMusicWindow = (event) => musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents;
         ipcMain.handle('music-m3u-export', async (event, payload) => {
