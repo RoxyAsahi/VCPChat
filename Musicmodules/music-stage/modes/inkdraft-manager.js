@@ -511,15 +511,22 @@
         }
 
         // 半调层：背景纹样 + 垫在字后面的一张大图（粗线，只进网点）。
-        const backdrop = pickWeighted(random, [['band', 0.3], ['graph', 0.25], ['arcs', 0.25], ['none', 0.2]]);
+        const backdrop = pickWeighted(random, [['band', 0.34], ['graph', 0.24], ['arcs', 0.26], ['none', 0.16]]);
         main.globalCompositeOperation = 'lighter';
         if (backdrop === 'band') {
             const y = (textBox ? (textBox[1] + textBox[3]) / 2 : H / 2) + (random() - 0.5) * H * 0.2;
-            const g = main.createLinearGradient(0, y - H * 0.18, 0, y + H * 0.18);
-            g.addColorStop(0, 'rgb(0,0,0)'); g.addColorStop(0.5, 'rgb(0,0,46)'); g.addColorStop(1, 'rgb(0,0,0)');
-            main.fillStyle = g; main.fillRect(0, y - H * 0.18, W, H * 0.36);
+            // 色带：一道边是直的、略斜的网点带（版面里压的那一道灰），不是渐变的雾
+            const half = H * (0.1 + random() * 0.08);
+            main.save();
+            main.translate(W / 2, y);
+            main.rotate((random() - 0.5) * 0.12);
+            main.fillStyle = `rgb(0,0,${Math.round(70 + random() * 30)})`;
+            main.filter = `blur(${(H * 0.002).toFixed(1)}px)`;
+            main.fillRect(-W, -half, W * 2, half * 2);
+            main.filter = 'none';
+            main.restore();
         } else if (backdrop === 'graph') {
-            main.strokeStyle = 'rgb(0,0,40)';
+            main.strokeStyle = 'rgb(0,0,72)';
             main.lineWidth = Math.max(1, H * 0.0015);
             const step = H / 18;
             main.beginPath();
@@ -527,7 +534,7 @@
             for (let y = (H % step) / 2; y < H; y += step) { main.moveTo(0, y); main.lineTo(W, y); }
             main.stroke();
         } else if (backdrop === 'arcs') {
-            main.strokeStyle = 'rgb(0,0,54)';
+            main.strokeStyle = 'rgb(0,0,84)';
             main.lineWidth = H * 0.006;
             const ox = random() < 0.5 ? 0 : W, oy = random() < 0.5 ? 0 : H;
             main.beginPath();
@@ -536,9 +543,16 @@
         }
         main.globalCompositeOperation = 'source-over';
         if (settings.figures) {
-            const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.02, toneLevel: 0.4, soft: H * 0.004 });
+            // 垫在字后面的大图：粗线、只进网点，浓到网点刚好相连（全景里字占满画面时，看得见的主要是它）
+            const tonePen = Figures.createPen(main, null, ID_SCALE, { tone: true, lineWidth: H * 0.026, toneLevel: 0.64, soft: H * 0.004 });
             Figures.drawFigure(tonePen, Figures.KINDS[Math.floor(random() * Figures.KINDS.length)],
                 wideC[0], wideC[1], H * (0.36 + random() * 0.1), (random() - 0.5) * 0.4, random);
+            // 一半的段再垫一张小一点的，偏到一边、露一半在画外
+            if (random() < 0.5) {
+                const side = random() < 0.5 ? -1 : 1;
+                Figures.drawFigure(tonePen, Figures.KINDS[Math.floor(random() * Figures.KINDS.length)],
+                    wideC[0] + side * W * (0.3 + random() * 0.12), wideC[1] + (random() - 0.5) * H * 0.4, H * (0.22 + random() * 0.08), random() * TAU, random);
+            }
         }
 
         // 版面零件（规线、裁切标记、行号、时间码）和线稿，一笔一笔冒出来。
@@ -1129,12 +1143,20 @@ void main() {
         float d = (length(wp - r.xy) - r.z) / r.w;
         ring += exp(-d * d) * 0.9;
     }
+    // 灰墨团：有边的融球（中间高、到半轴边上平滑落到 0），挨近了连成一片；边被低频噪声推得不圆，像泼上去的。
+    // 阈值以上那块是 0.55 倍半轴，所以半轴取 r / 0.55，看上去和原来一样大。周围一圈只进网点（halo）。
     float accent = 0.0;
+    float accentHalo = 0.0;
     for (int i = 0; i < ${MAX_ACCENT}; i++) {
         if (i >= uAccentCount) break;
         vec4 b = uAccent[i];
+        float R = b.z / 0.55;
         vec2 d = wp - b.xy;
-        accent += b.z * b.z / (dot(d, d) + 1.0);
+        vec2 wob = vec2(vnoise(wp / (R * 0.45) + float(i) * 7.3), vnoise(wp / (R * 0.45) + 31.0 - float(i) * 3.1)) - 0.5;
+        vec2 q = (d + wob * R * 0.34) / R;
+        float kk = max(0.0, 1.0 - dot(q, q));
+        accent += kk * kk * kk * 1.45;
+        accentHalo += kk * kk * 0.55;
     }
 
     float k = uWorld.y;
@@ -1148,7 +1170,8 @@ void main() {
         float q = max(0.0, 1.0 - dot(d, d));
         cloudT += q * q * c.w;
     }
-    float clouds = max(min(cloudT, 0.85), smoothstep(0.5, 0.95, cl) * 0.72);
+    // 网点云最浓也只到圆点刚好分开（0.55），远看是一片网点，不糊成一块带喷枪边的平灰
+    float clouds = max(max(min(cloudT, 0.55), smoothstep(0.5, 0.95, cl) * 0.55), min(accentHalo, 0.5));
     outColor = vec4(field * 0.25, ring * 0.5, accent * 0.25, clouds);
     // 流场也是平滑的：这里算好，原生分辨率那一遍只取一次（存成 0.5 为零点、±0.05 的范围）
     outWarp = vec4((suv - gl_FragCoord.xy / uRes) * 10.0 + 0.5, 0.0, 1.0);
@@ -1256,7 +1279,9 @@ void main() {
     // 边的软硬只有一个像素：按 F 在屏幕上的变化率算，大特写和小字都是干净的一刀
     float edgeW = max(fwidth(F), 0.0001) * 0.75;
     float a = smoothstep(thr - edgeW, thr + edgeW, F);
-    float aA = smoothstep(0.42 + rough * 0.6, 0.52 + rough * 0.6, accent * 0.5);
+    // 灰墨团的边和字一样：切阈值、被噪点搅过、一个像素宽的抗锯齿，不再是喷枪那样一圈散开的雾
+    float aW = max(fwidth(accent), 0.0001) * 0.75;
+    float aA = smoothstep(0.5 + rough - aW, 0.5 + rough + aW, accent);
 
     // 半调：网点格在世界里（跟着镜头放大），网点大小随浓淡
     vec2 sp = gl_FragCoord.xy / uRes - 0.5;

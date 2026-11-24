@@ -1,6 +1,6 @@
 /*
  * 墨痕（inkdraft）的线稿：像演算纸、论文插图上的那种细线图——轨道、星图、晶格、
- * 分子、探测器截面、粒子图、演算草稿、能谱、势能曲线……
+ * 分子、探测器截面、粒子图、演算草稿、能谱、势能曲线、气泡室、企鹅图、箱图……
  *
  * 每张图在半径 1 的坐标里用 Pen 画。Pen 每调用一次算「一笔」，笔序写进编号画布的
  * G 通道，着色器按笔序一笔一笔把它显出来。同一套图也可以用粗线画进 B 通道，当作垫在
@@ -389,6 +389,61 @@
             dots.forEach((a) => pen.dot(Math.cos(a) * 0.82, Math.sin(a) * 0.82, 0.04));
             pen.note(pick(random, ['ATLAS', 'CMS', 'ALICE', 'LHCb']), 0.6, 0.72, 0.09, 'left');
             pen.note('√s = 13.6 TeV', 0, 0, 0.1);
+        },
+        // 气泡室照片：一束入射线打到顶点，一对正负电子在磁场里朝两边卷成螺旋，几条直的径迹，一串越来越密的气泡
+        bubble(pen, random) {
+            const vx = (random() - 0.5) * 0.3, vy = -(random() * 0.3 - 0.25);
+            pen.line([[-1.05, vy + 0.25], [vx, vy]]);
+            pen.dot(vx, vy, 0.03);
+            const spiral = (r0, turn, sign) => {
+                const pts = [];
+                for (let i = 0; i <= 90; i += 1) {
+                    const a = i / 90 * TAU * 2.2;
+                    const r = r0 * Math.exp(-a * turn);
+                    pts.push([vx + sign * (Math.sin(a) * r), vy - sign * (r0 - Math.cos(a) * r) * 0.9]);
+                }
+                pen.line(pts);
+            };
+            spiral(0.3 + random() * 0.12, 0.07, -1);
+            spiral(0.36 + random() * 0.14, 0.085, 1);
+            for (let n = 2 + Math.floor(random() * 2); n > 0; n -= 1) {
+                const a = (random() - 0.5);
+                pen.line([[vx, vy], [vx + Math.cos(a) * 1.05, vy - Math.sin(a) * 1.05]]);
+            }
+            for (let i = 0; i < 7; i += 1) pen.dot(-0.95 + i * (0.2 - i * 0.012), -0.75 - i * 0.03, 0.02);
+            [[-0.85, 0.85], [0.85, -0.8]].forEach(([cx, cy]) => pen.segments([[[cx - 0.1, cy], [cx + 0.1, cy]], [[cx, cy - 0.1], [cx, cy + 0.1]]]));
+            pen.note('γ → e⁺e⁻', vx - 0.5, vy + 0.62, 0.1);
+            pen.note(pick(random, ['B = 2 T', 'p = 0.3 B r', 'Λ → p π⁻']), 0.3, 0.98, 0.09);
+        },
+        // 企鹅图：一条夸克线上开一个圈，圈底下甩出一根胶子，再分成一对夸克
+        penguin(pen, random) {
+            pen.arrow([-1.05, -0.15], [-0.45, -0.15]);
+            pen.line([[-0.45, -0.15], [0.45, -0.15]]);
+            pen.arrow([0.45, -0.15], [1.05, -0.15]);
+            pen.circle(0, -0.15, 0.45, Math.PI, TAU);
+            [[-0.45, -0.15], [0.45, -0.15], [0, -0.15]].forEach(([x, y]) => pen.dot(x, y, 0.035));
+            pen.wave([0, -0.15], [0, 0.5], 9, 0.05);
+            pen.dot(0, 0.5, 0.035);
+            pen.arrow([0, 0.5], [0.75, 0.3]);
+            pen.arrow([0.75, 0.8], [0, 0.5]);
+            pen.note('b', -1.05, -0.33, 0.12); pen.note('s', 1.05, -0.33, 0.12); pen.note('W', 0, -0.76, 0.12);
+            pen.note(pick(random, ['t', 'u, c, t']), -0.22, -0.02, 0.1);
+            pen.note('g', 0.18, 0.2, 0.11);
+            pen.note(pick(random, ['b → s g', 'Vtb V*ts', 'O(GF αs)']), -1, 0.95, 0.09, 'left');
+        },
+        // 箱图：上下两条夸克线，中间两根 W 波浪线连成一个方框
+        box(pen, random) {
+            const [meson, upper, lower] = pick(random, [['K⁰', 's', 'd'], ['B⁰', 'b', 'd'], ['D⁰', 'c', 'u']]);
+            pen.arrow([-1.05, -0.38], [-0.42, -0.38]); pen.arrow([-0.42, -0.38], [0.42, -0.38]); pen.arrow([0.42, -0.38], [1.05, -0.38]);
+            pen.arrow([1.05, 0.38], [0.42, 0.38]); pen.arrow([0.42, 0.38], [-0.42, 0.38]); pen.arrow([-0.42, 0.38], [-1.05, 0.38]);
+            pen.wave([-0.42, -0.38], [-0.42, 0.38], 7, 0.05);
+            pen.wave([0.42, -0.38], [0.42, 0.38], 7, 0.05);
+            [-0.42, 0.42].forEach((x) => { pen.dot(x, -0.38, 0.035); pen.dot(x, 0.38, 0.035); });
+            pen.note(upper, -0.75, -0.56, 0.11); pen.note(lower, -0.75, 0.58, 0.11);
+            pen.note(lower, 0.75, -0.56, 0.11); pen.note(upper, 0.75, 0.58, 0.11);
+            pen.note('u, c, t', 0, -0.56, 0.09); pen.note('W', -0.62, 0, 0.11); pen.note('W', 0.62, 0, 0.11);
+            pen.note(meson, -1.25, 0, 0.12);
+            pen.note(pick(random, ['Δm', 'ΔF = 2', 'ε ≈ 2.2×10⁻³']), -0.3, 1, 0.1);
         }
     };
 
