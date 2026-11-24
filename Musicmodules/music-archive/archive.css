@@ -868,3 +868,14 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-row::after { right: var(--text-end-inset); }
 .archive-list-row .tx::before { right: var(--text-end-inset); }
 .archive-list-cols { margin-right: var(--text-end-inset); padding-right: var(--cell-end); }
+/* 检索框收小（Roxy 11-24：太大、和栏名/表头衔接突兀）：
+   字号、图标、+ 按钮都降到和分类标签同一档，底线改成和表格同一种细线，聚焦时才变强调色 */
+.archive-list-toolbar { gap: 10px; border-bottom-color: color-mix(in srgb, var(--ar-ink) 24%, transparent); }
+.archive-list-search { gap: 9px; padding-bottom: 6px; }
+.archive-list-search .archive-glyph-search { width: 14px; height: 14px; opacity: .6; }
+.archive-list-search input { font-size: 14px; line-height: 20px; padding: 0; letter-spacing: .3px; }
+.archive-list-search input::placeholder { font-size: 13px; letter-spacing: .6px; opacity: .7; }
+.archive-list-import { padding-bottom: 6px; }
+.archive-list-import-toggle { width: 20px; height: 20px; border-color: transparent; font-size: 16px; }
+.archive-list-clear { width: 20px; height: 20px; }
+.archive-hud:not(.narrow):not(.squeeze) .archive-list-brand { bottom: calc(100% + 14px); }
