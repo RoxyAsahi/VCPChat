@@ -862,3 +862,9 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-row:is(:hover, :focus-within) .rt { color: color-mix(in srgb, var(--ar-ink) 82%, transparent); }
 .archive-list-row .go { left: calc(10px + var(--no-digits, 3) * 3.4px - 13px); }
 .archive-list-row .eq, .archive-list-row.current .eq { left: calc(10px + var(--no-digits, 3) * 3.4px - 4.5px); }
+/* 右边线对齐：行的细线、选中/悬停底色、表头线都收在和检索线、分组线同一条右边（--text-end-inset），时长在格子里留 8px */
+.archive-list { --cell-end: 8px; }
+.archive-list-row { padding-inline-end: calc(var(--text-end-inset) + var(--cell-end)); }
+.archive-list-row::after { right: var(--text-end-inset); }
+.archive-list-row .tx::before { right: var(--text-end-inset); }
+.archive-list-cols { margin-right: var(--text-end-inset); padding-right: var(--cell-end); }
