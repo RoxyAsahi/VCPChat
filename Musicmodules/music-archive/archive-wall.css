@@ -515,3 +515,15 @@ body.music-reduce-motion .aw-tile.aw-flip .aw-in, body.music-reduce-motion .ag-c
 .aw-table .aw-locate { right: 48px; }
 body.music-reduce-motion .aw-locate.is-away::before, body.music-reduce-motion .aw-locate.is-ping::after { animation: none; }
 .ag-locate { right: 30px !important; bottom: 30px !important; }
+
+/* 大卡是当前这首时：主键两边的上一首、下一首圆键 */
+#music-archive-view .aw-panel-acts .aw-round { width: 34px; min-width: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+#music-archive-view .aw-panel-acts .aw-round[hidden] { display: none; }
+.aw-round i { position: relative; width: 12px; height: 12px; }
+.aw-round i::before, .aw-round i::after { content: ""; position: absolute; top: 0; }
+.aw-prev i::before { left: 0; width: 2px; height: 12px; background: currentColor; }
+.aw-prev i::after { left: 2px; border-style: solid; border-width: 6px 10px 6px 0; border-color: transparent currentColor transparent transparent; }
+.aw-next i::before { right: 0; width: 2px; height: 12px; background: currentColor; }
+.aw-next i::after { right: 2px; border-style: solid; border-width: 6px 0 6px 10px; border-color: transparent transparent transparent currentColor; }
+@container awcard (max-width: 340px) { #music-archive-view .aw-panel-acts .aw-round { width: 28px; min-width: 28px; } #music-archive-view .aw-panel-acts [data-wall="stage"] { display: none; } }
+#music-archive-view .aw-panel-acts .aw-primary.is-now:not(:disabled) { background: color-mix(in srgb, var(--ar-accent) 88%, #fff); color: #111; }

@@ -616,7 +616,7 @@
         panel.className = 'aw-panel';
         panel.innerHTML = '<div class="aw-lyric" hidden><div class="aw-lyric-roll"></div></div><div class="aw-panel-head"><span class="aw-panel-no"></span><span class="aw-panel-dur"></span></div><b class="aw-panel-title"></b><span class="aw-panel-sub"></span>'
             + '<div class="aw-seek" data-wall="seek" hidden><span class="aw-seek-t">0:00</span><div class="aw-seek-bar"><i></i></div><span class="aw-seek-d">0:00</span></div>'
-            + '<div class="aw-panel-acts"><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
+            + '<div class="aw-panel-acts"><button type="button" data-wall="prev" class="aw-round aw-prev" title="上一首" aria-label="上一首" hidden><i></i></button><button type="button" data-wall="play" class="aw-primary"><i></i><span>播放</span></button><button type="button" data-wall="next" class="aw-round aw-next" title="下一首" aria-label="下一首" hidden><i></i></button><button type="button" data-wall="stage">进入舞台</button><button type="button" data-wall="menu">更多…</button></div>';
         const fillPanel = (i) => {
             const t = opts.track(i);
             const m = opts.meta(t, i);
@@ -627,11 +627,16 @@
             const p = opts.playing();
             const isNow = p.index === i && p.active;
             const btn = panel.querySelector('[data-wall="play"]');
-            btn.lastChild.textContent = isNow ? '正在播放' : (p.index === i ? '继续播放' : '播放');
+            const isCur = p.index === i;
+            const canTransport = isCur && typeof opts.transport === 'function';
+            // 展开的是当前这首：主键变成暂停/继续，两边出现上一首、下一首（和 Folia 大卡上的播放控制一样）
+            btn.lastChild.textContent = isNow ? (canTransport ? '暂停' : '正在播放') : (isCur ? '继续播放' : '播放');
             btn.classList.toggle('is-now', isNow);
+            btn.disabled = isNow && !canTransport;
+            panel.querySelector('.aw-prev').hidden = !canTransport;
+            panel.querySelector('.aw-next').hidden = !canTransport;
             panel.dataset.item = String(i);
             syncSeek();
-            btn.disabled = isNow;
         };
 
         // ---------- 大卡进度条：只在展开的是当前这首时出现 ----------
@@ -971,7 +976,10 @@
                 }
                 const i = st.expanded ? st.ids[st.expanded.item] : -1;
                 if (i < 0) return;
-                if (btn.dataset.wall === 'play') opts.play(i, {});
+                const p = opts.playing();
+                const cur = p.index === i && typeof opts.transport === 'function';
+                if (btn.dataset.wall === 'prev' || btn.dataset.wall === 'next') { st.followExpand = true; opts.transport(btn.dataset.wall); }
+                else if (btn.dataset.wall === 'play') { if (cur) opts.transport('toggle'); else opts.play(i, {}); }
                 else if (btn.dataset.wall === 'stage') opts.play(i, { stage: true });
                 else if (btn.dataset.wall === 'menu') { const r = btn.getBoundingClientRect(); opts.menu(i, r.left, r.bottom + 6, btn); }
                 schedule();
@@ -1080,6 +1088,12 @@
                     st.playKey = pk;
                     st.playIndex = p.index;
                     st.dirty = true;
+                    // 大卡展开着的是刚才在放的那首、现在换到下一首了：大卡跟着换到新的这首
+                    if (st.expanded && prevIndex !== undefined && prevIndex !== p.index && p.index >= 0 && (st.followExpand || st.ids[st.expanded.item] === prevIndex)) {
+                        const pos = st.ids.indexOf(p.index);
+                        if (pos >= 0 && st.g) focusInstance(nearestOf(st.g, pos, viewCenter(), st.gap), { expand: true });
+                    }
+                    st.followExpand = false;
                     // 换歌了：用户这几秒没在摆弄墙的话，镜头自己滑到正在播放的那张（不改选中、不展开）
                     if (p.active && prevIndex !== undefined && prevIndex !== p.index && performance.now() - (st.touchedAt || 0) > 6000) {
                         const pos = st.ids.indexOf(p.index);

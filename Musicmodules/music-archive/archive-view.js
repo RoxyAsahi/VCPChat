@@ -2047,6 +2047,11 @@
                 return { t: d ? Math.min(d, t) : t, d };
             },
             seek: (t) => app.seekTo?.(t),
+            transport: (act) => {
+                if (act === 'toggle') { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
+                else if (act === 'prev') app.prevTrack?.();
+                else if (act === 'next') app.nextTrack?.();
+            },
             lyrics: () => (Array.isArray(app.currentLyrics) ? app.currentLyrics : []),
             reducedMotion
         };

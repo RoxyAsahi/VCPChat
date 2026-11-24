@@ -125,6 +125,10 @@ const FAKE = ({ n, light, covers }) => {
   check('大卡进度条', seek && !seek.hidden && seek.d === '3:20', JSON.stringify(seek));
   const lyr = await page.evaluate(() => { const e = document.querySelector('.aw-tile.is-open .aw-lyric'); const n = e && e.querySelector('p.is-now'); return e ? { hidden: e.hidden, now: n && n.textContent } : null; });
   check('大卡歌词', lyr && !lyr.hidden && /第 11 行/.test(lyr.now || ''), JSON.stringify(lyr));
+  {
+    const tp = await page.evaluate(() => { const b = document.querySelector('.aw-tile.is-open [data-wall="play"]'); const pv = document.querySelector('.aw-tile.is-open .aw-prev'); return { label: b && b.textContent, disabled: b && b.disabled, prev: pv && !pv.hidden }; });
+    check('大卡当前这首：暂停键和上一首/下一首', tp.label === '暂停' && !tp.disabled && tp.prev, JSON.stringify(tp));
+  }
   await shot(tag + '-2b-seek');
   if (args.dim) {
     // 熄灯：收起大卡后半分钟不碰，除正在播放的都暗下去；鼠标一动就亮
