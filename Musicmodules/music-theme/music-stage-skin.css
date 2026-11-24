@@ -892,25 +892,46 @@ body.music-reduce-motion .music-stage-mode-menu {
     visibility: visible;
 }
 
-/* ---------- 左上角：字标兼「返回首页」 ----------
- * 平时和原来的字标一样安静；悬停时后面浮出一块和右上角舞台下拉同规格的底（30 高、圆角 8），
- * 箭头往左挪 2px、字变亮。镜台/隧图和窄窗口里字标藏起来，只留箭头那一小块。 */
-.music-stage-top-chrome .music-stage-home {
-    grid-column: 1;
-    justify-self: start;
-    pointer-events: auto;
+/* ---------- 标题栏里的「返回首页」和舞台下拉 ----------
+ * 舞台打开时，标题栏左边的「VCP - 音乐播放器」换成「‹ VCP —— 歌词舞台」返回按钮，
+ * 右边窗口按钮左侧放舞台下拉；都不再浮在舞台画面上。标题栏是拖动区，这两样设成 no-drag。
+ * 返回按钮平时和字标一样安静，悬停浮出和下拉同规格的底（30 高、圆角 8），箭头左挪 2px。 */
+#custom-title-bar .music-stage-home,
+#custom-title-bar .music-stage-mode-picker {
+    display: none;
+}
+
+body.music-stage-active #custom-title-bar .title {
+    display: none;
+}
+
+body.music-stage-active #custom-title-bar .music-stage-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     height: 30px;
     box-sizing: border-box;
-    margin: 0 0 0 -8px;
+    margin: 0 0 0 -6px;
     padding: 0 12px 0 6px;
-    gap: 10px;
     border: 1px solid transparent;
     border-radius: 8px;
     background: transparent;
+    color: var(--ms-muted);
     font-family: var(--mt-font-label);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .14em;
     cursor: pointer;
+    -webkit-app-region: no-drag;
     transition: color var(--mt-dur-1, .15s) ease, background-color var(--mt-dur-1, .15s) ease,
         border-color var(--mt-dur-1, .15s) ease;
+}
+
+#custom-title-bar .music-stage-home i {
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--ms-line);
 }
 
 .music-stage-home-icon {
@@ -923,9 +944,9 @@ body.music-reduce-motion .music-stage-mode-menu {
     transition: transform .2s ease;
 }
 
-.music-stage-top-chrome .music-stage-home:hover {
+body.music-stage-active #custom-title-bar .music-stage-home:hover {
     color: var(--ms-ink);
-    background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
+    background: var(--ms-glass);
     border-color: var(--ms-glass-edge);
 }
 
@@ -942,34 +963,39 @@ body.music-reduce-motion .music-stage-mode-menu {
     outline-offset: 2px;
 }
 
-.music-stage:has(.music-stage-mode-diorama, .music-stage-mode-tunnel) .music-stage-top-chrome .music-stage-home {
-    visibility: visible;
-    padding: 0;
-    width: 30px;
-    justify-content: center;
-    margin-left: 0;
-    background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
-    border-color: var(--ms-glass-edge);
-    color: var(--ms-ink);
+body.music-stage-active #custom-title-bar .music-stage-mode-picker {
+    display: block;
+    position: relative;
+    margin-right: 4px;
+    -webkit-app-region: no-drag;
 }
 
-.music-stage:has(.music-stage-mode-diorama, .music-stage-mode-tunnel) .music-stage-home > :not(.music-stage-home-icon) {
-    display: none;
+#custom-title-bar .music-stage-mode-picker-toggle {
+    background: transparent;
+    border-color: transparent;
+    color: var(--ms-ink);
+    text-shadow: none;
+}
+
+#custom-title-bar .music-stage-mode-picker-toggle:hover,
+#custom-title-bar .music-stage-mode-picker.is-open .music-stage-mode-picker-toggle {
+    background: var(--ms-glass);
+    border-color: var(--ms-glass-edge);
+}
+
+#custom-title-bar .music-stage-mode-menu {
+    max-height: min(520px, calc(100vh - 120px));
 }
 
 @media (max-width: 900px) {
-    .music-stage-top-chrome .music-stage-home {
-        display: inline-flex;
+    body.music-stage-active #custom-title-bar .music-stage-home {
         width: 30px;
         padding: 0;
         margin-left: 0;
         justify-content: center;
-        background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
-        border-color: var(--ms-glass-edge);
-        color: var(--ms-ink);
     }
 
-    .music-stage-home > :not(.music-stage-home-icon) {
+    #custom-title-bar .music-stage-home > :not(.music-stage-home-icon) {
         display: none;
     }
 }

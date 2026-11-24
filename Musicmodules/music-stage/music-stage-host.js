@@ -71,8 +71,9 @@
             edgeSpectrum: root.querySelector('.music-stage-edge-spectrum'),
             edgeCanvas: root.querySelector('.music-stage-edge-spectrum-canvas'),
             modeRoot: root.querySelector('.music-stage-mode-root'),
-            modeSwitcher: root.querySelector('.music-stage-mode-picker, .music-stage-mode-switcher'),
-            homeButton: root.querySelector('.music-stage-home'),
+            modeSwitcher: root.querySelector('.music-stage-mode-switcher')
+                || document.querySelector('#custom-title-bar .music-stage-mode-picker'),
+            homeButton: document.querySelector('#custom-title-bar .music-stage-home'),
             settings: root.querySelector('.music-stage-settings'),
             settingsToggle: root.querySelector('.music-stage-settings-toggle'),
             settingsCard: root.querySelector('.music-stage-settings-card'),
