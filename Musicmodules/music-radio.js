@@ -367,6 +367,8 @@
         try { global.MusicTrackFile?.setupMusicTrackFile?.(app); } catch (e) { /* 没有这个模块 */ }
         // 曲库文件夹管理（music-folders.js）
         try { global.MusicFolders?.setupMusicFolders?.(app); } catch (e) { /* 没有这个模块 */ }
+        // 自己的 EQ 预设（music-eq-presets.js）
+        try { global.MusicEqPresets?.setupMusicEqPresets?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };

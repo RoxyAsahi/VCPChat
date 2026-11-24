@@ -304,3 +304,6 @@
 .mfold-acts { display: flex; gap: 6px; flex: none; }
 .mfold-acts .minfo-btn { height: 28px; padding: 0 12px; font-size: 12.5px; }
 .mfold-acts .mfold-remove:hover { color: #e5484d; }
+
+/* 存 EQ 预设的起名框（music-eq-presets.js） */
+.dialog-overlay.music-eq-name .music-dialog-msg { margin: 10px 0 6px; font-size: 12.5px; }
