@@ -961,7 +961,7 @@ test('扫描途中一批批进来：阵列和目录跟着长，选中的还是�
     vp.scrollTop = 2000; vp.dispatchEvent(new f.w.Event('scroll'));
     await wait(40);
     const topTitle = () => {
-        const rows = [...vp.querySelectorAll('.archive-list-row')].map((n) => ({ y: parseFloat((n.style.transform.match(/translateY\(([-\d.]+)px/) || [])[1]), t: n.textContent }))
+        const rows = [...vp.querySelectorAll('.archive-list-row')].map((n) => ({ y: parseFloat((n.style.transform.match(/translateY\(([-\d.]+)px/) || [])[1]), t: n.querySelector('.tx').textContent }))   // 只比歌名：序号会因为前面多了歌而变
             .filter((x) => x.y >= vp.scrollTop).sort((a, b) => a.y - b.y);
         return rows[0] && rows[0].t;
     };

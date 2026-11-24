@@ -444,6 +444,9 @@
             if (key !== lastRange) { lastRange = key; fluid?.setProgressRange(a, b); }
             return [a, b];
         };
+        // 胶囊里的总时长点一下换成剩余时间（−03:12），再点换回；记在 localStorage musicDockRemain。
+        let remainMode = false;
+        try { remainMode = global.localStorage?.getItem('musicDockRemain') === '1'; } catch (e) {}
         const renderProgress = () => {
             const d = duration();
             const t = currentTime();
@@ -459,17 +462,19 @@
             }
             fluid?.setProgress(fraction);
             const timeText = formatClock(t);
-            const durText = formatClock(d);
+            const totalText = formatClock(d);
+            const durText = remainMode && d > 0 ? `−${formatClock(Math.max(0, d - t))}` : totalText;
             if (timeText !== state.lastTimeText) {
                 state.lastTimeText = timeText;
                 for (const node of el.t1) node.textContent = timeText;
             }
-            const tipText = `${timeText} / ${durText}`;
+            const tipText = `${timeText} / ${totalText}`;
             if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             if (durText !== state.lastDurText) {
                 state.lastDurText = durText;
                 for (const node of el.t2) node.textContent = durText;
-                for (const trk of el.tracks) trk.setAttribute('aria-valuemax', String(Math.round(d)));
+                const max = String(Math.round(d));
+                for (const trk of el.tracks) if (trk.getAttribute('aria-valuemax') !== max) trk.setAttribute('aria-valuemax', max);
             }
             if (state.panelOpen && state.tab === '歌词') syncLyricHighlight();
         };
@@ -721,6 +726,27 @@
                 syncExpanded();
             }, HOVER_COLLAPSE_MS);
         });
+        const remainTitle = () => (remainMode ? '点一下换回总时长' : '点一下换成剩余时间');
+        for (const node of el.t2) {
+            node.style.cursor = 'pointer';
+            node.title = remainTitle();
+            listen(node, 'click', (event) => {
+                event.stopPropagation();
+                remainMode = !remainMode;
+                try { global.localStorage?.setItem('musicDockRemain', remainMode ? '1' : '0'); } catch (e) {}
+                for (const n of el.t2) n.title = remainTitle();
+                renderProgress();
+            });
+        }
+        // 右键胶囊（按钮以外）：档案页里飞到正在播放的那首、目录滚到那一行；舞台里或经典视图里不拦，照旧。
+        listen(el.cap, 'contextmenu', (event) => {
+            if (event.target.closest('button') || stageActive() || el.cap.classList.contains('md-notrack')) return;
+            const view = app.archiveView;
+            if (!view || view.mode !== 'archive' || typeof view.locatePlaying !== 'function') return;
+            event.preventDefault();
+            event.stopPropagation();
+            view.locatePlaying();
+        });
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button')) return;
             // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
@@ -952,7 +978,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '进入歌词舞台';
-            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
+            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度，右键在档案页里找到这首';
             syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
@@ -1444,7 +1470,8 @@
                 return;
             }
             if (state.lyricsSource !== app.currentLyrics) { renderBody(); return; }
-            let index = Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1;
+            // 当前句按进度自己算：首页（档案页）开着时经典歌词那套动画循环是停的，app.currentLyricIndex 不会往前走
+            let index = typeof app.lyricIndexAt === 'function' ? app.lyricIndexAt(currentTime()) : (Number.isInteger(app.currentLyricIndex) ? app.currentLyricIndex : -1);
             // 暂停着打开（比如重开窗口停在 0:08）时歌词模块不更新当前行，这里按进度自己找一次，不然一行都不亮
             if (index < 0 && !app.isPlaying && typeof app.lyricIndexAt === 'function' && currentTime() > 0) {
                 const at = app.lyricIndexAt(currentTime());
@@ -1745,6 +1772,12 @@
         };
         cleanups.push(() => { toastPos?.remove(); toastPos = null; toastSheet = ''; });
         let panelReturn = null;
+        // 开关面板时会用脚本挪焦点；用鼠标开关的不该亮出焦点框（还回去的那颗按钮上会出现一个粗框），只有键盘操作才显示
+        let lastKeyboard = false;
+        const markInput = (kbd) => { lastKeyboard = kbd; document.documentElement.classList.toggle('md-pointer-mode', !kbd); };
+        listen(document, 'keydown', (event) => { if (event.key === 'Tab' || event.key.startsWith('Arrow') || event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') markInput(true); }, true);
+        listen(document, 'pointerdown', () => markInput(false), true);
+        cleanups.push(() => document.documentElement.classList.remove('md-pointer-mode'));
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
             if (!state.panelOpen) {
@@ -1764,7 +1797,7 @@
                 renderTabs(false);
                 if (!(state.tab === '播放列表' && prebuiltFresh())) renderBody();
                 prebuilt = null;
-                el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
+                el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true, focusVisible: lastKeyboard });
                 syncSolid();
                 requestAnimationFrame(() => { if (state.panelOpen && !state.destroyed) placeMarks(el.pnl); });
                 return;
@@ -1789,7 +1822,7 @@
             const active = document.activeElement;
             if (active && (el.pnl.contains(active) || active === el.handle)) {
                 const back = panelReturn && panelReturn.isConnected ? panelReturn : el.handle;
-                back.focus?.({ preventScroll: true });
+                back.focus?.({ preventScroll: true, focusVisible: lastKeyboard });
             }
             panelReturn = null;
             syncSolid();
@@ -1851,6 +1884,29 @@
                 kickProgress();
             });
             listen(el.handle, 'pointercancel', (event) => finish(event, false));
+            // 指针停在播放头上滚轮：一格跳 5 秒（往上是往后），触控板按累计距离算；只认播放头，别处滚轮不碰进度。
+            // 停手 0.3 秒或换方向就清零累计，免得上一回剩下的零头吞掉下一格。
+            let seekWheelAcc = 0;
+            let seekWheelAt = -1e9;
+            listen(el.handle, 'wheel', (event) => {
+                if (ringMode !== 'playhead' || state.panelOpen || state.dragging) return;
+                const d = duration();
+                if (!(d > 0)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+                const delta = (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
+                if (event.timeStamp - seekWheelAt > 300 || Math.sign(delta) !== Math.sign(seekWheelAcc)) seekWheelAcc = 0;
+                seekWheelAt = event.timeStamp;
+                seekWheelAcc += delta;
+                const steps = Math.trunc(seekWheelAcc / 100);
+                if (!steps) return;
+                seekWheelAcc -= steps * 100;
+                state.ringHover = true;
+                syncSolid();
+                app.seekTo?.(Math.min(Math.max(0, d - 0.5), Math.max(0, currentTime() - steps * 5)));
+                kickProgress();
+            }, { passive: false });
             listen(el.handle, 'click', (event) => {
                 if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
                 togglePanel();
@@ -2173,7 +2229,7 @@
             ['M', '静音 / 恢复（档案页里是打字检索）'],
             ['L', '喜欢 / 取消喜欢当前这首（档案页里是打字检索）'],
             ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
-            ['Ctrl + L', '档案页里定位当前播放'],
+            ['Ctrl + L', '档案页里定位当前播放（右键底栏胶囊也行）'],
             ['Alt + ↑ / ↓', '档案页歌单里把选中的歌上移 / 下移一位'],
             ['Delete', '档案页歌单里移除选中的歌（可撤销）'],
             ['Ctrl + Enter', '档案页里把选中的歌插到下一首播放'],

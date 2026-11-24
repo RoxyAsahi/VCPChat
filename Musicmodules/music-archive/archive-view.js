@@ -28,7 +28,9 @@
 
     const TEMPLATE = `
         <div class="archive-atmos" aria-hidden="true"></div>
+        <div class="archive-grain" data-ref="grain" aria-hidden="true"></div>
         <div class="archive-tip" data-ref="tip" aria-hidden="true"><b></b><span></span></div>
+        <div class="archive-keys" data-ref="keys" role="dialog" aria-label="快捷键" hidden><div class="archive-keys-head"><span class="archive-tiny">KEYS</span><b>快捷键</b><button type="button" data-act="keys" aria-label="关闭">×</button></div><dl><dt>↑ ↓</dt><dd>上一首 / 下一首</dd><dt>← →</dt><dd>换一组</dd><dt>PgUp PgDn</dt><dd>跳 10 首</dd><dt>Home End</dt><dd>这一组的第一首 / 最后一首</dd><dt>Enter</dt><dd>播放选中（Shift+Enter 直接进舞台）</dd><dt>空格</dt><dd>播放 / 暂停</dd><dt>/ 或直接打字</dt><dd>检索</dd><dt>Ctrl+L</dt><dd>回到正在播放</dd><dt>Shift+R</dt><dd>随机抽取</dd><dt>Shift+F10</dt><dd>选中曲目的菜单</dd><dt>Esc</dt><dd>收起 / 停下</dd></dl><p class="archive-keys-wall">封面墙 / 网格里：方向键按位置走，单击展开大卡、双击播放，PgUp PgDn 在网格里翻页，拖动或滚轮平移</p><p>再按 ? 或 Esc 关闭</p></div>
         <div class="archive-hud" data-ref="hud">
             <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
@@ -36,6 +38,7 @@
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
+                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="now" title="回到正在播放的曲目（Ctrl+L）"><span class="archive-glyph-now" aria-hidden="true">◷</span> 正在播放</button>
             </nav>
             <div class="archive-empty" role="status">
@@ -46,7 +49,7 @@
                 <button type="button" data-act="add-cloud">从云端导入 <span aria-hidden="true">→</span></button>
             </div>
             <div class="archive-bottom">
-                <div class="archive-counter"><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
+                <div class="archive-counter"><div class="archive-lanes" data-ref="lanes"><button type="button" data-act="lane-prev" title="上一组（←）" aria-label="上一组">←</button><button type="button" class="archive-lanes-name" data-act="list" title="打开目录，看全部分组"><span class="archive-tiny" data-ref="laneN"></span><b data-ref="laneName"></b></button><button type="button" data-act="lane-next" title="下一组（→）" aria-label="下一组">→</button></div><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
                 <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
             </div>
         </div>`;
@@ -369,7 +372,107 @@
             const digits = Math.max(2, String(count).length);
             rollTo(refs.selN, pad(count ? r + 1 : 0, digits));
             refs.selT.textContent = pad(count, digits);
+            renderRuler(col, count, r);
+            renderLanes(col);
             syncCard();
+        };
+
+        /*
+         * 索引标尺（借鉴 RhinE 档案页阵列下方的刻度尺）：一组里的曲目摊成一排细刻线，
+         * 多于刻线数时每根代表相等的一段；当前位置是一根高的强调色刻线。
+         * 悬停在上面显示那一格的曲名，按住左右拖动一路选过去，松手停下；两头的 ↑ ↓ 逐首走。
+         */
+        /* 分组切换（借鉴 RhinE 阵列下方的「← SHELF 04 / 31  名称 →」）：目录收起时也知道自己在哪一组、能换组 */
+        const renderLanes = (col) => {
+            const n = state.columns.length;
+            if (!refs.lanes) return;
+            refs.lanes.hidden = n < 2;
+            if (n < 2) return;
+            const d = Math.max(2, String(n).length);
+            refs.laneN.textContent = `组 ${pad(Model.wrap(state.lane, n) + 1, d)} / ${pad(n, d)}`;
+            refs.laneName.textContent = col.name || '';
+        };
+        const RULER_TICKS = 32;
+        let rulerKey = '';
+        const rulerTicks = (count) => Math.min(count, RULER_TICKS);
+        const renderRuler = (col, count, r) => {
+            const el = refs.ruler;
+            if (!el) return;
+            el.hidden = count < 2;
+            if (count < 2) return;
+            const n = rulerTicks(count);
+            const key = col.id + ':' + count;
+            if (key !== rulerKey) {
+                rulerKey = key;
+                refs.rulerTrack.style.setProperty('--ticks', n);
+                // 刻线用真元素画：HUD 整体缩放后，1px 的重复渐变会有几根被吃掉
+                refs.rulerTrack.querySelectorAll('.archive-ruler-tick').forEach((x) => x.remove());
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < n; i++) { const t = document.createElement('s'); t.className = 'archive-ruler-tick'; t.style.left = ((i + 0.5) / n * 100).toFixed(3) + '%'; frag.appendChild(t); }
+                refs.rulerTrack.insertBefore(frag, refs.rulerAt);
+                refs.rulerTrack.setAttribute('aria-valuemin', '1');
+                refs.rulerTrack.setAttribute('aria-valuemax', String(count));
+            }
+            // 刻线 i 管 [i*count/n, (i+1)*count/n) 这几首；位置线按所在那一段的中点放
+            const tick = Math.min(n - 1, Math.floor(r * n / count));
+            refs.rulerAt.style.setProperty('--at', ((tick + 0.5) / n).toFixed(4));
+            refs.rulerTrack.setAttribute('aria-valuenow', String(r + 1));
+        };
+        const rulerRowAt = (clientX) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (count < 2) return -1;
+            const box = refs.rulerTrack.getBoundingClientRect();
+            const f = Math.min(0.9999, Math.max(0, (clientX - box.left) / Math.max(1, box.width)));
+            const n = rulerTicks(count);
+            const tick = Math.floor(f * n);
+            // 一根刻线代表好几首时，按刻线内的位置细分，拖动时能走到每一首
+            return Math.min(count - 1, Math.floor((tick + (f * n - tick)) * count / n));
+        };
+        const rulerTipAt = (clientX) => {
+            const row = rulerRowAt(clientX);
+            const col = column();
+            const t = row >= 0 && col ? tracks()[col.items[row]] : null;
+            if (!t) { refs.rulerTip.classList.remove('on'); refs.rulerTrack.classList.remove('hovering'); return; }
+            // 悬停的那一格先亮一根细线（借鉴 RhinE 刻度尺的 hoverTick），松手或点下去才真的选过去
+            const hn = rulerTicks(col.items.length);
+            refs.rulerTrack.style.setProperty('--hover', ((Math.min(hn - 1, Math.floor(row * hn / col.items.length)) + 0.5) / hn).toFixed(4));
+            refs.rulerTrack.classList.add('hovering');
+            const box = refs.rulerTrack.getBoundingClientRect();
+            refs.rulerTip.textContent = pad(row + 1, Math.max(2, String(col.items.length).length)) + '  ' + (Model.stripExtension(t.title) || '未知标题');
+            // HUD 整体按设计稿缩放过：屏幕像素换回标尺自己的像素
+            const k = refs.rulerTrack.offsetWidth / Math.max(1, box.width);
+            refs.rulerTip.style.left = Math.round(Math.min(box.width, Math.max(0, clientX - box.left)) * k) + 'px';
+            refs.rulerTip.classList.add('on');
+        };
+        const bindRuler = () => {
+            const track = refs.rulerTrack;
+            if (!track) return;
+            let dragging = false;
+            track.addEventListener('pointermove', (e) => {
+                rulerTipAt(e.clientX);
+                if (dragging) { const row = rulerRowAt(e.clientX); if (row >= 0) goRow(row, { pulse: false }); }
+            });
+            track.addEventListener('pointerleave', () => { if (!dragging) { refs.rulerTip.classList.remove('on'); track.classList.remove('hovering'); } });
+            track.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                dragging = true;
+                track.setPointerCapture?.(e.pointerId);
+                track.classList.add('drag');
+                stopInertia();
+                const row = rulerRowAt(e.clientX);
+                if (row >= 0) goRow(row);
+            });
+            const end = (e) => {
+                if (!dragging) return;
+                dragging = false;
+                track.classList.remove('drag');
+                track.releasePointerCapture?.(e.pointerId);
+                if (e.type === 'pointercancel' || !track.matches(':hover')) refs.rulerTip.classList.remove('on');
+            };
+            track.addEventListener('pointerup', end);
+            track.addEventListener('pointercancel', end);
         };
 
         // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
@@ -459,6 +562,31 @@
             capped(state.coverCache, url, entry, 64);
         };
         let cardExpanded = true;
+        /*
+         * 借鉴 RhinE「鼠标不动、档案在它下面移动后重新找一次指着的那张」：键盘、标尺、滚轮换了选中后，
+         * 镜头停稳时按鼠标最后的位置重新判一次悬停，高亮不会还挂在原来那张卡上。只改悬停和光标，不弹提示。
+         */
+        let lastPtr = null, rehoverTimer = 0;
+        let picking = false;   // 随机抽取正在跑（pick 在后面才声明，select 里用这个）
+        const rehover = () => {
+            rehoverTimer = 0;
+            const sc = state.scene;
+            if (!lastPtr || !sc || !sc.canvas || wheelBrowsing || turning || (plane && plane.active)) return;
+            const rect = sc.canvas.getBoundingClientRect();
+            const d = sc.detailRect && sc.detailRect();
+            const x = lastPtr.x - rect.left, y = lastPtr.y - rect.top;
+            if (d && x >= d.left && x <= d.right && y >= d.top && y <= d.bottom) return;
+            const c = sc.pick(lastPtr.x, lastPtr.y, rect);
+            sc.setHover(c);
+            const browsing = !cardExpanded && !sc.detail;
+            sc.canvas.style.cursor = c && Model.cellTrack(state.columns, c.lane, c.row) >= 0 ? 'pointer' : browsing ? 'grab' : '';
+            kick();
+        };
+        const rehoverSoon = () => {
+            if (!lastPtr) return;
+            clearTimeout(rehoverTimer);
+            rehoverTimer = setTimeout(rehover, reducedMotion() ? 0 : 420);
+        };
         let wheelBrowsing = false;
         const syncCard = () => {
             if (!state.scene || state.destroyed) return;
@@ -518,9 +646,12 @@
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
             state.scene?.select(lane, row, { pulse });
             renderHud();
-            syncList();
+            // 随机抽取跑着时左侧目录先不跟（借鉴 RhinE：抽取途中资料面板不动，落定才显示）：
+            // 每一跳都换分组、滚列表又费又晃，停下或被打断时再一次对齐
+            if (!picking) syncList();
             schedulePlace();
             kick();
+            rehoverSoon();
         };
 
         /* 每一列记住上次停在第几首：换列回来时回到那一首（第一次进某列时保持行号） */
@@ -850,6 +981,80 @@
             if (selectedIndex() !== i) return;
             playSelected(playback);
         };
+        /*
+         * 随机抽取：选择框先跨列跑过去，再沿列往下走、越走越慢，停在随机的一首上，取出并播放。
+         * 跑的途中用户任何操作（按键、点击、滚轮）都会停下，停在当时那一格，不播放。
+         * 降低动态时直接落到那一首。
+         */
+        const pick = { timers: [], on: false };
+        const pickStop = () => {
+            if (!pick.on) return;
+            pick.on = false;
+            picking = false;
+            pick.timers.forEach(clearTimeout);
+            pick.timers = [];
+            refs.pickBtn?.classList.remove('running');
+            setCardExpanded(true);
+            syncList();
+        };
+        const randomPick = () => {
+            if (pick.on || !state.columns.length) return;
+            const order = libraryOrder();
+            const cur = selectedIndex();
+            const pool = order.length > 1 ? order.filter((i) => i !== cur) : order;
+            if (!pool.length) return;
+            const target = pool[Math.floor(Math.random() * pool.length)];
+            const n = state.columns.length;
+            const at = Model.locate(state.columns, target, Model.wrap(state.lane, n));
+            if (!at) return;
+            const lane1 = at.lane + n * Math.round((state.lane - at.lane) / n);
+            const m = state.columns[at.lane].items.length;
+            // 先算出到那一列时会停在第几行（换列会回到记住的位置），再从那里往目标走
+            const remembered = focusByColumn.get(state.columns[at.lane].id);
+            const startRow = lane1 === state.lane ? state.row
+                : remembered !== undefined ? remembered + m * Math.round((state.row - remembered) / m) : state.row;
+            const row1 = at.row + m * Math.round((startRow - at.row) / m);
+            const steps = [];
+            let t = 0;
+            if (reducedMotion()) {
+                steps.push({ t, lane: lane1, row: row1 });
+            } else {
+                const dl = lane1 - state.lane, hops = Math.min(Math.abs(dl), 8);
+                for (let h = 1; h <= hops; h++) steps.push({ t: t += 110, lane: state.lane + Math.round(dl * h / hops), row: null });
+                const dr = row1 - startRow, N = Math.min(Math.abs(dr), 12);
+                let last = startRow;
+                for (let j = 1; j <= N; j++) {
+                    const r = startRow + Math.round(dr * (1 - Math.pow(1 - j / N, 2))); // 缓出：最后几步最短、最慢
+                    if (r === last) continue;
+                    steps.push({ t: t += 60 + 240 * Math.pow(j / N, 2), lane: lane1, row: r });
+                    last = r;
+                }
+                if (last !== row1 || !steps.length) steps.push({ t: t += 100, lane: lane1, row: row1 });
+            }
+            pick.on = true;
+            picking = true;
+            refs.pickBtn?.classList.add('running');
+            setCardExpanded(false);
+            for (const s of steps) {
+                pick.timers.push(setTimeout(() => {
+                    if (!pick.on || state.destroyed) return;
+                    if (s.row === null) stepLane(s.lane - state.lane);
+                    else select(s.lane, s.row);
+                    state.scene?.touch?.();
+                }, s.t));
+            }
+            pick.timers.push(setTimeout(() => {
+                if (!pick.on || state.destroyed) return;
+                pick.on = false;
+                picking = false;
+                pick.timers = [];
+                refs.pickBtn?.classList.remove('running');
+                if (selectedIndex() !== target) select(lane1, row1);
+                syncList();
+                setCardExpanded(true);
+                playSelected();
+            }, t + (reducedMotion() ? 0 : 450)));
+        };
         /* 底部显示正在放的这一组（队列）叫什么 */
         const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
@@ -1175,6 +1380,7 @@
         };
         const bindCanvas = (canvas) => {
             canvas.addEventListener('pointermove', (e) => {
+                lastPtr = { x: e.clientX, y: e.clientY };
                 const rect = canvas.getBoundingClientRect();
                 state.scene?.setPointer((e.clientX - rect.left) / rect.width - 0.5, (e.clientY - rect.top) / rect.height - 0.5);   // 照原版 ±0.5
                 if (plane && (e.buttons & 1)) {
@@ -1239,7 +1445,7 @@
                 }
                 kick();
             });
-            canvas.addEventListener('pointerleave', () => { pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
+            canvas.addEventListener('pointerleave', () => { lastPtr = null; clearTimeout(rehoverTimer); pendingPick = null; state.scene?.setHover(null); showTip(null); kick(); });
             // 取出时按住卡左右拖可以转着看，松手转回正面；按在卡外面（没拖）就把卡放回去
             const onDetailCard = (e) => {
                 const r = state.scene?.detailRect();
@@ -1339,6 +1545,7 @@
             if (!wheelBrowsing) return;
             wheelBrowsing = false;
             syncCard();
+            rehoverSoon();
         };
         const stopInertia = () => {
             inertia.stop();
@@ -1393,12 +1600,38 @@
             inertiaTimer = setTimeout(releaseWheel, 160);
         }, { passive: false });
 
+        // 借鉴 RhinE「在排名上滚轮换排」：滚轮停在分组名上换组、停在标尺上逐首走，不必先挪到场景里
+        const wheelLaneName = Model.createWheel(60);
+        const wheelRuler = Model.createWheel(60);
+        const onHudWheel = (e) => {
+            const onLanes = refs.lanes && refs.lanes.contains(e.target);
+            const onRuler = !onLanes && refs.ruler && refs.ruler.contains(e.target);
+            if (!onLanes && !onRuler) return;
+            const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta) return;
+            e.preventDefault();
+            const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            const n = Model.isWheelNotch(e, global.devicePixelRatio)
+                ? Math.sign(delta)
+                : (onLanes ? wheelLaneName : wheelRuler)(delta * unit, e.timeStamp);
+            if (!n) return;
+            if (onLanes) stepLane(Math.sign(n));
+            else select(state.lane, state.row + n);
+        };
+        root.addEventListener('wheel', onHudWheel, { passive: false });
+
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
                 switch (btn.dataset.act) {
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
+                    case 'pick': randomPick(); break;
+                    case 'row-prev': select(state.lane, state.row - 1); break;
+                    case 'row-next': select(state.lane, state.row + 1); break;
+                    case 'lane-prev': stepLane(-1); break;
+                    case 'keys': toggleKeys(false); break;
+                    case 'lane-next': stepLane(1); break;
                     case 'now': locatePlaying(); break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
                     case 'controls': openControls(); break;
@@ -1424,15 +1657,27 @@
         root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
 
+        // 借鉴 RhinE 的按键说明：按 ? 摊开一张快捷键卡，Esc / 再按 ? / 点别处收起
+        const keysOpen = () => Boolean(refs.keys && !refs.keys.hidden);
+        const toggleKeys = (on = !keysOpen()) => {
+            if (!refs.keys) return;
+            refs.keys.hidden = !on;
+            if (on && !reducedMotion()) refs.keys.animate([{ opacity: 0, transform: 'translate(-50%, calc(-50% + 6px))' }, { opacity: 1, transform: 'translate(-50%, -50%)' }], { duration: 160, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        };
+        const onKeysOutside = (e) => { if (keysOpen() && !refs.keys.contains(e.target)) toggleKeys(false); };
+        document.addEventListener('pointerdown', onKeysOutside, true);
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
             if (momentum && isShown()) stopMomentum();
+            if (pick.on && isShown()) { pickStop(); if (e.key === 'Escape') { e.preventDefault(); return; } }
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
             // Ctrl+L 定位当前播放（输入框里也能用）
             if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
+            if (keysOpen() && (e.key === 'Escape' || e.key === '?')) { e.preventDefault(); toggleKeys(false); return; }
+            if (e.key === '?') { e.preventDefault(); toggleKeys(true); return; }
             stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) {
@@ -1447,6 +1692,7 @@
                 e.preventDefault(); playSelected({ stage: e.shiftKey }); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+            if (e.shiftKey && e.code === 'KeyR') { e.preventDefault(); randomPick(); return; }
             if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenuForSelected(); return; }
             // 直接打字：打开目录、聚焦检索框并带入这个字（不用先按 /）。
             // 输入法正在组字（isComposing / Process / 229）时不抢，让输入法把字交给它自己的输入框
@@ -1463,9 +1709,95 @@
             }
         };
         document.addEventListener('keydown', onKeyDown);
+        bindRuler();
+        // 随机抽取跑着时，点哪里、滚轮都先停下（抽取按钮自己除外：再点一下不会重来）
+        const onPickInterrupt = (e) => {
+            if (!pick.on) return;
+            if (e.type === 'pointerdown' && e.target && e.target.closest && e.target.closest('[data-act="pick"]')) return;
+            pickStop();
+        };
+        document.addEventListener('pointerdown', onPickInterrupt, true);
+        document.addEventListener('wheel', onPickInterrupt, { capture: true, passive: true });
         // ---------- 外部状态 ----------
-        const onResize = () => resize();
+        const onResize = () => { resize(); syncGrain(); };
         global.addEventListener('resize', onResize);
+        /*
+         * 浅色/深色切换时的扫描带（借鉴 RhinE 换色时横扫整窗的那一道扫描线）：颜色先换好，
+         * 再有一条带横向扫描线的窄带从左扫到右，右边缘是一根强调色扫描头，扫过就散。
+         * 启动时第一次定主题不扫；降低动态时不扫；窗口在后台时不扫。
+         */
+        let modeLight = document.body.classList.contains('light-theme');
+        const modeReadyAt = performance.now() + 1500;
+        let modeSweepEl = null;
+        const modeSweep = () => {
+            if (reducedMotion() || document.hidden || performance.now() < modeReadyAt) return;
+            modeSweepEl?.remove();
+            const cs = getComputedStyle(root);
+            const el = document.createElement('div');
+            el.className = 'archive-mode-sweep';
+            el.setAttribute('aria-hidden', 'true');
+            el.style.setProperty('--sweep-ink', cs.getPropertyValue('--ar-ink').trim() || 'currentColor');
+            el.style.setProperty('--sweep-accent', cs.getPropertyValue('--ar-accent').trim() || 'currentColor');
+            el.innerHTML = '<i></i>';
+            document.body.appendChild(el);
+            modeSweepEl = el;
+            const band = el.firstChild;
+            const w = global.innerWidth || 1600;
+            const bw = Math.round(Math.min(260, Math.max(160, w * 0.12)));
+            band.style.width = bw + 'px';
+            const anim = band.animate?.([{ transform: `translateX(${-bw}px)` }, { transform: `translateX(${w}px)` }],
+                { duration: Math.round(Math.min(760, 420 + w * 0.12)), easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'forwards' });
+            const done = () => { if (modeSweepEl === el) modeSweepEl = null; el.remove(); };
+            if (anim) anim.onfinish = anim.oncancel = done; else setTimeout(done, 0);
+        };
+        const modeObserver = new MutationObserver(() => {
+            const light = document.body.classList.contains('light-theme');
+            if (light === modeLight) return;
+            modeLight = light;
+            modeSweep();
+        });
+        modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        /*
+         * 颗粒质感（借鉴 RhinE 的 grain）：一块无缝噪点小图平铺在场景上、HUD 下面，按设备像素 1:1。
+         * 深色时是白色噪点（只把黑底提亮），浅色时是黑色噪点（只把纸面压暗），平均只差两三级灰，
+         * 让大面积的纸色和黑底不那么像塑料。图只生成一次，静止不动，不占每帧开销。
+         */
+        const GRAIN_TILE = 160;
+        const grainTiles = {};
+        const grainTile = (light) => {
+            const k = light ? 'light' : 'dark';
+            if (grainTiles[k] !== undefined) return grainTiles[k];
+            let url = '';
+            try {
+                const c = document.createElement('canvas');
+                c.width = c.height = GRAIN_TILE;
+                const g = c.getContext('2d');
+                const img = g.createImageData(GRAIN_TILE, GRAIN_TILE);
+                const v = light ? 0 : 255;
+                // 固定种子：每次打开颗粒一样，不会一闪
+                let seed = 0x2f6b1d;
+                const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return ((seed >>> 0) % 100000) / 100000; };
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const r = rnd();
+                    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+                    img.data[i + 3] = Math.round(r * r * r * (light ? 13 : 11));
+                }
+                g.putImageData(img, 0, 0);
+                url = c.toDataURL('image/png');
+            } catch (e) { url = ''; }
+            grainTiles[k] = url;
+            return url;
+        };
+        const syncGrain = () => {
+            const el = refs.grain;
+            if (!el) return;
+            const url = grainTile(document.body.classList.contains('light-theme'));
+            el.style.backgroundImage = url ? `url("${url}")` : 'none';
+            el.style.backgroundSize = (GRAIN_TILE / (global.devicePixelRatio || 1)) + 'px';
+        };
+        syncGrain();
+        const grainObserver = new MutationObserver(syncGrain);
+        grainObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
@@ -1551,6 +1883,13 @@
             clearTimeout(state.wait);
             state.wait = 0;
             document.removeEventListener('keydown', onKeyDown);
+            clearTimeout(rehoverTimer);
+            document.removeEventListener('pointerdown', onKeysOutside, true);
+            grainObserver.disconnect();
+            modeObserver.disconnect(); modeSweepEl?.remove();
+            pick.timers.forEach(clearTimeout); pick.on = false;
+            document.removeEventListener('pointerdown', onPickInterrupt, true);
+            document.removeEventListener('wheel', onPickInterrupt, { capture: true });
             document.removeEventListener('visibilitychange', onVisibility);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
@@ -1647,6 +1986,7 @@
             onMotion: (fn) => { motionListeners.add(fn); return () => motionListeners.delete(fn); },
             raise,
             setThemeWave: () => applyTheme({ wave: true }),
+            locatePlaying,
             get list() { return list; },
             destroy,
             get mode() { return state.mode; },
