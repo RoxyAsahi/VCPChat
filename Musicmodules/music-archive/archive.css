@@ -879,3 +879,30 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-import-toggle { width: 20px; height: 20px; border-color: transparent; font-size: 16px; }
 .archive-list-clear { width: 20px; height: 20px; }
 .archive-hud:not(.narrow):not(.squeeze) .archive-list-brand { bottom: calc(100% + 14px); }
+/* ===== 顶部减层级（Roxy 11-24：「这里层级太多了」）=====
+   原来：检索行（带底线）→ 分类行（带排序）→ 表头（带底线），三层。
+   现在：检索收成分类行右端一个放大镜，点开/输入时铺满这一行盖住分类；排序并进表头（点列名排序）；只留表头一条线。 */
+.archive-list-kinds { margin-top: 18px; margin-bottom: 12px; padding-right: 56px; }
+.archive-list-kinds > button + button { margin-left: 26px; }
+.archive-list-kinds > button + button::before { right: calc(100% + 7px); }
+.archive-list-sort { display: none; }
+.archive-list-toolbar { position: absolute; z-index: 7; top: 14px; right: var(--text-end-inset); left: auto; margin: 0; height: 24px; gap: 8px; align-items: center; border-bottom: 0; }
+.archive-list-search { flex: 0 0 auto; padding: 0; gap: 0; cursor: pointer; }
+.archive-list-search .archive-glyph-search { width: 14px; height: 14px; opacity: .7; }
+.archive-list-search input { width: 0; flex: 0 0 0; opacity: 0; }
+.archive-list-import { padding: 0; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-toolbar,
+.archive-list:has(.archive-list-recentq:not([hidden])) .archive-list-toolbar { left: var(--gutter); border-bottom: 1px solid var(--ar-accent); }
+.archive-list:has(.archive-list-search input:not(:focus):not(:placeholder-shown)) .archive-list-toolbar { border-bottom-color: color-mix(in srgb, var(--ar-ink) 24%, transparent); }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search { flex: 1 1 auto; gap: 9px; cursor: text; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search input { width: auto; flex: 1 1 auto; opacity: 1; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-kinds { visibility: hidden; }
+.archive-list-search:hover .archive-glyph-search { opacity: 1; }
+/* 表头即排序 */
+.archive-list-cols > button { padding: 0; border: 0; background: none; font: inherit; letter-spacing: inherit; color: inherit; text-align: inherit; cursor: pointer; transition: color .12s; }
+.archive-list-cols > button:last-child { text-align: right; }
+.archive-list-cols > button:hover { color: var(--ar-ink); }
+.archive-list-cols > button[aria-pressed="true"]::after { content: " ↓"; font-weight: 400; opacity: .7; }
+.archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button { pointer-events: none; }
+.archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button::after { content: none; }
+.archive-list[data-sort="artist"] .archive-list-cols > button:nth-child(2) { color: var(--ar-ink); font-weight: 600; }

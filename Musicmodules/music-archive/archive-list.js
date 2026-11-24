@@ -79,7 +79,7 @@
                 </span>
             </span>
         </div>
-        <div class="archive-list-cols" aria-hidden="true"><span>编号</span><span>曲目 / TITLE</span><span>时长 / TIME</span></div>
+        <div class="archive-list-cols" data-l="cols"><button type="button" data-col="added" title="按添加时间排">编号</button><button type="button" data-col="title" data-l="colTitle" title="按标题排（再点一次按歌手）">曲目 / TITLE</button><button type="button" data-col="duration" title="按时长排">时长 / TIME</button></div>
         <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单</button></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
@@ -1666,6 +1666,8 @@
             const entry = SORTS.find(([k]) => k === mode) || SORTS[0];
             r.sortName.textContent = entry[1];
             el.dataset.sort = entry[0]; // 表头跟着标出按哪一列排（CSS 用）
+            r.colTitle.textContent = entry[0] === 'artist' ? '歌手 / ARTIST' : '曲目 / TITLE';
+            r.cols.querySelectorAll('[data-col]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.col === entry[0] || (b.dataset.col === 'title' && entry[0] === 'artist'))));
             r.sortBtn.classList.toggle('on', mode !== 'title');
             r.sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sort === mode)));
         };
@@ -1694,6 +1696,14 @@
             opts.onSort?.(mode); // 阵列和目录一起按新顺序重建
         };
         r.sortBtn.addEventListener('click', (e) => { e.stopPropagation(); sortOpen() ? closeSort() : openSort(); });
+        // 表头即排序：点「编号」按添加时间，「曲目」在标题和歌手之间切换，「时长」按时长（排序菜单还在，只是不占一层）
+        r.cols.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-col]');
+            if (!b) return;
+            const cur = sortMode();
+            const col = b.dataset.col;
+            chooseSort(col === 'title' ? (cur === 'title' ? 'artist' : 'title') : col);
+        });
         r.sortMenu.addEventListener('click', (e) => {
             const b = e.target.closest('[data-sort]');
             if (!b) return;
