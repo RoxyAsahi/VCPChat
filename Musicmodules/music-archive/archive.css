@@ -858,3 +858,8 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
 @media (max-height: 640px) {
     .archive-hud.short .archive-lanes, .archive-hud.short .archive-ruler { display: none; }
 }
+/* R25 歌词页标题旁的歌词类型小标签（逐字 / 逐句 / 纯文本 · 译），点它换一份 */
+.archive-lyrics-head .archive-lyrics-chip { flex: none; padding: 1px 6px; border: 1px solid var(--ar-rule); border-radius: 3px; background: transparent; color: var(--ar-muted); font: inherit; font-size: 10.5px; letter-spacing: .8px; line-height: 1.5; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.archive-lyrics-head .archive-lyrics-chip:hover:not(:disabled) { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-head .archive-lyrics-chip:disabled { cursor: default; }
+.archive-lyrics-head .archive-lyrics-chip:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }

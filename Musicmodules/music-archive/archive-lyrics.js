@@ -40,7 +40,7 @@
     };
 
     const TEMPLATE = `
-        <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
+        <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-chip" data-y="chip" hidden></button><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
         <div class="archive-lyrics-index" data-y="index" title="歌词行索引：点一格跳到那一段"></div>
         <div class="archive-lyrics-none" data-y="none"><span data-y="noneText">这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
@@ -105,6 +105,24 @@
             const t = current();
             state.path = t ? t.path : null;
             r.title.textContent = t ? String(t.title || '').replace(/\.(mp3|flac|wav|ogg|m4a|aac|opus|ape|wma|alac|aiff?|dsf|dff)$/i, '') : '';
+            paintChip();
+        };
+        /* 标题旁的小标签（借鉴 RhinE 歌词页的状态标签）：这份歌词是逐字、逐句还是纯文本，带不带译文；点它换一份 */
+        const paintChip = () => {
+            if (!r.chip) return;
+            const n = state.lines.length;
+            let text = '';
+            if (n) {
+                const ww = state.lines.some((l) => wordsOf(l));
+                const tr = state.lines.some((l) => String(l.translation || '').trim());
+                text = (ww ? '逐字' : '逐句') + (tr ? ' · 译' : '');
+            } else if (state.plain) text = '纯文本';
+            r.chip.hidden = !text;
+            r.chip.textContent = text;
+            const canFetch = typeof app.openLyricsFetchModal === 'function';
+            r.chip.disabled = !canFetch;
+            r.chip.title = (text === '纯文本' ? '这份歌词没有时间轴' : text.startsWith('逐字') ? '这份歌词带逐字时间' : '这份歌词按句对时间')
+                + (text.includes('译') ? '，带译文' : '') + (canFetch ? '。点一下换一份' : '');
         };
 
         /*
@@ -235,6 +253,9 @@
         r.desk.addEventListener('click', () => { app.desktopLyrics?.toggle?.(); });
         document.addEventListener('music-desktop-lyrics-change', syncDesk);
         setTimeout(syncDesk, 0);
+        r.chip?.addEventListener('click', () => {
+            if (typeof app.openLyricsFetchModal === 'function') app.openLyricsFetchModal(app.currentTrackIndex);
+        });
         r.fetch.addEventListener('click', () => {
             if (typeof app.openLyricsFetchModal === 'function') app.openLyricsFetchModal(app.currentTrackIndex);
         });
