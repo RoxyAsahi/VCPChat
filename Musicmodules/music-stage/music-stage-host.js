@@ -307,6 +307,15 @@
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' }
             ],
+            signal: [
+                { key: 'panel', label: '监视窗', type: 'select', options: [['lyrics', '歌词'], ['history', '电平记录'], ['off', '不显示']] },
+                { key: 'showSpectrum', label: '频谱条', type: 'toggle' },
+                { key: 'pulseRate', label: '脉冲', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
             orbit: [
                 { key: 'tilt', label: '轨道倾斜（扁到圆）', type: 'range', min: 0.15, max: 0.6, step: 0.01, unit: 'x' },
                 { key: 'roll', label: '轨道侧转', type: 'range', min: -30, max: 30, step: 1, unit: '°' },
@@ -467,7 +476,7 @@
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
-            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork' || state.modeId === 'orbit'));
+            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork' || state.modeId === 'orbit' || state.modeId === 'signal'));
             // 雾笺、绘光的画面在浅色主题下也是夜色，左上角字标要换成浅色才看得见。
             root.classList.toggle('stage-night', state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi');
             document.body.classList.toggle('music-stage-scene-3d', scene3d);

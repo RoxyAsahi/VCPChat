@@ -13,7 +13,8 @@
         lumiere: global.MusicStageLumiereManager,
         hanabi: global.MusicStageHanabiManager,
         clockwork: global.MusicStageClockworkManager,
-        orbit: global.MusicStageOrbitManager
+        orbit: global.MusicStageOrbitManager,
+        signal: global.MusicStageSignalManager
     };
 
     const definitions = [
@@ -28,7 +29,8 @@
         { id: 'lumiere', label: '绘光', manager: managers.lumiere },
         { id: 'hanabi', label: '花火', manager: managers.hanabi },
         { id: 'clockwork', label: '时计', manager: managers.clockwork },
-        { id: 'orbit', label: '回环', manager: managers.orbit }
+        { id: 'orbit', label: '回环', manager: managers.orbit },
+        { id: 'signal', label: '信号', manager: managers.signal }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({

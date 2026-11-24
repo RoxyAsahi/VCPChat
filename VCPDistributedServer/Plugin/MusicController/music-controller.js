@@ -71,6 +71,8 @@ process.stdin.on('end', () => {
             '时计': 'clockwork',
             orbit: 'orbit',
             '回环': 'orbit',
+            signal: 'signal',
+            '信号': 'signal',
             starborn: 'starborn',
             '星诞': 'starborn'
         };
@@ -83,7 +85,7 @@ process.stdin.on('end', () => {
             stageMode = stageModeAliases[requestedStageMode.trim().toLowerCase()];
             if (!stageMode) {
                 throw new Error(
-                    `Unknown stage mode '${requestedStageMode}'. Supported modes: luminous, partita, cadenza, tempera, sonnet, diorama, fume, tunnel, kowloon, inkdraft, fogpane, lumiere, hanabi, clockwork, orbit, starborn.`
+                    `Unknown stage mode '${requestedStageMode}'. Supported modes: luminous, partita, cadenza, tempera, sonnet, diorama, fume, tunnel, kowloon, inkdraft, fogpane, lumiere, hanabi, clockwork, orbit, signal, starborn.`
                 );
             }
         }

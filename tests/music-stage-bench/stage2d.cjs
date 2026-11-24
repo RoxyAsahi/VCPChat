@@ -85,6 +85,7 @@ const run = async (browser, origin, mode, config) => {
 const shots = async (browser, origin, mode, dir, times, config) => {
     fs.mkdirSync(dir, { recursive: true });
     const page = await browser.newPage({ viewport: { width: W, height: H } });
+    if (process.env.STAGE_LOG) { page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.error('[page]', m.text().slice(0, 1500)); }); page.on('pageerror', e => console.error('[pageerror]', String(e).slice(0, 1500))); }
     await page.goto(`${origin}/blank.html`);
     await page.evaluate(([m, c]) => { localStorage.clear(); localStorage.setItem('musicStageMode', m); if (c) localStorage.setItem('musicStageConfig', JSON.stringify(c)); }, [mode, config || null]);
     await page.goto(`${origin}/Musicmodules/harness.html?lyrics=${LYR}&duration=215&t=${times[0]}`);

@@ -148,3 +148,30 @@ test('orbit: glyphs keep reading order round the ring, the sung glyph turns to t
     const back = O.project(Math.PI / 2, 0.5, 0.15, 0);
     assert.ok(front.s > back.s && front.z < back.z && front.y < back.y);
 });
+
+require(path.join(stage, 'modes', 'signal-manager.js'));
+test('signal: the figure-eight centreline is one closed, unbroken loop through the crossing, and the spectrum bands stay in range', () => {
+    const S = window.MusicStageSignalManager._test;
+    const steps = 2000;
+    const ds = S.LOOP / steps;
+    let crossings = 0;
+    for (let i = 0; i < steps; i += 1) {
+        const [x0, y0] = S.pointAt(i * ds);
+        const [x1, y1] = S.pointAt((i + 1) * ds);
+        assert.ok(Math.hypot(x1 - x0, y1 - y0) <= ds * 1.001, `jump at step ${i}`);
+        if (Math.hypot(x0, y0) < ds / 2) crossings += 1;
+    }
+    assert.equal(crossings, 2, 'passes the centre twice');
+    const [ex, ey] = S.pointAt(S.LOOP);
+    assert.ok(Math.hypot(ex, ey) < 1e-9, 'closes on itself');
+    const onRight = S.pointAt(S.HALF + S.ARC / 2);
+    assert.ok(Math.abs(Math.hypot(onRight[0] - S.D, onRight[1]) - S.R) < 1e-9 && onRight[0] > S.D, 'right loop is a circle, outer side');
+    const onLeft = S.pointAt(3 * S.HALF + S.ARC + S.ARC / 2);
+    assert.ok(Math.abs(Math.hypot(onLeft[0] + S.D, onLeft[1]) - S.R) < 1e-9 && onLeft[0] < -S.D, 'left loop is a circle, outer side');
+    let last = -1;
+    for (let i = 0; i < 48; i += 1) {
+        const b = S.bandIndex(i, 512);
+        assert.ok(b >= last && b < 512);
+        last = b;
+    }
+});
