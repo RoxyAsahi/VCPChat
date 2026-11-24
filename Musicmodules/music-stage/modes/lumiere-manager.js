@@ -387,7 +387,16 @@ vec4 coverage(vec2 uv) {
         float lod = (1.0 - uPrevFade) * (4.0 + uLodBias) * step(0.001, uFocus);
         r0 = textureLod(uPrevText, (tc - 0.5) / uPrevZoom + 0.5, lod).r;
     }
+#ifndef SHARP_SEED
+    r = 0.0;   // 这一句的字由逐字层画；泛光取亮部时仍算进去
+#endif
     return vec4(r, r0, 0.0, 0.0);
+}`;
+    const HOME = `
+uniform float uZoom;
+vec2 home(vec2 t) {
+    vec2 tc = (t - 0.5) * uZoom + 0.5;
+    return vec2(tc.x, 1.0 - tc.y);
 }`;
 
     const createGl = (canvas) => {
@@ -427,7 +436,8 @@ vec4 coverage(vec2 uv) {
         };
         const slots = Array.from({ length: 3 }, () => ({ text: texture(gl.LINEAR, true), glyph: texture(gl.NEAREST, false), key: null, used: 0 }));
         const sharp = Utils.createSharpText(gl, { label: 'lumiere', coverage: COVERAGE });
-        return { gl, program, uniforms, vao: gl.createVertexArray(), slots, sharp };
+        const glyphs = Utils.createGlyphLayer(gl, { label: 'lumiere', home: HOME });
+        return { gl, program, uniforms, vao: gl.createVertexArray(), slots, sharp, glyphs, glyphData: new Float32Array(256 * Utils.GLYPH_FLOATS) };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -666,14 +676,19 @@ vec4 coverage(vec2 uv) {
                     id = Math.min(255, id + 1);
                     ctx.globalCompositeOperation = 'lighten';
                     ctx.fillStyle = `rgb(0,${id},0)`;
-                    ctx.fillRect(Math.floor(x - 2), Math.floor(baseline - size * 0.95), Math.ceil(w + 4), Math.ceil(size * 1.2));
+                    const gx = Math.floor(x - 2), gy = Math.floor(baseline - size * 0.95), gw = Math.ceil(w + 4), gh = Math.ceil(size * 1.2);
+                    ctx.fillRect(gx, gy, gw, gh);
+                    const padG = size * 0.1;
                     ctx.globalCompositeOperation = 'lighter';
                     ctx.fillStyle = 'rgb(255,0,0)';
                     ctx.fillText(g.text, x, baseline);
                     data[id * 4] = g.start;
                     data[id * 4 + 1] = g.end;
                     const cx = x + w / 2 - W / 2, cy = baseline - size * 0.35 - H / 2;
-                    placedGlyphs.push({ x: (W / 2 + cx * cos - cy * sin) / W, y: (H / 2 + cx * sin + cy * cos) / H, size: size / H, w: w / W, start: g.start, end: g.end });
+                    placedGlyphs.push({
+                        x: (W / 2 + cx * cos - cy * sin) / W, y: (H / 2 + cx * sin + cy * cos) / H, size: size / H, w: w / W, start: g.start, end: g.end,
+                        id, px: size, box: [(gx - padG) / W, (gy - padG) / H, (gx + gw + padG) / W, (gy + gh + padG) / H]
+                    });
                 });
                 ctx.restore();
             }
@@ -700,6 +715,10 @@ vec4 coverage(vec2 uv) {
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 256, 1, 0, gl.RGBA, gl.FLOAT, data);
             slot.key = key;
             slot.glyphs = placedGlyphs;
+            // 这一句的字怎么进场、唱到时怎么动（绘光偏安静：升起、弹出、盖章、滑入；唱到时胀一下或闪一下）
+            const pick = seededRandom(`lumiere:${cuesFor?.key}:${index}:glyphs`);
+            slot.enter = cue.kind === 'line' ? ['rise', 'pop', 'stamp', 'slide'][Math.floor(pick() * 4)] : 'rise';
+            slot.sing = ['swell', 'flash', 'bounce'][Math.floor(pick() * 3)];
             slot.used = performance.now();
             stats.builds += 1;
             stats.buildMs = Math.round(performance.now() - started);
@@ -811,6 +830,33 @@ vec4 coverage(vec2 uv) {
                 gl.uniform1f(c.uPrevFade, prevFade);
                 gl.uniform1f(c.uLodBias, lodBias);
             });
+            // 逐字层：每个字按自己的入场和唱到的动作画在合成好的画面上
+            {
+                const data = glState.glyphData;
+                let n = 0;
+                const list = slot.glyphs || [];
+                const stagger = Math.min(0.05, 0.6 / Math.max(1, list.length));
+                list.forEach((g, i) => {
+                    if (!g.box || n >= 256) return;
+                    const pose = Utils.glyphPose(slot.enter, t - cue.start - i * stagger, slot.sing, t - g.start, s.reducedMotion);
+                    if (pose[4] <= 0.001) return;
+                    const o = n * Utils.GLYPH_FLOATS;
+                    data.set(g.box, o);
+                    data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
+                    data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
+                    data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = 0; data[o + 15] = 0;
+                    n += 1;
+                });
+                glState.glyphs.draw(data, n, (c) => {
+                    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.text); gl.uniform1i(c.uText, 0);
+                    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sharp.textLayer); gl.uniform1i(c.uTextLayer, 1);
+                    gl.uniform2f(c.uTextSize, world.W, world.H);
+                    gl.uniform1f(c.uLod, focus > 0 ? focus * (4.5 + lodBias) : -1);
+                    gl.uniform1f(c.uFade, 1 - focus * 0.7);
+                    gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
+                });
+                stats.glyphs = n;
+            }
             stats.draws += 1;
             scheduleNext(index);
         };

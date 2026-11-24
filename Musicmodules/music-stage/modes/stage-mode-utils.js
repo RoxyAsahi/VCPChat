@@ -846,6 +846,7 @@ float vnoise(vec2 p) {
     //   col = base + r * (text - base) + r0 * (prev - base)
     // 舞台给出 coverage(uv) 的 GLSL（返回 vec4：x 当前句、y 上一句在这一点的覆盖率，zw 由舞台自用），以及它要用的 uniform；
     // 需要在插值之后再加一笔（比如上一句碎掉时的火星）的，再给一段 post(col, c)。
+    // 泛光取亮部那一遍里定义了 SHARP_SEED：字交给逐字层画的舞台，在那一遍仍要把字算进去。
     const SPLIT_OUT_GLSL = `
 layout(location = 0) out vec4 outBase;
 layout(location = 1) out vec4 outText;
@@ -917,6 +918,7 @@ void main() {
         const frag = (seed) => `#version 300 es
 precision highp float;
 precision highp int;
+${seed ? '#define SHARP_SEED 1' : ''}
 uniform sampler2D uBase;
 uniform sampler2D uTextLayer;
 uniform sampler2D uPrevLayer;
@@ -1126,6 +1128,8 @@ flat in vec4 vLook;
 out vec4 outColor;
 // 只取自己这个字的笔画（字框按编号写在 G 通道），邻字伸进外框的笔画不跟着动
 float cov(vec2 uv) {
+    // 整句虚着的时候模糊会溢出字框，按字框裁会露出方边：这时不裁（邻字的虚影本来也看不清）
+    if (uLod > 1.0) return textureLod(uText, uv, uLod).r;
     ivec2 p = clamp(ivec2(uv * uTextSize), ivec2(0), ivec2(uTextSize) - 1);
     if (int(texelFetch(uText, p, 0).g * 255.0 + 0.5) != int(vCtr.z + 0.5)) return 0.0;
     return uLod >= 0.0 ? textureLod(uText, uv, uLod).r : texture(uText, uv).r;
