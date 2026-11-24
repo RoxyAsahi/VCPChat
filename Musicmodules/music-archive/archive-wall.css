@@ -384,7 +384,9 @@ body.music-reduce-motion .ag-art, body.music-reduce-motion #music-archive-view .
 }
 .aw-table .aw-world { transform-origin: 0 0; transform-style: preserve-3d; }
 .aw-table .aw-in { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 8%, transparent); }
-.aw-table .aw-tile:hover .aw-in { transform: translateZ(10px); filter: saturate(1.08) brightness(1.06); box-shadow: 0 0 0 1px var(--ar-ink), 0 0 0 4px rgba(var(--ar-paper-rgb), .5); }
+/* 平放悬停：像从桌上捏起一角，以下沿为轴微微立起 */
+.aw-table .aw-tile:hover { transform-style: preserve-3d; }
+.aw-table .aw-tile:hover .aw-in { transform-origin: 50% 100%; transform: rotateX(-16deg) translateZ(8px); filter: saturate(1.08) brightness(1.06); box-shadow: 0 0 0 1px var(--ar-ink), 0 0 0 4px rgba(var(--ar-paper-rgb), .5); }
 /* 平放：远处的小卡不画字，只留封面和徽标 */
 .aw-table .aw-s .aw-cap { display: none; }
 .aw-table .aw-tile.is-focus .aw-in { box-shadow: 0 0 0 3px var(--ar-accent); }

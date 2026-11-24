@@ -259,6 +259,12 @@ const FAKE = ({ n, light, covers }) => {
       console.log('PERF ' + name, JSON.stringify(p2));
     }
   }
+  {
+    const tr = await page.evaluate(() => { const el = document.querySelector('.aw-table'); const r = el.getBoundingClientRect(); return { x: r.left + r.width * 0.45, y: r.top + r.height * 0.7 }; });
+    await page.mouse.move(tr.x, tr.y); await page.waitForTimeout(400);
+    await shot(tag + '-9b-table-hover');
+    await page.mouse.move(5, 5);
+  }
   await shot(tag + '-9-table');
   const tb = await page.evaluate(() => {
     const el = document.querySelector('.aw-table');
