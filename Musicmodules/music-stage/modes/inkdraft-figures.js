@@ -1085,6 +1085,227 @@
             pen.note(pick(random, ['R', 'A', 'M', '心', '✦']), 0, -0.1, 0.24);
             pen.line([[-0.15, 0.3], [-0.35, 0.9], [-0.22, 0.82], [-0.1, 0.92]]);
             pen.line([[0.15, 0.3], [0.3, 0.92], [0.18, 0.84], [0.06, 0.94]]);
+        },
+
+        /* ── 气象 ── */
+        // 风玫瑰：几圈同心刻度，十六个方位各一根长短不一的风频条，中间写静风率
+        windRose(pen, random) {
+            [0.3, 0.55, 0.8].forEach(r => pen.circle(0, 0, r));
+            const bars = [];
+            for (let i = 0; i < 16; i += 1) {
+                const a = i / 16 * TAU - Math.PI / 2;
+                const len = 0.18 + Math.pow(random(), 1.6) * 0.72;
+                bars.push([[Math.cos(a) * 0.12, Math.sin(a) * 0.12], [Math.cos(a) * len, Math.sin(a) * len]]);
+            }
+            pen.segments(bars);
+            pen.circle(0, 0, 0.12);
+            pen.note(`${Math.floor(3 + random() * 12)}%`, 0, 0, 0.07);
+            pen.note('N', 0, -0.93, 0.1);
+            pen.note(pick(random, ['1971–2000', 'JUL', 'DJF', '10 m']), 0.75, 0.9, 0.065, 'right');
+        },
+        // 云的分类：高中低三层各一朵轮廓（卷云几道钩、积云一团、积雨云砧状顶），左边标高度
+        cloudTypes(pen, random) {
+            pen.line([[-0.95, -0.85], [-0.95, 0.85]]);
+            [[-0.6, 'Ci', '8 km'], [0, 'Ac', '4 km'], [0.55, 'Cu', '1 km']].forEach(([y, name, h]) => {
+                pen.line([[-1.0, y], [-0.9, y]]);
+                pen.note(h, -1.02, y - 0.05, 0.06, 'right');
+                pen.note(name, 0.92, y, 0.08, 'right');
+            });
+            for (let i = 0; i < 3; i += 1) {
+                const x = -0.55 + i * 0.4, y = -0.62 + (random() - 0.5) * 0.08;
+                pen.line([[x, y], [x + 0.25, y - 0.05], [x + 0.32, y - 0.12]]);
+            }
+            const bumps = (cx, cy, w, n, h) => {
+                const pts = [];
+                for (let i = 0; i <= n * 8; i += 1) {
+                    const t = i / (n * 8);
+                    pts.push([cx - w / 2 + w * t, cy - Math.abs(Math.sin(t * n * Math.PI)) * h]);
+                }
+                pen.line(pts);
+                pen.line([[cx - w / 2, cy], [cx + w / 2, cy]]);
+            };
+            bumps(-0.1, 0.02, 0.7, 5, 0.06);
+            bumps(0.05, 0.6, 0.8, 4, 0.16);
+            pen.line([[-0.25, 0.6], [-0.2, 0.36], [0.3, 0.36], [0.35, 0.6]]);
+        },
+        // 雨量筒：圆筒、漏斗、刻度，水位一道，旁边记降水量
+        rainGauge(pen, random) {
+            pen.line([[-0.3, -0.55], [-0.3, 0.85], [0.3, 0.85], [0.3, -0.55]]);
+            pen.ellipse(0, -0.55, 0.3, 0.08);
+            pen.line([[-0.3, -0.55], [-0.05, -0.3], [-0.05, -0.1]]);
+            pen.line([[0.3, -0.55], [0.05, -0.3], [0.05, -0.1]]);
+            const ticks = [];
+            for (let i = 0; i <= 12; i += 1) { const y = 0.8 - i * 0.07; ticks.push([[0.3, y], [0.3 + (i % 5 === 0 ? 0.12 : 0.06), y]]); }
+            pen.segments(ticks);
+            const level = 0.8 - (0.15 + random() * 0.6);
+            pen.wave([-0.28, level], [0.28, level], 3, 0.012);
+            pen.note(`${(2 + random() * 40).toFixed(1)} mm`, 0.48, level, 0.08, 'left');
+            for (let i = 0; i < 6; i += 1) { const x = -0.8 + random() * 1.6, y = -0.95 + random() * 0.3; pen.line([[x, y], [x - 0.04, y + 0.12]]); }
+        },
+        // 天气图：几道闭合的等压线绕着 H 和 L，一道冷锋（三角）一道暖锋（半圆）
+        weatherMap(pen, random) {
+            const lx = -0.35 + (random() - 0.5) * 0.2, ly = 0.05;
+            [0.18, 0.36, 0.56].forEach((r, i) => {
+                const pts = [];
+                for (let k = 0; k <= 40; k += 1) { const a = k / 40 * TAU; const rr = r * (1 + Math.sin(a * 2 + i) * 0.12); pts.push([lx + Math.cos(a) * rr * 1.3, ly + Math.sin(a) * rr]); }
+                pen.line(pts);
+            });
+            pen.note('L', lx, ly, 0.14);
+            pen.note(`${Math.floor(985 + random() * 10)}`, lx + 0.5, ly - 0.42, 0.06);
+            pen.note('H', 0.72, -0.6, 0.12);
+            pen.circle(0.72, -0.6, 0.16);
+            const front = [];
+            for (let k = 0; k <= 20; k += 1) { const t = k / 20; front.push([lx + 0.2 + t * 0.6, ly + 0.15 + t * 0.7 - Math.sin(t * Math.PI) * 0.15]); }
+            pen.line(front);
+            for (let k = 2; k < 20; k += 5) {
+                const [ax, ay] = front[k], [bx, by] = front[k + 2];
+                pen.line([[ax, ay], [(ax + bx) / 2 + (by - ay) * 0.8, (ay + by) / 2 - (bx - ax) * 0.8], [bx, by]], true);
+            }
+            const warm = [];
+            for (let k = 0; k <= 20; k += 1) { const t = k / 20; warm.push([lx + 0.25 + t * 0.7, ly - 0.05 - t * 0.25 + Math.sin(t * Math.PI) * 0.06]); }
+            pen.line(warm);
+            for (let k = 3; k < 20; k += 6) { const [cx, cy] = warm[k]; pen.ellipse(cx, cy, 0.05, 0.05, 0, Math.PI, TAU, 10); }
+        },
+        // 雪花：六重对称的枝晶，每根主枝两三对侧枝
+        snowflake(pen, random) {
+            const side = [0.3 + random() * 0.1, 0.52 + random() * 0.1, 0.72];
+            const lens = [0.2 + random() * 0.08, 0.16 + random() * 0.06, 0.09];
+            for (let i = 0; i < 6; i += 1) {
+                const a = i / 6 * TAU;
+                const ca = Math.cos(a), sa = Math.sin(a);
+                const arm = [[[0, 0], [ca * 0.9, sa * 0.9]]];
+                side.forEach((d, k) => {
+                    const px = ca * d, py = sa * d;
+                    [-1, 1].forEach((sgn) => {
+                        const b = a + sgn * Math.PI / 3;
+                        arm.push([[px, py], [px + Math.cos(b) * lens[k], py + Math.sin(b) * lens[k]]]);
+                    });
+                });
+                pen.segments(arm);
+            }
+            pen.line(Array.from({ length: 7 }, (_, i) => [Math.cos(i / 6 * TAU) * 0.14, Math.sin(i / 6 * TAU) * 0.14]));
+            pen.note(pick(random, ['P1e', 'dendrite', '−15 °C', 'C1f']), 0, 1.0, 0.07);
+        },
+        // 气压表盘：一道弧形刻度、指针和随动针，弧上写 RAIN / CHANGE / FAIR
+        barometer(pen, random) {
+            pen.circle(0, 0, 0.88);
+            const from = Math.PI * 0.8, to = Math.PI * 2.2;
+            pen.circle(0, 0, 0.7, from, to);
+            const ticks = [];
+            for (let i = 0; i <= 40; i += 1) {
+                const a = from + (to - from) * i / 40;
+                const r2 = i % 5 === 0 ? 0.58 : 0.64;
+                ticks.push([[Math.cos(a) * 0.7, Math.sin(a) * 0.7], [Math.cos(a) * r2, Math.sin(a) * r2]]);
+            }
+            pen.segments(ticks);
+            [['RAIN', 0.15], ['CHANGE', 0.5], ['FAIR', 0.85]].forEach(([w, k]) => {
+                const a = from + (to - from) * k;
+                pen.note(w, Math.cos(a) * 0.45, Math.sin(a) * 0.45, 0.07);
+            });
+            const a = from + (to - from) * (0.2 + random() * 0.6);
+            pen.line([[-Math.cos(a) * 0.15, -Math.sin(a) * 0.15], [Math.cos(a) * 0.66, Math.sin(a) * 0.66]]);
+            pen.dot(0, 0, 0.04);
+            const b = a + (random() - 0.5) * 0.6;
+            pen.dashed([0, 0], [Math.cos(b) * 0.6, Math.sin(b) * 0.6], 0.03);
+            pen.note('hPa', 0, 0.5, 0.065);
+        },
+
+        /* ── 乐谱 ── */
+        // 五线谱一小节：五道线、竖线、几个音符（符头、符干、连梁），一个拍号
+        staff(pen, random) {
+            const ys = [-0.32, -0.16, 0, 0.16, 0.32];
+            pen.segments(ys.map(y => [[-0.95, y], [0.95, y]]));
+            pen.line([[-0.95, -0.32], [-0.95, 0.32]]);
+            pen.line([[0.95, -0.32], [0.95, 0.32]]);
+            pen.line([[0.1, -0.32], [0.1, 0.32]]);
+            pen.note(pick(random, ['4', '3', '6']), -0.78, -0.1, 0.17);
+            pen.note(pick(random, ['4', '4', '8']), -0.78, 0.2, 0.17);
+            const heads = [];
+            for (let i = 0; i < 6; i += 1) {
+                const x = -0.55 + i * (i < 3 ? 0.2 : 0.24) + (i >= 3 ? 0.08 : 0);
+                const y = 0.32 - Math.floor(random() * 9) * 0.08;
+                heads.push([x, y]);
+                pen.ellipse(x, y, 0.065, 0.045, -0.4, 0, TAU, 16);
+                pen.dot(x, y, 0.03);
+                pen.line([[x + 0.06, y - 0.02], [x + 0.06, -0.62]]);
+            }
+            pen.line([[heads[0][0] + 0.06, -0.62], [heads[2][0] + 0.06, -0.62]]);
+            pen.line([[heads[0][0] + 0.06, -0.55], [heads[2][0] + 0.06, -0.55]]);
+            pen.line([[heads[3][0] + 0.06, -0.62], [heads[5][0] + 0.06, -0.62]]);
+            pen.note(pick(random, ['mp', 'p', 'mf', 'pp']), -0.4, 0.55, 0.09);
+            pen.line([[-0.1, 0.5], [0.4, 0.46], [0.9, 0.5]]);
+        },
+        // 节拍器：梯形的盒子、摆杆和砝码，摆杆两边两道虚线弧标摆幅，写 ♩= 速度
+        metronome(pen, random) {
+            pen.line([[-0.45, 0.85], [-0.2, -0.75], [0.2, -0.75], [0.45, 0.85]], true);
+            pen.line([[-0.5, 0.85], [0.5, 0.85]]);
+            const tilt = (random() - 0.5) * 0.7;
+            const tip = [Math.sin(tilt) * 1.25, 0.55 - Math.cos(tilt) * 1.25];
+            pen.line([[0, 0.55], tip]);
+            const w = [Math.sin(tilt) * 0.75, 0.55 - Math.cos(tilt) * 0.75];
+            pen.line([[w[0] - 0.08, w[1] - 0.05], [w[0] + 0.08, w[1] - 0.05], [w[0] + 0.06, w[1] + 0.07], [w[0] - 0.06, w[1] + 0.07]], true);
+            pen.ellipse(0, 0.55, 1.1, 1.1, 0, -Math.PI / 2 - 0.4, -Math.PI / 2 - 0.15, 8);
+            pen.ellipse(0, 0.55, 1.1, 1.1, 0, -Math.PI / 2 + 0.15, -Math.PI / 2 + 0.4, 8);
+            const ticks = [];
+            for (let i = 0; i < 9; i += 1) { const y = -0.5 + i * 0.12; ticks.push([[-0.06, y], [0.06, y]]); }
+            pen.segments(ticks);
+            pen.note(`M.M. = ${pick(random, [60, 72, 84, 96, 108, 120, 132])}`, 0.6, -0.6, 0.09, 'left');
+        },
+        // 音叉：U 形的叉、柄，叉尖两边一圈圈声波
+        tuningFork(pen, random) {
+            pen.line([[-0.12, -0.8], [-0.12, 0.05]]);
+            pen.line([[0.12, -0.8], [0.12, 0.05]]);
+            pen.ellipse(0, 0.05, 0.12, 0.12, 0, 0, Math.PI, 12);
+            pen.line([[0, 0.17], [0, 0.9]]);
+            pen.ellipse(0, 0.9, 0.06, 0.03);
+            for (let k = 1; k <= 3; k += 1) {
+                pen.ellipse(-0.12, -0.6, 0.15 * k, 0.22 * k, 0, Math.PI * 0.65, Math.PI * 1.35, 12);
+                pen.ellipse(0.12, -0.6, 0.15 * k, 0.22 * k, 0, -Math.PI * 0.35, Math.PI * 0.35, 12);
+            }
+            pen.note(pick(random, ['A = 440 Hz', 'C 523.3', 'A 432']), 0.25, 0.55, 0.08, 'left');
+        },
+        // 一段琴键：白键一排，黑键两三一组，按下的几个键点一个圆点，下面写和弦名
+        pianoKeys(pen, random) {
+            const n = 10, w = 1.8 / n;
+            pen.line([[-0.9, -0.4], [0.9, -0.4], [0.9, 0.45], [-0.9, 0.45]], true);
+            pen.segments(Array.from({ length: n - 1 }, (_, i) => [[-0.9 + (i + 1) * w, -0.4], [-0.9 + (i + 1) * w, 0.45]]));
+            [0, 1, 3, 4, 5, 7, 8].forEach((i) => {
+                const x = -0.9 + (i + 1) * w - w * 0.3;
+                pen.line([[x, -0.4], [x, 0.12], [x + w * 0.6, 0.12], [x + w * 0.6, -0.4]]);
+            });
+            const root = Math.floor(random() * 5);
+            [root, root + 2, root + 4].forEach(i => pen.dot(-0.9 + (i + 0.5) * w, 0.32, 0.035));
+            pen.note(pick(random, ['Cmaj7', 'Am9', 'F/G', 'Dm7', 'E♭add9']), 0, 0.68, 0.1);
+        },
+        // 示波器：方格、一道波形（基频加泛音），标频率和每格时间
+        waveform(pen, random) {
+            pen.line([[-0.9, -0.55], [0.9, -0.55], [0.9, 0.55], [-0.9, 0.55]], true);
+            const grid = [];
+            for (let i = 1; i < 8; i += 1) grid.push([[-0.9 + i * 0.225, -0.55], [-0.9 + i * 0.225, 0.55]]);
+            for (let i = 1; i < 4; i += 1) grid.push([[-0.9, -0.55 + i * 0.275], [0.9, -0.55 + i * 0.275]]);
+            pen.dashed([-0.9, 0], [0.9, 0], 0.03);
+            pen.segments(grid.filter((_, i) => i % 2 === 0));
+            const f = 2 + Math.floor(random() * 3), h2 = random() * 0.5, h3 = random() * 0.3;
+            const pts = [];
+            for (let i = 0; i <= 120; i += 1) {
+                const t = i / 120;
+                const v = Math.sin(t * f * TAU) + h2 * Math.sin(t * f * 2 * TAU + 1) + h3 * Math.sin(t * f * 3 * TAU);
+                pts.push([-0.9 + 1.8 * t, -v * 0.3 / (1 + h2 + h3) * 1.4]);
+            }
+            pen.line(pts);
+            pen.note(`${Math.floor(110 + random() * 800)} Hz`, -0.88, -0.65, 0.07, 'left');
+            pen.note('2 ms/div', 0.88, 0.68, 0.06, 'right');
+        },
+        // 唱片：几圈纹路、中间标签和孔，唱臂从右上角搭过来
+        vinyl(pen, random) {
+            pen.circle(0, 0, 0.85);
+            [0.75, 0.62, 0.5].forEach(r => pen.circle(0, 0, r, random() * TAU, random() * TAU + TAU * 0.8));
+            pen.circle(0, 0, 0.28);
+            pen.dot(0, 0, 0.03);
+            pen.note(pick(random, ['33⅓', '45', 'A-1', 'SIDE B']), 0, 0.14, 0.07);
+            pen.circle(0.85, -0.85, 0.08);
+            pen.line([[0.85, -0.85], [0.95, -0.2], [0.45, 0.35]]);
+            pen.line([[0.4, 0.3], [0.5, 0.42]]);
         }
     };
 
@@ -1142,6 +1363,22 @@
             kinds: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail', 'waxSeal'],
             tone: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail'],
             backdrops: [['ruled', 0.42], ['band', 0.22], ['graph', 0.14], ['none', 0.22]]
+        },
+        weather: {
+            mark: (n, r) => `${Math.floor(990 + r() * 40)} hPa  ${(r() * 30).toFixed(1)} °C`,
+            interlude: 'CLEARING',
+            label: '天气',
+            kinds: ['windRose', 'cloudTypes', 'rainGauge', 'weatherMap', 'snowflake', 'barometer'],
+            tone: ['windRose', 'weatherMap', 'barometer', 'snowflake', 'cloudTypes'],
+            backdrops: [['swell', 0.26], ['arcs', 0.26], ['graph', 0.2], ['none', 0.28]]
+        },
+        score: {
+            mark: n => `m. ${n}`,
+            interlude: 'TACET',
+            label: '乐谱',
+            kinds: ['staff', 'metronome', 'tuningFork', 'pianoKeys', 'waveform', 'vinyl'],
+            tone: ['staff', 'vinyl', 'waveform', 'pianoKeys', 'metronome'],
+            backdrops: [['ruled', 0.4], ['arcs', 0.2], ['band', 0.18], ['none', 0.22]]
         },
         night: {
             mark: (n, r) => `RA ${pad(Math.floor(r() * 24))}ʰ${pad(Math.floor(r() * 60))}ᵐ  m = ${(r() * 6).toFixed(1)}`,

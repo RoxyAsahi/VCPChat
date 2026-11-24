@@ -365,7 +365,7 @@
             collisions: fallback.collisions === undefined ? source.collisions : bool(source.collisions, fallback.collisions),
             inkFlip: fallback.inkFlip === undefined ? source.inkFlip : bool(source.inkFlip, fallback.inkFlip),
             negativeShots: fallback.negativeShots === undefined ? source.negativeShots : bool(source.negativeShots, fallback.negativeShots),
-            inkScene: fallback.inkScene === undefined ? source.inkScene : enumValue(source.inkScene, ['auto', 'notebook', 'rail', 'sea', 'night', 'city', 'flora', 'letters'], fallback.inkScene),
+            inkScene: fallback.inkScene === undefined ? source.inkScene : enumValue(source.inkScene, ['auto', 'notebook', 'rail', 'sea', 'night', 'city', 'flora', 'letters', 'weather', 'score'], fallback.inkScene),
             drops: fallback.drops === undefined ? source.drops : bool(source.drops, fallback.drops),
             drips: fallback.drips === undefined ? source.drips : bool(source.drips, fallback.drips),
             keywords: fallback.keywords === undefined ? source.keywords : bool(source.keywords, fallback.keywords),

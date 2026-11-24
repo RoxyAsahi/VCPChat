@@ -358,7 +358,7 @@
         const scenes = Figures.SCENES;
         if (wanted && scenes[wanted]) return wanted;
         const r = seededRandom(`inkdraft:scene:${key}`)();
-        const pool = [['notebook', 0.25], ['rail', 0.125], ['sea', 0.125], ['night', 0.125], ['city', 0.125], ['flora', 0.125], ['letters', 0.125]];
+        const pool = [['notebook', 0.2], ['rail', 0.1], ['sea', 0.1], ['night', 0.1], ['city', 0.1], ['flora', 0.1], ['letters', 0.1], ['weather', 0.1], ['score', 0.1]];
         let acc = 0;
         for (const [name, w] of pool) { acc += w; if (r < acc) return name; }
         return 'notebook';
