@@ -43,7 +43,7 @@
         <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-chip" data-y="chip" hidden></button><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
         <button type="button" class="archive-lyrics-back" data-y="back" data-dir="up" tabindex="-1" title="不等它自己滑回，马上回到正在唱的那一句">回到当前句 <i aria-hidden="true"></i></button>
-        <div class="archive-lyrics-index" data-y="index" title="歌词行索引：点一格跳到那一段"></div>
+        <div class="archive-lyrics-index" data-y="index" aria-label="歌词进度：指针移上去看那一句，点一下跳过去"></div>
         <div class="archive-lyrics-none" data-y="none"><span data-y="noneText">这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
     /*
@@ -151,31 +151,50 @@
         };
         const fitSoon = () => { if (!fitRaf) fitRaf = requestAnimationFrame(fitLines); };
 
-        const INDEX_MAX = 48;
+        /*
+         * 歌词进度条（原来一行一格的密刻度太小、点不准）：一根细竖线，唱过的一段实一点，正在唱的位置一道强调色短横；
+         * 指针移上去出现一道细线和那一句的预览（时间 + 原文），点一下跳过去。平时淡，指针进歌词栏才清楚。
+         */
         const buildIndex = () => {
-            const n = Math.min(state.lines.length, INDEX_MAX);
+            const n = state.lines.length;
             state.indexN = n;
             state.indexAt = -2;
             r.index.hidden = n < 4;
-            // 悬停一格显示那一段第一句，先看再点
-            const first = (q) => textOf(state.lines[Math.min(state.lines.length - 1, Math.ceil(q * state.lines.length / n))]);
-            r.index.innerHTML = n < 4 ? '' : Array.from({ length: n }, (_, k) => `<i data-q="${k}" title="${esc(first(k))}"></i>`).join('');
+            r.index.innerHTML = n < 4 ? '' : '<span class="rail"></span><span class="fill"></span><span class="cur"></span><span class="hov"></span><span class="tip"><b></b><span></span></span>';
+            r.index.classList.remove('hovering');
         };
         const paintIndex = (k) => {
             const n = state.indexN || 0;
             if (n < 4) return;
-            const q = k < 0 ? -1 : Math.min(n - 1, Math.floor(k * n / state.lines.length));
-            if (q === state.indexAt) return;
-            state.indexAt = q;
-            const marks = r.index.children;
-            for (let j = 0; j < marks.length; j++) marks[j].className = j === q ? 'on' : j < q ? 'past' : '';
+            if (k === state.indexAt) return;
+            state.indexAt = k;
+            r.index.style.setProperty('--at', String(k < 0 ? 0 : k / (n - 1)));
+            r.index.classList.toggle('started', k >= 0);
         };
-        r.index.addEventListener('click', (e) => {
-            const m = e.target.closest('i[data-q]');
+        const clock = (t) => { t = Math.max(0, Math.floor(Number(t) || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+        const indexAtY = (y) => {
             const n = state.indexN || 0;
-            if (!m || !n) return;
-            const k = Math.min(state.lines.length - 1, Math.ceil(Number(m.dataset.q) * state.lines.length / n));
-            r.track.children[k]?.click();
+            const box = r.index.getBoundingClientRect();
+            if (n < 4 || !(box.height > 0)) return -1;
+            return Math.round(Math.min(1, Math.max(0, (y - box.top) / box.height)) * (n - 1));
+        };
+        r.index.addEventListener('pointermove', (e) => {
+            const k = indexAtY(e.clientY);
+            if (k < 0) return;
+            const line = state.lines[k];
+            r.index.classList.add('hovering');
+            r.index.style.setProperty('--hv', String(k / ((state.indexN || 1) - 1)));
+            const tip = r.index.querySelector('.tip');
+            if (tip && tip.dataset.k !== String(k)) {
+                tip.dataset.k = String(k);
+                tip.firstChild.textContent = clock(line && line.time);
+                tip.lastChild.textContent = textOf(line);
+            }
+        });
+        r.index.addEventListener('pointerleave', () => r.index.classList.remove('hovering'));
+        r.index.addEventListener('click', (e) => {
+            const k = indexAtY(e.clientY);
+            if (k >= 0) r.track.children[k]?.click();
         });
 
         const show = (on) => {

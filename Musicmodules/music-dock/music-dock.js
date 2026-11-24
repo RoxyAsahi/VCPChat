@@ -1203,9 +1203,12 @@
                 html += lyricsBar(lines);
                 watchLeftLyrics();
                 state.lyricsDup = leftLyricsShown();
-                if (state.lyricsDup) html += '<div class="md-lyr-else"><p class="md-empty">歌词已经在旁边的首页歌词栏里，这里就不重复列一遍了。</p>'
-                    + '<p class="md-lyr-else-acts" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0"><button class="md-chip" type="button" data-act="lyr-here">收起首页歌词，在这里看</button>'
-                    + '<button class="md-chip" type="button" data-act="lyr-ctl">去控制</button></p></div>';
+                // 首页歌词栏开着：这里不重复整份，只放「这一句 / 下一句」，上面的翻译、偏移照常可调
+                if (state.lyricsDup) html += '<div class="md-lyr-else" style="padding:18px 6px 8px">'
+                    + '<p class="md-lyr-cur" style="margin:0;font-size:17px;line-height:1.45;font-weight:600;color:var(--md-t1);overflow-wrap:anywhere"></p>'
+                    + '<p class="md-lyr-curtr" style="margin:2px 0 0;font-size:13px;line-height:1.4;color:var(--md-t2);overflow-wrap:anywhere"></p>'
+                    + '<p class="md-lyr-nxt" style="margin:14px 0 0;font-size:13px;line-height:1.45;color:var(--md-t3);overflow-wrap:anywhere"></p>'
+                    + '<p style="margin:18px 0 0"><button class="md-chip" type="button" data-act="lyr-here">在这里看整份</button></p></div>';
                 else html += lines.length
                     ? `<div class="md-lyrl">${lines.map((line, index) => `<p data-i="${index}" data-time="${Number(line.time) || 0}">${escapeHtml(line.text || line.original || '') || '&nbsp;'}`
                         + `${line.translation ? `<small class="md-tr">${escapeHtml(line.translation)}</small>` : ''}</p>`).join('')}</div>`
@@ -1483,8 +1486,26 @@
             }
         }
 
+        // 首页歌词栏开着时面板里的「这一句 / 下一句」
+        function paintLyricNow(force = false) {
+            const box = el.body.querySelector('.md-lyr-else');
+            if (!box) return;
+            const lines = Array.isArray(app.currentLyrics) ? app.currentLyrics : [];
+            const text = (l) => String((l && (l.text || l.original)) || '').trim();
+            const at = typeof app.lyricIndexAt === 'function' ? app.lyricIndexAt(currentTime()) : -1;
+            if (!force && at === state.lyricIndex && state.lyricsSource === app.currentLyrics) return;
+            state.lyricIndex = at;
+            state.lyricsSource = app.currentLyrics;
+            const cur = at >= 0 ? lines[at] : null;
+            let k = at + 1;
+            while (k < lines.length && !text(lines[k])) k++;
+            box.querySelector('.md-lyr-cur').textContent = cur ? (text(cur) || '♪') : (lines.length ? '♪' : '这首歌还没有歌词');
+            box.querySelector('.md-lyr-curtr').textContent = cur && cur.translation && app.lyricsTranslation !== false ? String(cur.translation) : '';
+            box.querySelector('.md-lyr-nxt').textContent = lines[k] ? text(lines[k]) : '';
+        }
         function syncLyricHighlight(force = false) {
             if (state.panelOpen && state.tab === '歌词' && leftLyricsShown() !== Boolean(state.lyricsDup)) { renderBody(); return; }
+            if (state.lyricsDup) { paintLyricNow(force); return; }
             const box = el.body.querySelector('.md-lyrl');
             if (!box) {
                 if (state.lyricsSource !== app.currentLyrics && Array.isArray(app.currentLyrics) && app.currentLyrics.length) renderBody();
@@ -1795,6 +1816,12 @@
         };
         cleanups.push(() => { toastPos?.remove(); toastPos = null; toastSheet = ''; });
         let panelReturn = null;
+        // 开关面板时会用脚本挪焦点；用鼠标开关的不该亮出焦点框（还回去的那颗按钮上会出现一个粗框），只有键盘操作才显示
+        let lastKeyboard = false;
+        const markInput = (kbd) => { lastKeyboard = kbd; document.documentElement.classList.toggle('md-pointer-mode', !kbd); };
+        listen(document, 'keydown', (event) => { if (event.key === 'Tab' || event.key.startsWith('Arrow') || event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') markInput(true); }, true);
+        listen(document, 'pointerdown', () => markInput(false), true);
+        cleanups.push(() => document.documentElement.classList.remove('md-pointer-mode'));
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
             // 首页右侧已经在显示歌词：打开面板时不停在重复的歌词页签上，改到「控制」
@@ -1816,7 +1843,7 @@
                 renderTabs(false);
                 if (!(state.tab === '播放列表' && prebuiltFresh())) renderBody();
                 prebuilt = null;
-                el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
+                el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true, focusVisible: lastKeyboard });
                 syncSolid();
                 requestAnimationFrame(() => { if (state.panelOpen && !state.destroyed) placeMarks(el.pnl); });
                 return;
@@ -1841,7 +1868,7 @@
             const active = document.activeElement;
             if (active && (el.pnl.contains(active) || active === el.handle)) {
                 const back = panelReturn && panelReturn.isConnected ? panelReturn : el.handle;
-                back.focus?.({ preventScroll: true });
+                back.focus?.({ preventScroll: true, focusVisible: lastKeyboard });
             }
             panelReturn = null;
             syncSolid();
