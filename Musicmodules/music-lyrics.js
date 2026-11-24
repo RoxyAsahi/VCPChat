@@ -709,14 +709,20 @@ function setupLyrics(app) {
     };
 
     // 歌词文件里有字、但一句带时间的都没有（纯文本歌词）：记下有几行，首页歌词栏据此说明「没有时间轴」而不是「没有歌词」
-    const plainLyricCount = (raw) => (typeof raw === 'string'
-        ? raw.split(/\r?\n/).map((s) => s.replace(/\[[^\]]*\]/g, '').trim()).filter(Boolean).length : 0);
+    const plainLyricLines = (raw) => (typeof raw === 'string'
+        ? raw.split(/\r?\n/).map((s) => s.replace(/\[[^\]]*\]/g, '').trim()).filter(Boolean).slice(0, 400) : []);
+    // 纯文本行也留着（app.currentLyricsPlainLines），首页歌词栏照 RhinE 把它们静静摆出来、能用滚轮翻
+    const plainLyricCount = (raw) => {
+        app.currentLyricsPlainLines = plainLyricLines(raw);
+        return app.currentLyricsPlainLines.length;
+    };
 
     app.resetLyrics = () => {
         app.lyricsRequestToken = (app.lyricsRequestToken || 0) + 1;
         app.currentLyricsData = null;
         app.currentLyrics = [];
         app.currentLyricsPlain = 0;
+        app.currentLyricsPlainLines = [];
         app.currentLyricIndex = -1;
         app.currentScrollY = 0;
         app.targetScrollY = 0;

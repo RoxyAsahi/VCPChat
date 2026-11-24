@@ -83,6 +83,19 @@
                 const body = words ? words.map((w) => `<span class="w">${esc(w.text)}</span>`).join('') : esc(textOf(l));
                 return `<p data-k="${k}"${tr ? ' class="tr"' : ''}><b${words ? ' class="ww"' : ''}>${body}</b>${tr ? `<em>${esc(tr)}</em>` : ''}</p>`;
             }).join('');
+            // 纯文本歌词（没有时间轴）：照 RhinE 静静摆出来，不高亮、不跟随，滚轮从第一行往下翻
+            const plain = !state.lines.length && Array.isArray(app.currentLyricsPlainLines) && app.currentLyricsPlainLines.length
+                ? app.currentLyricsPlainLines : null;
+            state.plain = plain;
+            el.classList.toggle('plain', Boolean(plain));
+            if (plain) {
+                r.track.innerHTML = '<p class="plain-note"><em>这份歌词没有时间轴，不跟着歌走 · 滚轮翻看</em></p>'
+                    + plain.map((text) => `<p class="plain"><b>${esc(text)}</b></p>`).join('');
+                clearTimeout(state.manualTimer);
+                state.manualTimer = 0;
+                state.manual = 0;
+                state.shift = 0;
+            }
             buildIndex();
             fitSoon();
             state.index = -2;
@@ -157,7 +170,7 @@
         const sync = () => {
             const t = current();
             if (app.currentLyrics !== state.source || (t ? t.path : null) !== state.path) build();
-            const has = state.lines.length > 0;
+            const has = state.lines.length > 0 || Boolean(state.plain);
             if (has) setNone(false);
             show(state.allowed && has);
             syncNone();
@@ -173,7 +186,7 @@
         };
         const wantNone = () => {
             const t = current();
-            if (!state.allowed || !t || !t.path || state.lines.length) return null;
+            if (!state.allowed || !t || !t.path || state.lines.length || state.plain) return null;
             return app.isPlaying || state.nonePath === t.path ? t.path : null;
         };
         const syncNone = () => {
@@ -295,10 +308,17 @@
 
         // 滚轮自己翻歌词：先不跟随，停手 3 秒后滑回正在唱的那一行（不让档案页把滚轮当成切歌）
         r.viewport.addEventListener('wheel', (e) => {
-            if (!state.shown || !state.lines.length) return;
+            if (!state.shown || (!state.lines.length && !state.plain)) return;
             e.preventDefault();
             e.stopPropagation();
             const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+            if (state.plain) {
+                // 纯文本：翻到哪停在哪，不自己滑回
+                const max = Math.max(0, r.track.offsetHeight - r.viewport.clientHeight + 16);
+                state.manual = Math.max(0, Math.min(max, state.manual + e.deltaY * unit));
+                place(false);
+                return;
+            }
             state.manual += e.deltaY * unit;
             state.manual = Math.max(-state.shift, state.manual);
             el.classList.add('browsing');
