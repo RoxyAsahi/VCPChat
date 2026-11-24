@@ -1111,6 +1111,7 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     //   run(scene, over, knee, start)：scene 是低分辨率的画面，over 是叠在上面的一层（预乘透明度，比如字），
     //     两者合起来取亮部，在 1/2 到 1/32 的小图上双滤波；返回泛光纹理
     //   present(scene, glow, w, h, opts)：把画面放大到屏幕，加上泛光和颗粒
+    //   add(glow, w, h, strength)：只把泛光叠加到当前画布上（只给一部分东西泛光时用，比如烟花火星）
     const createBloom = (gl, { label = 'stage' } = {}) => {
         const seedFrag = `#version 300 es
 precision mediump float;
@@ -1152,6 +1153,16 @@ void main() {
         const down = compileProgram(gl, SPLIT_VERT, BLOOM_DOWN, `${label}:glow-down`);
         const up = compileProgram(gl, SPLIT_VERT, BLOOM_UP, `${label}:glow-up`);
         const present = compileProgram(gl, SPLIT_VERT, presentFrag, `${label}:present`);
+        const addFrag = `#version 300 es
+precision mediump float;
+uniform sampler2D uGlow;
+uniform vec2 uRes;
+uniform float uBloom;
+out vec4 outColor;
+void main() {
+    outColor = vec4(texture(uGlow, gl_FragCoord.xy / uRes).rgb * (uBloom / ${BLOOM_LEVELS}.0), 1.0);
+}`;
+        let adder = null;
         const half = Boolean(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
         const format = half ? [gl.RGBA16F, gl.HALF_FLOAT] : [gl.RGBA8, gl.UNSIGNED_BYTE];
         const levels = [], fbos = [];
@@ -1234,6 +1245,20 @@ void main() {
                 gl.uniform1f(u.uGrain, grain);
                 gl.uniform1f(u.uGrainStep, grainStep);
                 gl.drawArrays(gl.TRIANGLES, 0, 3);
+            },
+            add(glow, w, h, strength = 1) {
+                if (!adder) adder = compileProgram(gl, SPLIT_VERT, addFrag, `${label}:glow-add`);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.viewport(0, 0, w, h);
+                gl.bindVertexArray(vao);
+                gl.useProgram(adder.program);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.ONE, gl.ONE);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glow); gl.uniform1i(adder.uniforms.uGlow, 0);
+                gl.uniform2f(adder.uniforms.uRes, w, h);
+                gl.uniform1f(adder.uniforms.uBloom, strength);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.disable(gl.BLEND);
             }
         };
     };

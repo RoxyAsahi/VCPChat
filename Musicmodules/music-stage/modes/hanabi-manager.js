@@ -20,6 +20,7 @@
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
     const PER_BURST = Object.freeze({ 'energy-saving': 72, standard: 110, ultimate: 140 });
     const TRAIL = 10;
+    const SPARK_BLOOM = 1.6;   // 火星的泛光强度（只照火星，见画火星那段）
     const MAX_ACTIVE = 24;
     const MAX_BURSTS = 1024;
     const MAX_LIGHTS = 6;
@@ -775,7 +776,8 @@ vec2 home(vec2 t) {
             vao: gl.createVertexArray(), slots, bursts: texture(gl.NEAREST, false), burstsKey: null,
             sharp: Utils.createSharpText(gl, { label: 'hanabi', coverage: COVERAGE, post: POST }),
             glyphs: Utils.createGlyphLayer(gl, { label: 'hanabi', home: HOME }),
-            glyphData: new Float32Array(256 * Utils.GLYPH_FLOATS)
+            glyphData: new Float32Array(256 * Utils.GLYPH_FLOATS),
+            sparkTarget: Utils.createTarget(gl), bloom: Utils.createBloom(gl, { label: 'hanabi' })
         };
     };
 
@@ -1494,11 +1496,30 @@ vec2 home(vec2 t) {
                 gl.uniform2f(u.uRes, canvas.width, canvas.height);
                 gl.uniform1f(u.uTrail, s.trails);
                 gl.uniform1f(u.uPower, power);
-                gl.uniform1f(u.uMirror, 0);
-                gl.drawArrays(gl.POINTS, 0, count * per * TRAIL);
-                if (s.reflection && quality !== 'energy-saving') {
-                    gl.uniform1f(u.uMirror, 1);
+                const mirror = s.reflection && quality !== 'energy-saving';
+                const points = () => {
+                    gl.uniform1f(u.uMirror, 0);
                     gl.drawArrays(gl.POINTS, 0, count * per * TRAIL);
+                    if (mirror) {
+                        gl.uniform1f(u.uMirror, 1);
+                        gl.drawArrays(gl.POINTS, 0, count * per * TRAIL);
+                    }
+                };
+                points();
+                // 泛光只给火星：火星另画一遍到半分辨率的小图上（黑底），模糊后叠回来。卡片和字不进泛光，不会被照白
+                if (SPARK_BLOOM > 0) {
+                    const { sparkTarget, bloom } = glState;
+                    const hw = Math.max(1, canvas.width >> 1), hh = Math.max(1, canvas.height >> 1);
+                    sparkTarget.bind(hw, hh);
+                    gl.disable(gl.BLEND);
+                    gl.clearColor(0, 0, 0, 1);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                    gl.enable(gl.BLEND);
+                    gl.uniform2f(u.uRes, hw, hh);
+                    points();
+                    const glowTex = bloom.run(sparkTarget, null, [0.0, 0.08], 1);
+                    bloom.add(glowTex, canvas.width, canvas.height, SPARK_BLOOM * (1 + power * 0.5));
+                    gl.bindVertexArray(vao);
                 }
                 gl.disable(gl.BLEND);
             }
@@ -1571,6 +1592,7 @@ vec2 home(vec2 t) {
                 gl.deleteTexture(glState.bursts);
                 gl.deleteProgram(glState.sky.program);
                 gl.deleteProgram(glState.spark.program);
+                gl.deleteTexture(glState.sparkTarget.tex);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
             glState = null;
