@@ -845,3 +845,8 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 /* 检索命中：副标题字小、又有 overflow 裁切，用贴身 1px 下划线，不再加粗 */
 .archive-list-row .tx em mark { font-weight: inherit; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .archive-list-brand-title > span.q { left: -.5em; max-width: calc(100% + .5em); }
+/* 表头标出当前排序列（照原版：排序那一列表头加重，时长排序时整列时长也提亮） */
+.archive-list:is([data-sort="title"], [data-sort="artist"]) .archive-list-cols span:nth-child(2),
+.archive-list[data-sort="duration"] .archive-list-cols span:nth-child(3) { color: var(--ar-ink); font-weight: 600; }
+.archive-list[data-sort="duration"] .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 86%, transparent); }
+.archive-list[data-sort="added"] .archive-list-cols span:nth-child(1) { color: var(--ar-ink); font-weight: 600; }

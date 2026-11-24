@@ -1661,6 +1661,7 @@
             const mode = sortMode();
             const entry = SORTS.find(([k]) => k === mode) || SORTS[0];
             r.sortName.textContent = entry[1];
+            el.dataset.sort = entry[0]; // 表头跟着标出按哪一列排（CSS 用）
             r.sortBtn.classList.toggle('on', mode !== 'title');
             r.sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sort === mode)));
         };
