@@ -533,6 +533,7 @@ void main() {
             sung = sungLines(frame.lines);
             sungFor = frame.lines;
             glState?.slots.forEach((slot) => { slot.key = null; });
+            Utils.loadLyricFont(frame.lines, [400], () => { glState?.slots.forEach((slot) => { slot.key = null; }); redraw(); }, frame.track?.title || '');
         };
 
         const family = () => global.getComputedStyle?.(mode.root).fontFamily || 'system-ui, sans-serif';
@@ -566,9 +567,9 @@ void main() {
                 }
                 if (!glyphs) continue;
                 let size = base;
-                ctx.font = `500 ${size}px ${family()}`;
+                ctx.font = `400 ${size}px ${family()}`;
                 const width = ctx.measureText(glyphs.join('')).width;
-                if (width > fitPx) { size = Math.floor(size * fitPx / width); ctx.font = `500 ${size}px ${family()}`; }
+                if (width > fitPx) { size = Math.floor(size * fitPx / width); ctx.font = `400 ${size}px ${family()}`; }
                 const baseline = row * ROW_PX + ROW_PX * 0.5 + size * 0.36;
                 let x = 4;
                 let id = 0;

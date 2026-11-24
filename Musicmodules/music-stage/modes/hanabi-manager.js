@@ -683,6 +683,7 @@ void main() {
             cues = buildCues(frame.lines || [], frame.duration);
             bursts = planShow(cues, key, density);
             cuesFor = { lines: frame.lines, key, density };
+            Utils.loadLyricFont(frame.lines, [800], () => { glState?.slots.forEach((slot) => { slot.key = null; }); redraw(); }, `${frame.track?.title || ''}${frame.track?.artist || ''}`);
             stats.bursts = bursts.length;
             glState?.slots.forEach((slot) => { slot.key = null; });
             if (glState) glState.burstsKey = null;
@@ -731,7 +732,7 @@ void main() {
             if (glyphs.length) {
                 const visible = glyphs.filter(g => g.text.trim()).length;
                 const cjk = glyphs.filter(g => CJK.test(g.text)).length > visible / 2;
-                const font = size => `${cjk ? 500 : 400} ${size.toFixed(1)}px ${family()}`;
+                const font = size => `800 ${size.toFixed(1)}px ${family()}`;
                 // 两种排法：河岸上方一两行；或者竖着斜挂在天上，每个词块左边贴一条彩色纸签
                 // 副歌改成拼贴：词块大小不一、各自歪一点，像剪下来贴在夜空上，一两块垫着彩纸
                 const collage = cue.kind === 'line' && cue.chorus && s.collage && visible >= 3 && visible <= 28;
@@ -852,7 +853,7 @@ void main() {
                         ctx.globalCompositeOperation = 'lighter';
                         ctx.fillStyle = 'rgb(46,0,0)';
                         const big = H * (0.17 + random() * 0.06);
-                        ctx.font = `700 ${big.toFixed(1)}px ${family()}`;
+                        ctx.font = `800 ${big.toFixed(1)}px ${family()}`;
                         const rot = (random() - 0.5) * 0.5 + 0.18;
                         for (let k = 0; k < 3; k += 1) {
                             ctx.save();

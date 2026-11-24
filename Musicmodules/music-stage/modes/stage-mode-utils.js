@@ -547,6 +547,29 @@
     });
     const lyricFont = key => LYRIC_FONTS[key] || LYRIC_FONTS.sans;
 
+    // 2D 歌词舞台的字体：随 VCPChat 带的 Noto Sans SC 可变字体（100–900 都有），
+    // 没加载到时退回系统黑体。字体按 unicode-range 分片，用到哪些字才下载哪片，
+    // 所以要拿整首歌的字去 load；load 完后舞台要把画好的字图作废重画。
+    const STAGE_FONT = '"Noto Sans SC Variable","Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif';
+    const fontLoads = new Map();
+    const loadLyricFont = (lines, weights, onLoaded, extra = '') => {
+        const fonts = global.document?.fonts;
+        if (!fonts?.load) return true;
+        const text = [...new Set(splitGraphemes(`${extra}${(lines || []).map(l => `${l?.fullText || l?.original || ''}${l?.translation || ''}`).join('')}`))].join('').slice(0, 4000) || '歌';
+        let ready = true;
+        const pending = [];
+        for (const w of weights) {
+            const font = `${w} 32px ${STAGE_FONT}`;
+            try { if (fonts.check(font, text)) continue; } catch (_) { continue; }
+            ready = false;
+            const key = `${font}|${text}`;
+            if (!fontLoads.has(key)) fontLoads.set(key, fonts.load(font, text).catch(() => []));
+            pending.push(fontLoads.get(key));
+        }
+        if (!ready && typeof onLoaded === 'function') Promise.all(pending).then(() => onLoaded());
+        return ready;
+    };
+
     // The colour a cover is "about": the hue with the most vivid area,
     // averaged over the pixels of that hue. A grey, black or white cover has
     // no such colour and gives null, so the stage keeps its theme's sky.
@@ -786,6 +809,8 @@ float vnoise(vec2 p) {
         watchOverlay, watchCardInset, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,
         lyricFont,
+        STAGE_FONT,
+        loadLyricFont,
         createRenderScale,
         createHandoverVeil,
         createFrameCap, createStillGate, durationChanged,

@@ -29,8 +29,6 @@
     const FOG_HOLD = 4.5;
     const FOG_RETURN = 3.2;
     const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-    const HAND_CJK = '"KaiTi", "STKaiti", "Kaiti SC", "BiauKai", "AR PL UKai CN", serif';
-    const HAND_LATIN = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
     const hexRgb = (hex, fallback) => {
         const match = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
@@ -765,7 +763,7 @@ void main() {
             }
         };
 
-        const fontFor = (size, cjk) => `400 ${size.toFixed(1)}px ${cjk ? HAND_CJK : HAND_LATIN}`;
+        const fontFor = (size) => `600 ${size.toFixed(1)}px ${Utils.STAGE_FONT}`;
         const measure = (text, size, cjk) => { measureCtx.font = fontFor(size, cjk); return measureCtx.measureText(text).width; };
 
         const ensurePlan = (frame) => {
@@ -777,6 +775,7 @@ void main() {
             plan = planSong(frame.lines || [], world.W, world.H, s.fontScale, measure, `${frame.track?.path || frame.track?.title || ''}|${world.W}x${world.H}|${s.fontScale}`, avoid);
             planFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; });
+            Utils.loadLyricFont(frame.lines, [600], () => { planFor = null; glState?.slots.forEach((slot) => { slot.key = null; }); redraw(); }, `${frame.track?.title || ''}${frame.track?.artist || ''}`);
         };
 
         // 一句的指痕图：G 通道是字的编号，R 通道是手指擦过的形状（字描粗、圆头）。

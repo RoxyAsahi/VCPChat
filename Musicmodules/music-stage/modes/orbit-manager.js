@@ -421,6 +421,7 @@ void main() {
             sung = sungLines(frame.lines);
             sungFor = frame.lines;
             glState?.slots.forEach((slot) => { slot.key = null; });
+            Utils.loadLyricFont(frame.lines, [700], () => { glState?.slots.forEach((slot) => { slot.key = null; }); redraw(); }, frame.track?.title || '');
         };
 
         const family = () => global.getComputedStyle?.(mode.root).fontFamily || 'system-ui, sans-serif';
@@ -448,7 +449,7 @@ void main() {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             const size = 88;
-            ctx.font = `500 ${size}px ${family()}`;
+            ctx.font = `700 ${size}px ${family()}`;
             const items = [];
             glyphs.forEach((g) => {
                 const width = ctx.measureText(g.text).width;

@@ -4,6 +4,9 @@
  * See Musicmodules/README.md for attribution and licensing notes.
  */
 
+/* 2D 歌词舞台用的字体：VCPChat 自带的 Noto Sans SC 可变字体 */
+@import url('../../assets/font/vcp-ui/noto-sans-sc.css');
+
 @property --stage-edge-angle {
     syntax: "<angle>";
     inherits: false;
@@ -4476,7 +4479,7 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
     flex-direction: column;
     gap: 1.1em;
     transition: transform 0.75s cubic-bezier(0.25, 0.8, 0.25, 1);
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+    font-weight: 600;
     font-size: calc(clamp(17px, 1.35vw, 24px) * var(--impression-scale, 1));
     color: var(--stage-ink);
 }
@@ -4536,7 +4539,7 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
     padding: 10px 14px 10px 12px;
     border-left: 2px solid color-mix(in srgb, var(--stage-accent) 70%, transparent);
     color: var(--stage-ink);
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+    font-family: inherit;
     pointer-events: none;
 }
 .impression-label > b { font-size: 15px; font-weight: 600; }
@@ -4564,4 +4567,18 @@ body.light-theme .music-stage-mode-impression { background: #efece6; }
 }
 @media (prefers-reduced-motion: reduce) {
     .impression-track, .impression-line { transition: none; }
+}
+
+/* 九个 2D 歌词舞台统一用 Noto Sans SC（画布上的字也读这里的字体栈） */
+.music-stage-mode-inkdraft,
+.music-stage-mode-fogpane,
+.music-stage-mode-lumiere,
+.music-stage-mode-hanabi,
+.music-stage-mode-clockwork,
+.music-stage-mode-orbit,
+.music-stage-mode-signal,
+.music-stage-mode-groupchat,
+.music-stage-mode-impression {
+    font-family: "Noto Sans SC Variable", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    font-synthesis: none;
 }

@@ -506,6 +506,7 @@ void main() {
             cues = buildCues(frame.lines || [], frame.duration, key);
             cuesFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; });
+            Utils.loadLyricFont(frame.lines, [500], () => { glState?.slots.forEach((slot) => { slot.key = null; }); redraw(); }, `${frame.track?.title || ''}${frame.track?.artist || ''}`);
         };
 
         const family = () => global.getComputedStyle?.(mode.root).fontFamily || 'system-ui, sans-serif';
@@ -534,7 +535,7 @@ void main() {
             const data = new Float32Array(256 * 4);
             const placedGlyphs = [];
             const random = seededRandom(`lumiere:${cuesFor?.key}:${index}:layout`);
-            const font = (size, cjk) => `${cjk ? 400 : 300} ${size.toFixed(1)}px ${family()}`;
+            const font = (size) => `500 ${size.toFixed(1)}px ${family()}`;
             // 背景层（B 通道）：上一句的大号空心字回声，下一句的小字预告；都只在光里隐约可见
             const textOf = c => (c && c.kind === 'line' && readableText(c.line.fullText) ? String(c.line.fullText).trim() : '');
             const echo = textOf(cues[index - 1]);

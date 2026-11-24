@@ -312,7 +312,7 @@
     const prepareCue = (cue, index, ctx) => {
         const { W, H, aspect, family, settings, trackKey, title, mainCanvas, idsCanvas } = ctx;
         const random = seededRandom(`inkdraft:${trackKey}:${index}:${cue.kind}:${cue.start.toFixed(2)}`);
-        const fontFor = (size, cjk) => `${cjk ? 400 : 300} ${size.toFixed(1)}px ${family}`;
+        const fontFor = (size) => `800 ${size.toFixed(1)}px ${family}`;   // 粗黑体，和漫画分镜的字一个分量
         const main = mainCanvas.getContext('2d', { alpha: false });
         const ids = idsCanvas.getContext('2d', { alpha: false });
         main.globalCompositeOperation = 'source-over';
@@ -1075,7 +1075,7 @@ void main() {
 
         const fontFamily = () => {
             const family = global.getComputedStyle?.(mode.root).fontFamily || '';
-            return family || '"Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif';
+            return family || Utils.STAGE_FONT;
         };
 
         const resize = () => {
@@ -1106,6 +1106,8 @@ void main() {
             cues = buildCues(frame.lines || [], frame.duration);
             cuesFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; });
+            // 字体分片还没下载完：下载完把字图作废重画（字宽变了，分镜也要重排）
+            Utils.loadLyricFont(frame.lines, [800], () => { glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; }); redraw(); }, frame.track?.title || '');
         };
 
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
