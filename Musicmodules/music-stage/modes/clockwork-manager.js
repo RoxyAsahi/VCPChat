@@ -22,7 +22,7 @@
     const ROWS = 7; // 当前句上下各三句
     const ROW_PX = 128;
     const ATLAS_W = 2048;
-    const STEP = 0.15; // 相邻两句的夹角（弧度）
+    const STEP = 0.2; // 相邻两句的夹角（弧度）
     const TURN = 0.7; // 换句时转一格用的秒数
 
     const hexRgb = (hex, fallback) => {
@@ -337,34 +337,40 @@ void main() {
     {
         vec2 q = p - hubC;
         float r = length(q);
-        float a = atan(q.y, q.x) - uTurn;
-        // 翻译要贴在当前句下面：当前句以下的几根整体往下多转 uGap，让出一条缝（缝里不画字）。
-        float aRaw = atan(q.y, q.x);
+        // 每句挂在半径 R0 的弧上（当前句在三点钟方向），字只跟着转三成多一点，不顺着半径倒下去，读起来是横的。
+        // 当前句大、两边的句子小一圈并按离开的角度变淡（同一套字图，按行缩放）。
+        // 翻译贴在当前句下面：当前句以下的几句整体往下多转 uGap，让出一条缝。
         float cut = -STEP * 0.42;
-        float gapZone = step(cut - uGap, aRaw) * step(aRaw, cut);
-        a += uGap * step(aRaw, cut - uGap);
-        float k = floor(-a / STEP + 0.5);
-        if (abs(k) <= 3.0 && r > R0 - 0.02 && (uGap <= 0.0 || gapZone < 0.5)) {
-            float la = a + k * STEP;
-            float along = r * cos(la) - R0;
-            float perp = r * sin(la);
-            float rowH = uFont * ${(ROW_PX / 100).toFixed(2)};
-            float L = rowH * ${(ATLAS_W / ROW_PX).toFixed(1)};
-            vec2 tc = vec2(along / L, (k + 3.0 + 0.5 - perp / rowH) / ROWS);
-            if (tc.x > 0.0 && tc.x < 1.0 && abs(perp) < rowH * 0.5) {
-                vec4 tx = texture(uText, tc);
-                int gid = int(texelFetch(uText, ivec2(tc * vec2(${ATLAS_W}.0, ROWS * ${ROW_PX}.0)), 0).g * 255.0 + 0.5);
-                vec2 se = gid > 0 ? texelFetch(uGlyph, ivec2(gid, 0), 0).xy : vec2(-1e9);
-                float rowAng = abs(-k * STEP + uTurn);
-                float near = 1.0 - smoothstep(0.0, STEP * 1.2, rowAng);
-                float fade = 1.0 - smoothstep(STEP * 1.6, STEP * 3.0, rowAng);
-                float reveal = gid > 0 ? smoothstep(se.x - 0.1, se.x + 0.1, uTime) : 1.0;
-                float singing = gid > 0 ? smoothstep(se.x - 0.08, se.x + 0.05, uTime) * (1.0 - smoothstep(se.y, se.y + 0.45, uTime)) : 0.0;
-                float alpha = tx.r * fade * mix(uWaiting * 0.8, 1.0, near) * mix(uWaiting + 0.25, 1.0, reveal);
-                vec3 ink = mix(uInk, uAccent, singing);
-                col = mix(col, ink, clamp(alpha, 0.0, 1.0));
-                lit = alpha * near;
-            }
+        float rowH = uFont * ${(ROW_PX / 100).toFixed(2)};
+        float L = rowH * ${(ATLAS_W / ROW_PX).toFixed(1)};
+        for (int kk = -3; kk <= 3; kk++) {
+            float k = float(kk);
+            float th = uTurn - k * STEP;
+            th -= uGap * step(th, cut);
+            float rowAng = abs(th);
+            if (rowAng > 1.45) continue;
+            float near = 1.0 - smoothstep(0.0, STEP * 0.9, rowAng);
+            float dist = rowAng / STEP;
+            float sc = mix(0.7 * max(0.7, 1.0 - dist * 0.08), 1.12, near);
+            float ph = th * 0.35;
+            vec2 anchor = vec2(cos(th), sin(th)) * R0;
+            vec2 d = q - anchor;
+            float along = d.x * cos(ph) + d.y * sin(ph);
+            float perp = -d.x * sin(ph) + d.y * cos(ph);
+            float h = rowH * sc;
+            vec2 tc = vec2(along / (L * sc), (k + 3.0 + 0.5 - perp / h) / ROWS);
+            if (tc.x <= 0.0 || tc.x >= 1.0 || abs(perp) >= h * 0.5) continue;
+            vec4 tx = texture(uText, tc);
+            if (tx.r < 0.002) continue;
+            int gid = int(texelFetch(uText, ivec2(tc * vec2(${ATLAS_W}.0, ROWS * ${ROW_PX}.0)), 0).g * 255.0 + 0.5);
+            vec2 se = gid > 0 ? texelFetch(uGlyph, ivec2(gid, 0), 0).xy : vec2(-1e9);
+            float fade = max(0.12, pow(max(cos(th * 0.75), 0.0), 2.5) * (1.0 - dist * 0.18)) * (1.0 - smoothstep(STEP * 2.6, STEP * 3.4, rowAng));
+            float reveal = gid > 0 ? smoothstep(se.x - 0.1, se.x + 0.1, uTime) : 1.0;
+            float singing = gid > 0 ? smoothstep(se.x - 0.08, se.x + 0.05, uTime) * (1.0 - smoothstep(se.y, se.y + 0.45, uTime)) : 0.0;
+            float alpha = tx.r * mix(fade * mix(0.55, 0.85, uWaiting), 1.0, near) * mix(uWaiting + 0.25, 1.0, reveal);
+            vec3 ink = mix(uInk, uAccent, singing);
+            col = mix(col, ink, clamp(alpha, 0.0, 1.0));
+            lit = max(lit, alpha * near);
         }
         // 当前句的指针线：从刻度环到字的起点
         float a0 = atan(q.y, q.x) - uTurn;
@@ -718,7 +724,7 @@ void main() {
                 const X = X2 * D / (D + Y2 * sx);
                 return [(X * D * cy / (D + X * sy) + aspect / 2) * H, (1 - (Y * D / (D + X * sy) + 0.5)) * H];
             };
-            const [x, y] = toScreen(hubX + 0.425, 0.5 - 0.052 * fontScale * 0.62);
+            const [x, y] = toScreen(hubX + 0.425, 0.5 - 0.052 * fontScale * 0.7);
             const key = `${Math.round(x * 2)}|${Math.round(y * 2)}`;
             if (key === placed) return;
             placed = key;
