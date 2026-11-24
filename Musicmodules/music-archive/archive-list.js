@@ -8,6 +8,7 @@
     'use strict';
 
     const LETTER_H = 34;  // 首字母分组的行内小标题（字母 + 首数，上面压一条结构线）
+    const EDGE_FADE = 26; // 和 archive.css 里 .archive-list-viewport 上下渐隐的高度一致
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
     const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
     // 分组标题都在行内（档案目录表的排法），左侧外边距不再放吸附的大字母，也不画跟着它走的液态记号
@@ -749,7 +750,8 @@
             const pad2 = LABEL_H;
             if (center) vp.scrollTop = Math.max(0, y - h / 2 + ROW_H / 2);
             else if (y < vp.scrollTop + pad2) vp.scrollTop = Math.max(0, y - pad2);
-            else if (y + ROW_H > vp.scrollTop + h) vp.scrollTop = y + ROW_H - h;
+            // 底部留出渐隐那一段（26px），键盘往下走时选中行不会落在半透明的边上
+            else if (y + ROW_H > vp.scrollTop + h - EDGE_FADE) vp.scrollTop = y + ROW_H - h + EDGE_FADE;
             schedule();
         };
 
@@ -784,7 +786,7 @@
         const inView = (k) => {
             const vp = r.viewport;
             const y = state.offsets[k];
-            return y >= vp.scrollTop && y + ROW_H <= vp.scrollTop + (vp.clientHeight || 600);
+            return y >= vp.scrollTop && y + ROW_H <= vp.scrollTop + (vp.clientHeight || 600) - EDGE_FADE;
         };
 
         /* 列表里换选中（键盘/单击）：告诉阵列 */
