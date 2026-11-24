@@ -14,7 +14,8 @@
         hanabi: global.MusicStageHanabiManager,
         clockwork: global.MusicStageClockworkManager,
         orbit: global.MusicStageOrbitManager,
-        signal: global.MusicStageSignalManager
+        signal: global.MusicStageSignalManager,
+        groupchat: global.MusicStageGroupchatManager
     };
 
     const definitions = [
@@ -30,7 +31,8 @@
         { id: 'hanabi', label: '花火', manager: managers.hanabi },
         { id: 'clockwork', label: '时计', manager: managers.clockwork },
         { id: 'orbit', label: '回环', manager: managers.orbit },
-        { id: 'signal', label: '信号', manager: managers.signal }
+        { id: 'signal', label: '信号', manager: managers.signal },
+        { id: 'groupchat', label: '群唱', manager: managers.groupchat }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({

@@ -183,3 +183,30 @@ test('signal: the figure-eight centreline is one closed, unbroken loop through t
         last = b;
     }
 });
+
+require(path.join(stage, 'modes', 'groupchat-manager.js'));
+test('groupchat: a deterministic thread with typing lead, voice notes in long breaks, and choruses sung by several', () => {
+    const G = window.MusicStageGroupchatManager._test;
+    const song = window.MusicStageRuntime.normalizeLines([
+        { time: 5, original: '我们走到海边' },
+        { time: 9, original: '再见夏天' },
+        { time: 13, original: '风把信吹远' },
+        { time: 30, original: '再见夏天' },
+        { time: 34, original: '最后一句' }
+    ]);
+    const a = G.buildThread(song, '夏', 60);
+    const b = G.buildThread(song, '夏', 60);
+    assert.deepEqual(a.map(m => [m.kind, m.start, m.sender?.name]), b.map(m => [m.kind, m.start, m.sender?.name]));
+    assert.equal(a[0].kind, 'system');
+    for (let i = 1; i < a.length; i += 1) assert.ok(a[i].start >= a[i - 1].start);
+    const lines = a.filter(m => m.kind === 'line');
+    assert.equal(lines.length, 5);
+    assert.ok(lines.filter(m => m.chorus).length === 2 && lines.filter(m => m.chorus).every(m => m.echoes.length >= 2 && !m.echoes.includes(m.sender)));
+    const voice = a.find(m => m.kind === 'voice' && m.start > 13);
+    assert.ok(voice && voice.start > 13 && voice.end < 30 - G.TYPING_LEAD, 'the long break holds a voice note');
+    const before = lines[1].start - 0.5;
+    assert.equal(G.typingAt(a, before), lines[1], 'someone is typing just before the line');
+    assert.equal(G.typingAt(a, lines[1].start - 3), null);
+    assert.equal(a[G.messageIndexAt(a, lines[2].start + 0.1)], lines[2]);
+    assert.equal(G.messageIndexAt(a, -1), -1);
+});

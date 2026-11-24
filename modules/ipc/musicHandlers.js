@@ -508,6 +508,7 @@ async function handleMusicControl(args) {
         'clockwork',
         'orbit',
         'signal',
+        'groupchat',
         'starborn'
     ]);
     const normalizedStageMode = typeof stageMode === 'string' && stageMode.trim()
