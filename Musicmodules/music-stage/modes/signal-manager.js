@@ -172,6 +172,16 @@ Hit arc(vec2 p, vec2 c, float a0, float dir, float u0) {
 
 Hit nearest(Hit a, Hit b) { if (a.d < b.d) return a; return b; }
 
+// 摄影棚：暗房间，主光方向一大块柔光箱（跟着环的侧倾慢慢挪），右边一根竖灯条，底下一点暖的地面反光。
+// 返回的是亮度（柔光箱远亮于 1），釉面、铜按各自的反射率去乘。
+float studio(vec3 r) {
+    float room = mix(0.05, 0.26, uLight) + mix(0.05, 0.1, uLight) * smoothstep(-0.6, 0.9, r.y);
+    float box = smoothstep(0.7, 0.94, dot(r, uLightP));
+    float strip = exp(-(r.x - 0.62) * (r.x - 0.62) / 0.0025) * smoothstep(-0.5, 0.3, r.y) * step(0.0, r.z);
+    float floorWarm = smoothstep(0.05, -0.7, r.y) * 0.06;
+    return room + box * 2.2 + strip * 0.9 + floorWarm;
+}
+
 // 光团：沿槽从头往后渐暗
 float pulseAt(float u) {
     float e = 0.0;
@@ -209,7 +219,7 @@ float windowAt(Hit h) {
          + smoothstep(W2 + e, W2 + e + 0.004, a) * smoothstep(W3 - e, W3 - e - 0.004, a);
 }
 
-vec3 shadeTube(Hit h, float energy) {
+vec3 shadeTube(Hit h, float energy, vec2 p) {
     float collar = collarAt(h);
     float rad = TR + 0.02 * collar;
     float s = clamp(h.side / rad, -1.0, 1.0);
@@ -226,9 +236,15 @@ vec3 shadeTube(Hit h, float energy) {
     vec3 glowHue = mix(uAccent, vec3(1.0, 0.52, 0.2), 0.55);
     float boost = 1.0 + 0.9 * uKick + 0.45 * uCharge;
 
-    // 陶瓷管身：哑光，柔一点的高光，边上一圈暗
-    vec3 col = uBody * (0.22 + 0.95 * wrap) + vec3(1.0, 0.97, 0.94) * (spec * mix(0.16, 0.3, uLight) + sheen * 0.05);
-    col *= 1.0 - rim * mix(0.55, 0.25, uLight);
+    // 陶瓷管身：上了釉。底下是哑的胎色（漫射），上面一层透明釉照出摄影棚：
+    // 柔光箱在管顶映成一道长亮带，灯条在另一侧映成一根细线，越往两边（掠射）反射越强（菲涅尔）
+    vec3 V = normalize(vec3(-p * 0.06, 1.0));
+    float ndv = max(dot(n, V), 0.0);
+    float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+    float env = studio(reflect(-V, n));
+    vec3 col = uBody * (0.2 + 0.9 * wrap) * (1.0 - fres);
+    col *= 1.0 - rim * mix(0.5, 0.2, uLight);
+    col += vec3(1.0, 0.98, 0.95) * env * fres * mix(2.6, 2.0, uLight) + vec3(1.0, 0.97, 0.94) * sheen * 0.03;
 
     // 线圈窗：一节玻璃套，里面一根密绕的铜弹簧，中间穿着发光的芯
     float win = windowAt(h);
@@ -260,13 +276,18 @@ vec3 shadeTube(Hit h, float energy) {
     col = mix(col, mix(glowHue * 0.25, glowC, 0.35 + 0.65 * coreG), groove);
 
     // 铜套：比管身略粗，两边各一道暗缝
-    vec3 brass = copper * (0.1 + 0.62 * wrap) + vec3(1.0, 0.86, 0.7) * pow(max(dot(n, Hv), 0.0), 40.0) * 0.75;
-    brass *= 1.0 - rim * 0.5;
+    // 铜套：抛光的铜，照出同一间摄影棚（铜套很窄，拉丝抹开看不出来，只取一下）
+    float envB = env;   // 和釉面是同一个反射方向
+    vec3 F0b = vec3(0.95, 0.64, 0.45);
+    vec3 brass = (F0b + (1.0 - F0b) * pow(1.0 - ndv, 5.0)) * envB * 0.8 + copper * 0.22 * wrap;
+    brass *= 1.0 - rim * 0.35;
     brass += vec3(1.0, 0.78, 0.55) * uKick * 0.22 * (1.0 - rim);
     col = mix(col, brass, collar);
     // 铜套两边的细缝
     float edge = collar * (1.0 - collar) * 4.0;
     col *= 1.0 - edge * 0.55;
+    // 管子圆截面的底边：靠近轮廓、背光那侧再压暗一点（环境光被自己挡住）
+    col *= 1.0 - smoothstep(0.55, 1.0, abs(s)) * max(-dot(h.n * sign(s), uLightP.xy), 0.0) * 0.35;
     return col;
 }
 
@@ -284,6 +305,10 @@ void main() {
     col *= 1.0 + mix(0.12, 0.04, uLight) * exp(-dot(q, q) * 0.12);
     vec2 g = abs(fract(frag / (uK * 0.5)) - 0.5);
     col = mix(col, uInk, (1.0 - smoothstep(0.0, 1.0 / (uK * 0.5), min(g.x, g.y))) * mix(0.018, 0.03, uLight));
+    // 面板是横向拉丝的阳极氧化铝：一行行深浅不一的细纹，主光那侧泛一层宽的亮
+    float brush = hash12(vec2(floor(frag.y), floor(frag.x / 340.0 + hash12(vec2(floor(frag.y), 3.0)))));
+    col *= 1.0 + (brush - 0.5) * mix(0.05, 0.03, uLight);
+    col *= 1.0 + 0.06 * smoothstep(0.9, -0.2, abs(uv.y - 0.62 - uv.x * 0.1) * 2.2) * (1.0 - uLight * 0.5);
 
     float c = cos(PHI), sn = sin(PHI);
     vec2 t2up = vec2(HALF * c, HALF * sn), t2dn = vec2(HALF * c, -HALF * sn);
@@ -319,14 +344,20 @@ void main() {
     }
     bool frontCovers = front.d < TR - aa && (front.d < back.d || crossing > 0.0);
     float rb = TR + 0.02 * collarAt(back);
-    if (back.d < rb + aa && !frontCovers) col = mix(col, shadeTube(back, uEnergy), smoothstep(rb + aa, rb - aa, back.d));
+    // 交叉处上面那根在下面那根上落一道软影子（光从左上来，影子往右下偏）
+    float occl = 1.0;
+    if (crossing > 0.0) {
+        Hit fs = seg(p - vec2(-uLightP.x, -uLightP.y) * 0.09, t2dn, t1up, HALF + ARC);
+        occl = 1.0 - smoothstep(TR + 0.16, TR - 0.04, fs.d) * crossing * mix(0.6, 0.35, uLight);
+    }
+    if (back.d < rb + aa && !frontCovers) col = mix(col, shadeTube(back, uEnergy, p) * occl, smoothstep(rb + aa, rb - aa, back.d));
     // 上面那根在交叉处压着下面那根：先描一圈缝，再画它
     float gap = 0.07;
     if (front.d < TR + gap && (front.d < back.d || crossing > 0.0)) {
         float ring = smoothstep(TR + gap + aa, TR + gap - aa, front.d) * crossing;
         col = mix(col, uField * mix(0.4, 0.8, uLight), ring * step(back.d, TR + aa));
         float rf = TR + 0.02 * collarAt(front);
-        if (front.d < rf + aa) col = mix(col, shadeTube(front, uEnergy), smoothstep(rf + aa, rf - aa, front.d));
+        if (front.d < rf + aa) col = mix(col, shadeTube(front, uEnergy, p), smoothstep(rf + aa, rf - aa, front.d));
     }
     }
 

@@ -269,6 +269,15 @@
 
     /* ───────────────────────── GL ───────────────────────── */
 
+    // 车窗玻璃是圆角矩形，四周留一圈胶条和车厢壁（主画面和水珠两处都要用）
+    const GLASS_GLSL = `
+float glassDist(vec2 uv, float asp) {
+    vec2 q = (uv - 0.5) * vec2(asp, 1.0);
+    float r = 0.05;
+    vec2 d = abs(q) - (vec2(asp * 0.5, 0.5) - 0.024) + r;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+}`;
+
     const VERT = `#version 300 es
 void main() {
     vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -372,7 +381,10 @@ vec3 street(vec2 p) {
             vec2 w = floor(local * vec2(5.0, 14.0));
             float lit = step(0.8, hash12(w + c * 7.0 + float(layer) * 31.0));
             vec2 f = fract(local * vec2(5.0, 14.0));
-            float pane = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.7);
+            // 窗格边按像素抗锯齿（透过擦开的地方看得比较清楚，硬边会一格格闪）
+            vec2 fw = fwidth(local * vec2(5.0, 14.0)) * 0.75;
+            vec2 pe = smoothstep(vec2(0.3) - fw, vec2(0.3) + fw, f) * smoothstep(vec2(0.7) + fw, vec2(0.7) - fw, f);
+            float pane = pe.x * pe.y;
             col = b + uWin * lit * pane * (layer == 0 ? 0.55 : 0.8);
         }
     }
@@ -546,8 +558,28 @@ uniform vec3 uFogCol;
 uniform float uFogDensity;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform float uLightTheme;
 out vec4 outColor;
 ${COMMON}
+
+// 车窗的圆角玻璃：返回到玻璃边的距离（屏幕高为单位，玻璃里为负）
+${GLASS_GLSL}
+
+// 玻璃上映出的车厢：外面黑，玻璃就成了一面暗镜子。顶上两排灯管（近的长、远的短一点、略斜），
+// 一根横扶手、一根竖扶杆，底下一排座椅靠背的上沿。只用算术，不取图。
+vec3 interior(vec2 uv, float asp) {
+    float x = uv.x * asp;
+    float tube = exp(-pow((uv.y - 0.905 - (uv.x - 0.5) * 0.035) / 0.016, 2.0)) * smoothstep(0.03, 0.14, uv.x) * smoothstep(0.97, 0.84, uv.x);
+    float tube2 = exp(-pow((uv.y - 0.79 - (uv.x - 0.5) * 0.02) / 0.007, 2.0)) * smoothstep(0.22, 0.36, uv.x) * smoothstep(0.86, 0.72, uv.x) * 0.55;
+    float rail = exp(-pow((uv.y - 0.845) / 0.0035, 2.0)) * 0.28;
+    float px = x - asp * 0.79 - (uv.y - 0.5) * 0.025;
+    float pole = (exp(-pow(px / 0.0045, 2.0)) * 0.45 + exp(-pow((px + 0.006) / 0.0015, 2.0)) * 0.5) * smoothstep(0.0, 0.25, uv.y);
+    float sx = fract(x / 0.62 + 0.18);
+    float top = 0.15 + 0.035 * sin(sx * 3.14159) - step(0.86, sx) * 0.2;
+    float seat = exp(-pow((uv.y - top) / 0.004, 2.0)) * 0.22 + smoothstep(top, top - 0.08, uv.y) * 0.035;
+    vec3 warm = mix(vec3(1.0, 0.9, 0.74), vec3(0.88, 0.95, 1.0), uLightTheme);
+    return warm * (tube * 0.75 + tube2 + rail + seat) + vec3(0.85, 0.88, 0.92) * pole;
+}
 
 // 指痕外沿积的水：手指把雾推到笔画两边，聚成一圈水。这个像素自己没被擦开、
 // 但旁边一小圈里有已经写到的笔画，就算在水线上（返回 0..1，越靠近笔画越满）。
@@ -571,7 +603,8 @@ float wetEdge(sampler2D atlas, sampler2D data, vec4 info, vec2 uv) {
         wet = max(wet, smoothstep(sp - 0.03, sp, prog) * smoothstep(0.3, 0.8, t.r));
     }
     float n = vnoise(uv * vec2(9.0, 6.0) + info.z) * 0.6 + vnoise(uv * 40.0) * 0.4;
-    float back = smoothstep(info.x, info.x + ${FOG_RETURN.toFixed(1)}, uTime + (n - 0.5) * 2.2);
+    // 水线在笔画最外沿，和笔画边一起最先被雾盖回去（不然雾漫回后还剩一圈圈弧形水珠）
+    float back = smoothstep(info.x, info.x + ${FOG_RETURN.toFixed(1)}, uTime + (n - 0.5) * 2.2 + 0.8);
     return wet * (1.0 - back);
 }
 
@@ -643,15 +676,32 @@ void main() {
     }
 
     // 雾后面两层模糊的窗外：用多级双滤波模糊（圆润），不用 mip（会糊成一块块方的光斑）
-    vec3 blurred = mix(texture(uFogBlur, uv).rgb * uFogNorm.x, texture(uFogGlow, uv).rgb * uFogNorm.y, 0.5);
+    // 雾里的灯应当化开成一团、看不出边（擦开的地方才是有边的光斑），所以偏向更糊的那一层
+    vec3 blurred = mix(texture(uFogBlur, uv).rgb * uFogNorm.x, texture(uFogGlow, uv).rgb * uFogNorm.y, 0.72);
     float grainy = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 180.0) - 0.5;
     float clumps = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 7.0);
     // 雾里的灯：除了透过来的模糊光斑，再往外晕开一大圈
     vec3 wide = texture(uFogGlow, uv).rgb * uFogNorm.y;
     vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25 + max(wide - uFogCol * 0.6, 0.0) * 0.45;
     // 透过擦开的地方看窗外：眼睛对在玻璃上，窗外是虚的（窗外场景只有 1/3 分辨率，直接看会是一格格的方块）
-    vec3 clear = textureLod(uScene, uv, 2.2).rgb * 1.05;
-    vec3 col = mix(fog, clear, wipe);
+    float asp = uRes.x / uRes.y;
+    float glassD = glassDist(uv, asp);
+    // 雾里的细水珠：一颗颗看不清，但身后有灯的地方会一点点闪
+    vec2 mp = gl_FragCoord.xy / 2.4;
+    vec2 mc = floor(mp);
+    float md = length(fract(mp) - 0.25 - hash22(mc) * 0.5);
+    float micro = smoothstep(0.3, 0.06, md) * step(0.5, hash12(mc + 5.3));
+    float backLum = dot(wide, vec3(0.3, 0.55, 0.15));
+    fog += micro * (wide * 0.45 + 0.008) * smoothstep(0.04, 0.4, backLum);
+    // 靠窗框的雾更厚（玻璃边最冷）
+    float rimFog = smoothstep(-0.13, 0.0, glassD);
+    fog = mix(fog, uFogCol * 1.04 + blurred * 0.2, rimFog * 0.32);
+    // 透过擦开的地方看窗外：眼睛对着玻璃上的字，窗外是虚的，但比雾里清楚得多——灯是一个个有边的光斑
+    vec3 clear = textureLod(uScene, uv, 0.6).rgb * 1.05;
+    // 擦干净的玻璃映出车厢里
+    vec3 refl = interior(uv, asp);
+    clear += refl * mix(0.16, 0.09, uLightTheme);
+    vec3 col = mix(fog + refl * 0.025, clear, wipe);
     // 指痕边上积着一圈水，亮一点
     float rim = wipe * (1.0 - wipe) * 4.0;
     col += rim * 0.06 + rim * blurred * 0.25;
@@ -720,6 +770,23 @@ void main() {
         }
         col += uBeamCol * beam * uBeam.z * mix(0.34, 0.14, wipe);
     }
+    // 窗底积水：顺着玻璃淌下来的水在胶条上沿积成一道，亮边是它映着的车厢灯
+    float pool = smoothstep(-0.0105, -0.0075, glassD) * smoothstep(0.0, -0.002, glassD) * smoothstep(0.12, 0.03, uv.y);
+    pool *= 0.75 + 0.25 * sin(uv.x * asp * 60.0 + sin(uv.x * 17.0) * 3.0);
+    col = mix(col, clear * 1.15 + uFogCol * 0.15, pool * 0.75);
+    col += pool * smoothstep(-0.0095, -0.0085, glassD) * smoothstep(-0.007, -0.008, glassD) * 0.35;
+    // 玻璃外：一圈黑胶条（内沿一道细高光，上面亮下面暗），再外是车厢内壁
+    float aaG = max(fwidth(glassD), 1e-4);
+    if (glassD > -aaG) {
+        float topLit = 0.55 + 0.45 * uv.y;
+        vec3 rubber = vec3(0.028, 0.03, 0.034) * (0.8 + 0.4 * uv.y);
+        rubber += exp(-pow((glassD - 0.0022) / 0.0014, 2.0)) * 0.16 * topLit + exp(-pow((glassD - 0.0085) / 0.0012, 2.0)) * 0.07 * topLit;
+        vec3 wallC = mix(vec3(0.11, 0.105, 0.1), vec3(0.74, 0.72, 0.68), uLightTheme) * (0.7 + 0.45 * uv.y);
+        wallC += (hash12(floor(gl_FragCoord.xy / 1.3)) - 0.5) * 0.015;
+        vec3 frame = mix(rubber, wallC, smoothstep(0.0105, 0.0105 + aaG, glassD));
+        frame *= 1.0 - smoothstep(0.0125, 0.0105, glassD) * smoothstep(0.0105, 0.0125, glassD) * 0.0;
+        col = mix(col, frame, smoothstep(-aaG, aaG, glassD));
+    }
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 13.0) - 0.5) * 0.03 * uGrain;
     // 窗框四周暗一点
     vec2 v = uv - 0.5;
@@ -777,6 +844,7 @@ in vec2 vQ;
 in float vR;
 in float vSize;
 out vec4 outColor;
+${GLASS_GLSL}
 void main() {
     vec2 q = vQ;
     // 水往下坠：下半截拉长一点
@@ -805,6 +873,7 @@ void main() {
     float aDrop = drop * 0.95;
     float aRing = ring * 0.18 * (1.0 - drop);
     float a = aDrop + aRing;
+    a *= smoothstep(-0.006, -0.012, glassDist(uv, uCanvas.x / uCanvas.y));
     if (a <= 0.001) discard;
     outColor = vec4((clamp(inside, 0.0, 1.0) * aDrop + clear * aRing) / a, a);
 }`;
@@ -1312,6 +1381,7 @@ void main() {
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));
             gl.uniform1f(u.uGrain, s.grain);
+            gl.uniform1f(u.uLightTheme, colours.light ? 1 : 0);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 
