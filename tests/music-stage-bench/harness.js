@@ -37,6 +37,8 @@
       add(verseA, 4.2); add(chorus, 4.6); t += 4; add(verseB, 4.2); add(chorus, 4.6); t += 20; add(bridge, 4.4); add(chorus, 4.6);
       return out; },
     none: () => [],
+    // ?lyrics=custom：stage2d.cjs 用 LRC=文件 读进来的真实歌词（双语 LRC：同一时刻第一行原文、第二行翻译）
+    custom: () => (window.__customLyrics || []).slice(),
     // ?lyrics=plain：没有时间的纯文本歌词，放在 app.currentLyricsPlainLines
     plain: () => [],
     // ?lyrics=long：一首都是超长句的歌（中文长句、英文长句、不带空格的长串）

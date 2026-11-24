@@ -35,6 +35,32 @@
     const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
     const REST_PART = 20;
     const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+    const CREDIT = /^(作词|作詞|作曲|编曲|編曲|词|詞|曲|编|制作人|监制|混音|母带|和声|吉他|贝斯|鼓|演唱|原唱|Lyrics?|Lyricist|Compose[rd]?|Composition|Arrange[rd]?|Arrangement|Producer|Vocals?|Mix(?:ing)?|Master(?:ing)?)\s*(by)?\s*[:：]/i;
+    const KANJI = /[\p{Script=Han}々〆ヶ]/u;
+    const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
+    // 歌词里写在括号里的注音「海鳴(うみな)り」：括号和假名拿掉，记在前面那串汉字的第一个字上，排字时小字注在汉字上面
+    const takeRuby = (glyphs) => {
+        const out = [];
+        for (let i = 0; i < glyphs.length; i += 1) {
+            const g = glyphs[i];
+            if ((g.text === '(' || g.text === '（') && out.length && KANJI.test(out[out.length - 1].text)) {
+                let j = i + 1, kana = '';
+                while (j < glyphs.length && KANA.test(glyphs[j].text)) { kana += glyphs[j].text; j += 1; }
+                if (kana && j < glyphs.length && (glyphs[j].text === ')' || glyphs[j].text === '）')) {
+                    let k = out.length - 1;
+                    while (k > 0 && KANJI.test(out[k - 1].text) && !out[k - 1].rubyAt && out.length - k < 4) k -= 1;
+                    out[k].ruby = kana;
+                    out[k].rubyCount = out.length - k;
+                    for (let m = k; m < out.length; m += 1) out[m].rubyAt = true;
+                    out[out.length - 1].end = Math.max(out[out.length - 1].end, glyphs[j].end);
+                    i = j;
+                    continue;
+                }
+            }
+            out.push(g);
+        }
+        return out;
+    };
     const wordSegmenter = typeof Intl !== 'undefined' && Intl.Segmenter
         ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
 
@@ -77,7 +103,13 @@
                 cues.push({ kind: 'rest', start: start + length * i / parts, end: start + length * (i + 1) / parts, title: title && i === 0 });
             }
         };
-        const sung = lines.filter(line => readableText(line.fullText));
+        // 「作词 : xxx」「作曲 : xxx」这种署名行不当歌词唱：收起来，写在开场歌名那一页的角上（像书的版权页）
+        const credits = [];
+        const sung = lines.filter((line) => {
+            if (!readableText(line.fullText)) return false;
+            if (CREDIT.test(String(line.fullText).trim())) { credits.push(String(line.fullText).trim().replace(/\s*[:：]\s*/, ' : ')); return false; }
+            return true;
+        });
         const tail = Math.max(Number(duration) || 0, 0);
         if (!sung.length) {
             pushRest(0, Math.max(tail, 720), true);
@@ -98,6 +130,7 @@
             }
         });
         if (cues.length && cues[0].start > 0) cues[0].start = 0;
+        if (credits.length && cues[0]?.title) cues[0].credits = credits.slice(0, 6);
         markKeywords(cues, sung);
         markChorus(cues);
         return cues;
@@ -180,7 +213,7 @@
     const glyphUnits = (cue, title) => {
         let glyphs;
         if (cue.kind === 'line') {
-            glyphs = buildGlyphTimeline(cue.line).map(g => ({ text: g.text, start: g.startTime, end: g.endTime }));
+            glyphs = takeRuby(buildGlyphTimeline(cue.line).map(g => ({ text: g.text, start: g.startTime, end: g.endTime })));
         } else if (cue.title && title) {
             glyphs = splitGraphemes(title).map((text, i) => ({ text, start: cue.start + 0.4 + i * 0.06, end: cue.start + 0.7 + i * 0.06 }));
         } else glyphs = [];
@@ -568,6 +601,29 @@
             placed.forEach((p) => { p.box = [p.x, p.baseline - p.size * 0.88, p.x + p.w, p.baseline + p.size * 0.2]; });
             textBox = unionBox(placed.map(p => p.box));
         }
+        // 注音（Folia 没有）：小字假名排在那串汉字正上方，和汉字同时出现；不参与取景
+        const rubies = [];
+        placed.forEach((p, i) => {
+            if (!p.g.ruby) return;
+            let last = p;
+            for (let k = 1; k < (p.g.rubyCount || 1); k += 1) { const q = placed[i + k]; if (q && q.baseline === p.baseline) last = q; }
+            const chars = splitGraphemes(p.g.ruby);
+            const rs = p.size * 0.32;
+            main.font = fontFor(rs);
+            const ws = chars.map(c => main.measureText(c).width);
+            const total = ws.reduce((a, b) => a + b, 0);
+            const runW = last.x + last.w - p.x;
+            const track = chars.length > 1 ? Math.max(0, (runW - total) / chars.length) : 0;
+            let x = p.x + (runW - total - track * (chars.length - 1)) / 2;
+            const baseline = p.baseline - p.size * 0.92;
+            chars.forEach((c, k) => {
+                const r = { g: { text: c, start: p.g.start, end: Math.max(p.g.end, last.g.end) }, unit: p.unit, x, baseline, size: rs, w: ws[k] };
+                r.box = [r.x, baseline - rs * 0.88, r.x + r.w, baseline + rs * 0.2];
+                rubies.push(r);
+                x += ws[k] + track;
+            });
+        });
+        if (rubies.length) textBox = unionBox([textBox, ...rubies.map(r => r.box)]);
         // 字形还烤进 R 通道一份：只给换句时上一句的残影、墨漫的口子用；这一句的字由逐字层按屏幕像素画。
         // 逐字层：每个字一个实例（世界里那一格的中心、边长、种子；开唱、唱完、是不是关键词；图集里的 uv 框）
         main.textBaseline = 'alphabetic';
@@ -576,7 +632,7 @@
         const keys = new Set(cue.keys || []);
         // 逐字层的实例先记下（世界里那一格的中心、边长、转角；开唱、唱完、关键词、是不是注记；图集里的字），注记排好以后一起建图集
         const glyphEntries = [];
-        placed.forEach((p) => {
+        placed.concat(rubies).forEach((p) => {
             main.font = fontFor(p.size);
             main.filter = `blur(${Math.max(0.8, p.size * 0.02).toFixed(2)}px)`;
             main.fillText(p.g.text, p.x, p.baseline);
@@ -820,6 +876,15 @@
             pen.note(cue.kind === 'line' ? scene.mark(cue.number, random) : scene.interlude, 0, 0, 0.018, 'left');
             pen.place(x1, y1 + H * 0.045, H, 0);
             pen.note(formatTime(cue.start), 0, 0, 0.016, 'right');
+            // 署名行（作词、作曲……）排在歌名下面左边，一行一行跟着笔出来
+            // 下面放不下（竖排的歌名很高）就排在字块右边
+            const creditList = cue.credits || [];
+            const below = y1 + H * (0.085 + creditList.length * 0.03) < H * 0.94;
+            creditList.forEach((line, i) => {
+                if (below) pen.place(x0, y1 + H * (0.085 + i * 0.03), H, 0);
+                else pen.place(x1 + H * 0.05, y0 + H * (0.06 + i * 0.03), H, 0);
+                pen.note(line, 0, 0, 0.017, 'left');
+            });
             // 时间轴括号：字块左边一道竖括号，每个词开唱的位置一格刻度，括号顶上记段号
             if (cue.kind === 'line' && unitBoxes.length > 1 && random() < 0.6) {
                 const bx = x0 - pad * 0.9;
