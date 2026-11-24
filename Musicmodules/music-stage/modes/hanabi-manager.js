@@ -90,9 +90,10 @@
         const random = seededRandom(`hanabi:${seedKey}`);
         const pick = list => list[Math.floor(random() * list.length) % list.length];
         const bursts = [];
-        const add = (t, kind, x, y, size, colour) => {
+        const add = (t, kind, x, y, size, colour, anchor = null) => {
             if (!(t >= 0)) return;
             bursts.push({
+                anchor,
                 t, kind: KIND[kind], x, y, size,
                 colour: colour || pick(PALETTE),
                 two: kind !== 'yanagi' && kind !== 'kamuro' && random() < 0.35,
@@ -104,7 +105,7 @@
         let count = 4;
         let sectionKind = 'kiku';
         let side = random() < 0.5 ? -1 : 1;
-        cues.forEach((cue) => {
+        cues.forEach((cue, cueIndex) => {
             if (cue.kind === 'line') {
                 if (count >= 4) {
                     section += 1;
@@ -127,9 +128,11 @@
                     if (!willow && g.endTime - g.startTime > 1.1) {
                         willow = true;
                         add(g.startTime + 0.1, 'yanagi', 0.2 + random() * 0.6, 0.74 + random() * 0.08, 1, gold);
-                    } else if (g.startTime - lastPop > 0.95 / density && random() < 0.75 * density) {
+                    } else if (cue.chorus ? g.startTime - lastPop > 0.28 / density : g.startTime - lastPop > 0.95 / density && random() < 0.75 * density) {
+                        // 小花开在唱到的那个字上方（字排好后按字的位置挪过去，见 anchorPops）；副歌里每个字都开一朵
                         lastPop = g.startTime;
-                        add(g.startTime, 'pop', 0.1 + random() * 0.8, 0.56 + random() * 0.28, 0.55 + random() * 0.2);
+                        add(g.startTime, 'pop', 0.1 + random() * 0.8, 0.56 + random() * 0.28, cue.chorus ? 0.42 + random() * 0.12 : 0.55 + random() * 0.2, null,
+                            { cue: cueIndex, start: g.startTime });
                     }
                 });
             } else {
@@ -913,6 +916,20 @@ vec2 home(vec2 t) {
 
         const family = () => global.getComputedStyle?.(mode.root).fontFamily || 'system-ui, sans-serif';
 
+        // 字排好后，把这一句跟着字开的小花挪到那个字的正上方（屏幕坐标，y 朝上）
+        const anchorPops = (index, placed) => {
+            let moved = false;
+            for (const b of bursts) {
+                if (!b.anchor || b.anchor.cue !== index) continue;
+                const g = placed.find(p => Math.abs(p.start - b.anchor.start) < 1e-3);
+                if (!g) continue;
+                b.x = clamp(g.x, 0.04, 0.96);
+                b.y = clamp(1 - (g.y - g.size * 1.05), 0.08, 0.95);
+                moved = true;
+            }
+            if (moved && glState) glState.burstsKey = null;
+        };
+
         // 一句的字形图：在河岸上方居中，同一个字号；G 是字编号（字框）
         const slotFor = (index, build = true) => {
             if (!glState || index < 0 || index >= cues.length) return null;
@@ -1218,6 +1235,7 @@ vec2 home(vec2 t) {
             // 退场：碎成火星（原来的做法）、像柳火一样落下、散成星屑、往上飘走
             slot.exit = ['dissolve', 'fall', 'scatter', 'ascend'][Math.floor(pick() * 4)];
             slot.glyphs = placed;
+            anchorPops(index, placed);
             slot.fuse = fuse;
             slot.used = performance.now();
             stats.builds += 1;
