@@ -765,7 +765,7 @@
                 [[x1 + mark * 0.3, y1], [x1 + mark, y1]], [[x1, y1 + mark * 0.3], [x1, y1 + mark]]]);
             if (random() < 0.7) pen.line([[x0, y1 + pad * 0.6], [x0 + (x1 - x0) * (0.4 + random() * 0.6), y1 + pad * 0.6]]);
             pen.place(x0, y0 - H * 0.03, H, 0);
-            pen.note(cue.kind === 'line' ? `L.${String(cue.number).padStart(2, '0')}` : 'INTERLUDE', 0, 0, 0.018, 'left');
+            pen.note(cue.kind === 'line' ? scene.mark(cue.number, random) : scene.interlude, 0, 0, 0.018, 'left');
             pen.place(x1, y1 + H * 0.045, H, 0);
             pen.note(formatTime(cue.start), 0, 0, 0.016, 'right');
             // 时间轴括号：字块左边一道竖括号，每个词开唱的位置一格刻度，括号顶上记段号

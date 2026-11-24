@@ -1092,44 +1092,60 @@
 
     // 意象场景：一首歌一套（Folia 只有一种演算纸）。每套有自己的线稿、垫底大图和背景纹样；
     // 线稿还是同一支笔、同一种细线插图的画法，所以换套不换手。
+    const pad = (n, w = 2) => String(n).padStart(w, '0');
+    // 每套场景的版面零件用自己的说法：行号换成公里标、经纬度、赤经、门牌、图号、邮编……
     const SCENES = Object.freeze({
         notebook: {
+            mark: n => `L.${pad(n)}`,
+            interlude: 'INTERLUDE',
             label: '演算纸',
             kinds: ['orbit', 'starmap', 'lattice', 'cell', 'molecule', 'detector', 'feynman', 'paths', 'draft', 'shower', 'decay', 'spectrum', 'potential', 'running', 'cherenkov', 'collider', 'bubble', 'penguin', 'box'],
             tone: ['orbit', 'lattice', 'detector', 'feynman', 'paths', 'shower', 'spectrum', 'potential', 'collider', 'bubble', 'penguin'],
             backdrops: [['band', 0.34], ['graph', 0.24], ['arcs', 0.26], ['none', 0.16]]
         },
         rail: {
+            mark: (n, r) => `K${10 + n}+${pad(Math.floor(r() * 10) * 100, 3)}`,
+            interlude: '回送 / OUT OF SERVICE',
             label: '铁道',
             kinds: ['rail', 'timetable', 'signal', 'ticket', 'catenary', 'trackSection', 'routeMap'],
             tone: ['rail', 'timetable', 'catenary', 'routeMap', 'trackSection', 'signal'],
             backdrops: [['sleepers', 0.34], ['band', 0.22], ['graph', 0.22], ['none', 0.22]]
         },
         sea: {
+            mark: (n, r) => `${(20 + r() * 30).toFixed(2)}°N ${(110 + r() * 40).toFixed(2)}°E`,
+            interlude: 'SLACK WATER',
             label: '海',
             kinds: ['tide', 'compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines'],
             tone: ['compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines', 'tide'],
             backdrops: [['swell', 0.4], ['arcs', 0.22], ['band', 0.2], ['none', 0.18]]
         },
         city: {
+            mark: (n, r) => `${n} 号  ${1 + Math.floor(r() * 30)}F`,
+            interlude: 'CLOSED',
             label: '城市',
             kinds: ['floorPlan', 'streetGrid', 'facade', 'isoBlock', 'lamp', 'skyline'],
             tone: ['streetGrid', 'facade', 'isoBlock', 'skyline', 'floorPlan'],
             backdrops: [['blocks', 0.36], ['graph', 0.22], ['band', 0.2], ['none', 0.22]]
         },
         flora: {
+            mark: n => `fig. ${n}`,
+            interlude: 'dormant',
             label: '植物',
             kinds: ['leaf', 'floralDiagram', 'phyllotaxis', 'branch', 'seedHead', 'sprout'],
             tone: ['leaf', 'floralDiagram', 'phyllotaxis', 'branch', 'seedHead'],
             backdrops: [['stems', 0.4], ['arcs', 0.2], ['band', 0.2], ['none', 0.2]]
         },
         letters: {
+            mark: (n, r) => `No. ${pad(n)}  〒${String(100 + Math.floor(r() * 899)).padStart(3, '0')}-${String(Math.floor(r() * 9999)).padStart(4, '0')}`,
+            interlude: 'P.S.',
             label: '信笺',
             kinds: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail', 'waxSeal'],
             tone: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail'],
             backdrops: [['ruled', 0.42], ['band', 0.22], ['graph', 0.14], ['none', 0.22]]
         },
         night: {
+            mark: (n, r) => `RA ${pad(Math.floor(r() * 24))}ʰ${pad(Math.floor(r() * 60))}ᵐ  m = ${(r() * 6).toFixed(1)}`,
+            interlude: 'DAWN',
             label: '星夜',
             kinds: ['starmap', 'orbit', 'constellation', 'moonPhases', 'altaz', 'telescope', 'lightCurve'],
             tone: ['orbit', 'constellation', 'altaz', 'telescope', 'moonPhases', 'starmap'],
