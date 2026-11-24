@@ -398,6 +398,9 @@ void main() {
             const head = new THREE.LatheGeometry(profile, 28);
             head.rotateX(Math.PI / 2);         // 车床绕 y 轴转，转到朝 +z
             head.translate(cx, cy, 0);
+            // 轮廓按半径从里往外排，车床算出的法线朝里（所以面也是反的、要双面画）：法线翻回朝外，端详打主光时钉帽才是亮面
+            const hn = head.attributes.normal.array;
+            for (let i = 0; i < hn.length; i++) hn[i] = -hn[i];
             parts.push([head, FITTING_SCREW]);
             for (const a of [0.23, 0.23 + Math.PI / 2]) {   // 十字槽：两条细长的深色条，略斜
                 const slot = new THREE.PlaneGeometry(0.07, 0.013);
@@ -408,10 +411,11 @@ void main() {
         }
         const flat = parts.map(([g, k]) => [g.index ? g.toNonIndexed() : g, k]);
         const count = flat.reduce((n, [g]) => n + g.attributes.position.count, 0);
-        const pos = new Float32Array(count * 3), kind = new Uint8Array(count);
+        const pos = new Float32Array(count * 3), nrm = new Float32Array(count * 3), kind = new Uint8Array(count);
         let o = 0;
         for (const [g, k] of flat) {
             pos.set(g.attributes.position.array, o * 3);
+            nrm.set(g.attributes.normal.array, o * 3);
             kind.fill(k, o, o + g.attributes.position.count);
             o += g.attributes.position.count;
         }
@@ -419,6 +423,9 @@ void main() {
         for (const [g] of flat) g.dispose();
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));   // 端详时打主光要用
+        // 十字槽是凹进去的，主光高光照不进槽底：槽不加高光，否则和钉帽一样亮、十字就没了
+        geo.setAttribute('keySpec', new THREE.BufferAttribute(Float32Array.from(kind, (k) => (k === FITTING_SLOT ? 0 : 1)), 1));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geo.userData.kind = kind;
         return geo;
@@ -874,6 +881,25 @@ vec3 archiveUntone(vec3 y) {
         // 选中卡的索引片和螺钉（颜色按参考播放器截图里和卡面的明暗比例取）
         const fittingsGeo = fittingsGeometry(THREE);
         const fittingsMat = keepColors(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }));
+        {
+            // 取出端详时参考播放器给索引片、螺钉也打同一束主光（keyLight，gloss 0.15）；浏览时不打
+            const untone = fittingsMat.onBeforeCompile;
+            fittingsMat.onBeforeCompile = (sh, r) => {
+                sh.uniforms.uKeyHero = glowUniforms.uHero;
+                sh.vertexShader = 'attribute float keySpec;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.vertexShader.replace('#include <project_vertex>',
+                    '#include <project_vertex>\nvKeySpec = keySpec;\nvKeyW = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvKeyN = mat3(modelMatrix) * normal;');
+                sh.fragmentShader = 'uniform float uKeyHero;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `if (uKeyHero > 0.0) {
+        vec3 kn = normalize(vKeyN);
+        const vec3 KEY = vec3(0.0, 0.5477, 0.8367);
+        vec3 kv = normalize(cameraPosition - vKeyW);
+        float kspec = pow(max(dot(kn, normalize(KEY + kv)), 0.0), 30.5) * 0.2805 * vKeySpec;
+        outgoingLight = mix(outgoingLight, outgoingLight * (0.55 + 0.45 * max(dot(kn, KEY), 0.0)) + kspec, uKeyHero);
+    }
+    #include <opaque_fragment>`);
+                if (untone) untone(sh, r);
+            };
+            fittingsMat.customProgramCacheKey = () => 'archive-fittings-key';
+        }
         const fittings = new THREE.Mesh(fittingsGeo, fittingsMat);
         fittings.matrixAutoUpdate = false;
         fittings.visible = false;
