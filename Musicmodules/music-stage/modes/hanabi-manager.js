@@ -14,7 +14,7 @@
     const Runtime = global.MusicStageRuntime;
     if (!Utils || !Runtime) throw new Error('MusicStageModeUtils and MusicStageRuntime must load before hanabi-manager.js');
     const { clamp, seededRandom, createElement } = Utils;
-    const { resolveSupplementalText, buildGlyphTimeline, readableText } = Runtime;
+    const { resolveSupplementalText, buildGlyphTimeline, readableText, splitGraphemes } = Runtime;
 
     const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
     const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
@@ -569,7 +569,16 @@ void main() {
         const translation = createElement('div', 'stage-translation hanabi-translation');
         const notice = createElement('div', 'hanabi-notice');
         notice.hidden = true;
-        mode.root.append(canvas, kicker, translation, notice);
+        // 片尾：最后一段间奏里，右边垂下一条竖写的纸幡——今夜终演、曲名、歌手
+        const credits = createElement('div', 'hanabi-credits');
+        const creditsTitle = createElement('b');
+        const creditsArtist = createElement('span', 'hanabi-credits-artist');
+        const creditsKicker = createElement('span', 'hanabi-credits-kicker');
+        creditsKicker.append(...['今', '夜', '终', '演'].map(g => createElement('i', '', g)));
+        credits.append(creditsKicker, creditsTitle, creditsArtist);
+        credits.setAttribute('aria-hidden', 'true');
+        let creditsOn = false;
+        mode.root.append(canvas, kicker, translation, credits, notice);
         const textCanvas = document.createElement('canvas');
 
         let glState = null;
@@ -1074,6 +1083,21 @@ void main() {
         const updateOverlay = (frame) => {
             const next = `花火 · ${Utils.lineCounter(frame)}`;
             if (next !== caption) { caption = next; kicker.textContent = next; }
+            const ci = cues.length > 1 ? findCue(cues, frame.playbackTime || 0) : -1;
+            const outro = ci === cues.length - 1 && cues[ci]?.kind === 'rest' && (frame.playbackTime || 0) - cues[ci].start > 1.2;
+            if (outro !== creditsOn) {
+                creditsOn = outro;
+                if (outro) {
+                    // 竖写：一个字一格往下排（不靠 writing-mode，字体缺竖排度量时也不会挤在一起）
+                    const column = (el, text, max) => {
+                        const glyphs = splitGraphemes(text).filter(g => g.trim()).slice(0, max);
+                        el.replaceChildren(...glyphs.map(g => createElement('i', '', g)));
+                    };
+                    column(creditsTitle, String(frame.track?.title || '').replace(/\.(mp3|flac|wav|m4a|ogg|aac|ape|opus)$/i, '').trim() || '无题', 14);
+                    column(creditsArtist, String(frame.track?.artist || '').trim(), 10);
+                }
+                credits.classList.toggle('is-on', outro);
+            }
             const text = settings().showTranslation ? resolveSupplementalText(frame.activeLine) : '';
             if (text !== lastTranslation) { lastTranslation = text; translation.textContent = text; translation.hidden = !text; }
         };

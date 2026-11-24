@@ -202,6 +202,7 @@
                 drops: true,
                 drips: true,
                 fireflies: 1,
+                spotlights: 1,
                 cameraSpeed: 1,
                 grain: 0.4,
                 showTranslation: true
@@ -237,6 +238,7 @@
                 smoke: 1,
                 wireframe: true,
                 perspective: true,
+                parallax: 1,
                 audioReactivity: 1,
                 grain: 0.3,
                 showTranslation: true
@@ -368,6 +370,7 @@
             collage: fallback.collage === undefined ? source.collage : bool(source.collage, fallback.collage),
             view: fallback.view === undefined ? source.view : enumValue(source.view, ['street', 'aquarium', 'alternate'], fallback.view),
             fireflies: fallback.fireflies === undefined ? source.fireflies : clamp(source.fireflies, 0, 2, fallback.fireflies),
+            spotlights: fallback.spotlights === undefined ? source.spotlights : clamp(source.spotlights, 0, 2, fallback.spotlights),
             nebula: fallback.nebula === undefined ? source.nebula : clamp(source.nebula, 0, 2, fallback.nebula),
             bloom: fallback.bloom === undefined ? source.bloom : clamp(source.bloom, 0, 2, fallback.bloom),
             flare: fallback.flare === undefined ? source.flare : clamp(source.flare, 0, 2, fallback.flare),
@@ -379,6 +382,7 @@
             trails: fallback.trails === undefined ? source.trails : clamp(source.trails, 0, 1.6, fallback.trails),
             reflection: fallback.reflection === undefined ? source.reflection : bool(source.reflection, fallback.reflection),
             perspective: fallback.perspective === undefined ? source.perspective : bool(source.perspective, fallback.perspective),
+            parallax: fallback.parallax === undefined ? source.parallax : clamp(source.parallax, 0, 2, fallback.parallax),
             wireframe: fallback.wireframe === undefined ? source.wireframe : bool(source.wireframe, fallback.wireframe),
             secondHand: fallback.secondHand === undefined ? source.secondHand : bool(source.secondHand, fallback.secondHand),
             tilt: fallback.tilt === undefined ? source.tilt : clamp(source.tilt, 0.15, 0.6, fallback.tilt),

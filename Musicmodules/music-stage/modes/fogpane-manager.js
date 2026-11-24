@@ -428,6 +428,8 @@ uniform float uTime;
 uniform vec4 uDrips[6];   // x, 开始时刻, 速度, 种子
 uniform float uDripTop[6]; // 从哪儿开始淌（字底下的积水，或窗顶）
 uniform vec4 uSpot;      // 正在写的字：x, y, 半径, 强度
+uniform vec3 uBeam;      // 楼底下两盏聚光灯打向的地方：x, y, 强度
+uniform vec3 uBeamCol;
 uniform vec3 uBreath;    // 停唱时对着窗呵一口气：x, y, 浓度
 uniform float uFireflies;
 uniform float uFrost;
@@ -556,6 +558,26 @@ void main() {
         float spot = exp(-dot(sd, sd) / (uSpot.z * uSpot.z)) * uSpot.w;
         col += (clear * 0.22 + vec3(1.0, 0.86, 0.66) * 0.05) * spot;
     }
+    // 聚光灯：远处楼底下左右两盏，追着正在写的字；雾把光束散开，擦开的地方看得见光柱
+    if (uBeam.z > 0.0) {
+        float asp = uRes.x / uRes.y;
+        float beam = 0.0;
+        for (int k = 0; k < 2; k++) {
+            vec2 o = vec2(k == 0 ? 0.08 : 0.92, -0.06) * vec2(asp, 1.0);
+            vec2 a = uBeam.xy * vec2(asp, 1.0) - o;
+            vec2 q = uv * vec2(asp, 1.0) - o;
+            float L = max(length(a), 1e-3);
+            vec2 dir = a / L;
+            float along = dot(q, dir);
+            float perp = abs(dir.x * q.y - dir.y * q.x);
+            float w = 0.008 + along * 0.055;
+            float flick = 0.9 + 0.1 * vnoise(vec2(uTime * 3.0, float(k) * 7.0));
+            beam += smoothstep(w, w * 0.25, perp) * smoothstep(0.0, 0.12, along) * (1.0 - smoothstep(L, L * 1.3, along)) * 0.42 * flick;
+            vec2 hit = q - a;
+            beam += exp(-dot(hit, hit) / 0.004) * 0.35;
+        }
+        col += uBeamCol * beam * uBeam.z * mix(0.34, 0.14, wipe);
+    }
     col += (hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 13.0) - 0.5) * 0.03 * uGrain;
     // 窗框四周暗一点
     vec2 v = uv - 0.5;
@@ -661,6 +683,7 @@ void main() {
                 fog: clamp(tuning.fog ?? 1, 0.5, 1.5),
                 drops: tuning.drops !== false,
                 fireflies: clamp(tuning.fireflies ?? 1, 0, 2),
+                spotlights: clamp(tuning.spotlights ?? 1, 0, 2),
                 drips: tuning.drips !== false,
                 rain: tuning.rain || 'light',
                 view: ['street', 'aquarium', 'alternate'].includes(tuning.view) ? tuning.view : 'alternate',
@@ -886,6 +909,8 @@ void main() {
             return n;
         };
 
+        let lastKick = -1, bumpAt = -Infinity, bumpAmp = 0, heardAt = -Infinity;
+        const beam = { x: 0.5, y: 0.5, vx: 0, vy: 0, level: 0, wall: null };
         const draw = (frame) => {
             if (!glState || lostContext) return;
             const { gl, scene, main, vao } = glState;
@@ -905,11 +930,27 @@ void main() {
             Utils.bindNoise(gl, scene.uniforms.uNoise, 0);
             const su = scene.uniforms;
             const clock = t * s.cameraSpeed;
-            // 车偶尔颠一下
-            const bumpK = Math.floor(clock / 2.7);
-            const br = seededRandom(`bump:${bumpK}`);
-            const bt = clock - bumpK * 2.7 - br() * 2;
-            const bump = s.reducedMotion ? 0 : (bt > 0 && bt < 0.5 ? Math.sin(bt * 18) * Math.exp(-bt * 7) * 0.012 * (br() < 0.6 ? 1 : 0) : 0);
+            // 车颠一下：有音乐数据时跟着底鼓颠（力度够、两次隔开 0.35 秒，幅度随低音）；没有时偶尔随机颠
+            const wall = (frame.now ?? performance.now()) / 1000;
+            const audio = frame.audio || {};
+            const kick = Number.isFinite(audio.onsets) && audio.onsets !== lastKick;
+            if (Number.isFinite(audio.onsets)) lastKick = audio.onsets;
+            if ((audio.power || 0) > 0.03) heardAt = wall;
+            if (kick && frame.isPlaying && (audio.bass || 0) > 0.42 && wall - bumpAt > 0.35) {
+                bumpAt = wall;
+                bumpAmp = 0.005 + 0.011 * clamp((audio.bass - 0.42) / 0.5, 0, 1);
+            }
+            let bump;
+            if (wall - heardAt < 2) {
+                const bt = wall - bumpAt;
+                bump = bt >= 0 && bt < 0.6 ? Math.sin(bt * 18) * Math.exp(-bt * 7) * bumpAmp : 0;
+            } else {
+                const bumpK = Math.floor(clock / 2.7);
+                const br = seededRandom(`bump:${bumpK}`);
+                const bt = clock - bumpK * 2.7 - br() * 2;
+                bump = bt > 0 && bt < 0.5 ? Math.sin(bt * 18) * Math.exp(-bt * 7) * 0.012 * (br() < 0.6 ? 1 : 0) : 0;
+            }
+            if (s.reducedMotion) bump = 0;
             gl.uniform2f(su.uRes, sw, sh);
             gl.uniform1f(su.uAspect, sw / sh);
             gl.uniform1f(su.uT, clock);
@@ -963,6 +1004,35 @@ void main() {
                 }
             }
             gl.uniform4f(u.uSpot, spot[0], spot[1], spot[2], s.reducedMotion ? 0 : spot[3]);
+            // 聚光灯的落点：沿着正在写的字滑过去（临界阻尼弹簧，速度连续）；这句写完唱完 0.8 秒后慢慢熄
+            let aim = null, lit = 0;
+            for (const p of visible) {
+                if (t < p.start - 0.2 || t > p.end + 2.2) continue;
+                const items = p.items;
+                let k = items.findIndex(it => t < it.g.end);
+                if (k < 0) k = items.length - 1;
+                const a = items[k], b = items[Math.min(items.length - 1, k + 1)];
+                const f = clamp((t - a.g.start) / Math.max(0.05, a.g.end - a.g.start), 0, 1);
+                const x = (a.x + a.w / 2) * (1 - f) + (b.x + b.w / 2) * f;
+                const y = (a.baseline - a.size * 0.4) * (1 - f) + (b.baseline - b.size * 0.4) * f;
+                aim = [x / world.W, 1 - y / world.H];
+                lit = smooth(p.start - 0.2, p.start + 0.4, t) * (1 - smooth(p.end + 0.8, p.end + 2.2, t));
+            }
+            const dtBeam = clamp(wall - (beam.wall ?? wall), 0, 0.1);
+            beam.wall = wall;
+            if (aim) {
+                if (!frame.isPlaying || beam.level <= 0.01) { beam.x = aim[0]; beam.y = aim[1]; beam.vx = 0; beam.vy = 0; } else {
+                    const w = 7;
+                    for (const [p, v, target] of [['x', 'vx', aim[0]], ['y', 'vy', aim[1]]]) {
+                        const acc = w * w * (target - beam[p]) - 2 * w * beam[v];
+                        beam[v] += acc * dtBeam;
+                        beam[p] += beam[v] * dtBeam;
+                    }
+                }
+            }
+            beam.level = frame.isPlaying ? beam.level + (lit - beam.level) * (1 - Math.exp(-dtBeam * 5)) : lit;
+            gl.uniform3f(u.uBeam, beam.x, beam.y, s.reducedMotion ? 0 : beam.level * s.spotlights);
+            gl.uniform3fv(u.uBeamCol, colours.neon);
             // 呵气：一句唱完、下一句还没开始（空当超过 2 秒）时
             let breath = 0;
             let bx = 0.5, by = 0.35;

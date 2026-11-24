@@ -81,6 +81,7 @@ uniform float uTime;
 uniform float uTurn;      // 歌词扇面相对字图的转角
 uniform float uGear;      // 主齿轮转角
 uniform float uSecond;    // 秒针转角
+uniform float uParallax;  // 分层视差强度：齿轮浮在表盘上方，倾斜时近的层错开得多
 uniform float uFont;      // 字高（屏幕高的比例）
 uniform float uGlow;      // 低音
 uniform float uLight;     // 浅色主题
@@ -267,16 +268,19 @@ void main() {
     // 擒纵轮（小、钢色）、副齿轮、主齿轮。主齿轮在最前
     vec2 c2 = C2, c3 = C3;
     float a2 = A2, a3 = A3;
-    vec3 g3 = gear(p - c3, 0.095, 20.0, 3.0, a3, aa);
-    if (g3.x > 0.0) col = mix(col, metal(uSteel, p - c3, g3, a3), g3.x);
-    vec3 g2 = gear(p - c2, 0.17, 37.0, 4.0, a2, aa);
-    if (g2.x > 0.0) col = mix(col, metal(uBrass * 0.92, p - c2, g2, a2), g2.x);
-    vec3 g1 = gear(p - hubC, 0.33, 72.0, 5.0, uGear, aa);
-    if (g1.x > 0.0) col = mix(col, metal(uBrass, p - hubC, g1, uGear), g1.x);
+    // 每层浮在表盘上方不同的高度：表盘一倾斜，层和层、层和落影就错开（主齿轮最高）
+    vec2 lift = vec2(sin(uTilt.x), -sin(uTilt.y)) * uParallax;
+    vec2 L1 = lift * 0.075, L2 = lift * 0.05, L3 = lift * 0.032;
+    vec3 g3 = gear(p + L3 - c3, 0.095, 20.0, 3.0, a3, aa);
+    if (g3.x > 0.0) col = mix(col, metal(uSteel, p + L3 - c3, g3, a3), g3.x);
+    vec3 g2 = gear(p + L2 - c2, 0.17, 37.0, 4.0, a2, aa);
+    if (g2.x > 0.0) col = mix(col, metal(uBrass * 0.92, p + L2 - c2, g2, a2), g2.x);
+    vec3 g1 = gear(p + L1 - hubC, 0.33, 72.0, 5.0, uGear, aa);
+    if (g1.x > 0.0) col = mix(col, metal(uBrass, p + L1 - hubC, g1, uGear), g1.x);
 
     // 轴心宝石：低音时亮
     for (int i = 0; i < 3; i++) {
-        vec2 c = i == 0 ? hubC : (i == 1 ? c2 : c3);
+        vec2 c = i == 0 ? hubC - L1 - lift * 0.012 : (i == 1 ? c2 - L2 : c3 - L3);
         float rr = i == 0 ? 0.03 : 0.017;
         float d = length(p - c);
         vec3 ruby = vec3(0.62, 0.06, 0.1);
@@ -320,7 +324,7 @@ void main() {
 
     // 秒针：从轴心伸到刻度环，跟播放时间走
     if (uSecondHand > 0.5) {
-        vec2 q = p - hubC;
+        vec2 q = p + L1 + lift * 0.012 - hubC;   // 秒针装在宝石上面，跟着最高那层错开
         vec2 dir = vec2(cos(uSecond), sin(uSecond));
         float along = dot(q, dir);
         float perp = abs(dir.x * q.y - dir.y * q.x);
@@ -486,6 +490,7 @@ void main() {
             const tuning = mode.config.modes?.clockwork || {};
             return {
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
+                parallax: clamp(tuning.parallax ?? 1, 0, 2),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 secondHand: tuning.secondHand !== false,
                 smoke: clamp(tuning.smoke ?? 1, 0, 2),
@@ -665,6 +670,7 @@ void main() {
             gl.uniform1f(u.uGear, gearAngle);
             gl.uniform1f(u.uSecond, Math.PI / 2 - (tick % 60) / 60 * Math.PI * 2);
             gl.uniform1f(u.uFont, 0.052 * s.fontScale);
+            gl.uniform1f(u.uParallax, s.parallax);
             gl.uniform1f(u.uGlow, glow);
             gl.uniform1f(u.uLight, colours.light ? 1 : 0);
             gl.uniform1f(u.uWaiting, s.waitingOpacity);
