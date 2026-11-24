@@ -153,3 +153,21 @@ test('adversarial: import with every entry missing, or an empty list, creates no
     assert.match(toasts.at(-1).message, /没有本机的歌/);
     delete globalThis.MusicToast;
 });
+
+test('after export the toast offers to show the file in its folder', async () => {
+    const toasts = [];
+    globalThis.MusicToast = { show: (t) => toasts.push(t) };
+    let shown = null;
+    const app = {
+        playlist: [{ path: 'C:\\M\\a.flac' }],
+        customPlaylists: [],
+        api: { importMusicM3u: async () => ({ ok: false }), exportMusicM3u: async () => ({ ok: true, file: 'C:\\out.m3u8' }), showMusicInFolder: async (p) => { shown = p; return { ok: true }; } }
+    };
+    setupMusicM3u(app);
+    await app.m3u.exportPlaylist({ name: 'x', tracks: ['C:\\M\\a.flac'] });
+    assert.equal(toasts.at(-1).action.label, '在文件夹中显示');
+    toasts.at(-1).action.run();
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(shown, { path: 'C:\\out.m3u8' });
+    delete globalThis.MusicToast;
+});

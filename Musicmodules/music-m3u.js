@@ -94,7 +94,11 @@
                 return null;
             }
             const skipped = (pl.tracks || []).length - tracks.length;
-            toast(`已导出「${pl.name}」：${tracks.length} 首${skipped > 0 ? `（${skipped} 首云端的歌没写进去）` : ''}`, { kind: 'success' });
+            // 导出完给个「在文件夹中显示」：存到哪了一眼看到，拖给别的播放器、发给别人都顺手
+            const reveal = res.file && typeof api().showMusicInFolder === 'function'
+                ? { label: '在文件夹中显示', run: () => { Promise.resolve(api().showMusicInFolder({ path: res.file })).catch(() => {}); } }
+                : undefined;
+            toast(`已导出「${pl.name}」：${tracks.length} 首${skipped > 0 ? `（${skipped} 首云端的歌没写进去）` : ''}`, { kind: 'success', duration: reveal ? 6000 : undefined, action: reveal });
             return res.file;
         };
 
