@@ -955,3 +955,24 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-thumb { right: -11px; }
 .archive-list-foot { padding-top: 16px; }
 .archive-hud.list-open .archive-list-foot { padding-top: 12px; }
+/* ===== 检索展开态重做（Roxy 11-24：「搜索的 hover 还是烂」）=====
+   不要共用套件那块圆角玻璃胶囊（和目录的扁平细线不搭）：展开后就是一行字 + 一条 1px 细线，
+   细线只在检索框底下、不伸到「+」下面；平时淡（24%），悬停 40%，聚焦 70% 墨色；放大镜跟着变深，不再是亮白。 */
+.archive-list-search::after { content: none; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-toolbar,
+.archive-list:has(.archive-list-recentq:not([hidden])) .archive-list-toolbar,
+.archive-list:has(.archive-list-search input:not(:focus):not(:placeholder-shown)) .archive-list-toolbar { border-bottom: 0; gap: 10px; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search {
+    padding: 0 2px 0 0; gap: 8px; border-radius: 0;
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ar-ink) 24%, transparent);
+    transition: box-shadow .16s ease;
+}
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search:hover { background: transparent; box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ar-ink) 40%, transparent); }
+.archive-list .archive-list-search:focus-within { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ar-ink) 70%, transparent); }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-glyph-search { color: var(--ar-muted); opacity: .8; }
+.archive-list .archive-list-search:focus-within .archive-glyph-search { color: var(--ar-ink); opacity: .75; }
+.archive-list:has(.archive-list-search :is(input:focus, input:not(:placeholder-shown))) .archive-list-search input { height: 26px; padding: 0 0 0 1px; font-size: 13.5px; }
+.archive-list-search input::placeholder { color: var(--ar-muted); opacity: .55; }
+.archive-list .archive-list-search::after, .archive-list .archive-list-search:focus-within::after { content: none; display: none; }
+.archive-list:has(.archive-list-search input:focus) .archive-list-search { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ar-ink) 70%, transparent); }
+.archive-list:has(.archive-list-search input:focus) .archive-list-search .archive-glyph-search { color: var(--ar-ink); opacity: .75; }
