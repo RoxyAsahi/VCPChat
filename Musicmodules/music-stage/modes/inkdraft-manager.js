@@ -985,7 +985,7 @@
     };
     const SCREEN_ANGLES = [0.26, 0.52, 0.79, 1.31];
     const FIRST_SHOT = [['wide', 3], ['close', 2], ['dutch', 1.5], ['far', 0.8], ['follow', 1.5]];
-    const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 2], ['dutch', 1.5], ['wide', 1], ['far', 0.6]];
+    const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 1.6], ['dutch', 1.5], ['wide', 1.6], ['far', 0.9]];
     // 切点：按节奏均分（一句大约 2.6 秒一刀，副歌密一些），再吸到最近的词开唱时刻上
     const planCuts = (start, end, count, onsets) => {
         const cuts = [];
@@ -1298,6 +1298,7 @@ uniform float uTime;
 uniform float uReveal;
 uniform float uCss;      // 一个 CSS 像素是多少个屏幕像素
 uniform float uBleed;    // 洇墨的强度（0 = 关）
+uniform float uWobble;   // 手写的抖（0 = 关）
 in vec2 vUv;
 in vec4 vT;
 out vec4 outColor;
@@ -1312,7 +1313,12 @@ float vn(vec2 p) {
     return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 void main() {
-    vec2 g = texture(uAtlas, vUv).rg;
+    // 手写的抖：字形在图集里被一层低频噪声推一推（按图集像素算，抖动钉在字上，镜头动它不游），
+    // 笔画边不再是印刷体那样一条光滑的线（Folia 的字边也是抖的，这里抖得更慢、更像笔压不匀）
+    vec2 tsz = vec2(textureSize(uAtlas, 0));
+    vec2 q = vUv * tsz;
+    vec2 wob = (vec2(vn(q * 0.035), vn(q * 0.035 + 17.3)) - 0.5) * 4.0 + (vec2(vn(q * 0.16 + 5.1), vn(q * 0.16 + 31.7)) - 0.5) * 1.3;
+    vec2 g = texture(uAtlas, vUv + wob * uWobble / tsz).rg;
     float dt = uTime - vT.x;
     float on = step(0.0, dt);
     float age = max(dt, 0.0);
@@ -1846,6 +1852,7 @@ void main() {
                 keywords: tuning.keywords !== false,
                 bleed: tuning.inkBleed !== false,
                 spatter: tuning.inkSpatter !== false,
+                wobble: tuning.inkWobble === false ? 0 : 1,
                 scene: typeof tuning.inkScene === 'string' ? tuning.inkScene : 'auto',
                 paper: tuning.paperTexture === false ? 0 : 1,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
@@ -2034,6 +2041,7 @@ void main() {
                 gl.uniform1f(gu.uReveal, Math.min(1, s.waitingOpacity / 0.35) * smooth(0, 0.35, local0));
                 gl.uniform1f(gu.uCss, canvas.height / Math.max(1, size.h));
                 gl.uniform1f(gu.uBleed, s.bleed ? 1 : 0);
+                gl.uniform1f(gu.uWobble, s.wobble);
                 gl.bindVertexArray(slot.glyphVao);
                 gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.glyphCount);
                 gl.disable(gl.BLEND);
