@@ -968,6 +968,9 @@ vec3 archiveUntone(vec3 y) {
         // ---- 状态 ----
         const target = { lane: 0, row: 0 };
         const camLane = { v: 0, vel: 0 }, camRow = { v: 0, vel: 0 }, shoulder = { v: 0, vel: 0 }, focus = { v: 0, vel: 0 }, lift = { v: 0.4, vel: 0 };
+        // 第一次出现时整片档案从雾里沿行方向滑进来（参考播放器 m_reveal：按 2.8 跟到 1，entryZ = −28·(1 − reveal)，
+        // 选中卡的抬起也乘 reveal）。减少动态时直接到位。
+        let reveal = reducedMotion() ? 1 : 0;
         let liftGoal = 0.4;   // 选中卡抬起的高度；进播放页前会再抬高一些
         /*
          * 取出：选中卡从列里抬到 DETAIL_LIFT，镜头推近到它正面、把它放进目录与歌词之间，卡面上显出封面。
@@ -1226,7 +1229,8 @@ vec3 archiveUntone(vec3 y) {
             damp(focus, target.lane, reduced ? rate : 4, dt);
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
             liftRate = reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8;
-            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
+            if (reveal < 1) { reveal += (1 - reveal) * (reduced ? 1 : 1 - Math.exp(-dt * 2.8)); if (1 - reveal < 0.0005) reveal = 1; }
+            damp(lift, detailOn ? DETAIL_LIFT : liftGoal * reveal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
                 r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
@@ -1299,7 +1303,7 @@ vec3 archiveUntone(vec3 y) {
                     let backRot = 0;
                     let backQ = 0;
                     if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; backQ = smooth(r.v / 0.4); } }
-                    dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
+                    dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17 - 28 * (1 - reveal));
                     // 参考播放器：坡度倾斜 × (1 − quality)，quality = smooth(lift / 0.4)；落回中的卡也一样，抬着时不跟坡度晃
                     dummy.rotation.x = tilt * (1 - (isTarget ? smooth(lift.v / 0.4) : backQ));
                     dummy.rotation.y = isTarget ? inspect.v : backRot;
@@ -1407,7 +1411,7 @@ vec3 archiveUntone(vec3 y) {
             // 行方向按屏幕像素算：剩下没走完的距离（位置差 + 速度/速率）不到半个像素就停。原来按 0.001 行、
             // 速度 0.001 行/秒判，最后约半秒都在画一帧挪零点几像素的画面（参考播放器也是位移不变才休眠）。
             const rowRest = (Math.abs(camRow.v - target.row) + Math.abs(camRow.vel) / 3.7) * ROW_SPACING * pxPerUnit;
-            const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
+            const settled = reveal === 1 && !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
                 && (Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) + Math.abs(lift.vel) / liftRate) * pxPerUnit < 0.5 && !returning.size
                 && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
                 && !themeBusy() && Math.abs(camLane.vel) < 0.001
