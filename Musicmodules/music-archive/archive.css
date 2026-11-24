@@ -856,3 +856,9 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 /* 滚到底：去掉下沿渐隐，最后一行完整显示 */
 .archive-list-viewport.at-bottom { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px); mask-image: linear-gradient(to bottom, transparent 0, #000 26px); }
 .archive-list-viewport.at-top.at-bottom { -webkit-mask-image: none; mask-image: none; }
+/* 悬停：比选中轻（4%，选中 6%），副标题和时长只提一点，不和选中行抢；播放钮、律动条对准编号数字的中线 */
+.archive-list-row:is(:hover, :focus-within):not(.on) { --row-wash: color-mix(in srgb, var(--ar-ink) 4%, transparent); }
+.archive-list-row:is(:hover, :focus-within) .tx em,
+.archive-list-row:is(:hover, :focus-within) .rt { color: color-mix(in srgb, var(--ar-ink) 82%, transparent); }
+.archive-list-row .go { left: calc(10px + var(--no-digits, 3) * 3.4px - 13px); }
+.archive-list-row .eq, .archive-list-row.current .eq { left: calc(10px + var(--no-digits, 3) * 3.4px - 4.5px); }
