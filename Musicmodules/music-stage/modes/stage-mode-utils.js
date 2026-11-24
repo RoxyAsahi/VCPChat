@@ -1042,6 +1042,7 @@ ${seed ? `    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
             program, uniforms,
             get size() { return size; },
             get textLayer() { return layers[1]; },
+            get prevLayer() { return layers[2]; },
             // 低分辨率那一遍：绑到三张图上
             begin(w, h) {
                 if (w !== size[0] || h !== size[1]) {
@@ -1121,6 +1122,7 @@ uniform sampler2D uTextLayer;
 uniform vec2 uTextSize;
 uniform float uLod;      // 段落进场时整句是虚的（mip 级），< 0 不虚
 uniform float uFade;
+uniform vec4 uFill;      // a > 0 时字用这个颜色（rgb）而不是原位的颜色
 in vec2 vTex;
 in vec2 vHome;
 flat in vec4 vCtr;
@@ -1155,7 +1157,7 @@ void main() {
         float hl = cov(vTex - vec2(0.03, 0.04) * px) * 0.5;
         o = vec4(vec3(hl), hl);
     }
-    vec3 fill = texture(uTextLayer, vHome).rgb + vec3(1.0, 0.97, 0.92) * vLook.y;
+    vec3 fill = mix(texture(uTextLayer, vHome).rgb, uFill.rgb, uFill.a) + vec3(1.0, 0.97, 0.92) * vLook.y;
     o = vec4(fill * r, r) + o * (1.0 - r);
     outColor = o * vLook.x * uFade;
 }`;
@@ -1211,6 +1213,19 @@ void main() {
         nod: k => [0, 0, 1, Math.sin(Math.PI * 2 * k) * 0.12 * (1 - k), 1, 0],
         flash: k => [0, 0, 1 + Math.sin(Math.PI * k) * 0.05, 0, 1, (1 - k) * 0.55]
     });
+    // 退场（k：0..1 退场进度，i：第几个字，用来错开和定方向）
+    const GLYPH_EXIT = Object.freeze({
+        fall: (k, i) => [Math.sin(i * 2.1) * 0.15 * k, k * k * 1.6, 1, Math.sin(i * 1.7) * 0.5 * k * k, 1 - k * k, 0],
+        scatter: (k, i) => {
+            const a = i * 2.39996 + 0.7, e = easeOut(k);
+            return [Math.cos(a) * 0.9 * e, Math.sin(a) * 0.9 * e, 1 - 0.4 * e, Math.sin(a * 3) * 0.8 * e, 1 - k, k < 0.2 ? (0.2 - k) * 2 : 0];
+        },
+        ascend: (k, i) => [0, -easeOut(k) * 0.7, 1 + 0.12 * k, 0, Math.max(0, 1 - k * 1.15 + Math.sin(i) * 0.05), 0]
+    });
+    const glyphExit = (kind, k, i, still = false) => {
+        if (still || !GLYPH_EXIT[kind]) return [0, 0, 1, 0, 1 - k, 0];
+        return GLYPH_EXIT[kind](Math.min(1, Math.max(0, k)), i);
+    };
     // 一个字这一刻的姿态（入场 × 唱到）：enter/sing 是上面两张表里的名字，tauEnter/tauSing 是距入场、开唱的秒数
     const glyphPose = (enter, tauEnter, sing, tauSing, still = false) => {
         if (still) return [0, 0, 1, 0, 1, 0];
@@ -1234,7 +1249,7 @@ void main() {
     global.MusicStageModeUtils = Object.freeze({
         NOISE_GLSL, noiseTexture, bindNoise,
         SPLIT_OUT_GLSL, compileProgram, createSharpText, sharpSizes,
-        GLYPH_FLOATS, createGlyphLayer, GLYPH_ENTER, GLYPH_SING, glyphPose,
+        GLYPH_FLOATS, createGlyphLayer, GLYPH_ENTER, GLYPH_SING, GLYPH_EXIT, glyphPose, glyphExit,
         lineCounter, withPlainLyrics,
         watchOverlay, watchCardInset, breathe, settlePrograms,
         coverColour, dominantHue, createCoverTint,

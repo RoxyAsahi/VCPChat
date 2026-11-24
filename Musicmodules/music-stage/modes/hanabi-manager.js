@@ -678,6 +678,11 @@ uniform float uLodBias;
 uniform float uCell;
 uniform sampler2D uCard;
 uniform float uCardIn;
+uniform float uPrevGlyphs;   // 1 = 上一句的字由逐字层画退场动作（这里不再画它，也不出火星）
+bool inGlyph(sampler2D tex, vec2 t) {
+    ivec2 size = textureSize(tex, 0);
+    return texelFetch(tex, clamp(ivec2(t * vec2(size)), ivec2(0), size - 1), 0).g > 0.002;
+}
 vec4 coverage(vec2 uv) {
     float aspect = uRes.x / uRes.y;
     vec2 tc = vec2(uv.x, 1.0 - uv.y);
@@ -688,9 +693,9 @@ vec4 coverage(vec2 uv) {
         c1 = mat2(cr, -sr, sr, cr) * c1 / vec2(aspect, 1.0);
         t1 = c1 / (uZoom * uEnter2.x) + 0.5;
     }
-    // 这一句的字由逐字层画；这里只留它的覆盖率给上一句和火星做遮挡
+    // 这一句的字由逐字层画；这里只画字框以外的（背景里淡淡的大字），覆盖率留给上一句和火星做遮挡
     float r = (uEnter.z > 0.01 ? textureLod(uText, t1, uEnter.z + uLodBias) : texture(uText, t1)).r * uEnter.w;
-    vec4 c = vec4(0.0);
+    vec4 c = vec4(inGlyph(uText, t1) ? 0.0 : r, 0.0, 0.0, 0.0);
     if (uPrevFade > 0.0) {
         vec2 t0 = (tc - 0.5) / uPrevZoom + 0.5 + vec2(0.0, -(1.0 - uPrevFade) * 0.02);
         float r0 = texture(uPrevText, t0).r;
@@ -702,6 +707,7 @@ vec4 coverage(vec2 uv) {
         // 火星在上一句的字上，被这一句的卡片盖住的地方看不见
         float card = texture(uCard, t1).a * uEnter.w * uCardIn;
         c.z = r0 * ember * strong * uPrevFade * 1.4 * (1.0 - card) * (1.0 - r);
+        if (uPrevGlyphs > 0.5 && inGlyph(uPrevText, t0)) c.yz = vec2(0.0);
     }
     return c;
 }`;
@@ -1209,6 +1215,8 @@ vec2 home(vec2 t) {
             const enters = cue.kind === 'line' ? ['pop', 'rise', 'drop', 'stamp', 'spin', 'slide'] : ['rise'];
             slot.enter = enters[Math.floor(pick() * enters.length)];
             slot.sing = ['bounce', 'swell', 'nod', 'flash'][Math.floor(pick() * 4)];
+            // 退场：碎成火星（原来的做法）、像柳火一样落下、散成星屑、往上飘走
+            slot.exit = ['dissolve', 'fall', 'scatter', 'ascend'][Math.floor(pick() * 4)];
             slot.glyphs = placed;
             slot.fuse = fuse;
             slot.used = performance.now();
@@ -1275,6 +1283,7 @@ vec2 home(vec2 t) {
                 }
             }
             const prevFade = prev ? 1 - smooth(0, 0.4, local) : 0;
+            const prevGlyphs = Boolean(prev && prev.exit && prev.exit !== 'dissolve' && prev.glyphs?.length);
             const zoom = 1 + clamp(local / Math.max(1, cue.end - cue.start), 0, 1) * 0.03;
             const audio = frame.audio || {};
             const power = clamp(((audio.power || 0) * 0.6 + (audio.bass || 0) * 0.4) * s.audioReactivity, 0, 1.5);
@@ -1375,7 +1384,40 @@ vec2 home(vec2 t) {
                 gl.uniform1f(c.uCell, cell);
                 gl.activeTexture(gl.TEXTURE0 + unit + 2); gl.bindTexture(gl.TEXTURE_2D, slot.card); gl.uniform1i(c.uCard, unit + 2);
                 gl.uniform1f(c.uCardIn, cardIn);
+                gl.uniform1f(c.uPrevGlyphs, prevGlyphs ? 1 : 0);
             });
+            // 上一句的退场：字各自落下、散开或飘走（碎成火星的那种仍由合成那一遍画）
+            if (prevGlyphs) {
+                const data = glState.glyphData;
+                const k = 1 - prevFade;
+                let n = 0;
+                (prev.glyphs || []).forEach((g, i) => {
+                    if (!g.box || n >= 256) return;
+                    const pose = Utils.glyphExit(prev.exit, k, i, s.reducedMotion);
+                    if (pose[4] <= 0.001) return;
+                    const o = n * Utils.GLYPH_FLOATS;
+                    data.set(g.box, o);
+                    data[o + 4] = g.x; data[o + 5] = g.y; data[o + 6] = g.id; data[o + 7] = g.px;
+                    data[o + 8] = pose[0] * g.px; data[o + 9] = pose[1] * g.px; data[o + 10] = pose[2]; data[o + 11] = pose[3];
+                    data[o + 12] = pose[4]; data[o + 13] = pose[5]; data[o + 14] = prev.rim || 0; data[o + 15] = 0;
+                    n += 1;
+                });
+                const pz = s.reducedMotion ? 1 : 1.03;
+                glState.glyphs.draw(data, n, (c) => {
+                    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, prev.text); gl.uniform1i(c.uText, 0);
+                    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sharp.prevLayer); gl.uniform1i(c.uTextLayer, 1);
+                    gl.uniform2f(c.uTextSize, world.W, world.H);
+                    gl.uniform1f(c.uLod, -1);
+                    gl.uniform1f(c.uFade, 1);
+                    // 退场的字飞到新卡片前面、夜空里，原位的颜色（卡片色）不再合适：用这句自己的墨色
+                    const ink = prev.dark ? [0.8, 0.42, 0.62] : colours.ink.map(v => v * 0.92);
+                    gl.uniform4f(c.uFill, ink[0], ink[1], ink[2], 1);
+                    gl.uniform1f(c.uZoom, pz);
+                    // 上一句的取样带一点往上的位移（见 COVERAGE 里的 t0）：借进场的平移参数表达
+                    gl.uniform4f(c.uEnter, (1 - prevFade) * 0.02 * pz, 0, 0, 0.5);
+                    gl.uniform2f(c.uEnter2, 1, 0);
+                });
+            }
             // 逐字层：每个字按自己的入场和唱到的动作画在合成好的画面上
             {
                 const data = glState.glyphData;
@@ -1400,6 +1442,7 @@ vec2 home(vec2 t) {
                     gl.uniform2f(c.uTextSize, world.W, world.H);
                     gl.uniform1f(c.uLod, enter[2] > 0.01 ? enter[2] + lodBias : -1);
                     gl.uniform1f(c.uFade, enter[3]);
+                    gl.uniform4f(c.uFill, 0, 0, 0, 0);
                     gl.uniform1f(c.uZoom, s.reducedMotion ? 1 : zoom);
                     gl.uniform4fv(c.uEnter, enter);
                     gl.uniform2fv(c.uEnter2, enter2);
