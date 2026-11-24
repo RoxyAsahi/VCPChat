@@ -1141,7 +1141,9 @@ vec3 archiveUntone(vec3 y) {
             }
             camera.position.copy(camAim).addScaledVector(camDir, distance);
             if (!reduced) {
-                const par = 0.12 * (1 - 0.75 * k);
+                // 参考播放器 NativeSceneCamera.cpp：横屏取出端详也保留整幅视差（指针那时已冻结，镜头不会跟着晃），
+                // 只有竖屏才随推近消掉；原来按 0.25 收，推近途中镜头会自己漂一段
+                const par = 0.12 * (aspect < 1 ? 1 - k : 1);
                 camera.position.x += pointer.x * par; camera.position.y -= pointer.y * par;
             }
             camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(viewSpan / (2 * distance)));
