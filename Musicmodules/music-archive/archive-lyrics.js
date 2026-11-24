@@ -43,7 +43,7 @@
         <div class="archive-lyrics-head"><span>歌词</span><i>／</i><b data-y="title"></b><button type="button" class="archive-lyrics-desk" data-y="desk" hidden aria-pressed="false" title="在桌面上显示歌词（切到别的程序也能看到）">桌面歌词</button></div>
         <div class="archive-lyrics-viewport" data-y="viewport"><div class="archive-lyrics-track" data-y="track"></div></div>
         <div class="archive-lyrics-index" data-y="index" title="歌词行索引：点一格跳到那一段"></div>
-        <div class="archive-lyrics-none" data-y="none"><span>这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
+        <div class="archive-lyrics-none" data-y="none"><span data-y="noneText">这首歌还没有歌词</span><button type="button" data-y="fetch">获取歌词 <i aria-hidden="true">→</i></button></div>`;
 
     /*
      * opts: { host, app, reducedMotion(), onChange() }
@@ -191,6 +191,9 @@
                 if (wantNone() !== path) return;
                 state.nonePath = path;
                 r.fetch.hidden = typeof app.openLyricsFetchModal !== 'function';
+                // 有纯文本歌词时说清楚：不是没有，是没有时间轴（借鉴 RhinE 把「没找到」和「找到了但用不了」分开说）
+                r.noneText.textContent = app.currentLyricsPlain > 0 ? `这份歌词没有时间轴（${app.currentLyricsPlain} 行），跟不上歌` : '这首歌还没有歌词';
+                r.fetch.firstChild.textContent = app.currentLyricsPlain > 0 ? '换一份 ' : '获取歌词 ';
                 setNone(true);
             }, NONE_AFTER);
         };

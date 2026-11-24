@@ -89,6 +89,7 @@ function setupLyrics(app) {
                 app.currentLyrics = app.parseLrc(cached);
             }
             if (!app.currentLyrics.length) {
+                app.currentLyricsPlain = plainLyricCount(cached);
                 // 有歌词文件，但里面一句带时间的都没有（纯文本歌词、乱码、只有标题信息）：以前歌词区一片空白
                 app.lyricsList.innerHTML = '<li class="no-lyrics">这份歌词没有时间轴，没法跟着歌走；可以点「获取歌词」换一份</li>';
                 return;
@@ -172,7 +173,10 @@ function setupLyrics(app) {
                         app.currentLyrics = app.parseLrc(fetched);
                     }
                     if (app.currentLyrics.length) app.renderLyrics();
-                    else app.lyricsList.innerHTML = '<li class="no-lyrics">暂无歌词</li>';
+                    else {
+                        app.currentLyricsPlain = plainLyricCount(fetched);
+                        app.lyricsList.innerHTML = app.currentLyricsPlain ? '<li class="no-lyrics">这份歌词没有时间轴，没法跟着歌走；可以点「获取歌词」换一份</li>' : '<li class="no-lyrics">暂无歌词</li>';
+                    }
                 } else if (failed) {
                     app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败，检查网络后重新播放这首</li>';
                 } else {
@@ -704,10 +708,15 @@ function setupLyrics(app) {
         requestAnimationFrame(step);
     };
 
+    // 歌词文件里有字、但一句带时间的都没有（纯文本歌词）：记下有几行，首页歌词栏据此说明「没有时间轴」而不是「没有歌词」
+    const plainLyricCount = (raw) => (typeof raw === 'string'
+        ? raw.split(/\r?\n/).map((s) => s.replace(/\[[^\]]*\]/g, '').trim()).filter(Boolean).length : 0);
+
     app.resetLyrics = () => {
         app.lyricsRequestToken = (app.lyricsRequestToken || 0) + 1;
         app.currentLyricsData = null;
         app.currentLyrics = [];
+        app.currentLyricsPlain = 0;
         app.currentLyricIndex = -1;
         app.currentScrollY = 0;
         app.targetScrollY = 0;
