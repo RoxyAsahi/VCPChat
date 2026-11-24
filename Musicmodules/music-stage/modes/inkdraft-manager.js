@@ -312,7 +312,8 @@
     const prepareCue = (cue, index, ctx) => {
         const { W, H, aspect, family, settings, trackKey, title, mainCanvas, idsCanvas } = ctx;
         const random = seededRandom(`inkdraft:${trackKey}:${index}:${cue.kind}:${cue.start.toFixed(2)}`);
-        const fontFor = (size) => `800 ${size.toFixed(1)}px ${family}`;   // 粗黑体，和漫画分镜的字一个分量
+        // 笔画密的字（汉字、假名、谚文）只用 500：墨是切阈值切出来的，比字形胖一圈，粗体的密字一胖就糊成一团；西文用 800
+        const fontFor = (size, cjk) => `${cjk ? 500 : 800} ${size.toFixed(1)}px ${family}`;
         const main = mainCanvas.getContext('2d', { alpha: false });
         const ids = idsCanvas.getContext('2d', { alpha: false });
         main.globalCompositeOperation = 'source-over';
@@ -353,7 +354,11 @@
         placed.forEach((p, i) => {
             const id = Math.min(MAX_GLYPHS, i + 1);
             main.font = fontFor(p.size, CJK.test(p.g.text));
+            // 字形先按字号的比例轻轻模糊一下：边缘变成一道和字号成比例的缓坡，
+            // 着色器在坡上切阈值，大字小字的毛边才一样细，放大的特写也还是干净的边
+            main.filter = `blur(${Math.max(0.8, p.size * 0.022).toFixed(2)}px)`;
             main.fillText(p.g.text, p.x, p.baseline);
+            main.filter = 'none';
             glyphData[id * 4] = p.g.start;
             glyphData[id * 4 + 1] = p.g.end;
             glyphData[id * 4 + 2] = keys.size && keys.has(plainWord(p.unit?.glyphs.map(g => g.text).join(''))) ? 1 : 0;
@@ -807,9 +812,10 @@ vec2 worldAt(vec4 view) {
 }
 vec2 flowed(vec2 w) {
     float k = uWorld.y;
-    vec2 n = vec2(vnoise(w / (k * 0.16) + uFlow * 0.37), vnoise(w / (k * 0.16) + 17.0 - uFlow * 0.29)) - 0.5;
-    vec2 m = vec2(vnoise(w / (k * 0.025) + uFlow * 1.3), vnoise(w / (k * 0.025) - 9.0 + uFlow)) - 0.5;
-    return w + n * k * 0.006 + m * k * 0.0016;
+    // 手抖：一层大的慢慢推（整个字跟着弯）、一层小的抖（笔画边上起伏），每秒跳 8 格
+    vec2 n = vec2(vnoise(w / (k * 0.31) + uFlow * 0.37), vnoise(w / (k * 0.31) + 17.0 - uFlow * 0.29)) - 0.5;
+    vec2 m = vec2(vnoise(w / (k * 0.11) + uFlow * 1.3), vnoise(w / (k * 0.11) - 9.0 + uFlow)) - 0.5;
+    return w + n * k * 0.02 + m * k * 0.007;
 }
 
 void main() {
@@ -817,8 +823,6 @@ void main() {
     vec2 uv = w / uWorld;
     bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
     vec4 m = inside ? texture(uMain, uv) : vec4(0.0);
-    // 字形取样偏软一档：边缘的坡更宽，阈值噪点切出来的毛边才明显（线稿和注记小字不软，免得糊）
-    m.r = inside ? texture(uMain, uv, 0.8).r : 0.0;
     float halo = inside ? textureLod(uMain, uv, 4.0).r : 0.0;
     vec4 idv = inside ? texelFetch(uIds, min(ivec2(uv * uIdSize), ivec2(uIdSize) - 1), 0) : vec4(0.0);
     int gid = int(idv.r * 255.0 + 0.5);
@@ -870,12 +874,18 @@ void main() {
     }
 
     float k = uWorld.y;
-    float rough = (vnoise(wp / (k * 0.006) + uFlow * 1.7) - 0.5) * 0.3 + (hash12(floor(gl_FragCoord.xy / 2.0) + uFlow * 7.0) - 0.5) * 0.08;
-    float F = glyphInk * (1.25 + swell * 0.35) + halo * reveal * (uHalo + swell * 0.9) + lineInk * 1.1 + field * 0.5 + ring;
+    // 阈值被噪点搅过：墨边像砂纸上蹭出来的，颗粒按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳
+    vec2 px = gl_FragCoord.xy / max(uRes.y / 900.0, 0.5);
+    float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (hash12(floor(px * 0.9)) - 0.5) * 0.08) * (0.5 + uGrain);
+    // 字的墨只来自字形本身（不把大晕加进来，不然字会胖一圈、笔画糊在一起）；大晕只进网点的浓淡。
+    // 唱到的那一下字胀一点点再收回。
+    float F = glyphInk * (0.8 + swell * 0.22) + halo * reveal * swell * 0.2 + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
     // 段尾硬切之前，字从边上一块块散掉，散的方向朝外
     if (uExit > 0.0) thr += uExit * (0.25 + vnoise(wp / (k * 0.03)) * 0.9 + length(gl_FragCoord.xy / uRes - 0.5) * 0.8);
-    float a = smoothstep(thr - 0.05, thr + 0.05, F);
+    // 边的软硬只有一个像素：按 F 在屏幕上的变化率算，大特写和小字都是干净的一刀
+    float edgeW = max(fwidth(F), 0.0001) * 0.75;
+    float a = smoothstep(thr - edgeW, thr + edgeW, F);
     float aA = smoothstep(0.42 + rough * 0.6, 0.52 + rough * 0.6, accent * 0.5);
 
     // 半调：网点格在世界里（跟着镜头放大），网点大小随浓淡
@@ -888,6 +898,8 @@ void main() {
     T = max(T, max(cloud * 0.72, vig * 0.6 * uCloud));
     T = max(T, (halo * 1.5 + m.r * 0.5) * pre * uGhost / max(uGhost, 0.001) * 0.9);
     T = max(T, halo * reveal * 0.55 * uCloud);
+    // 还没唱到的字只是一层网点的影子（不是一块平的灰）
+    T = max(T, ghost / max(uGhost, 0.001) * 0.85 * min(1.0, uGhost * 3.0));
     float ca = 0.2588, sa = 0.9659;
     vec2 g = vec2(wp.x * sa + wp.y * ca, -wp.x * ca + wp.y * sa) / (k / mix(150.0, 96.0, uCloud));
     float dist = length(fract(g) - 0.5);
@@ -900,10 +912,12 @@ void main() {
     col = mix(col, uDot, dots * 0.85);
     col = mix(col, uAccentCol, aA);
     // 还没唱到的字：淡淡的墨，同样切阈值（毛边一致）
-    float ga = smoothstep(thr - 0.05, thr + 0.05, ghost * 1.25 / max(uGhost, 0.001)) * uGhost;
+    float gF = ghost / max(uGhost, 0.001);
+    float gW = max(fwidth(gF), 0.0001) * 0.75;
+    float ga = smoothstep(thr - gW, thr + gW, gF) * uGhost;
     // 关键词的字身用强调色（字周围的晕仍是墨，像套色印刷压了一道黑边）
     vec3 inkK = mix(ink, uAccentCol, kw * smoothstep(0.3, 0.65, m.r));
-    col = mix(col, mix(inkK, paper, aA), max(a, ga * 0.6 * (1.0 - a)));
+    col = mix(col, mix(inkK, paper, aA), max(a, ga * 0.18 * (1.0 - a)));
 
     if (uPrevFade > 0.0) {
         vec2 wq = flowed(worldAt(uPrevView));
@@ -918,11 +932,12 @@ void main() {
         if (all(greaterThanEqual(uq, vec2(0.0))) && all(lessThanEqual(uq, vec2(1.0)))) {
             vec4 pm = texture(uPrev, uq);
             float ph = textureLod(uPrev, uq, 4.0).r;
-            float Fp = pm.r * 1.25 + ph * uHalo + pm.g * 1.1;
+            float Fp = pm.r + pm.g * 1.1;
             float breakUp = (vnoise(wq / (k * 0.05)) - 0.5) * 0.9;
             float tp = uSmash > 0.0 ? 0.5 + rough + step(1.0 - uSmash * 1.15, h) * 9.0
                                     : 0.5 + rough + uPrevFade * 1.1 + breakUp * uPrevFade;
-            float ap = smoothstep(tp - 0.05, tp + 0.05, Fp);
+            float pw = max(fwidth(Fp), 0.0001) * 0.75;
+            float ap = smoothstep(tp - pw, tp + pw, Fp);
             col = mix(col, ink, ap * (1.0 - a));
         }
     }
@@ -937,7 +952,10 @@ void main() {
     }
     float gr = hash12(floor(gl_FragCoord.xy / 1.5) + uGrainStep * 17.0) - 0.5;
     float fibre = vnoise(gl_FragCoord.xy / 3.0 + uGrainStep * 5.0) - 0.5;
-    col += (gr * 0.07 + fibre * 0.04) * uGrain;
+    col *= 1.0 + (gr * 0.44 + fibre * 0.2) * uGrain;
+    // 杂点：纸上是墨色的点，墨里是纸色的点（印刷没压实的地方）
+    float speck = step(0.988, hash12(floor(gl_FragCoord.xy / 2.2) + uGrainStep * 3.7 + 0.5));
+    col = mix(col, mix(ink, paper, a), speck * 0.55 * min(uGrain * 2.0, 1.0));
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
@@ -1107,7 +1125,7 @@ void main() {
             cuesFor = { lines: frame.lines, key };
             glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; });
             // 字体分片还没下载完：下载完把字图作废重画（字宽变了，分镜也要重排）
-            Utils.loadLyricFont(frame.lines, [800], () => { glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; }); redraw(); }, frame.track?.title || '');
+            Utils.loadLyricFont(frame.lines, [500, 800], () => { glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; }); redraw(); }, frame.track?.title || '');
         };
 
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
