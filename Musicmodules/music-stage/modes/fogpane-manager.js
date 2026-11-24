@@ -519,6 +519,9 @@ void main() {
 precision highp float;
 precision highp int;
 uniform sampler2D uScene;
+uniform sampler2D uFogBlur;
+uniform sampler2D uFogGlow;
+uniform vec2 uFogNorm;
 uniform sampler2D uAtlas0;
 uniform sampler2D uAtlas1;
 uniform sampler2D uAtlas2;
@@ -639,11 +642,12 @@ void main() {
         edgeBead *= smoothstep(0.15, 0.6, wet);
     }
 
-    vec3 blurred = textureLod(uScene, uv, 4.2).rgb;
+    // 雾后面两层模糊的窗外：用多级双滤波模糊（圆润），不用 mip（会糊成一块块方的光斑）
+    vec3 blurred = mix(texture(uFogBlur, uv).rgb * uFogNorm.x, texture(uFogGlow, uv).rgb * uFogNorm.y, 0.5);
     float grainy = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 180.0) - 0.5;
     float clumps = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 7.0);
     // 雾里的灯：除了透过来的模糊光斑，再往外晕开一大圈
-    vec3 wide = textureLod(uScene, uv, 6.2).rgb;
+    vec3 wide = texture(uFogGlow, uv).rgb * uFogNorm.y;
     vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25 + max(wide - uFogCol * 0.6, 0.0) * 0.45;
     // 透过擦开的地方看窗外：眼睛对在玻璃上，窗外是虚的（窗外场景只有 1/3 分辨率，直接看会是一格格的方块）
     vec3 clear = textureLod(uScene, uv, 2.2).rgb * 1.05;
@@ -861,7 +865,8 @@ void main() {
         const slots = Array.from({ length: LINE_SLOTS + 1 }, () => ({ atlas: texture(gl.LINEAR), data: texture(gl.NEAREST), key: null, used: 0 }));
         return {
             gl, scene, main, drops, vao, sceneTex, fbo, sceneSize: [0, 0], blank, blankData, slots,
-            window: Utils.createTarget(gl), upscale: Utils.createBloom(gl, { label: 'fogpane' })
+            window: Utils.createTarget(gl), upscale: Utils.createBloom(gl, { label: 'fogpane' }),
+            fogBlur: Utils.createBloom(gl, { label: 'fogpane-blur' })
         };
     };
 
@@ -1216,6 +1221,8 @@ void main() {
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex);
             gl.generateMipmap(gl.TEXTURE_2D);
+            const fogBlur = glState.fogBlur;
+            fogBlur.run({ tex: glState.sceneTex, size: glState.sceneSize }, null, [-1, 0.5], 0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             // 2) 车窗（小图）
@@ -1224,6 +1231,9 @@ void main() {
             const u = main.uniforms;
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex); gl.uniform1i(u.uScene, 0);
             Utils.bindNoise(gl, u.uNoise, 7);
+            gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D, fogBlur.level(2)); gl.uniform1i(u.uFogBlur, 8);
+            gl.activeTexture(gl.TEXTURE9); gl.bindTexture(gl.TEXTURE_2D, fogBlur.level(3)); gl.uniform1i(u.uFogGlow, 9);
+            gl.uniform2f(u.uFogNorm, 1 / (fogBlur.levels - 2), 1 / (fogBlur.levels - 3));
             const lineInfo = new Float32Array(LINE_SLOTS * 4);
             for (let i = 0; i < LINE_SLOTS; i += 1) {
                 const slot = slots[i];

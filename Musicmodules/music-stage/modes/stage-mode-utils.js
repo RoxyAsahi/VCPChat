@@ -1246,6 +1246,10 @@ void main() {
                 gl.uniform1f(u.uGrainStep, grainStep);
                 gl.drawArrays(gl.TRIANGLES, 0, 3);
             },
+            // run 之后第 i 层：第 i 层及更粗各层模糊之和（共 BLOOM_LEVELS - i 层，取用时除掉）。
+            // knee 给 [-1, 0.5] 时不取亮部、整张图都进来，就是一组圆润的多级模糊（比 mip 的方块模糊圆）。
+            level(i) { return levels[Math.min(Math.max(i, 0), BLOOM_LEVELS - 1)]; },
+            levels: BLOOM_LEVELS,
             add(glow, w, h, strength = 1) {
                 if (!adder) adder = compileProgram(gl, SPLIT_VERT, addFrag, `${label}:glow-add`);
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
