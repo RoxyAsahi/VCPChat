@@ -229,11 +229,22 @@ vec3 grade(vec3 c) {
 void main() {
     vec2 frag = gl_FragCoord.xy;
     vec2 uv = frag / uRes;
-    // 墙：同一幅画放大、糊开、压暗，像画挂在被它映亮的墙上
+    // 墙：同一幅画放大、糊开、压暗，像画挂在被它映亮的墙上。颜色慢慢流动（取样位置被几道慢慢变的正弦波推着走，
+    // 也把最糊那一级贴图的方块揉开；全用算术，不多取贴图）
     vec2 bgUv = 0.5 + (uv - 0.5) * vec2(1.0, uRes.y / uRes.x) * 0.9;
+    vec2 flow = vec2(sin(uv.y * 3.1 + uTime * 0.05 + sin(uv.x * 2.3 - uTime * 0.03) * 1.4),
+                     cos(uv.x * 2.7 - uTime * 0.04 + sin(uv.y * 1.9 + uTime * 0.02) * 1.4)) * 0.5;
+    bgUv += flow * 0.12;
     vec3 bg = grade(textureLod(uPaint, bgUv, 5.5).rgb);
     if (uHasPrev > 0.5 && uReveal < 1.05) bg = mix(grade(textureLod(uPrev, bgUv, 5.5).rgb), bg, smoothstep(0.0, 1.0, uReveal));
     vec3 col = mix(uWall, bg * mix(0.5, 1.0, uLight), mix(0.55, 0.3, uLight));
+    // 墙面：灯照到的地方明暗有一点起伏（像刷过的墙）
+    float plaster = flow.x * flow.y * 0.8;
+    // 画灯往下打，墙上画框上沿那一圈也被照到一点
+    vec2 sp = (frag - vec2(uLamp.x, uLamp.y - uLamp.z * 0.5)) / vec2(uLamp.z * 2.6, uLamp.z * 1.6);
+    float spill = exp(-dot(sp, sp)) * uLamp.w;
+    col *= 1.0 + plaster * (0.08 + spill * 0.16) * mix(1.0, 0.6, uLight);
+    col += vec3(1.0, 0.86, 0.62) * spill * mix(0.06, 0.025, uLight);
     col *= 1.0 - mix(0.55, 0.22, uLight) * dot(uv - 0.5, uv - 0.5);
 
     vec2 lo = uRect.xy;
