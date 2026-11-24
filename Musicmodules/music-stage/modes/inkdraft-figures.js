@@ -795,6 +795,294 @@
             pen.note('Δm', -1.0, -0.72, 0.08, 'right');
             pen.note('phase', 0.95, 0.68, 0.07, 'right');
             pen.note(pick(random, ['P = 3.52 d', 'Algol', 'transit', 'P = 0.94 d']), 0.2, -0.6, 0.08);
+        },
+
+        /* ── 城市 ── */
+        // 平面图：几间房、墙上开门的弧、窗是墙上两道细线，标面积
+        floorPlan(pen, random) {
+            const W = 1.7, H = 1.2, x0 = -0.85, y0 = -0.6;
+            pen.line([[x0, y0], [x0 + W, y0], [x0 + W, y0 + H], [x0, y0 + H]], true);
+            const vx = x0 + W * (0.4 + random() * 0.2), hy = y0 + H * (0.45 + random() * 0.15);
+            pen.line([[vx, y0], [vx, hy - 0.16]]); pen.line([[vx, hy + 0.06], [vx, y0 + H]]);
+            pen.line([[x0, hy], [vx - 0.2, hy]]);
+            pen.ellipse(vx, hy - 0.16, 0.22, 0.22, 0, Math.PI / 2, Math.PI, 12);
+            pen.line([[vx, hy - 0.16], [vx - 0.22, hy - 0.16]]);
+            [[x0 + 0.25, x0 + 0.55], [vx + 0.2, vx + 0.55]].forEach(([a, b]) => pen.segments([[[a, y0 - 0.03], [b, y0 - 0.03]], [[a, y0 + 0.03], [b, y0 + 0.03]]]));
+            pen.note(`${(8 + random() * 10).toFixed(1)} m²`, (x0 + vx) / 2, (y0 + hy) / 2, 0.08);
+            pen.note(`${(10 + random() * 14).toFixed(1)} m²`, (vx + x0 + W) / 2, 0, 0.08);
+            pen.note(pick(random, ['卧', '厨', 'LDK', '書斎']), (x0 + vx) / 2, (hy + y0 + H) / 2, 0.08);
+            pen.arrow([x0, y0 + H + 0.14], [x0 + W, y0 + H + 0.14], 0.04);
+            pen.note(`${Math.floor(5000 + random() * 4000)}`, x0 + W / 2, y0 + H + 0.24, 0.065);
+        },
+        // 街区图：斜着的路网，一条大街加粗（两道线），一个圆环交叉口，路名
+        streetGrid(pen, random) {
+            const a = (random() - 0.5) * 0.5, c = Math.cos(a), s = Math.sin(a);
+            const R = (x, y) => [x * c - y * s, x * s + y * c];
+            for (let i = -2; i <= 2; i += 1) pen.line([R(-1, i * 0.38), R(1, i * 0.38)]);
+            for (let i = -2; i <= 2; i += 1) pen.line([R(i * 0.42 + (random() - 0.5) * 0.06, -0.95), R(i * 0.42, 0.95)]);
+            pen.line([R(-1, 0.05), R(1, 0.05)]);
+            pen.circle(...R(0.42, 0), 0.14);
+            pen.note(pick(random, ['中山路', '港通り', 'Rue Haute', '长安街', 'Elm St.']), ...R(-0.55, -0.1), 0.075);
+            pen.note(pick(random, ['3丁目', 'Block C', '东四']), ...R(-0.2, 0.55), 0.07);
+            pen.dot(...R(-0.21, -0.57), 0.04);
+        },
+        // 立面：几层楼，一排排窗（有的亮着画实心），屋顶水箱和天线
+        facade(pen, random) {
+            const floors = 5 + Math.floor(random() * 3), w = 1.1, h = 1.6;
+            const x0 = -w / 2, y1 = 0.85, y0 = y1 - h;
+            pen.line([[x0, y1], [x0, y0], [x0 + w, y0], [x0 + w, y1]]);
+            pen.line([[-1, y1], [1, y1]]);
+            const fh = h / floors;
+            for (let f = 0; f < floors; f += 1) {
+                const y = y0 + f * fh;
+                if (f) pen.line([[x0 - 0.03, y], [x0 + w + 0.03, y]]);
+                for (let k = 0; k < 4; k += 1) {
+                    const wx = x0 + 0.1 + k * 0.25, wy = y + fh * 0.25;
+                    pen.line([[wx, wy], [wx + 0.15, wy], [wx + 0.15, wy + fh * 0.5], [wx, wy + fh * 0.5]], true);
+                    if (random() < 0.25) pen.dot(wx + 0.075, wy + fh * 0.25, 0.03);
+                }
+            }
+            pen.line([[0.2, y0], [0.2, y0 - 0.14], [0.42, y0 - 0.14], [0.42, y0]]);
+            pen.line([[-0.3, y0], [-0.3, y0 - 0.3]]);
+            pen.segments([[[-0.38, y0 - 0.24], [-0.22, y0 - 0.24]], [[-0.36, y0 - 0.18], [-0.24, y0 - 0.18]]]);
+            pen.note(`${floors}F  H = ${(floors * 3.1).toFixed(1)} m`, x0 + w + 0.06, y0 + 0.1, 0.07, 'left');
+        },
+        // 轴测街区：几栋方盒子楼，按 30° 轴测画三个面的边
+        isoBlock(pen, random) {
+            const ix = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)], iy = [-Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)];
+            const P = (x, y, z) => [x * ix[0] + y * iy[0], x * ix[1] + y * iy[1] - z];
+            const box = (x, y, w, d, h) => {
+                const b = [P(x, y, 0), P(x + w, y, 0), P(x + w, y + d, 0), P(x, y + d, 0)];
+                const t = [P(x, y, h), P(x + w, y, h), P(x + w, y + d, h), P(x, y + d, h)];
+                pen.line(t, true);
+                pen.line([b[1], b[2], b[3]]);
+                pen.segments([[b[1], t[1]], [b[2], t[2]], [b[3], t[3]]]);
+            };
+            pen.line([P(-0.8, -0.6, 0), P(0.8, -0.6, 0), P(0.8, 0.7, 0), P(-0.8, 0.7, 0)], true);
+            box(-0.6, -0.4, 0.4, 0.4, 0.5 + random() * 0.4);
+            box(0.0, -0.45, 0.5, 0.35, 0.3 + random() * 0.3);
+            box(-0.55, 0.2, 0.35, 0.35, 0.2 + random() * 0.2);
+            box(0.1, 0.15, 0.45, 0.4, 0.6 + random() * 0.3);
+            pen.note(pick(random, ['Block 7', '街区 B', 'Lot 12']), 0, 0.92, 0.075);
+        },
+        // 路灯：弯臂的灯杆、灯罩，地上一圈照亮的范围（虚线椭圆）
+        lamp(pen, random) {
+            pen.line([[-0.2, 0.9], [-0.2, -0.5]]);
+            pen.ellipse(0.05, -0.5, 0.25, 0.25, 0, Math.PI, Math.PI * 1.5, 12);
+            pen.line([[0.05, -0.75], [0.3, -0.75]]);
+            pen.line([[0.2, -0.75], [0.12, -0.62], [0.48, -0.62], [0.4, -0.75]]);
+            pen.line([[0.12, -0.62], [-0.15, 0.9]]); pen.line([[0.48, -0.62], [0.85, 0.9]]);
+            const pts = [];
+            for (let i = 0; i <= 24; i += 1) { const t = i / 24 * TAU; pts.push([0.35 + Math.cos(t) * 0.55, 0.9 + Math.sin(t) * 0.08]); }
+            pen.segments(pts.slice(1).map((p, i) => [pts[i], p]).filter((_, i) => i % 2 === 0));
+            pen.line([[-0.32, 0.9], [-0.08, 0.9]]);
+            pen.note(`${pick(random, ['3000 K', '2700 K', '4000 K'])}  ${Math.floor(60 + random() * 90)} W`, -0.25, -0.88, 0.07);
+        },
+        // 天际线剖面：一排高低不一的楼，楼顶几根天线，地面线上标距离
+        skyline(pen, random) {
+            const pts = [[-1, 0.6]];
+            let x = -1;
+            while (x < 1) {
+                const w = 0.08 + random() * 0.18, h = 0.15 + random() * random() * 1.1;
+                pts.push([x, 0.6 - h], [x + w, 0.6 - h]);
+                if (h > 0.7 && random() < 0.6) pen.line([[x + w / 2, 0.6 - h], [x + w / 2, 0.6 - h - 0.18]]);
+                x += w;
+                pts.push([x, 0.6 - h * (0.2 + random() * 0.5)]);
+            }
+            pts.push([1, 0.6]);
+            pen.line(pts.map(([px, py]) => [Math.min(1, px), py]));
+            pen.line([[-1, 0.6], [1, 0.6]]);
+            [-1, -0.5, 0, 0.5, 1].forEach((tx, i) => { pen.line([[tx, 0.6], [tx, 0.66]]); pen.note(`${i * 250} m`, tx, 0.75, 0.06); });
+        },
+
+        /* ── 植物 ── */
+        // 叶：叶形、主脉、两边的侧脉，叶柄，标学名
+        leaf(pen, random) {
+            const L = 0.9, Wd = 0.35 + random() * 0.15;
+            const side = sgn => { const pts = []; for (let i = 0; i <= 24; i += 1) { const t = i / 24; pts.push([-L + t * 2 * L, sgn * Math.sin(Math.PI * Math.pow(t, 0.8)) * Wd]); } return pts; };
+            pen.line(side(1)); pen.line(side(-1));
+            pen.line([[-L - 0.15, 0.04], [L, 0]]);
+            const veins = [];
+            for (let i = 1; i < 7; i += 1) {
+                const t = i / 7, x = -L + t * 2 * L;
+                const w = Math.sin(Math.PI * Math.pow(t, 0.8)) * Wd * 0.85;
+                veins.push([[x, 0], [x + 0.18, -w]], [[x, 0], [x + 0.18, w]]);
+            }
+            pen.segments(veins);
+            pen.note(pick(random, ['Ginkgo biloba', 'Acer palmatum', 'Prunus serrulata', 'Quercus robur', 'Ficus']), 0, Wd + 0.2, 0.08);
+        },
+        // 花图式：五瓣花的横切图，萼片、花瓣、雄蕊、心皮，一圈圈套着
+        floralDiagram(pen, random) {
+            const n = random() < 0.5 ? 5 : 4;
+            for (let i = 0; i < n; i += 1) {
+                const a = i / n * TAU - Math.PI / 2;
+                const b = a + Math.PI / n;
+                pen.ellipse(Math.cos(a) * 0.72, Math.sin(a) * 0.72, 0.1, 0.2, a + Math.PI / 2, 0, Math.PI, 14);
+                pen.ellipse(Math.cos(b) * 0.5, Math.sin(b) * 0.5, 0.17, 0.08, b + Math.PI / 2, 0, TAU, 20);
+                pen.circle(Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.05);
+            }
+            pen.circle(0, 0, 0.13);
+            pen.line([[-0.13, 0], [0.13, 0]]);
+            pen.dot(0, -0.98, 0.03);
+            pen.note(`K${n} C${n} A${n} G(${random() < 0.5 ? 2 : 3})`, 0, 1.0, 0.08);
+        },
+        // 叶序：按黄金角一个个排出去的点，越往外越大，连一条螺线
+        phyllotaxis(pen, random) {
+            const g = Math.PI * (3 - Math.sqrt(5));
+            const n = 60;
+            for (let i = 1; i < n; i += 1) {
+                const r = Math.sqrt(i / n) * 0.9, a = i * g;
+                pen.dot(Math.cos(a) * r, Math.sin(a) * r, 0.012 + r * 0.035);
+            }
+            const sp = [];
+            for (let i = 1; i < n; i += 8) { const r = Math.sqrt(i / n) * 0.9, a = i * g; sp.push([Math.cos(a) * r, Math.sin(a) * r]); }
+            pen.line(sp);
+            pen.note('137.5°', 0.7, -0.85, 0.08, 'left');
+        },
+        // 枝：一根分叉的枝（递归），枝头几片小叶、一两朵花苞
+        branch(pen, random) {
+            const segs = [];
+            const tips = [];
+            const grow = (x, y, a, len, depth) => {
+                const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
+                segs.push([[x, y], [x2, y2]]);
+                if (depth <= 0) { tips.push([x2, y2, a]); return; }
+                grow(x2, y2, a - 0.35 - random() * 0.3, len * (0.62 + random() * 0.15), depth - 1);
+                if (random() < 0.85) grow(x2, y2, a + 0.3 + random() * 0.3, len * (0.6 + random() * 0.15), depth - 1);
+            };
+            grow(-0.2, 0.95, -Math.PI / 2 + (random() - 0.5) * 0.3, 0.55, 4);
+            for (let i = 0; i < segs.length; i += 5) pen.segments(segs.slice(i, i + 5));
+            tips.forEach(([x, y, a], i) => {
+                if (i % 3 === 0) pen.circle(x, y, 0.035);
+                else pen.ellipse(x + Math.cos(a) * 0.06, y + Math.sin(a) * 0.06, 0.07, 0.03, a, 0, TAU, 14);
+            });
+        },
+        // 蒲公英的种子头：一圈放射的冠毛，每根顶上一撮伞，有一两颗飘走
+        seedHead(pen, random) {
+            pen.line([[0, 0.95], [0.04, 0.1]]);
+            pen.circle(0.04, 0.05, 0.06);
+            const rays = [];
+            const n = 26;
+            for (let i = 0; i < n; i += 1) {
+                const a = i / n * TAU;
+                if (random() < 0.15) continue;
+                const x = 0.04 + Math.cos(a) * 0.55, y = 0.05 + Math.sin(a) * 0.55;
+                rays.push([[0.04 + Math.cos(a) * 0.08, 0.05 + Math.sin(a) * 0.08], [x, y]]);
+                rays.push([[x, y], [x + Math.cos(a - 0.4) * 0.1, y + Math.sin(a - 0.4) * 0.1]], [[x, y], [x + Math.cos(a + 0.4) * 0.1, y + Math.sin(a + 0.4) * 0.1]]);
+            }
+            for (let i = 0; i < rays.length; i += 12) pen.segments(rays.slice(i, i + 12));
+            const fx = 0.75, fy = -0.75;
+            pen.line([[fx - 0.1, fy + 0.15], [fx, fy]]);
+            pen.segments([[[fx, fy], [fx - 0.08, fy - 0.08]], [[fx, fy], [fx + 0.08, fy - 0.08]], [[fx, fy], [fx, fy - 0.11]]]);
+            pen.note('Taraxacum', -0.9, 0.85, 0.075, 'left');
+        },
+        // 发芽：一排四个阶段，从种子到两片子叶，下面一道土线，标天数
+        sprout(pen, random) {
+            pen.line([[-1, 0.3], [1, 0.3]]);
+            [-0.75, -0.25, 0.25, 0.75].forEach((x, i) => {
+                pen.ellipse(x, 0.42, 0.07, 0.045, 0.3, 0, TAU, 14);
+                if (i >= 1) pen.line([[x, 0.42], [x - 0.04, 0.6 + i * 0.05]]);
+                if (i >= 2) pen.line([[x, 0.38], [x + 0.02, 0.3 - i * 0.12]]);
+                if (i >= 3) {
+                    pen.ellipse(x - 0.1, -0.08, 0.1, 0.045, -0.4, 0, TAU, 14);
+                    pen.ellipse(x + 0.12, -0.08, 0.1, 0.045, 0.4, 0, TAU, 14);
+                }
+                pen.note(`d${[0, 2, 4, 7][i]}`, x, 0.85, 0.07);
+            });
+        },
+
+        /* ── 信笺 ── */
+        // 信封：封口的三角、地址三行、右上角贴邮票的框
+        envelope(pen, random) {
+            const w = 0.95, h = 0.6;
+            pen.line([[-w, -h], [w, -h], [w, h], [-w, h]], true);
+            pen.line([[-w, -h], [0, 0.05], [w, -h]]);
+            pen.line([[0.58, -h + 0.08], [0.85, -h + 0.08], [0.85, -h + 0.42], [0.58, -h + 0.42]], true);
+            for (let i = 0; i < 3; i += 1) pen.line([[-0.5, 0.18 + i * 0.12], [0.1 + random() * 0.35, 0.18 + i * 0.12]]);
+            pen.note(pick(random, ['To:', '寄：', '〒']), -0.62, 0.18, 0.08, 'right');
+            pen.note(String(Math.floor(100000 + random() * 899999)), -0.85, -h + 0.14, 0.065, 'left');
+        },
+        // 邮票：齿孔边（一圈小半圆）、面值、里面一幅小画
+        stamp(pen, random) {
+            const w = 0.55, h = 0.72, r = 0.035;
+            // 齿孔：沿四边走一圈，每个孔是往里凹的一个小半圆
+            const edge = [];
+            const corners = [[-w, -h], [w, -h], [w, h], [-w, h], [-w, -h]];
+            for (let k = 0; k < 4; k += 1) {
+                const [ax, ay] = corners[k], [bx, by] = corners[k + 1];
+                const len = Math.hypot(bx - ax, by - ay), n = Math.round(len / 0.12);
+                const nx = -(by - ay) / len, ny = (bx - ax) / len;
+                for (let i = 0; i <= n * 6; i += 1) {
+                    const t = i / (n * 6);
+                    const bump = Math.max(0, Math.sin(t * n * Math.PI * 2 - Math.PI / 2)) * r;
+                    edge.push([ax + (bx - ax) * t + nx * bump, ay + (by - ay) * t + ny * bump]);
+                }
+            }
+            pen.line(edge);
+            pen.line([[-w + 0.1, -h + 0.1], [w - 0.1, -h + 0.1], [w - 0.1, h - 0.28], [-w + 0.1, h - 0.28]], true);
+            pen.wave([-w + 0.12, 0.05], [w - 0.12, 0.05], 3, 0.04);
+            pen.circle(0.18, -0.3, 0.1);
+            pen.note(`${pick(random, ['80', '1.20', '¥84', '50'])}`, 0, h - 0.14, 0.11);
+        },
+        // 邮戳：两个同心圆，中间日期，外圈地名，右边几道波浪线
+        postmark(pen, random) {
+            pen.circle(-0.35, 0, 0.42);
+            pen.circle(-0.35, 0, 0.3);
+            pen.line([[-0.62, -0.07], [-0.08, -0.07]]); pen.line([[-0.62, 0.07], [-0.08, 0.07]]);
+            pen.note(`${2000 + Math.floor(random() * 26)}.${1 + Math.floor(random() * 12)}.${1 + Math.floor(random() * 28)}`, -0.35, 0, 0.075);
+            pen.note(pick(random, ['港前', 'KAMAKURA', '海滨', 'LISBOA', '旧城']), -0.35, -0.18, 0.065);
+            for (let i = 0; i < 4; i += 1) pen.wave([0.1, -0.22 + i * 0.15], [1.0, -0.22 + i * 0.15], 3, 0.035);
+        },
+        // 横格信纸：几道横线，一道竖的页边线，横线上手写的一串波浪（看不清的字），末尾署名
+        ruledNote(pen, random) {
+            pen.line([[-0.78, -0.95], [-0.78, 0.95]]);
+            for (let i = 0; i < 7; i += 1) {
+                const y = -0.75 + i * 0.25;
+                pen.line([[-1, y], [1, y]]);
+                if (i < 6) {
+                    const end = i === 5 ? -0.1 : 0.6 + random() * 0.35;
+                    // 手写的一行：一个个词（一段连笔的圈），词之间留空；字高、笔画疏密都不匀
+                    let x = -0.7;
+                    while (x < end - 0.08) {
+                        const len = Math.min(end - x, 0.12 + random() * 0.28);
+                        const pts = [];
+                        const f = 38 + random() * 30, hgt = 0.025 + random() * 0.02, ph = random() * TAU;
+                        for (let t = 0; t <= len; t += 0.008) {
+                            const loop = Math.sin(t * f + ph);
+                            const tall = random() < 0.04 ? 0.05 : 0;
+                            pts.push([x + t + Math.cos(t * f + ph) * 0.008, y - 0.05 - loop * hgt - tall * Math.max(0, loop)]);
+                        }
+                        pen.line(pts);
+                        x += len + 0.05 + random() * 0.04;
+                    }
+                }
+            }
+            pen.note(pick(random, ['—— 你的朋友', 'yours,', '敬上', 'P.S.']), 0.5, 0.82, 0.09);
+        },
+        // 寄出的路线：两个城市之间一道虚线弧，中间一只纸飞机，标里程
+        airmail(pen, random) {
+            const a = [-0.8, 0.4], b = [0.8, 0.2];
+            pen.circle(...a, 0.05); pen.circle(...b, 0.05);
+            const pts = [];
+            for (let i = 0; i <= 30; i += 1) { const t = i / 30; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - Math.sin(Math.PI * t) * 0.6]); }
+            pen.segments(pts.slice(1).map((p, i) => [pts[i], p]).filter((_, i) => i % 2 === 0));
+            const m = pts[15];
+            pen.line([[m[0] - 0.12, m[1] - 0.02], [m[0] + 0.14, m[1]], [m[0] - 0.12, m[1] + 0.08], [m[0] - 0.05, m[1] + 0.01]], true);
+            pen.note(pick(random, ['北京', 'Osaka', '海滨', 'Paris']), a[0], a[1] + 0.14, 0.08);
+            pen.note(pick(random, ['旧金山', 'Lisboa', '山城', 'Kyoto']), b[0], b[1] + 0.14, 0.08);
+            pen.note(`${Math.floor(800 + random() * 9000)} km`, 0, 0.6, 0.075);
+            pen.note('PAR AVION', 0, -0.62, 0.07);
+        },
+        // 火漆印：不规则的一圈、里面一个印的圈和一个字母，下面两条丝带
+        waxSeal(pen, random) {
+            const pts = [];
+            for (let i = 0; i <= 20; i += 1) { const t = i / 20 * TAU; const r = 0.42 + (random() - 0.5) * 0.08; pts.push([Math.cos(t) * r, Math.sin(t) * r - 0.1]); }
+            pts[20] = pts[0];
+            pen.line(pts);
+            pen.circle(0, -0.1, 0.28);
+            pen.note(pick(random, ['R', 'A', 'M', '心', '✦']), 0, -0.1, 0.24);
+            pen.line([[-0.15, 0.3], [-0.35, 0.9], [-0.22, 0.82], [-0.1, 0.92]]);
+            pen.line([[0.15, 0.3], [0.3, 0.92], [0.18, 0.84], [0.06, 0.94]]);
         }
     };
 
@@ -820,6 +1108,24 @@
             kinds: ['tide', 'compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines'],
             tone: ['compass', 'isobaths', 'lighthouse', 'waveSection', 'hullLines', 'tide'],
             backdrops: [['swell', 0.4], ['arcs', 0.22], ['band', 0.2], ['none', 0.18]]
+        },
+        city: {
+            label: '城市',
+            kinds: ['floorPlan', 'streetGrid', 'facade', 'isoBlock', 'lamp', 'skyline'],
+            tone: ['streetGrid', 'facade', 'isoBlock', 'skyline', 'floorPlan'],
+            backdrops: [['blocks', 0.36], ['graph', 0.22], ['band', 0.2], ['none', 0.22]]
+        },
+        flora: {
+            label: '植物',
+            kinds: ['leaf', 'floralDiagram', 'phyllotaxis', 'branch', 'seedHead', 'sprout'],
+            tone: ['leaf', 'floralDiagram', 'phyllotaxis', 'branch', 'seedHead'],
+            backdrops: [['stems', 0.4], ['arcs', 0.2], ['band', 0.2], ['none', 0.2]]
+        },
+        letters: {
+            label: '信笺',
+            kinds: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail', 'waxSeal'],
+            tone: ['envelope', 'stamp', 'postmark', 'ruledNote', 'airmail'],
+            backdrops: [['ruled', 0.42], ['band', 0.22], ['graph', 0.14], ['none', 0.22]]
         },
         night: {
             label: '星夜',

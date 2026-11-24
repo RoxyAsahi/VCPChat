@@ -311,7 +311,10 @@
         const scenes = Figures.SCENES;
         if (wanted && scenes[wanted]) return wanted;
         const r = seededRandom(`inkdraft:scene:${key}`)();
-        return r < 0.34 ? 'notebook' : r < 0.56 ? 'rail' : r < 0.78 ? 'sea' : 'night';
+        const pool = [['notebook', 0.25], ['rail', 0.125], ['sea', 0.125], ['night', 0.125], ['city', 0.125], ['flora', 0.125], ['letters', 0.125]];
+        let acc = 0;
+        for (const [name, w] of pool) { acc += w; if (r < acc) return name; }
+        return 'notebook';
     };
 
     /* ───────────────────────── 逐字图集 ───────────────────────── */
@@ -680,6 +683,51 @@
                 main.arc(ox, oy, r, a, a + span * (0.5 + random()));
                 main.stroke();
             }
+        } else if (backdrop === 'blocks') {
+            // 街区：斜着的一张路网，路是粗的灰带，街区是留白
+            main.save();
+            main.translate(W / 2, H / 2);
+            main.rotate((random() - 0.5) * 0.6);
+            main.strokeStyle = 'rgb(0,0,78)';
+            main.lineWidth = H * 0.018;
+            const bx = H * (0.22 + random() * 0.1), by = H * (0.16 + random() * 0.08);
+            main.beginPath();
+            for (let x = -W; x < W; x += bx) { main.moveTo(x, -W); main.lineTo(x, W); }
+            for (let y = -W; y < W; y += by) { main.moveTo(-W, y); main.lineTo(W, y); }
+            main.stroke();
+            main.lineWidth = H * 0.04;
+            main.beginPath(); main.moveTo(-W, by * 0.5); main.lineTo(W, by * 0.5); main.stroke();
+            main.restore();
+        } else if (backdrop === 'stems') {
+            // 草茎：从画面底下长上来的几根弯的茎，有的带一片叶
+            main.strokeStyle = 'rgb(0,0,84)';
+            main.lineWidth = H * 0.007;
+            main.lineCap = 'round';
+            for (let i = 0; i < 9; i += 1) {
+                const x0 = W * random(), lean = (random() - 0.5) * W * 0.25, top = H * (0.05 + random() * 0.5);
+                main.beginPath();
+                main.moveTo(x0, H * 1.05);
+                main.quadraticCurveTo(x0 + lean * 0.2, (H + top) / 2, x0 + lean, top);
+                main.stroke();
+                if (random() < 0.6) {
+                    const ly = (H + top) / 2, lx = x0 + lean * 0.35;
+                    main.beginPath();
+                    main.ellipse(lx + H * 0.04, ly, H * 0.05, H * 0.016, -0.6, 0, TAU);
+                    main.stroke();
+                }
+            }
+        } else if (backdrop === 'ruled') {
+            // 信纸的横格和一道页边线
+            main.strokeStyle = 'rgb(0,0,74)';
+            main.lineWidth = Math.max(1, H * 0.0022);
+            const step = H / 14, off = random() * step;
+            main.beginPath();
+            for (let y = off; y < H; y += step) { main.moveTo(0, y); main.lineTo(W, y); }
+            main.stroke();
+            main.strokeStyle = 'rgb(0,0,92)';
+            main.lineWidth = H * 0.004;
+            const mx = W * (0.08 + random() * 0.08);
+            main.beginPath(); main.moveTo(mx, 0); main.lineTo(mx, H); main.stroke();
         } else if (backdrop === 'radial') {
             // 放射的赤经线：从画外的天极放出来的一束直线
             main.strokeStyle = 'rgb(0,0,72)';
