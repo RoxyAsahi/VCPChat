@@ -478,3 +478,39 @@ body.music-reduce-motion .archive-wall.aw-table::after { display: none; }
 .ag-cell.ag-flip > .ag-art { transform-origin: 0 50%; animation: aw-flip .56s var(--aw-sp-flow, cubic-bezier(.2, .9, .25, 1)) var(--ag-d, 0ms) backwards; }
 .ag-cell.ag-flip > .ag-t, .ag-cell.ag-flip > .ag-a { animation: ag-pop .34s var(--mt-ease-out, cubic-bezier(.2, .8, .2, 1)) calc(var(--ag-d, 0ms) + 120ms) backwards; }
 body.music-reduce-motion .aw-tile.aw-flip .aw-in, body.music-reduce-motion .ag-cell.ag-flip > * { animation: none; }
+
+/* 定位正在播放：右下角圆键，准星；正在播放那张不在视野里时亮成强调色、外面一圈慢慢呼吸；点一下放出一圈波纹 */
+#music-archive-view .aw-locate {
+    position: absolute;
+    right: 40px;
+    bottom: 34px;
+    z-index: 6;
+    width: 40px;
+    height: 40px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--ar-ink);
+    background: rgba(var(--ar-paper-rgb), .78);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-ink) 16%, transparent), 0 8px 22px rgba(0, 0, 0, .22);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    opacity: .7;
+    transition: opacity .2s, transform .2s var(--mt-ease-spring, cubic-bezier(.2, .9, .25, 1)), background-color .2s, color .2s;
+    cursor: pointer;
+}
+#music-archive-view .aw-locate[hidden] { display: none; }
+#music-archive-view .aw-locate:hover { opacity: 1; transform: scale(1.06); }
+#music-archive-view .aw-locate:active { transform: scale(.92); }
+/* 准星：一个圈 + 四个短刻度 */
+.aw-locate i { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 1.6px solid currentColor; border-radius: 50%; box-sizing: border-box; }
+.aw-locate i::before, .aw-locate i::after { content: ""; position: absolute; background: currentColor; }
+.aw-locate i::before { left: 50%; top: -6px; bottom: -6px; width: 1.6px; margin-left: -.8px; -webkit-mask-image: linear-gradient(180deg, #000 0 5px, transparent 5px calc(100% - 5px), #000 calc(100% - 5px)); mask-image: linear-gradient(180deg, #000 0 5px, transparent 5px calc(100% - 5px), #000 calc(100% - 5px)); }
+.aw-locate i::after { top: 50%; left: -6px; right: -6px; height: 1.6px; margin-top: -.8px; -webkit-mask-image: linear-gradient(90deg, #000 0 5px, transparent 5px calc(100% - 5px), #000 calc(100% - 5px)); mask-image: linear-gradient(90deg, #000 0 5px, transparent 5px calc(100% - 5px), #000 calc(100% - 5px)); }
+#music-archive-view .aw-locate.is-away { opacity: 1; color: #17130a; background: var(--ar-accent); }
+#music-archive-view .aw-locate.is-away::before { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 0 color-mix(in srgb, var(--ar-accent) 55%, transparent); animation: aw-breathe 2.4s ease-out infinite; pointer-events: none; }
+#music-archive-view .aw-locate.is-ping::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--ar-accent); animation: aw-ping .6s ease-out both; pointer-events: none; }
+@keyframes aw-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ar-accent) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 14px transparent; } }
+@keyframes aw-ping { from { transform: scale(1); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+.aw-table .aw-locate { right: 48px; }
+body.music-reduce-motion .aw-locate.is-away::before, body.music-reduce-motion .aw-locate.is-ping::after { animation: none; }

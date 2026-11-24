@@ -348,6 +348,16 @@
         }
         const world = el.firstChild;
         const emptyEl = el.lastChild;
+        // 定位正在播放：右下角圆键。这一组里有正在播放的歌时出现，那张不在视野里时亮起来；点了飞过去
+        const locateBtn = document.createElement('button');
+        locateBtn.type = 'button';
+        locateBtn.className = 'aw-locate';
+        locateBtn.dataset.wall = 'locate';
+        locateBtn.title = '找到正在播放的那首';
+        locateBtn.setAttribute('aria-label', '找到正在播放的那首');
+        locateBtn.hidden = true;
+        locateBtn.innerHTML = '<i></i>';
+        el.appendChild(locateBtn);
         opts.host.insertBefore(el, opts.before || null);
         const reduced = () => Boolean(opts.reducedMotion && opts.reducedMotion());
 
@@ -735,6 +745,7 @@
         const layout = () => {
             st.dirty = false;
             if (!st.g || !st.ids.length || !st.room.width) {
+                locateBtn.hidden = true;
                 for (const node of st.nodes.values()) recycle(node);
                 st.nodes.clear();
                 return;
@@ -823,6 +834,15 @@
                 if (!keep.has(id)) { st.nodes.delete(id); recycle(node); }
             }
             if (!exp && panel.parentNode) { panel.remove(); paintSeek(); }
+            // 定位键：正在播放的那首离这里最近的一份在不在视野里
+            if (playPos < 0) locateBtn.hidden = true;
+            else {
+                locateBtn.hidden = false;
+                const pi = nearestOf(g, playPos, viewCenter(), st.gap);
+                const pr = rectOf(pi);
+                const inView = pr.x + pr.w > st.cam.x && pr.x < st.cam.x + st.room.width && pr.y + pr.h > st.cam.y && pr.y < st.cam.y + st.room.height;
+                locateBtn.classList.toggle('is-away', !inView);
+            }
             world.classList.toggle('aw-has-open', Boolean(exp));
             st.laidAt = { x: st.cam.x, y: st.cam.y };
             st.revealOk = !reduced();
@@ -927,6 +947,19 @@
             const btn = e.target.closest('[data-wall]');
             if (btn) {
                 e.stopPropagation();
+                if (btn.dataset.wall === 'locate') {
+                    const p = opts.playing();
+                    const pos = p.index >= 0 ? st.ids.indexOf(p.index) : -1;
+                    if (pos >= 0) {
+                        const inst = nearestOf(st.g, pos, viewCenter(), st.gap);
+                        if (st.expanded && st.expanded.id !== inst.id) setExpanded(null);
+                        focusInstance(inst, { center: true });
+                    }
+                    locateBtn.classList.remove('is-ping');
+                    void locateBtn.offsetWidth;
+                    locateBtn.classList.add('is-ping');
+                    return;
+                }
                 if (btn.dataset.wall === 'quick') {
                     const q = tileOf(btn);
                     if (q) { if (!st.focus || st.focus.id !== q.id) focusInstance(q); opts.play(st.ids[q.item], {}); }

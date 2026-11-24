@@ -154,6 +154,20 @@ const FAKE = ({ n, light, covers }) => {
   await page.waitForTimeout(1500);
   d = await dbg();
   check('拖动移动了镜头', Math.abs(d.wall.cam.x - cam0.x) > 200, JSON.stringify(cam0) + ' → ' + JSON.stringify(d.wall.cam));
+  // 定位键：滚到远处后亮起，点了回到正在播放那首
+  {
+    const wallEl = await page.$('.archive-wall:not(.aw-table)');
+    const box = await wallEl.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let k = 0; k < 30; k++) { await page.mouse.wheel(260, 180); await page.waitForTimeout(16); }
+    await page.waitForTimeout(700);
+    const away = await page.evaluate(() => { const b = document.querySelector('.archive-wall:not(.aw-table) .aw-locate'); return b && !b.hidden && b.classList.contains('is-away'); });
+    await shot(tag + '-4b-locate');
+    await page.click('.archive-wall:not(.aw-table) .aw-locate');
+    await page.waitForTimeout(900);
+    const back = await page.evaluate(() => { const a = window.app; const t = document.querySelector('.archive-wall:not(.aw-table) .aw-tile.is-focus'); return { cur: a.currentTrackIndex, sel: a.archiveView.debug().selected, away: document.querySelector('.archive-wall:not(.aw-table) .aw-locate').classList.contains('is-away'), focusPlaying: Boolean(t && (t.classList.contains('is-playing') || t.classList.contains('is-current'))) }; });
+    check('定位键滚远后亮起、点了回到正在播放', away && back.focusPlaying && !back.away, JSON.stringify({ away, ...back }));
+  }
   await shot(tag + '-4-dragged');
 
   // 收起目录：墙变宽
