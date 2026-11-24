@@ -541,7 +541,6 @@ uniform float uAquaMain;
 uniform int uDripCount;
 uniform vec3 uFogCol;
 uniform float uFogDensity;
-uniform float uDrops;
 uniform float uGrain;
 uniform float uGrainStep;
 out vec4 outColor;
@@ -597,23 +596,6 @@ float written(sampler2D atlas, sampler2D data, vec4 info, vec2 uv) {
 
 void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
-    // 玻璃上的水珠：一格一颗，过一阵换个地方
-    vec2 grid = vec2(uRes.x / uRes.y * 26.0, 26.0);
-    vec2 cell = floor(uv * grid);
-    float period = 14.0;
-    float phase = hash12(cell) * period;
-    float round_ = floor((uTime + phase) / period);
-    vec2 jitter = hash22(cell + round_ * 17.0);
-    vec2 centre = (cell + 0.2 + jitter * 0.6) / grid;
-    float life = fract((uTime + phase) / period);
-    float big = step(0.93, hash12(cell + round_ * 5.0));
-    float radius = (0.0022 + hash12(cell + round_ * 3.0) * 0.005 + big * 0.007) * step(0.62, hash12(cell + round_)) * smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.85, 1.0, life));
-    vec2 d = (uv - centre) * vec2(uRes.x / uRes.y, 1.0);
-    float dl = length(d);
-    float drop = radius > 0.0 ? smoothstep(radius, radius * 0.8, dl) * uDrops : 0.0;
-    vec2 refract = drop > 0.0 ? -d / max(radius, 1e-4) * 0.035 : vec2(0.0);
-    float dropShade = radius > 0.0 ? smoothstep(radius * 0.45, radius, dl) : 0.0;
-
     // 往下淌的水：走过的地方清出一道，慢慢又起雾
     float trail = 0.0;
     float bead = 0.0;
@@ -657,25 +639,18 @@ void main() {
         edgeBead *= smoothstep(0.15, 0.6, wet);
     }
 
-    vec3 blurred = textureLod(uScene, uv + refract * 0.4, 4.2).rgb;
+    vec3 blurred = textureLod(uScene, uv, 4.2).rgb;
     float grainy = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 180.0) - 0.5;
     float clumps = vnoise(uv * vec2(uRes.x / uRes.y, 1.0) * 7.0);
     // 雾里的灯：除了透过来的模糊光斑，再往外晕开一大圈
     vec3 wide = textureLod(uScene, uv, 6.2).rgb;
     vec3 fog = mix(blurred * 1.15, uFogCol, uFogDensity * (0.78 + clumps * 0.22)) + grainy * 0.025 + blurred * 0.25 + max(wide - uFogCol * 0.6, 0.0) * 0.45;
     // 透过擦开的地方看窗外：眼睛对在玻璃上，窗外是虚的（窗外场景只有 1/3 分辨率，直接看会是一格格的方块）
-    vec3 clear = textureLod(uScene, uv + refract, 2.2).rgb * 1.05;
+    vec3 clear = textureLod(uScene, uv, 2.2).rgb * 1.05;
     vec3 col = mix(fog, clear, wipe);
     // 指痕边上积着一圈水，亮一点
     float rim = wipe * (1.0 - wipe) * 4.0;
     col += rim * 0.06 + rim * blurred * 0.25;
-    // 水珠：透过它看到的窗外是倒着的、亮一点；边上一圈暗（折射把暗处压进去），左上一点高光，右下一道透光
-    {
-        vec3 inside = textureLod(uScene, uv - d * 2.2, 2.2).rgb * 1.25 + fog * 0.35;
-        col = mix(col, inside * (1.0 - dropShade * 0.55), drop * 0.92);
-        col += drop * smoothstep(radius * 0.32, 0.0, length(d + vec2(radius * 0.38, -radius * 0.38))) * 0.45;
-        col += drop * smoothstep(radius * 0.35, 0.0, abs(length(d - vec2(radius * 0.12, -radius * 0.12)) - radius * 0.62)) * smoothstep(0.0, radius, dot(d, vec2(0.7, -0.7)) + radius * 0.3) * 0.12;
-    }
     // 指痕外沿：一圈薄水膜压暗雾，上面一颗颗水珠
     col = mix(col, clear * 0.8, wet * 0.22);
     if (edgeBead > 0.0) {
@@ -748,6 +723,92 @@ void main() {
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
+    // 玻璃上的水珠：按屏幕原生像素一颗颗画（窗户本身在小图上画再放大，珠子小，放大了会糊）。
+    // 两层：大珠稀，小珠密。一格最多一颗，过一阵换个地方；格子和珠子都在顶点着色器里由时间算出，不占 CPU。
+    // 每颗当成一个小半球透镜：透过它看到身后一大片窗外（倒过来、比雾清楚），边上一圈暗（光在边上折不出来），
+    // 左上高光，下沿聚光；大珠四周一小圈雾被它吸走了，薄一点。
+    const DROP_VERT = `#version 300 es
+precision highp float;
+uniform vec2 uCanvas;
+uniform float uTime;
+uniform vec4 uLayer;     // 每屏高几格, 有珠的比例, 最小半径, 最大半径（屏幕高为单位）
+uniform float uSalt;
+out vec2 vQ;
+out float vR;
+out float vSize;
+${COMMON}
+void main() {
+    float aspect = uCanvas.x / uCanvas.y;
+    float cells = uLayer.x;
+    float cols = ceil(aspect * cells);
+    float id = float(gl_InstanceID);
+    vec2 cell = vec2(mod(id, cols), floor(id / cols));
+    float salt = uSalt;
+    float period = 14.0 + salt * 3.0;
+    float phase = hash12(cell + salt * 7.1) * period;
+    float round_ = floor((uTime + phase) / period);
+    float life = fract((uTime + phase) / period);
+    float on = step(1.0 - uLayer.y, hash12(cell + round_ + salt * 13.0));
+    float size = hash12(cell + round_ * 3.0 + salt);
+    float r = mix(uLayer.z, uLayer.w, size * size) * on * smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.85, 1.0, life));
+    if (r <= 0.0) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vQ = vec2(0.0); vR = 0.0; vSize = 0.0; return; }
+    // 珠心留在格子里，整颗不出格
+    float mg = min(0.45, r * cells * 1.3);
+    vec2 centre = (cell + mg + hash22(cell + round_ * 17.0 + salt) * (1.0 - 2.0 * mg)) / cells;   // x 按屏幕高为单位
+    vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1)) * 2.0 - 1.0;
+    vec2 ext = corner * 1.6;
+    vec2 p = centre + ext * r;
+    gl_Position = vec4(p.x / aspect * 2.0 - 1.0, p.y * 2.0 - 1.0, 0.0, 1.0);
+    vQ = ext;
+    vR = r;
+    vSize = size;
+}`;
+    const DROP_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uScene;
+uniform sampler2D uMain;
+uniform vec2 uCanvas;
+uniform float uRing;
+in vec2 vQ;
+in float vR;
+in float vSize;
+out vec4 outColor;
+void main() {
+    vec2 q = vQ;
+    // 水往下坠：下半截拉长一点
+    if (q.y < 0.0) q.y *= mix(1.0, 0.78, vSize);
+    float ql = length(q);
+    float ring = uRing * smoothstep(1.55, 1.05, ql);
+    if (ql > 1.0 && ring <= 0.0) discard;
+    vec2 uv = gl_FragCoord.xy / uCanvas;
+    float aa = 1.2 / (vR * uCanvas.y);
+    float drop = 1.0 - smoothstep(1.0 - aa, 1.0, ql);
+    vec2 v = uv - 0.5;
+    float vig = 1.0 - dot(v, v) * 0.55;
+    vec3 base = texture(uMain, uv).rgb;
+    vec3 clear = textureLod(uScene, uv, 2.2).rgb * 1.05 * vig;
+    // 透镜：越靠边折得越厉害，看到的是身后几倍半径外的东西，倒着
+    vec2 look = -q * (0.035 + vR * 3.0) * vec2(uCanvas.y / uCanvas.x, 1.0);
+    vec3 inside = textureLod(uScene, uv + look, 1.6).rgb * 1.25 * vig + base * 0.35;
+    inside *= 1.0 - smoothstep(0.45, 1.0, ql) * 0.5;
+    // 下沿：光从上面进来，在珠底聚成一道弯月
+    float caustic = smoothstep(0.35, 0.9, dot(q, vec2(0.22, -0.97))) * (1.0 - smoothstep(0.86, 0.98, ql));
+    inside += caustic * (base * 0.55 + textureLod(uScene, uv, 3.0).rgb * 0.8 * vig);
+    // 高光：左上一小点，外面一圈很淡的亮边
+    float spec = smoothstep(0.3, 0.05, length(q - vec2(-0.34, 0.4)));
+    inside += spec * spec * 0.85 + smoothstep(0.12, 0.0, length(q - vec2(-0.3, 0.36))) * 0.35
+            + smoothstep(0.82, 0.97, ql) * smoothstep(1.0, 0.97, ql) * 0.06;
+    float aDrop = drop * 0.95;
+    float aRing = ring * 0.18 * (1.0 - drop);
+    float a = aDrop + aRing;
+    if (a <= 0.001) discard;
+    outColor = vec4((clamp(inside, 0.0, 1.0) * aDrop + clear * aRing) / a, a);
+}`;
+    const DROP_LAYERS = Object.freeze([
+        { cells: 9, density: 0.42, rMin: 0.007, rMax: 0.019, salt: 1, ring: 1 },
+        { cells: 28, density: 0.45, rMin: 0.0028, rMax: 0.0072, salt: 2, ring: 0 }
+    ]);
+
     const compile = (gl, type, source) => {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -777,6 +838,7 @@ void main() {
         if (!gl) return null;
         const scene = link(gl, SCENE_FRAG);
         const main = link(gl, MAIN_FRAG);
+        const drops = Utils.compileProgram(gl, DROP_VERT, DROP_FRAG, 'fogpane:drops');
         const vao = gl.createVertexArray();
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -797,7 +859,10 @@ void main() {
         const blankData = texture(gl.NEAREST);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 2, 0, gl.RGBA, gl.FLOAT, new Float32Array(8));
         const slots = Array.from({ length: LINE_SLOTS + 1 }, () => ({ atlas: texture(gl.LINEAR), data: texture(gl.NEAREST), key: null, used: 0 }));
-        return { gl, scene, main, vao, sceneTex, fbo, sceneSize: [0, 0], blank, blankData, slots };
+        return {
+            gl, scene, main, drops, vao, sceneTex, fbo, sceneSize: [0, 0], blank, blankData, slots,
+            window: Utils.createTarget(gl), upscale: Utils.createBloom(gl, { label: 'fogpane' })
+        };
     };
 
     /* ───────────────────────── 舞台 ───────────────────────── */
@@ -829,6 +894,7 @@ void main() {
         let plan = [];
         let planFor = null;
         let world = { W: 0, H: 0 };
+        let low = [1, 1];
         let paused = false;
         let latestFrame = null;
         let lastDraw = -Infinity;
@@ -888,11 +954,11 @@ void main() {
             const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
-            const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            const scale = Math.min(dpr, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
-            const bw = Math.max(1, Math.round(w * scale));
-            const bh = Math.max(1, Math.round(h * scale));
-            if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
+            // 窗户（雾、窗外、指痕）按像素预算画在小图上再放大；画布按屏幕原生像素，水珠画在上面
+            const size = Utils.sharpSizes(w, h, PIXELS[quality] || PIXELS.standard, RATIO[quality] || 2);
+            const bw = size.lw, bh = size.lh;
+            low = [bw, bh];
+            if (canvas.width !== size.nw || canvas.height !== size.nh) { canvas.width = size.nw; canvas.height = size.nh; still.invalidate(); }
             if (glState) {
                 const sw = Math.max(16, Math.round(bw / 3)), sh = Math.max(16, Math.round(bh / 3));
                 if (glState.sceneSize[0] !== sw || glState.sceneSize[1] !== sh) {
@@ -1152,8 +1218,8 @@ void main() {
             gl.generateMipmap(gl.TEXTURE_2D);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // 2) 车窗
-            gl.viewport(0, 0, canvas.width, canvas.height);
+            // 2) 车窗（小图）
+            glState.window.bind(low[0], low[1]);
             gl.useProgram(main.program);
             const u = main.uniforms;
             gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex); gl.uniform1i(u.uScene, 0);
@@ -1170,7 +1236,7 @@ void main() {
                 }
             }
             gl.uniform4fv(u.uLine, lineInfo);
-            gl.uniform2f(u.uRes, canvas.width, canvas.height);
+            gl.uniform2f(u.uRes, low[0], low[1]);
             gl.uniform2f(u.uAtlasSize, world.W, world.H);
             gl.uniform1f(u.uTime, t);
             const drips = s.drips && !s.reducedMotion ? dripsAt(t, planFor?.key || '', visible) : 0;
@@ -1235,10 +1301,32 @@ void main() {
             gl.uniform1i(u.uDripCount, drips);
             gl.uniform3fv(u.uFogCol, colours.fog);
             gl.uniform1f(u.uFogDensity, clamp(0.62 * s.fog, 0.2, 0.92));
-            gl.uniform1f(u.uDrops, s.drops ? 1 : 0);
             gl.uniform1f(u.uGrain, s.grain);
             gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+            // 3) 放大到屏幕，再按原生像素画水珠
+            glState.upscale.present(glState.window, null, canvas.width, canvas.height);
+            if (s.drops) {
+                const { drops } = glState;
+                const du = drops.uniforms;
+                gl.bindVertexArray(vao);
+                gl.useProgram(drops.program);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glState.sceneTex); gl.uniform1i(du.uScene, 0);
+                gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, glState.window.tex); gl.uniform1i(du.uMain, 1);
+                gl.uniform2f(du.uCanvas, canvas.width, canvas.height);
+                gl.uniform1f(du.uTime, t);
+                const aspect = canvas.width / canvas.height;
+                DROP_LAYERS.forEach((layer) => {
+                    gl.uniform4f(du.uLayer, layer.cells, layer.density, layer.rMin, layer.rMax);
+                    gl.uniform1f(du.uSalt, layer.salt);
+                    gl.uniform1f(du.uRing, layer.ring);
+                    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.ceil(aspect * layer.cells) * layer.cells);
+                });
+                gl.disable(gl.BLEND);
+            }
             stats.draws += 1;
             scheduleNext(t);
         };
@@ -1371,6 +1459,8 @@ void main() {
                 gl.deleteFramebuffer(glState.fbo);
                 gl.deleteProgram(glState.scene.program);
                 gl.deleteProgram(glState.main.program);
+                gl.deleteProgram(glState.drops.program);
+                gl.deleteTexture(glState.window.tex);
                 gl.getExtension('WEBGL_lose_context')?.loseContext();
             }
             glState = null;
