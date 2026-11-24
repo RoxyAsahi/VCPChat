@@ -41,3 +41,23 @@ test('local .lrc files in GBK, UTF-8 with BOM and UTF-16 are decoded', async () 
     assert.equal(await get({}, { artist: '甲', title: 'u16' }), LRC);
     assert.equal(await get({}, { artist: '甲', title: 'plain' }), LRC);
 });
+
+test('lyrics next to the track (.ttml first, then .lrc) win over the lyric folder', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'music-lrc-'));
+    const lyric = path.join(dir, 'lyric');
+    const album = path.join(dir, 'album');
+    fs.mkdirSync(lyric);
+    fs.mkdirSync(album);
+    fs.writeFileSync(path.join(lyric, '甲 - one.lrc'), '[00:01.00]folder copy');
+    fs.writeFileSync(path.join(album, '01 one.lrc'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('[00:01.00]sidecar lrc')]));
+    fs.writeFileSync(path.join(album, '02 two.ttml'), '<tt><body><p begin="1" end="2"><span begin="1" end="1.5">Hi</span> <span begin="1.5" end="2">there</span></p></body></tt>');
+    fs.writeFileSync(path.join(album, '03 three.lrc'), 'no timestamps here');
+    const get = lyricHandler(dir);
+    assert.equal(await get({}, { artist: '甲', title: 'one', path: path.join(album, '01 one.flac') }), '[00:01.00]sidecar lrc');
+    const ttml = await get({}, { artist: '甲', title: 'two', path: path.join(album, '02 two.flac') });
+    assert.equal(ttml.lines[0].fullText, 'Hi there');
+    assert.equal(ttml.isWordByWord, true);
+    assert.equal(await get({}, { artist: '甲', title: 'one', path: path.join(album, '03 three.flac') }), '[00:01.00]folder copy', 'untimed sidecar ignored');
+    assert.equal(await get({}, { artist: '甲', title: 'one', path: 'https://dav/x/01 one.flac' }), '[00:01.00]folder copy');
+    assert.equal(await get({}, { artist: '甲', title: 'one', path: 'relative/01 one.flac' }), '[00:01.00]folder copy');
+});

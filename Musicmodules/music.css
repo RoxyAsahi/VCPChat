@@ -351,6 +351,8 @@ body.light-theme #lyrics-list li:hover {
 
 .lyric-word {
     display: inline-block;
+    /* 逐字歌词里词尾的空格要留着，否则英文一行粘成一串 */
+    white-space: pre;
     position: relative;
     /* 核心：文字裁剪 + 线性渐变染色 */
     background-image: linear-gradient(

@@ -281,8 +281,8 @@
             const byPath = pathIndex();
             return mix.map((t) => byPath.get(Model.normalizePath(t && t.path))).filter((i) => i !== undefined);
         };
-        // 每日推荐跨天会换：日期也算进列的指纹
-        const dailyKey = () => (typeof app.dailyMix === 'function' ? new Date().toISOString().slice(0, 10) : '');
+        // 每日推荐跨天、换一批都会换：批号也算进列的指纹
+        const dailyKey = () => (typeof app.dailyMix !== 'function' ? '' : typeof app.dailyMixKey === 'function' ? app.dailyMixKey() : new Date().toISOString().slice(0, 10));
         const columnsKey = () => dailyKey() + '\n' + sortMode + '\n' + playlistsSig() + '\n' + recentPaths.join('|') + '\n' + favoritePaths().join('|');
         const buildColumns = (prepared = null) => {
             const out = prepared && prepared.cols && prepared.colsKey === columnsKey() && prepared.index === searchIndex ? prepared.cols : computeColumns(searchIndex);

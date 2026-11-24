@@ -357,6 +357,9 @@ pub struct SharedState {
     /// Name of the chosen device; when set, the stream is opened on the device
     /// with this name wherever it now sits in the list (`device_id` is updated).
     pub device_name: RwLock<Option<String>>,
+    /// Name of the device the output is actually open on (the system default
+    /// included), so the UI can keep per-device sound settings.
+    pub opened_device_name: RwLock<Option<String>>,
     pub volume: std::sync::atomic::AtomicU64,
     pub file_path: RwLock<Option<String>>,
     pub eq_type: RwLock<String>,
@@ -446,6 +449,7 @@ impl SharedState {
             output_fallback: AtomicU8::new(0),
             device_id: std::sync::atomic::AtomicI64::new(-1),
             device_name: RwLock::new(None),
+            opened_device_name: RwLock::new(None),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
             file_path: RwLock::new(None),
             eq_type: RwLock::new("IIR".to_string()),

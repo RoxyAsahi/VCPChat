@@ -74,3 +74,26 @@ test('resume remembers the unfinished track and clears once it ends', () => {
     app.pos = 199; stats.tick();
     assert.equal(stats.resume(), null);
 });
+
+test('summary: listening time by hour, active days, plays per range, survives reload', () => {
+    const { app, stats, play, store, advanceDays } = setup();
+    play(101); // A counted once
+    advanceDays(10);
+    app.currentTrackIndex = 1; app.lastKnownDuration = 180; app.pos = 0;
+    play(95); // B counted once, 10 days later
+    const week = stats.summary({ days: 7 });
+    assert.equal(week.plays, 1);
+    assert.equal(week.activeDays, 1);
+    assert.equal(week.tracks[0].path, 'C:\\Music\\B.flac');
+    assert.ok(Math.abs(week.seconds - 95) <= 2, String(week.seconds));
+    assert.equal(week.hours.reduce((a, b) => a + b, 0), week.seconds);
+    const all = stats.summary();
+    assert.equal(all.plays, 2);
+    assert.equal(all.activeDays, 2);
+    assert.ok(all.since);
+    stats.flush();
+    const reloaded = setup(store.get('musicPlayStats'));
+    reloaded.store.set('musicListenLog', store.get('musicListenLog'));
+    const again = setupMusicStats({ playlist: [] }, { storage: { getItem: (k) => store.get(k) ?? null, setItem() {} }, setTimer: () => 1, clearTimer() {}, observe: false });
+    assert.equal(again.summary().activeDays, 2);
+});

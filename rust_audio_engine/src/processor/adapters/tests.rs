@@ -2388,3 +2388,43 @@ fn finite_finish_paths_are_allocation_free_after_processing() {
         assert_eq!(convolver_progress.state(), ProcessState::Finished);
     });
 }
+
+#[test]
+fn channel_stage_balance_swap_and_mono() {
+    let mut snap = VolumeParamsSnapshot::default();
+    let mut buf = vec![1.0f64, 0.5, -0.2, 0.4];
+    super::apply_channel_stage(&mut buf, 2, &snap);
+    assert_eq!(buf, vec![1.0, 0.5, -0.2, 0.4], "centre, no swap, no mono is a pass-through");
+
+    snap.balance = 0.5; // turn the left side down by half
+    super::apply_channel_stage(&mut buf, 2, &snap);
+    assert_eq!(buf, vec![0.5, 0.5, -0.1, 0.4]);
+
+    let mut buf = vec![1.0f64, 0.0];
+    let snap = VolumeParamsSnapshot { swap_channels: true, ..Default::default() };
+    super::apply_channel_stage(&mut buf, 2, &snap);
+    assert_eq!(buf, vec![0.0, 1.0]);
+
+    let mut buf = vec![1.0f64, 0.0, 0.2, 0.6];
+    let snap = VolumeParamsSnapshot { mono: true, balance: -1.0, ..Default::default() };
+    super::apply_channel_stage(&mut buf, 2, &snap);
+    assert_eq!(buf, vec![0.5, 0.0, 0.4, 0.0], "mono fold, then the right side fully off");
+
+    // Not stereo: untouched
+    let mut buf = vec![1.0f64, 0.0, 0.5];
+    super::apply_channel_stage(&mut buf, 3, &VolumeParamsSnapshot { swap_channels: true, ..Default::default() });
+    assert_eq!(buf, vec![1.0, 0.0, 0.5]);
+}
+
+#[test]
+fn channel_mode_setter_snaps_near_centre_and_rejects_nan() {
+    let p = AtomicVolumeParams::new();
+    p.set_channel_mode(0.00001, false, false);
+    assert!(!p.read().has_channel_ops());
+    p.set_channel_mode(-0.3, true, false);
+    let s = p.read();
+    assert_eq!((s.balance, s.swap_channels, s.mono), (-0.3, true, false));
+    p.set_channel_mode(f64::NAN, true, true);
+    let s = p.read();
+    assert_eq!((s.balance, s.swap_channels, s.mono), (-0.3, true, true));
+}

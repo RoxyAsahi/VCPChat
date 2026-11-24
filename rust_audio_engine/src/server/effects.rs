@@ -27,6 +27,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/set_eq", web::post().to(set_eq))
         .route("/set_eq_type", web::post().to(set_eq_type))
         .route("/configure_optimizations", web::post().to(configure_optimizations))
+        .route("/set_channels", web::post().to(set_channels))
         .route("/crossfeed", web::get().to(get_crossfeed))
         .route("/set_crossfeed", web::post().to(set_crossfeed))
         .route("/saturation", web::get().to(get_saturation))
@@ -171,6 +172,23 @@ async fn configure_optimizations(
         "Optimizations updated",
         get_player_state(&player),
     ))
+}
+
+async fn set_channels(
+    data: web::Data<Arc<AppState>>,
+    body: web::Json<SetChannelsRequest>,
+) -> HttpResponse {
+    let player = data.player.lock();
+    let (balance, swap, mono) = player.channel_mode();
+    let balance = body.balance.filter(|b| b.is_finite()).unwrap_or(balance).clamp(-1.0, 1.0);
+    let swap = body.swap.unwrap_or(swap);
+    let mono = body.mono.unwrap_or(mono);
+    player.set_channel_mode(balance, swap, mono);
+    let (balance, swap, mono) = player.channel_mode();
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "success",
+        "channels": { "balance": balance, "swap": swap, "mono": mono }
+    }))
 }
 
 async fn set_crossfeed(

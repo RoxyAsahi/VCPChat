@@ -42,6 +42,9 @@ pub mod wasapi_exclusive {
         pub channels: AtomicU64,
         pub total_frames: AtomicU64,
         pub is_active: AtomicBool,
+        /// The device stopped taking audio, or a device call failed, while a
+        /// track was still playing. The owner reopens the output in shared mode.
+        pub output_lost: AtomicBool,
     }
     
     impl WasapiSharedState {
@@ -53,6 +56,7 @@ pub mod wasapi_exclusive {
                 channels: AtomicU64::new(2),
                 total_frames: AtomicU64::new(0),
                 is_active: AtomicBool::new(false),
+                output_lost: AtomicBool::new(false),
             }
         }
     }
@@ -136,6 +140,11 @@ pub mod wasapi_exclusive {
             self.shared_state.is_active.load(Ordering::Relaxed)
         }
         
+        /// True once the device stalled or failed in the middle of a track.
+        pub fn output_lost(&self) -> bool {
+            self.shared_state.output_lost.load(Ordering::Acquire)
+        }
+
         /// Get current playback state
         pub fn get_state(&self) -> WasapiState {
             *self.shared_state.state.read()
@@ -189,9 +198,18 @@ pub mod wasapi_exclusive {
                     }
                     
                     // Start exclusive playback
+                    shared_state.output_lost.store(false, Ordering::Release);
                     match start_exclusive_playback(&shared_state, &cmd_rx, sample_rate, channels, device_id, &mut dsp_callback) {
                         Ok(()) => log::info!("WASAPI: Exclusive playback completed"),
-                        Err(e) => log::error!("WASAPI: Playback error: {}", e),
+                        Err(e) => {
+                            log::error!("WASAPI: Playback error: {}", e);
+                            // Only a failure after the stream was running counts as
+                            // losing the output; open failures are handled by the
+                            // owner's start-up wait.
+                            if shared_state.is_active.load(Ordering::Relaxed) {
+                                shared_state.output_lost.store(true, Ordering::Release);
+                            }
+                        }
                     }
                     
                     shared_state.is_active.store(false, Ordering::Relaxed);
@@ -444,6 +462,14 @@ pub mod wasapi_exclusive {
         let mut output_f64_buffer: Vec<f64> = vec![0.0; max_buffer_frames * channels];
         let mut byte_buffer: Vec<u8> = vec![0u8; max_buffer_frames * blockalign as usize];
         let mut source_f64_buffer: Vec<f64> = vec![0.0; 4096 * channels];
+
+        // Watchdog: the device must keep taking audio. A full buffer that
+        // never drains (driver hang, device yanked mid-write) used to leave
+        // the engine "playing" in silence forever.
+        let clock = std::time::Instant::now();
+        let mut stall = crate::output_watchdog::StallWatch::new(0);
+        let now_ms = || clock.elapsed().as_millis() as u64;
+        let mut failure: Option<String> = None;
         
         loop {
             // Check for commands (non-blocking)
@@ -452,6 +478,7 @@ pub mod wasapi_exclusive {
                     WasapiCommand::Pause => {
                         if !paused {
                             let _ = audio_client.stop_stream();
+                            stall.progressed(now_ms());
                             *shared_state.state.write() = WasapiState::Paused;
                             paused = true;
                             log::info!("WASAPI: Paused");
@@ -461,6 +488,7 @@ pub mod wasapi_exclusive {
                     WasapiCommand::Play => {
                         if paused {
                             let _ = audio_client.start_stream();
+                            stall.progressed(now_ms());
                             *shared_state.state.write() = WasapiState::Playing;
                             paused = false;
                             log::info!("WASAPI: Resumed");
@@ -480,6 +508,7 @@ pub mod wasapi_exclusive {
                         // Small delay to ensure buffer is cleared
                         std::thread::sleep(std::time::Duration::from_millis(1));
                         let _ = audio_client.start_stream();
+                        stall.progressed(now_ms());
                         log::debug!("WASAPI: Stream restarted after seek");
                         continue;
                     }
@@ -501,6 +530,7 @@ pub mod wasapi_exclusive {
                 Ok(count) => count,
                 Err(e) => {
                     log::error!("WASAPI: Failed to get buffer space: {:?}", e);
+                    failure = Some(format!("device stopped answering: {:?}", e));
                     break;
                 }
             };
@@ -509,7 +539,19 @@ pub mod wasapi_exclusive {
                 // Wait for event
                 if h_event.wait_for_event(1000).is_err() {
                     log::warn!("WASAPI: Event wait timeout");
-                    continue;
+                }
+                match stall.idle(now_ms()) {
+                    crate::output_watchdog::StallAction::Wait => {}
+                    crate::output_watchdog::StallAction::ResetStream => {
+                        log::warn!("WASAPI: device has not taken audio for {} ms, restarting the stream", crate::output_watchdog::StallWatch::STALL_MS);
+                        let _ = audio_client.stop_stream();
+                        let _ = audio_client.start_stream();
+                    }
+                    crate::output_watchdog::StallAction::GiveUp => {
+                        failure = Some("device stopped taking audio".to_string());
+                        let _ = audio_client.stop_stream();
+                        break;
+                    }
                 }
                 continue;
             }
@@ -660,8 +702,10 @@ pub mod wasapi_exclusive {
             // Write to device
             if let Err(e) = render_client.write_to_device(actual_frames, data, None) {
                 log::error!("WASAPI: Failed to write to device: {:?}", e);
+                failure = Some(format!("write to device failed: {:?}", e));
                 break;
             }
+            stall.progressed(now_ms());
             
             // Wait for next buffer request
             if h_event.wait_for_event(1000).is_err() {
@@ -669,8 +713,15 @@ pub mod wasapi_exclusive {
             }
         }
         
-        shared_state.is_active.store(false, Ordering::Relaxed);
-        Ok(())
+        // Leave is_active set on failure so the thread can tell a mid-track
+        // loss from an open failure; it clears the flag right after.
+        match failure {
+            Some(reason) => Err(format!("WASAPI output lost: {}", reason)),
+            None => {
+                shared_state.is_active.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+        }
     }
 }
 

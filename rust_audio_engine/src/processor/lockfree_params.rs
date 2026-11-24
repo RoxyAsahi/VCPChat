@@ -1190,6 +1190,13 @@ pub struct VolumeParamsSnapshot {
     pub volume: f64, // 0.0 - 1.0
     /// Whether the effective gain is forced to zero.
     pub muted: bool,
+    /// Left/right balance in -1.0..=1.0 (negative turns the right side down,
+    /// positive turns the left side down). Only applies to stereo.
+    pub balance: f64,
+    /// Swap left and right (stereo only).
+    pub swap_channels: bool,
+    /// Fold stereo to mono (L+R)/2 on both sides.
+    pub mono: bool,
 }
 
 impl Default for VolumeParamsSnapshot {
@@ -1197,7 +1204,18 @@ impl Default for VolumeParamsSnapshot {
         Self {
             volume: 1.0,
             muted: false,
+            balance: 0.0,
+            swap_channels: false,
+            mono: false,
         }
+    }
+}
+
+impl VolumeParamsSnapshot {
+    /// True when the stereo channel stage would change anything.
+    #[inline]
+    pub fn has_channel_ops(&self) -> bool {
+        self.balance != 0.0 || self.swap_channels || self.mono
     }
 }
 
@@ -1232,6 +1250,21 @@ impl AtomicVolumeParams {
     pub fn set_muted(&self, muted: bool) {
         self.shared.update(|snapshot| {
             snapshot.muted = muted;
+        });
+    }
+
+    /// Set the stereo channel stage: balance (-1..=1), swap, mono fold.
+    /// A non-finite balance keeps the previous balance.
+    #[inline]
+    pub fn set_channel_mode(&self, balance: f64, swap_channels: bool, mono: bool) {
+        let balance = sanitized(balance, -1.0, 1.0);
+        self.shared.update(|snapshot| {
+            if let Some(b) = balance {
+                // A hair off centre counts as centre, so the fast path stays exact.
+                snapshot.balance = if b.abs() < 1.0e-4 { 0.0 } else { b };
+            }
+            snapshot.swap_channels = swap_channels;
+            snapshot.mono = mono;
         });
     }
 

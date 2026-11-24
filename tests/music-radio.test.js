@@ -95,3 +95,71 @@ test('daily mix is stable within a day and leans on unplayed songs; never-played
     assert.equal(fresh.length, 10);
     assert.ok(fresh.every((t) => !played.has(t)));
 });
+
+test('pickSimilar plays one file per song, picks the best copy and pushes instrumentals back', () => {
+    const { recordingKey, isInstrumental } = require(path.join(__dirname, '../Musicmodules/music-radio.js'));
+    const seed = { path: '/m/X/seed.flac', title: 'Seed', artist: 'X', album: 'S' };
+    const mp3 = { path: '/m/X/song.mp3', title: 'Song.mp3', artist: 'X', album: 'Best Of', lossless: false, bitrate: 320000 };
+    const flac = { path: '/m/X/song.flac', title: 'Song', artist: 'X', album: 'Album', lossless: true, bitsPerSample: 24, sampleRate: 96000 };
+    const remote = { path: 'https://nas/X/song.flac', title: 'Song', artist: 'X', album: 'Album', lossless: true, bitsPerSample: 24, sampleRate: 192000 };
+    const seedCopy = { path: '/m/X/seed-copy.mp3', title: 'Seed', artist: 'X', album: 'Best Of' };
+    const inst = { path: '/m/X/song-inst.flac', title: 'Song (Instrumental)', artist: 'X', album: 'Album' };
+    const other = { path: '/m/X/other.flac', title: 'Other', artist: 'X', album: 'Album' };
+    const broken = { path: '/m/X/broken.flac', title: 'Broken', artist: 'X', album: 'Album' };
+    const untagged = [{ path: '/a/01.flac', title: '01.flac' }, { path: '/b/01.flac', title: '01.flac' }];
+    const lib = [seed, mp3, remote, flac, seedCopy, inst, other, broken, ...untagged];
+    assert.equal(recordingKey(mp3), recordingKey(flac));
+    assert.equal(recordingKey(untagged[0]), '', 'no artist: never merged');
+    assert.ok(isInstrumental(inst) && isInstrumental({ title: '夜に駆ける (Inst.)' }) && isInstrumental({ title: 'Song - Off Vocal' }));
+    assert.ok(!isInstrumental({ title: 'Instinct' }) && !isInstrumental(seed));
+    const out = pickSimilar(lib, [seed], { size: 10, exclude: new Set([seed]), random: () => 0.5, playable: (t) => t !== broken });
+    assert.ok(out.includes(flac), 'local 24-bit flac wins');
+    assert.ok(!out.includes(mp3) && !out.includes(remote), 'other copies of the same song are dropped');
+    assert.ok(!out.includes(seedCopy), 'another file of the seed song is not queued right after it');
+    assert.ok(!out.includes(broken), 'unplayable tracks are skipped');
+    assert.ok(untagged.every((t) => out.includes(t)), 'untagged tracks with the same file name both stay');
+    assert.ok(out.indexOf(inst) > out.indexOf(other), 'instrumental goes after the vocal tracks');
+    const fromInst = pickSimilar(lib, [inst], { size: 10, exclude: new Set([inst]), random: () => 0.5 });
+    assert.ok(fromInst.includes(flac) || fromInst.length > 0);
+});
+
+test('daily mix: reshuffle gives a fresh batch, recent batches are pushed back, and the day is local', () => {
+    const { app, store } = setup();
+    const first = app.dailyMix();
+    assert.ok(first.length > 0);
+    const id1 = app.dailyMixKey();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    assert.ok(id1.startsWith(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}#`), id1);
+    const second = app.dailyMix.reshuffle();
+    assert.notEqual(app.dailyMixKey(), id1);
+    const overlap = second.filter((t) => first.includes(t)).length;
+    assert.ok(overlap < first.length / 2, 'second batch mostly new: overlap ' + overlap + '/' + first.length);
+    const seen = JSON.parse(store.get('musicDailyMixSeen'));
+    assert.equal(seen.b.length, 2);
+    assert.equal(seen.b[0].id, app.dailyMixKey());
+    // 同一批再算一次不变，也不重复记
+    assert.deepEqual(app.dailyMix(), second);
+    assert.equal(JSON.parse(store.get('musicDailyMixSeen')).b.length, 2);
+});
+
+test('recentBatches keeps at most three earlier batches from the last seven days', () => {
+    const { recentBatches } = require(path.join(__dirname, '../Musicmodules/music-radio.js'));
+    const b = (id) => ({ id, p: [] });
+    const out = recentBatches([b('2026-11-23#1'), b('2026-11-23#0'), b('2026-11-22#0'), b('2026-11-20#0'), b('2026-11-10#0')], '2026-11-23#1', '2026-11-23');
+    assert.deepEqual(out.map((x) => x.id), ['2026-11-23#0', '2026-11-22#0', '2026-11-20#0']);
+    assert.deepEqual(recentBatches([b('2026-11-10#0'), b('2026-11-30#0')], '2026-11-23#0', '2026-11-23'), []);
+});
+
+test('alternateCopy picks the best other file of the same song that has not failed', () => {
+    const { app } = setup();
+    const a = { path: '/x/a.mp3', title: 'Song.mp3', artist: 'Z', bitrate: 320000 };
+    const b = { path: '/y/a.flac', title: 'Song', artist: 'Z', lossless: true };
+    const c = { path: '/z/a.wav', title: 'Song', artist: 'Z' };
+    app.playlist = [...lib, a, b, c];
+    app.failedTracks = new Map([[c, 'gone']]);
+    assert.equal(app.alternateCopy(a), b);
+    assert.equal(app.alternateCopy(b), a);
+    assert.equal(app.alternateCopy({ path: '/q.flac', title: 'Other', artist: 'Z' }), null);
+    assert.equal(app.alternateCopy({ path: '/q.flac', title: '01' }), null, 'no artist, no guess');
+});

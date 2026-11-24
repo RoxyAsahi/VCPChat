@@ -62,7 +62,9 @@ function setupLyrics(app) {
             cached = await app.api.getMusicLyrics({
                 artist,
                 title: rawTitle,
-                rawObject: true
+                rawObject: true,
+                // 歌曲文件旁边同名的 .ttml / .lrc 优先
+                path: typeof options.path === 'string' ? options.path : undefined
             });
             if (requestToken !== app.lyricsRequestToken) return;
             if (!cached && normalizedTitle && normalizedTitle !== rawTitle) {
