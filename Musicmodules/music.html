@@ -33,7 +33,18 @@
     <!-- Custom Title Bar -->
     <div id="custom-title-bar">
         <div class="title">VCP - 音乐播放器</div>
+        <!-- 歌词舞台打开时：左边「返回首页」，右边舞台下拉，都放在标题栏里 -->
+        <button type="button" class="music-stage-home" aria-label="返回音乐首页"
+            title="返回音乐首页（Esc）">
+            <span class="music-stage-home-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"
+                    fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                    stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
+            <span class="music-stage-home-text" aria-hidden="true">VCP</span>
+            <i aria-hidden="true"></i>
+            <span class="music-stage-home-text" aria-hidden="true">歌词舞台</span>
+        </button>
         <div class="titlebar-actions">
+            <nav class="music-stage-mode-picker" aria-label="歌词演出模式"></nav>
             <button id="music-theme-toggle-btn" class="window-control-btn" type="button"
                 title="切换到浅色" aria-label="切换到浅色">
                 <svg class="music-theme-sun" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -651,12 +662,6 @@
         <div class="music-stage-mode-root" aria-live="off"></div>
 
         <header class="music-stage-top-chrome">
-            <div class="music-stage-wordmark" aria-hidden="true">
-                <span>VCP</span>
-                <i></i>
-                <span>歌词舞台</span>
-            </div>
-            <nav class="music-stage-mode-switcher" aria-label="歌词演出模式"></nav>
         </header>
 
         <aside class="music-stage-settings" aria-label="舞台视觉设置">
@@ -983,6 +988,16 @@
     <script src="music-stage/modes/kowloon-signs.js" onerror="this.remove()"></script>
     <script src="music-stage/modes/kowloon-sandbox.js" onerror="this.remove()"></script>
     <script src="music-stage/modes/kowloon-manager.js"></script>
+    <script src="music-stage/modes/inkdraft-figures.js"></script>
+    <script src="music-stage/modes/inkdraft-manager.js"></script>
+    <script src="music-stage/modes/fogpane-manager.js"></script>
+    <script src="music-stage/modes/lumiere-manager.js"></script>
+    <script src="music-stage/modes/hanabi-manager.js"></script>
+    <script src="music-stage/modes/clockwork-manager.js"></script>
+    <script src="music-stage/modes/orbit-manager.js"></script>
+    <script src="music-stage/modes/signal-manager.js"></script>
+    <script src="music-stage/modes/groupchat-manager.js"></script>
+    <script src="music-stage/modes/impression-manager.js"></script>
     <script src="music-stage/music-stage-advanced-modes.js"></script>
     <script src="music-stage/music-stage-modes.js"></script>
     <script src="music-stage/music-stage-host.js"></script>

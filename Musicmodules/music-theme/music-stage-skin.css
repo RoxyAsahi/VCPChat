@@ -755,3 +755,253 @@ body.music-stage-active #custom-title-bar button {
 /* 专辑本来想接在歌手后面同一行，可歌手是块级，专辑总是掉到下一行，行首还挂着一个「 · 」；索性各占一行，去掉点 */
 .music-stage-track-album { display: block; }
 .music-stage-track-album::before { content: none; }
+
+/* ---------- 舞台切换：右上角一个按钮写着当前舞台，点开竖着弹出全部舞台 ----------
+ * 横排页签舞台一多就挤满顶上、还要横着滚；改成角落里一个按钮。弹出的列表和主程序设置页的下拉一个规格：
+ * 外框留 4、圆角 12，每行 28 高、圆角 7、字号 12.5，当前项右边打勾；放不下时列表自己滚动。 */
+.music-stage-top-chrome .music-stage-mode-picker {
+    grid-column: 3;
+    justify-self: end;
+    position: relative;
+    pointer-events: auto;
+}
+
+.music-stage-mode-picker-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    box-sizing: border-box;
+    padding: 0 9px 0 13px;
+    border: 1px solid var(--ms-glass-edge);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--stage-bg, #101214) 46%, transparent);
+    color: var(--ms-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-shadow: var(--ms-text-shadow);
+    cursor: pointer;
+    transition: background-color var(--mt-dur-1, .15s) ease, border-color var(--mt-dur-1, .15s) ease;
+}
+
+.music-stage-mode-picker-toggle:hover,
+.music-stage-mode-picker.is-open .music-stage-mode-picker-toggle {
+    background: color-mix(in srgb, var(--stage-bg, #101214) 64%, transparent);
+    border-color: var(--ms-line);
+}
+
+.music-stage-mode-picker-toggle:focus-visible {
+    outline: 2px solid var(--ms-ink);
+    outline-offset: 2px;
+}
+
+.music-stage-mode-picker-chevron {
+    display: inline-flex;
+    opacity: .62;
+    transition: transform .2s ease;
+}
+
+.music-stage-mode-picker.is-open .music-stage-mode-picker-chevron {
+    transform: rotate(180deg);
+}
+
+.music-stage-mode-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 132px;
+    max-height: min(520px, calc(100vh - 240px));
+    box-sizing: border-box;
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    border: 1px solid var(--ms-glass-edge);
+    border-radius: 12px;
+    background: var(--ms-glass-strong);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .38);
+    transform-origin: top right;
+    animation: music-stage-mode-menu-in .16s cubic-bezier(.2, .7, .2, 1);
+}
+
+.music-stage-mode-menu[hidden] {
+    display: none;
+}
+
+@keyframes music-stage-mode-menu-in {
+    from { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+
+body.music-reduce-motion .music-stage-mode-menu {
+    animation: none;
+}
+
+.music-stage-mode-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+    box-sizing: border-box;
+    padding: 5px 8px 5px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ms-muted);
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 18px;
+    letter-spacing: .04em;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+}
+
+.music-stage-mode-menu-item-label {
+    flex: 1;
+    white-space: nowrap;
+}
+
+.music-stage-mode-menu-item-check {
+    display: inline-flex;
+    visibility: hidden;
+    color: var(--ms-ink);
+}
+
+.music-stage-mode-menu-item:hover,
+.music-stage-mode-menu-item:focus {
+    background: color-mix(in srgb, var(--ms-ink) 9%, transparent);
+    color: var(--ms-ink);
+}
+
+.music-stage-mode-menu-item:focus-visible {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ms-ink) 55%, transparent);
+}
+
+.music-stage-mode-menu-item.is-active {
+    color: var(--ms-ink);
+    font-weight: 650;
+}
+
+.music-stage-mode-menu-item.is-active .music-stage-mode-menu-item-check {
+    visibility: visible;
+}
+
+/* ---------- 标题栏里的「返回首页」和舞台下拉 ----------
+ * 舞台打开时，标题栏左边的「VCP - 音乐播放器」换成「‹ VCP —— 歌词舞台」返回按钮，
+ * 右边窗口按钮左侧放舞台下拉；都不再浮在舞台画面上。标题栏是拖动区，这两样设成 no-drag。
+ * 返回按钮平时和字标一样安静，悬停浮出和下拉同规格的底（30 高、圆角 8），箭头左挪 2px。 */
+#custom-title-bar .music-stage-home,
+#custom-title-bar .music-stage-mode-picker {
+    display: none;
+}
+
+body.music-stage-active #custom-title-bar .title {
+    display: none;
+}
+
+body.music-stage-active #custom-title-bar .music-stage-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 30px;
+    box-sizing: border-box;
+    margin: 0 0 0 -6px;
+    padding: 0 12px 0 6px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ms-muted);
+    font-family: var(--mt-font-label);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: color var(--mt-dur-1, .15s) ease, background-color var(--mt-dur-1, .15s) ease,
+        border-color var(--mt-dur-1, .15s) ease;
+}
+
+#custom-title-bar .music-stage-home i {
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--ms-line);
+}
+
+.music-stage-home-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: -2px;
+    transition: transform .2s ease;
+}
+
+body.music-stage-active #custom-title-bar .music-stage-home:hover {
+    color: var(--ms-ink);
+    background: var(--ms-glass);
+    border-color: var(--ms-glass-edge);
+}
+
+.music-stage-home:hover .music-stage-home-icon {
+    transform: translateX(-2px);
+}
+
+.music-stage-home:active .music-stage-home-icon {
+    transform: translateX(-3px);
+}
+
+.music-stage-home:focus-visible {
+    outline: 2px solid var(--ms-ink);
+    outline-offset: 2px;
+}
+
+body.music-stage-active #custom-title-bar .music-stage-mode-picker {
+    display: block;
+    position: relative;
+    margin-right: 4px;
+    -webkit-app-region: no-drag;
+}
+
+#custom-title-bar .music-stage-mode-picker-toggle {
+    background: transparent;
+    border-color: transparent;
+    color: var(--ms-ink);
+    text-shadow: none;
+}
+
+#custom-title-bar .music-stage-mode-picker-toggle:hover,
+#custom-title-bar .music-stage-mode-picker.is-open .music-stage-mode-picker-toggle {
+    background: var(--ms-glass);
+    border-color: var(--ms-glass-edge);
+}
+
+#custom-title-bar .music-stage-mode-menu {
+    max-height: min(520px, calc(100vh - 120px));
+}
+
+@media (max-width: 900px) {
+    body.music-stage-active #custom-title-bar .music-stage-home {
+        width: 30px;
+        padding: 0;
+        margin-left: 0;
+        justify-content: center;
+    }
+
+    #custom-title-bar .music-stage-home > :not(.music-stage-home-icon) {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .music-stage-home-icon {
+        transition: none;
+    }
+}

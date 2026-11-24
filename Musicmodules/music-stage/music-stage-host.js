@@ -71,7 +71,9 @@
             edgeSpectrum: root.querySelector('.music-stage-edge-spectrum'),
             edgeCanvas: root.querySelector('.music-stage-edge-spectrum-canvas'),
             modeRoot: root.querySelector('.music-stage-mode-root'),
-            modeSwitcher: root.querySelector('.music-stage-mode-switcher'),
+            modeSwitcher: root.querySelector('.music-stage-mode-switcher')
+                || document.querySelector('#custom-title-bar .music-stage-mode-picker'),
+            homeButton: document.querySelector('#custom-title-bar .music-stage-home'),
             settings: root.querySelector('.music-stage-settings'),
             settingsToggle: root.querySelector('.music-stage-settings-toggle'),
             settingsCard: root.querySelector('.music-stage-settings-card'),
@@ -280,6 +282,107 @@
                 { key: 'transitionLock', label: '换场最短间隔', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
                 { key: 'avoidRepeat', label: '不连续用同一舞台', type: 'toggle' }
             ],
+            inkdraft: [
+                { key: 'cameraCuts', label: '踩词硬切（多机位分镜）', type: 'toggle' },
+                { key: 'figures', label: '演算纸线稿', type: 'toggle' },
+                { key: 'collisions', label: '墨团对撞', type: 'toggle' },
+                { key: 'keywords', label: '关键词套色（反复出现的意象词用强调色）', type: 'toggle' },
+                { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'cloud', label: '墨云浓度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '砂纸颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'inkFlip', label: '画面反相（纸墨对调）', type: 'toggle' },
+                { key: 'negativeShots', label: '反相镜头（偶尔一镜纸墨对调）', type: 'toggle' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            fogpane: [
+                { key: 'fog', label: '雾气浓度', type: 'range', min: 0.5, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'view', label: '窗外的景', type: 'select', options: [['alternate', '间奏时换景（街景／水族馆）'], ['street', '雨夜街景'], ['aquarium', '水族馆']] },
+                { key: 'rain', label: '窗外的天气', type: 'select', options: [['off', '晴'], ['light', '小雨'], ['heavy', '大雨'], ['snow', '下雪（窗上结霜）']] },
+                { key: 'drops', label: '玻璃上的水珠', type: 'toggle' },
+                { key: 'drips', label: '往下淌的水痕', type: 'toggle' },
+                { key: 'fireflies', label: '窗外萤火', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'cameraSpeed', label: '车速', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' }
+            ],
+            impression: [
+                { key: 'timeOfDay', label: '每段换一个时辰的光', type: 'toggle' },
+                { key: 'flecks', label: '画上的光斑', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'frame', label: '画框', type: 'toggle' },
+                { key: 'lamp', label: '画灯', type: 'range', min: 0, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            groupchat: [
+                { key: 'echoes', label: '副歌大家一起唱', type: 'toggle' },
+                { key: 'voiceNotes', label: '间奏发语音', type: 'toggle' },
+                { key: 'reactions', label: '点赞和已读', type: 'toggle' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            signal: [
+                { key: 'panel', label: '监视窗', type: 'select', options: [['lyrics', '歌词'], ['history', '电平记录'], ['off', '不显示']] },
+                { key: 'showSpectrum', label: '频谱条', type: 'toggle' },
+                { key: 'pulseRate', label: '脉冲', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            orbit: [
+                { key: 'tilt', label: '轨道倾斜（扁到圆）', type: 'range', min: 0.15, max: 0.6, step: 0.01, unit: 'x' },
+                { key: 'roll', label: '轨道侧转', type: 'range', min: -30, max: 30, step: 1, unit: '°' },
+                { key: 'axisLine', label: '轴线', type: 'toggle' },
+                { key: 'nebula', label: '星尘星云', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            clockwork: [
+                { key: 'secondHand', label: '秒针', type: 'toggle' },
+                { key: 'wireframe', label: '蓝图线稿层', type: 'toggle' },
+                { key: 'perspective', label: '表盘透视（随歌换角度）', type: 'toggle' },
+                { key: 'parallax', label: '分层视差', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'smoke', label: '背景烟纹', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '其他句可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            hanabi: [
+                { key: 'density', label: '烟花密度', type: 'range', min: 0.4, max: 1.6, step: 0.05, unit: 'x' },
+                { key: 'trails', label: '尾迹长度', type: 'range', min: 0, max: 1.6, step: 0.05, unit: 'x' },
+                { key: 'smoke', label: '火药烟', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'bloom', label: '副歌泛光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'collage', label: '副歌拼贴（重复的句子拆成大小不一的词块）', type: 'toggle' },
+                { key: 'reflection', label: '河面倒影（节能档关闭）', type: 'toggle' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
+            lumiere: [
+                { key: 'smoke', label: '舞台烟雾', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'dust', label: '光里的浮尘', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'flare', label: '光源眩光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'bokeh', label: '前景散景', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
+            ],
             kowloon: [
                 { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['sandbox', '沙盒截面'], ['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
                 { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
@@ -393,13 +496,18 @@
             const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
+            // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
+            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork' || state.modeId === 'orbit' || state.modeId === 'signal' || state.modeId === 'groupchat' || state.modeId === 'impression'));
+            // 雾笺、绘光的画面在浅色主题下也是夜色，左上角字标要换成浅色才看得见。
+            root.classList.toggle('stage-night', state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi');
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
                 const selected = button.dataset.stageMode === state.modeId;
                 button.classList.toggle('is-active', selected);
-                button.setAttribute('aria-pressed', String(selected));
+                button.setAttribute(button.getAttribute('role') === 'menuitemradio' ? 'aria-checked' : 'aria-pressed', String(selected));
             });
+            syncModePickerLabel();
             revealActiveMode();
 
             if (state.active) {
@@ -408,9 +516,64 @@
             }
         };
 
-        // The switcher scrolls sideways in narrow windows; keep the selected
-        // stage in view instead of leaving it clipped off either end.
+        // 舞台切换：角落里一个按钮写着当前舞台，点开竖着弹出全部舞台（行高 28，和主程序设置页的下拉同一套）。
+        // 键盘：上下键 / Home / End 移动，回车或空格选中，Esc 或点外面收起；列表放不下时自己滚动。
+        const picker = { built: false, open: false, toggle: null, label: null, menu: null };
+        const isPicker = () => elements.modeSwitcher?.classList.contains('music-stage-mode-picker');
+        const modeMenu = () => (picker.built ? picker.menu : elements.modeSwitcher);
+        const modeOptions = () => Array.from(modeMenu()?.querySelectorAll('[data-stage-mode]') || []);
+        const buildModePicker = () => {
+            if (picker.built || !isPicker()) return;
+            const host = elements.modeSwitcher;
+            picker.toggle = createElement('button', 'music-stage-mode-picker-toggle', {
+                type: 'button',
+                'aria-haspopup': 'menu',
+                'aria-expanded': 'false',
+                title: '切换舞台'
+            });
+            picker.label = createElement('span', 'music-stage-mode-picker-label');
+            const chevron = createElement('span', 'music-stage-mode-picker-chevron', {
+                'aria-hidden': 'true',
+                html: '<svg viewBox="0 0 12 12" width="12" height="12"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            });
+            picker.toggle.append(picker.label, chevron);
+            picker.menu = createElement('div', 'music-stage-mode-menu', { role: 'menu', 'aria-label': '歌词演出模式', tabindex: '-1' });
+            picker.menu.hidden = true;
+            host.replaceChildren(picker.toggle, picker.menu);
+            picker.built = true;
+        };
+        const syncModePickerLabel = () => {
+            if (!picker.built) return;
+            const entry = Modes.entries.find((item) => item.id === state.modeId);
+            picker.label.textContent = entry?.label || '';
+            picker.toggle.title = entry ? `舞台：${entry.label}（点开切换）` : '切换舞台';
+        };
+        const focusModeOption = (index) => {
+            const options = modeOptions();
+            if (!options.length) return;
+            const target = options[(index + options.length) % options.length];
+            target.focus({ preventScroll: true });
+            target.scrollIntoView?.({ block: 'nearest' });
+        };
+        const setModePickerOpen = (open, { focus = 'menu' } = {}) => {
+            if (!picker.built || picker.open === open) return;
+            picker.open = open;
+            picker.menu.hidden = !open;
+            picker.toggle.setAttribute('aria-expanded', String(open));
+            elements.modeSwitcher.classList.toggle('is-open', open);
+            if (open) {
+                const options = modeOptions();
+                const current = Math.max(0, options.findIndex((option) => option.dataset.stageMode === state.modeId));
+                if (focus === 'menu') focusModeOption(current);
+                else options[current]?.scrollIntoView?.({ block: 'nearest' });
+            } else if (focus === 'toggle') {
+                picker.toggle.focus({ preventScroll: true });
+            }
+        };
+
+        // 旧的横排页签在窄窗口里会横向滚动：把选中的那个留在可见范围里。竖向菜单打开时由 setModePickerOpen 负责。
         const revealActiveMode = () => {
+            if (picker.built) return;
             const bar = elements.modeSwitcher;
             const button = bar?.querySelector('.music-stage-mode-button.is-active');
             if (!button || bar.scrollWidth <= bar.clientWidth + 1) return;
@@ -421,22 +584,42 @@
         };
 
         const renderModeButtons = () => {
+            buildModePicker();
             const fragment = document.createDocumentFragment();
             const visibleIds = state.config.enabledModes.includes(state.modeId)
                 ? state.config.enabledModes
                 : [state.modeId, ...state.config.enabledModes];
             Modes.entries.filter((entry) => visibleIds.includes(entry.id)).forEach((entry) => {
-                const button = createElement('button', 'music-stage-mode-button', {
-                    type: 'button',
-                    text: entry.label,
-                    title: `切换至${entry.label}`,
-                    'data-stage-mode': entry.id,
-                    'aria-pressed': String(entry.id === state.modeId)
-                });
-                button.classList.toggle('is-active', entry.id === state.modeId);
+                const selected = entry.id === state.modeId;
+                const button = picker.built
+                    ? createElement('button', 'music-stage-mode-menu-item', {
+                        type: 'button',
+                        role: 'menuitemradio',
+                        tabindex: '-1',
+                        'data-stage-mode': entry.id,
+                        'aria-checked': String(selected)
+                    })
+                    : createElement('button', 'music-stage-mode-button', {
+                        type: 'button',
+                        text: entry.label,
+                        title: `切换至${entry.label}`,
+                        'data-stage-mode': entry.id,
+                        'aria-pressed': String(selected)
+                    });
+                if (picker.built) {
+                    button.append(
+                        createElement('span', 'music-stage-mode-menu-item-label', entry.label),
+                        createElement('span', 'music-stage-mode-menu-item-check', {
+                            'aria-hidden': 'true',
+                            html: '<svg viewBox="0 0 14 14" width="13" height="13"><path d="M3 7.2 5.8 10 11 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                        })
+                    );
+                }
+                button.classList.toggle('is-active', selected);
                 fragment.appendChild(button);
             });
-            elements.modeSwitcher.replaceChildren(fragment);
+            modeMenu().replaceChildren(fragment);
+            syncModePickerLabel();
             revealActiveMode();
         };
 
@@ -521,7 +704,7 @@
             const config = state.config;
             const modeFragment = document.createDocumentFragment();
             Modes.entries.forEach((entry) => {
-                const label = createElement('label', 'music-stage-mode-option', {
+                const label = createElement('label', 'music-stage-mode-menu-item', {
                     title: entry.description ? `${entry.label} · ${entry.description}` : entry.label
                 });
                 const checkbox = createElement('input', '', {
@@ -1380,6 +1563,7 @@
         const exit = () => {
             if (!state.active || state.destroyed) return;
             if (state.settingsOpen) setSettingsOpen(false);
+            setModePickerOpen(false, { focus: 'none' });
             state.active = false;
             app.isStageActive = false;
             root.classList.remove('is-visible');
@@ -1614,10 +1798,47 @@
             setVolume(current > 0.001 ? 0 : state.lastNonZeroVolume);
         });
         scope.listen(elements.volumeSlider, 'input', (event) => setVolume(event.target.value));
+        // 左上角字标就是「返回首页」：和 Esc、底栏舞台按钮走同一条退出路径
+        scope.listen(elements.homeButton, 'click', () => exit());
         scope.listen(elements.modeSwitcher, 'click', (event) => {
+            if (picker.built && event.target.closest('.music-stage-mode-picker-toggle')) {
+                // 鼠标点开时不抢焦点到列表（免得出现键盘焦点框），键盘打开时直接落到当前舞台上
+                setModePickerOpen(!picker.open, { focus: event.detail === 0 ? 'menu' : 'none' });
+                return;
+            }
             const button = event.target.closest('[data-stage-mode]');
-            if (button) setMode(button.dataset.stageMode);
+            if (!button) return;
+            setMode(button.dataset.stageMode);
+            setModePickerOpen(false, { focus: event.detail === 0 ? 'toggle' : 'none' });
         });
+        scope.listen(elements.modeSwitcher, 'keydown', (event) => {
+            if (!picker.built) return;
+            const options = modeOptions();
+            const index = options.indexOf(document.activeElement);
+            if (event.target === picker.toggle && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                event.preventDefault();
+                event.stopPropagation();
+                setModePickerOpen(true);
+                return;
+            }
+            if (!picker.open) return;
+            const moves = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: options.length - 1 };
+            if (event.key in moves) {
+                event.preventDefault();
+                event.stopPropagation();
+                focusModeOption(index < 0 && event.key === 'ArrowUp' ? options.length - 1 : moves[event.key]);
+            } else if (event.key === 'Escape') {
+                // 只收起菜单，不退出舞台
+                event.preventDefault();
+                event.stopPropagation();
+                setModePickerOpen(false, { focus: 'toggle' });
+            } else if (event.key === 'Tab') {
+                setModePickerOpen(false, { focus: 'none' });
+            }
+        });
+        scope.listen(document, 'pointerdown', (event) => {
+            if (picker.open && !elements.modeSwitcher.contains(event.target)) setModePickerOpen(false, { focus: 'none' });
+        }, true);
         scope.listen(elements.progressTrack, 'pointerdown', (event) => {
             state.draggingProgress = true;
             elements.progressTrack.setPointerCapture?.(event.pointerId);
