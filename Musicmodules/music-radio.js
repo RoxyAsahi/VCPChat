@@ -372,6 +372,7 @@
         // 声道：平衡 / 互换 / 单声道（music-channels.js，新引擎才有）
         try { global.MusicChannels?.setupMusicChannels?.(app); } catch (e) { /* 没有这个模块 */ }
         try { global.MusicWindowTitle?.setupMusicWindowTitle?.(app); } catch (e) { /* 没有这个模块 */ }
+        try { global.MusicQueueUndo?.setupMusicQueueUndo?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };
