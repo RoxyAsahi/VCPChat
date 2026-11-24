@@ -214,7 +214,8 @@ void main() {
         // 颜色按参考截图里这两处的实际亮度取（索引片灰褐、螺钉略暗于卡面），不搬原版贴图。
         float q = selected * uQuality;
         bool notch = vLocal.x < -2.0 && vLocal.y > 3.4;
-        vec3 browse = mix(uCenter[1], uCenter[7], dark);
+        // 缺口按参考截图：里面和面板同一个色调（看下去是一道浅浅的凹槽，只靠边上的暗线显形），不是一块更白的方片
+        vec3 browse = notch ? faceSample(2, surfaceUv(2, vec3(vLocal.xy, 0.206)), dark).rgb * 0.97 : mix(uCenter[1], uCenter[7], dark);
         vec3 part = notch ? radiance(mix(vec3(0.78, 0.73, 0.66), vec3(0.62, 0.52, 0.36), dark))
                           : radiance(mix(vec3(0.70, 0.67, 0.63), vec3(0.58, 0.61, 0.62), dark));
         // 孔和缺口底下是空心盒子（参考 Ivory_Edges 只是一圈外框）：靠面板边的那一侧落进阴影，
