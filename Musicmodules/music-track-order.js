@@ -23,6 +23,7 @@
             let m = /^\s*(\d{1,2})[-.](\d{1,3})(?=[\s._-]|$)/.exec(name);
             if (m && !/^\d{4}/.test(name)) { disc = disc || positive(m[1]); no = positive(m[2]); }
             else if ((m = /^\s*(\d{1,3})(?=\s*[\s._)\-]|$)/.exec(name)) && !/^\d{4}/.test(name)) no = positive(m[1]);
+            else if ((m = /^\s*(?:track|トラック|曲目)\s*[_-]?\s*0*(\d{1,3})(?!\d)/i.exec(name))) no = positive(m[1]); // 抓轨软件默认的「Track01」「Track 1」
         }
         if (!disc) {
             const m = /(?:^|[\s_\-(\[])(?:cd|disc|disk|碟)\s*0*(\d{1,2})(?:\D|$)/i.exec(parentName(t.path));

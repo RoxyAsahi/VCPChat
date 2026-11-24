@@ -15,6 +15,9 @@ test('numberOf reads tags first, then file and folder names', () => {
     assert.deepEqual(numberOf({ path: 'D:\\A\\2019 Live.flac' }), { disc: 0, no: 0 });
     assert.deepEqual(numberOf({ path: 'D:\\A\\2Pac - x.flac' }), { disc: 0, no: 0 });
     assert.deepEqual(numberOf({ path: 'https://dav/A/05%20x.flac' }), { disc: 0, no: 5 });
+    assert.deepEqual(numberOf({ path: 'D:\\A\\Track01.wav' }), { disc: 0, no: 1 });
+    assert.deepEqual(numberOf({ path: 'D:\\A\\Track 12.flac' }), { disc: 0, no: 12 });
+    assert.deepEqual(numberOf({ path: 'D:\\A\\Tracking Down.flac' }), { disc: 0, no: 0 });
     assert.deepEqual(numberOf(null), { disc: 0, no: 0 });
 });
 
