@@ -863,3 +863,18 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
 .archive-lyrics-head .archive-lyrics-chip:hover:not(:disabled) { color: var(--ar-ink); border-color: var(--ar-ink); }
 .archive-lyrics-head .archive-lyrics-chip:disabled { cursor: default; }
 .archive-lyrics-head .archive-lyrics-chip:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }
+/* R26 歌词栏底部两角的裁切记号（借鉴 RhinE 歌词页框住歌词的角标）：和标题下的细线一起把歌词框成一块 */
+.archive-lyrics::after {
+    content: "";
+    position: absolute;
+    left: var(--lyrics-start); right: var(--lyrics-end); bottom: 0;
+    height: 9px;
+    --mark: var(--ar-rule);
+    background:
+        linear-gradient(var(--mark), var(--mark)) left bottom / 9px 1px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) left bottom / 1px 9px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) right bottom / 9px 1px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) right bottom / 1px 9px no-repeat;
+    pointer-events: none;
+}
+.archive-lyrics.none::after { display: none; }
