@@ -978,14 +978,16 @@
         // 进这一段的转场：多数直接硬切；进副歌那一句是「开墨」——整屏先是墨，从正中炸开一个口子，
         // 冲镜落到第一个字上，头一个镜头反相（白字黑底）；副歌里面多漫墨、冲镜
         const transition = index === 0 ? 'cut' : cue.chorusEntry ? 'burst' : pickWeighted(shotRandom, cue.chorus
-            ? [['flood', 2], ['smash', 2.5], ['ink', 1], ['cut', 2.5]]
-            : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]);
+            ? [['flood', 2], ['smash', 2.5], ['ink', 1], ['cut', 2.5], ['sweep', 1.5]]
+            : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1], ['sweep', 1.6]]);
         const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect, sceneKey: ctx.scene }, shotRandom, settings, transition);
         return {
             index, cue, atlas, glyphInst, glyphCount: glyphEntries.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
             strokeStart, strokeStep,
             transition,
             flood: transition === 'burst' ? [0.5, 0.5] : [0.2 + random() * 0.6, 0.25 + random() * 0.5],
+            // 扫笔方向：多半横着扫，斜一点；左右随机
+            sweep: [(random() - 0.5) * 0.6 + (random() < 0.5 ? 0 : Math.PI), random() * 40],
             sparks: placed.slice(0, MAX_GLYPHS).map((p, i) => ({
                 t: p.g.start, x: (p.box[0] + p.box[2]) / 2, y: (p.box[1] + p.box[3]) / 2, s: p.size,
                 a: random() * TAU, spin: (i % 2 ? 1 : -1) * (2.2 + random() * 1.4)
@@ -1038,7 +1040,9 @@
         }
     };
     const SCREEN_ANGLES = [0.26, 0.52, 0.79, 1.31];
-    const FIRST_SHOT = [['wide', 3], ['close', 2], ['dutch', 1.5], ['far', 0.8], ['follow', 1.5]];
+    // 一句开头多半就近看第一个字（Folia 换句也是直接落在第一个字上）；不再用远景开句——开句时线稿还没画，远景是一片空
+    const FIRST_SHOT = [['wide', 0.9], ['close', 3], ['dutch', 1.5], ['follow', 2.2]];
+    const SWEEP_BEFORE = 0.2, SWEEP_AFTER = 0.42;
     const MIDDLE_SHOT = [['close', 3], ['follow', 2], ['macro', 1.6], ['dutch', 1.5], ['wide', 1.6], ['far', 0.6]];
     // 切点：按节奏均分（一句大约 2.6 秒一刀，副歌密一些），再吸到最近的词开唱时刻上
     const planCuts = (start, end, count, onsets) => {
@@ -1556,6 +1560,7 @@ uniform vec4 uClouds[${MAX_CLOUDS}];
 uniform vec3 uBlobCol;
 uniform float uDotPx;
 uniform float uDotAngle;
+uniform vec4 uSweep;     // 扫笔：进度 0..1、方向、种子、0 = 不扫
 uniform vec4 uFlood;     // 屏幕 x, y, 半径, 0 = 不漫
 uniform float uSmash;    // 0..1 上一段碎开
 uniform float uCloud;    // 墨云浓度
@@ -1700,6 +1705,30 @@ void main() {
         float inked = smoothstep(-0.004, 0.004, edge);
         float band = (1.0 - smoothstep(0.0, 0.09, abs(edge + 0.05))) * (1.0 - inked);
         col = mix(col, ink, max(inked, band * dots));
+    }
+    if (uSweep.w > 0.0) {
+        // 扫笔：一笔干刷横扫过画面（前三分之一笔头扫过去盖满，换句就在笔下面发生），
+        // 后三分之二笔里的墨干了，飞白从起笔那头开始一条条裂开，新的一句从裂缝里露出来
+        vec2 sp = (gl_FragCoord.xy / uRes - 0.5) * vec2(uAspect, 1.0);
+        vec2 sd = vec2(cos(uSweep.y), sin(uSweep.y));
+        float along = dot(sp, sd);
+        float across = dot(sp, vec2(-sd.y, sd.x));
+        float span = 0.5 * uAspect + 0.35;
+        float u = uSweep.x;
+        float head = mix(-span, span + 0.1, clamp(u / 0.32, 0.0, 1.0));
+        float headEdge = head - along + (vnoise(vec2(across * 7.0, uSweep.z)) - 0.5) * 0.16
+                       + (vnoise(vec2(across * 38.0, uSweep.z + 3.0)) - 0.5) * 0.05;
+        float inStroke = smoothstep(-0.004, 0.004, headEdge);
+        // 鬃毛：沿着笔走向拉长的条纹，粗细两层
+        float bristle = vnoise(vec2(across * 90.0, along * 1.6 + uSweep.z)) * 0.6
+                      + vnoise(vec2(across * 16.0, along * 0.7 + uSweep.z * 2.0)) * 0.4;
+        float dryT = clamp((u - 0.32) / 0.68, 0.0, 1.0);
+        // 起笔那头先干；笔头附近本来就有一点飞白
+        float dry = 0.1 + dryT * 1.2 + (span - along) / (2.0 * span) * dryT * 0.35 + smoothstep(0.25, 0.0, headEdge) * 0.35;
+        float sw = max(fwidth(bristle), 0.002);
+        float cover = inStroke * smoothstep(dry - sw, dry + sw, bristle);
+        // 笔里墨的浓淡跟着鬃毛走一点
+        col = mix(col, mix(ink, paper, (1.0 - bristle) * 0.18), cover);
     }
     // 颗粒按 CSS 像素算：画面按原生分辨率画了，颗粒大小不跟着屏幕像素密度变
     vec2 cssPx = gl_FragCoord.xy / max(uDotPx, 0.5);
@@ -2060,10 +2089,12 @@ void main() {
             let prevView = null;
             const since = t - data.cue.start;
             let smash = 0;
-            if ((data.transition === 'ink' || data.transition === 'smash') && since < 0.5 && index > 0) {
+            // 墨化 0.38 秒就收（再长，上一句的碎笔会在新字周围飘太久）；碎开 0.5 秒
+            const prevLen = data.transition === 'ink' ? 0.38 : 0.5;
+            if ((data.transition === 'ink' || data.transition === 'smash') && since < prevLen && index > 0) {
                 prevSlot = slotFor(index - 1, false);
                 if (prevSlot) {
-                    prevFade = smooth(0, 0.5, since) * 0.999 + 0.001;
+                    prevFade = smooth(0, prevLen, since) * 0.999 + 0.001;
                     prevView = viewAt(prevSlot.data.shots, data.cue.start - 0.001);
                     if (data.transition === 'smash') smash = clamp(since / 0.5, 0.001, 1);
                 }
@@ -2139,9 +2170,18 @@ void main() {
                 gl.uniform1f(u.uDotAngle, view.angle ?? 0.26);
                 gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
                 gl.uniform1f(u.uSmash, smash);
+                // 扫笔跨在换句上：换句前 0.2 秒笔头进画，换句后 0.4 秒飞白裂开
+                let sweepU = -1, sweepP = null;
+                const nextData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
+                if (!s.reducedMotion) {
+                    if (data.transition === 'sweep' && since >= 0 && since < SWEEP_AFTER) { sweepU = (SWEEP_BEFORE + since) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = data.sweep; }
+                    else if (nextData?.transition === 'sweep' && t > nextData.cue.start - SWEEP_BEFORE) {
+                        sweepU = (t - nextData.cue.start + SWEEP_BEFORE) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = nextData.sweep;
+                    }
+                }
+                gl.uniform4f(u.uSweep, sweepU, sweepP ? sweepP[0] : 0, sweepP ? sweepP[1] : 0, sweepP ? 1 : 0);
                 gl.uniform1f(u.uCloud, s.cloud);
-                const nextSlotData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
-                const exiting = !s.reducedMotion && (!nextSlotData || nextSlotData.transition === 'cut') && data.cue.kind === 'line';
+                const exiting = !s.reducedMotion && (!nextData || nextData.transition === 'cut') && data.cue.kind === 'line';
                 gl.uniform1f(u.uExit, exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0);
                 // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
                 const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
