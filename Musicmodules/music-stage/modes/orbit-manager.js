@@ -136,12 +136,23 @@ uniform vec3 uInk;
 uniform vec3 uAccent;
 uniform float uGrain;
 uniform float uGrainStep;
+uniform float uBeat;
+uniform float uChorus;
+uniform float uTime;
+uniform float uNebula;
 out vec4 outColor;
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
 void main() {
@@ -154,6 +165,21 @@ void main() {
     vec2 d0 = p - uCentre;
     vec3 col = uField * (1.0 + mix(0.35, 0.06, uLight) * exp(-dot(d0, d0) * 3.0));
     col += uAccent * mix(0.05, 0.03, uLight) * exp(-dot(d0 - vec2(0.0, -0.1), d0 - vec2(0.0, -0.1)) * 6.0);
+
+    // 远处：很淡的星尘和两缕慢慢转的星云
+    if (uNebula > 0.0) {
+        float ca = cos(uTime * 0.01), sa = sin(uTime * 0.01);
+        vec2 np = vec2(d0.x * ca - d0.y * sa, d0.x * sa + d0.y * ca) * 2.2;
+        np += vec2(vnoise(np * 1.5 + 3.0), vnoise(np * 1.5 - 4.0)) * 0.8;
+        float neb = vnoise(np * 2.0 + uTime * 0.02) * 0.6 + vnoise(np * 5.0 - uTime * 0.03) * 0.4;
+        neb = smoothstep(0.5, 0.95, neb) * smoothstep(0.9, 0.2, length(d0));
+        col += mix(uAccent, uInk, 0.6) * neb * mix(0.05, 0.03, uLight) * uNebula * (1.0 + uChorus * 1.5);
+        vec2 sc = floor(gl_FragCoord.xy / 2.0);
+        float star = step(0.997, hash12(sc)) * (0.5 + 0.5 * sin(uTime * 1.7 + hash12(sc + 3.0) * 30.0));
+        col = mix(col, uInk, star * mix(0.3, 0.2, uLight) * uNebula);
+    }
+    // 副歌：轨道外一圈更宽的光
+    col += uAccent * uChorus * mix(0.08, 0.04, uLight) * exp(-dot(d0, d0) * 2.2);
 
     // 转回轨道自己的坐标
     float c = cos(-uRoll), s = sin(-uRoll);
@@ -178,13 +204,21 @@ void main() {
             col = mix(col, uAccent, (1.0 - smoothstep(0.003, 0.003 + aa, length(vec2(bead, dist)))) * (0.35 + front * 0.55));
         }
     }
-    // 轴线：穿过圆心的一根竖线，两头淡出
+    // 鼓点：从轨道向外推出一圈细光环
+    if (uBeat > 0.01) {
+        float sc = 1.0 + (1.0 - uBeat) * 0.45;
+        float e = length(q / (uAxes * sc));
+        float dist = abs(e - 1.0) * uAxes.y * sc;
+        col += mix(uInk, uAccent, 0.5) * exp(-dist * dist / 0.00002) * uBeat * uBeat * 0.4;
+    }
+    // 轴线：穿过圆心的一根竖线，两头淡出；鼓点时伸长、变亮
     if (uAxis > 0.5) {
         vec2 dir = vec2(-sin(uRoll), cos(uRoll));
         float along = dot(d0, dir);
         float perp = abs(dir.x * d0.y - dir.y * d0.x);
-        float line = (1.0 - smoothstep(0.0008, 0.0008 + aa, perp)) * (1.0 - smoothstep(0.1, 0.46, abs(along)));
-        col = mix(col, uInk, line * 0.35);
+        float reach = 0.46 + uBeat * 0.08 + uChorus * 0.06;
+        float line = (1.0 - smoothstep(0.0008, 0.0008 + aa, perp)) * (1.0 - smoothstep(0.1, reach, abs(along)));
+        col = mix(col, uInk, line * (0.35 + uBeat * 0.3));
     }
 
     vec2 v = uv - 0.5;
@@ -202,10 +236,11 @@ uniform int uCount;
 uniform vec2 uRes;
 out vec2 vTex;
 out vec3 vInfo;
+out float vBlur;
 void main() {
     int g = gl_VertexID / 6;
     int k = gl_VertexID - g * 6;
-    if (g >= uCount) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vTex = vec2(0.0); vInfo = vec3(0.0); return; }
+    if (g >= uCount) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vTex = vec2(0.0); vInfo = vec3(0.0); vBlur = 0.0; return; }
     vec2 corner = vec2(k == 1 || k == 2 || k == 4 ? 1.0 : 0.0, k == 2 || k == 4 || k == 5 ? 1.0 : 0.0);
     vec4 a = uA[g];
     vec4 b = uB[g];
@@ -214,7 +249,8 @@ void main() {
     vec2 pos = a.xy + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
     float aspect = uRes.x / uRes.y;
     gl_Position = vec4(pos.x / aspect * 2.0 - 1.0, pos.y * 2.0 - 1.0, 0.0, 1.0);
-    float cell = b.x;
+    float cell = floor(b.x);
+    vBlur = fract(b.x) / 0.9;
     vec2 cellXY = vec2(mod(cell, ${GRID}.0), floor(cell / ${GRID}.0));
     vec2 inCell = vec2(corner.x, 1.0 - corner.y);
     vTex = (cellXY + inCell) / ${GRID}.0;
@@ -228,12 +264,14 @@ uniform vec3 uAccent;
 uniform float uWaiting;
 in vec2 vTex;
 in vec3 vInfo;
+in float vBlur;
 out vec4 outColor;
 void main() {
     float alpha = vInfo.x;
     float singing = vInfo.y;
     float sung = vInfo.z;
-    float m = texture(uAtlas, vTex).r;
+    // 景深：轨道后半圈的字虚一点
+    float m = textureLod(uAtlas, vTex, vBlur * 1.8).r * (1.0 + vBlur * 0.25);
     float halo = textureLod(uAtlas, vTex, 3.0).r;
     vec3 col = mix(uInk, uAccent, singing);
     float body = m * mix(uWaiting, 1.0, max(sung, singing));
@@ -323,6 +361,9 @@ void main() {
         let lostContext = false;
         let idleHandle = 0;
         let glow = 0;
+        let chorus = 0;
+        let lastOnsets = -1;
+        let beatTime = -Infinity;
         const stats = { builds: 0, buildMs: 0, draws: 0, index: -2, glyphs: 0 };
 
         const settings = () => {
@@ -332,6 +373,7 @@ void main() {
                 tilt: clamp(tuning.tilt ?? 0.3, 0.15, 0.6),
                 roll: clamp(tuning.roll ?? -12, -30, 30),
                 axisLine: tuning.axisLine !== false,
+                nebula: clamp(tuning.nebula ?? 1, 0, 2),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.3, 0, 1),
                 audioReactivity: clamp(tuning.audioReactivity ?? 1, 0, 2),
                 grain: clamp(tuning.grain ?? 0.3, 0, 1),
@@ -454,7 +496,7 @@ void main() {
                 list.push({
                     z: pt.z,
                     a: [geo.cx + pt.x * (1 + outward), geo.cy + pt.y * (1 + outward), geo.size * pt.s * (1 + singing * 0.12), rot],
-                    b: [item.cell, alpha, singing, sungAmount]
+                    b: [item.cell + clamp(back, 0, 1) * 0.9, alpha, singing, sungAmount]
                 });
             });
             list.sort((p, q) => q.z - p.z);
@@ -521,6 +563,16 @@ void main() {
             gl.uniform1f(u.uSpin, s.reducedMotion ? 0 : t * 0.12);
             gl.uniform1f(u.uAxis, s.axisLine ? 1 : 0);
             gl.uniform1f(u.uGlow, glow);
+            if (Number.isFinite(audio.onsets) && audio.onsets !== lastOnsets) {
+                if (lastOnsets >= 0 && frame.isPlaying) beatTime = t;
+                lastOnsets = audio.onsets;
+            }
+            const energy = clamp(((audio.energy || 0) - 0.55) * 2.2 * s.audioReactivity, 0, 1);
+            chorus += (energy - chorus) * 0.08;
+            gl.uniform1f(u.uBeat, !s.reducedMotion && t >= beatTime ? Math.exp(-(t - beatTime) * 4) * Math.min(1, s.audioReactivity) : 0);
+            gl.uniform1f(u.uChorus, s.reducedMotion ? 0 : chorus);
+            gl.uniform1f(u.uTime, s.reducedMotion ? 0 : t);
+            gl.uniform1f(u.uNebula, s.nebula);
             gl.uniform1f(u.uLight, colours.light ? 1 : 0);
             gl.uniform3fv(u.uField, colours.field);
             gl.uniform3fv(u.uInk, colours.ink);

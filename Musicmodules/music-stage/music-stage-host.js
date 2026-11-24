@@ -308,6 +308,7 @@
                 { key: 'tilt', label: '轨道倾斜（扁到圆）', type: 'range', min: 0.15, max: 0.6, step: 0.01, unit: 'x' },
                 { key: 'roll', label: '轨道侧转', type: 'range', min: -30, max: 30, step: 1, unit: '°' },
                 { key: 'axisLine', label: '轴线', type: 'toggle' },
+                { key: 'nebula', label: '星尘星云', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'waitingOpacity', label: '未唱文字可见度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'grain', label: '颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
