@@ -1628,9 +1628,10 @@ void main() {
     float accent = sm.b * 4.0;
 
     float k = uWorld.y;
-    // 阈值被噪点搅过：墨边像砂纸上蹭出来的，颗粒按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳
+    // 阈值被噪点搅过：墨边是纸上洇出来的毛边，按屏幕像素算（不跟镜头放大，不会啃出大缺口），也不跟时间跳。
+    // 只用连续的噪声（两层），不用逐像素的散列——那种是一圈椒盐点，放大看像数码噪点，不像墨
     vec2 px = gl_FragCoord.xy / max(uRes.y / 900.0, 0.5);
-    float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (hash12(floor(px * 0.9)) - 0.5) * 0.08) * (0.5 + uGrain);
+    float rough = ((vnoise(px * 0.45) - 0.5) * 0.16 + (vnoise(px * 1.7 + 11.0) - 0.5) * 0.07) * (0.5 + uGrain);
     float F = gInk + lineInk * 1.1 + field * 0.5 + ring;
     float thr = 0.5 + rough;
     // 段尾硬切之前，字从边上一块块散掉，散的方向朝外
@@ -1672,8 +1673,12 @@ void main() {
     col = mix(col, mix(uBlobCol, ink, 0.45), dots * aA * smoothstep(0.3, 0.8, gf.g));
     // 关键词的字身用强调色
     vec3 inkK = mix(ink, uAccentCol, kwShare);
-    // 墨最后画：灰墨团漂到字上时，字压在它上面照样读得出来
-    col = mix(col, inkK, a);
+    // 墨最后画：灰墨团漂到字上时，字压在它上面照样读得出来。
+    // 积墨（Folia 没有）：墨干的时候往笔画边上走，边上一窄圈浓、中间稍淡，像真墨水写在纸上
+    float pool = 1.0 - smoothstep(0.0, 0.2, F - thr);
+    float body = smoothstep(0.15, 0.6, F - thr);
+    vec3 inkPooled = clamp(inkK + (inkK - paper) * 0.14 * pool - (inkK - paper) * 0.07 * body, 0.0, 1.0);
+    col = mix(col, inkPooled, a);
 
     if (uPrevFade > 0.0) {
         vec2 wq = worldAt(uPrevView, suv);
@@ -1734,14 +1739,15 @@ void main() {
     vec2 cssPx = gl_FragCoord.xy / max(uDotPx, 0.5);
     float gr = hash12(floor(cssPx / 1.5) + uGrainStep * 17.0) - 0.5;
     float fibre = vnoise(cssPx / 3.0 + uGrainStep * 5.0) - 0.5;
-    col *= 1.0 + (gr * 0.44 + fibre * 0.2) * uGrain;
+    // 墨里的颗粒压一半：墨是一层实的，不像砂纸
+    col *= 1.0 + (gr * 0.44 * (1.0 - a * 0.6) + fibre * 0.2) * uGrain;
     // 纸纹：纤维、绒、帘纹，钉在屏幕上不动（沸腾的只是上面那层颗粒）；墨里也透一点——干的墨盖不住纸的纤维
     float pt = texture(uPaperTex, cssPx / 256.0).r - 0.5;
     float pk = uPaperGrain * (1.0 - a * 0.55);
     col = col * (1.0 + pt * 0.26 * pk) + pt * 0.035 * pk;
     // 杂点：纸上是墨色的点，墨里是纸色的点（印刷没压实的地方）
     float speck = step(0.988, hash12(floor(cssPx / 2.2) + uGrainStep * 3.7 + 0.5));
-    col = mix(col, mix(ink, paper, a), speck * 0.55 * min(uGrain * 2.0, 1.0));
+    col = mix(col, mix(ink, paper, a), speck * 0.55 * (1.0 - a * 0.7) * min(uGrain * 2.0, 1.0));
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
