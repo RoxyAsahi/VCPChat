@@ -58,6 +58,7 @@ function changedSince(known, scanned, root) {
         const k = before.get(t.path);
         if (!k) return true;
         if (Number(k.size) !== Number(t.size) || Math.abs((Number(k.mtimeMs) || 0) - (Number(t.mtimeMs) || 0)) > 1) return true;
+        if (!k.albumArt && t.albumArt) return true; // 新找到了封面（同目录的 cover.jpg）
     }
     return false;
 }
@@ -121,7 +122,7 @@ function createLibraryWatch({
                     const byPath = new Map(known.map((t) => [t && t.path, t]));
                     tracks = tracks.filter((t) => {
                         const k = byPath.get(t.path);
-                        return k && (Number(k.size) !== Number(t.size) || Math.abs((Number(k.mtimeMs) || 0) - (Number(t.mtimeMs) || 0)) > 1);
+                        return k && (Number(k.size) !== Number(t.size) || Math.abs((Number(k.mtimeMs) || 0) - (Number(t.mtimeMs) || 0)) > 1 || (!k.albumArt && t.albumArt));
                     });
                     if (!tracks.length) continue;
                     // 扫的这段时间里用户可能把其中一些移出了曲库（整理重复的歌）：按最新的曲库再筛一遍，不把它们加回去

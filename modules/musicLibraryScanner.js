@@ -72,6 +72,34 @@ async function mapLimit(items, limit, fn) {
 
 const exists = (file) => fsp.access(file).then(() => true, () => false);
 
+// 文件里没嵌封面的歌，用同目录的封面图（很多整轨 / 抓轨专辑只放一张 cover.jpg 或 folder.jpg）。
+// 名字按常见程度排：cover > folder > front > albumart*，jpg/png/webp 都行，大小写不管。
+const FOLDER_COVER_RANK = [/^cover\.(jpe?g|png|webp)$/i, /^folder\.(jpe?g|png|webp)$/i, /^front\.(jpe?g|png|webp)$/i, /^albumart.*\.(jpe?g|png)$/i];
+function pickFolderCover(names) {
+    for (const re of FOLDER_COVER_RANK) {
+        const hit = (names || []).filter((n) => re.test(n)).sort()[0];
+        if (hit) return hit;
+    }
+    return null;
+}
+async function fillFolderCovers(tracks, readdir = (dir) => fsp.readdir(dir)) {
+    const byDir = new Map();
+    let filled = 0;
+    for (const t of tracks) {
+        if (!t || t.albumArt || typeof t.path !== 'string' || /^[a-z][a-z0-9+.-]+:\/\//i.test(t.path)) continue;
+        const dir = path.dirname(t.path);
+        if (!byDir.has(dir)) {
+            let names = [];
+            try { names = await readdir(dir); } catch (_) { names = []; }
+            const hit = pickFolderCover(names);
+            byDir.set(dir, hit ? path.join(dir, hit) : null);
+        }
+        const cover = byDir.get(dir);
+        if (cover) { t.albumArt = cover; filled++; }
+    }
+    return filled;
+}
+
 // 上次扫到的曲目能不能原样沿用：文件没动过，而且它指向的封面缓存还在。
 async function reusable(known, stat, coverSeen) {
     if (!known || !Number.isFinite(known.mtimeMs) || !Number.isFinite(known.size)) return false;
@@ -255,10 +283,13 @@ async function scanFolder(options) {
     }
 
     flushBatch();
+    if (!signal?.aborted) {
+        try { stats.folderCovers = await fillFolderCovers(slots.filter(Boolean)); } catch (_) { /* 只是补封面 */ }
+    }
     stats.aborted = Boolean(signal?.aborted);
     reportProgress(true);
     stats.elapsedMs = Date.now() - startedAt;
     return { tracks: slots.filter(Boolean).concat(keptFromUnreadable()), folderPath, stats };
 }
 
-module.exports = { scanFolder, collectAudioFiles, SUPPORTED_FORMATS };
+module.exports = { scanFolder, collectAudioFiles, SUPPORTED_FORMATS, pickFolderCover, fillFolderCovers };
