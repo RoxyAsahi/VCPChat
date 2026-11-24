@@ -926,7 +926,7 @@
         const transition = index > 0 ? pickWeighted(random, intoChorus
             ? [['flood', 3], ['smash', 3], ['ink', 1], ['cut', 1.5]]
             : [['cut', 4.5], ['ink', 1.4], ['flood', 1.2], ['smash', 1]]) : 'cut';
-        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect }, random, settings, transition);
+        const shots = planShots(cue, { placed, unitBoxes, wideH, wideC, textBox, figures, W, H, aspect, sceneKey: ctx.scene }, random, settings, transition);
         return {
             index, cue, atlas, glyphInst, glyphCount: glyphEntries.length, shots, mass, mass2, clouds, drops, drifters, collisions, accents,
             strokeStart, strokeStep,
@@ -976,6 +976,7 @@
             case 'close': return { roll: span(-0.07, 0.07), off: [span(-0.08, 0.08), span(-0.05, 0.05)] };
             case 'far': return { roll: span(-0.04, 0.04), off: [sign() * span(0.18, 0.3), sign() * span(0.1, 0.22)] };
             case 'figure': return { roll: sign() * span(0.08, 0.3), off: [span(-0.1, 0.1), span(-0.1, 0.1)] };
+            case 'reveal': return { roll: sign() * span(0.05, 0.15), off: [0, 0] };
             case 'follow': return { roll: span(-0.03, 0.03), off: [0, 0] };
             case 'pullback': return { roll: span(-0.1, 0.1), off: [0, 0] };
             case 'crash': return { roll: span(-0.12, 0.12), off: [0, 0] };
@@ -1000,7 +1001,7 @@
     };
 
     const planShots = (cue, scene, random, settings, transition = 'cut') => {
-        const { placed, unitBoxes, wideH, wideC, figures, W, H, aspect } = scene;
+        const { placed, unitBoxes, wideH, wideC, figures, W, H, aspect, sceneKey } = scene;
         const maxSize = placed.length ? Math.max(...placed.map(p => p.size)) : H * 0.1;
         const closeH = clamp(maxSize * 2.5, H * 0.16, wideH * 0.72);
         const close = buildFrames(placed, closeH, aspect);
@@ -1013,7 +1014,9 @@
         const length = cue.end - cue.start;
         const cuts = settings.cameraCuts && !settings.reducedMotion;
         const chorus = cue.kind === 'line' && Boolean(cue.line?.isChorus);
-        const negChance = settings.negativeShots ? (chorus ? 0.34 : 0.2) : 0;
+        // 反相镜头的多少看意象：星夜多（黑底白线像夜空），信笺少（信纸是白的）
+        const negScale = { night: 1.7, sea: 1.2, city: 1.1, letters: 0.5, flora: 0.8 }[sceneKey] ?? 1;
+        const negChance = settings.negativeShots ? Math.min(0.55, (chorus ? 0.34 : 0.2) * negScale) : 0;
         let inverted = 0;
         let previous = '';
         const push = (start, type, first) => {
@@ -1059,8 +1062,11 @@
                 // 一句的最后一个镜头够长时多半拉远，把整句和周围的墨交代出来
                 if (i > 0 && i === edges.length - 2 && end - start >= 1.4) weights = weights.concat([['pullback', 5]]);
                 if (chorus) weights = weights.map(([n, w]) => [n, w + (n === 'macro' ? 1.5 : n === 'dutch' ? 1 : 0)]);
+                // 移镜（Folia 没有）：从旁边那张线稿慢慢滑到正在唱的字上；镜头够长、这句有线稿时才用
+                if (i > 0 && figures.length && end - start >= 1.8) weights = weights.concat([['reveal', 1.4]]);
                 const pool = weights.filter(([n]) => n !== previous);
-                push(start, pickWeighted(random, pool.length ? pool : weights), i === 0);
+                const shot = push(start, pickWeighted(random, pool.length ? pool : weights), i === 0);
+                if (shot.type === 'reveal') shot.fig = figures[0];   // 第一张线稿最先画完，移镜开始时它已经在纸上
             });
         }
         const starts = unitBoxes.map(u => u.unit.start).sort((x, y) => x - y);
@@ -1117,6 +1123,18 @@
                 break;
             }
             case 'figure': if (shot.fig) { c = [shot.fig.x, shot.fig.y]; h = shot.fig.r * 2.6; } break;
+            case 'reveal': {
+                // 先在线稿上停一下，再匀加速、匀减速地滑到字上，滚转一路收平
+                const to = closeFrame ? closeFrame.c : wideC;
+                const toH = closeFrame ? closeH : wideH;
+                if (shot.fig) {
+                    const k = smooth(0.3, 0.85, u);
+                    c = [shot.fig.x + (to[0] - shot.fig.x) * k, shot.fig.y + (to[1] - shot.fig.y) * k];
+                    h = shot.fig.r * 2.8 + (toH - shot.fig.r * 2.8) * k;
+                    roll *= 1 - k;
+                } else { c = to; h = toH; }
+                break;
+            }
             default: break;
         }
         // 一个镜头从头到尾只推近 3.5%
