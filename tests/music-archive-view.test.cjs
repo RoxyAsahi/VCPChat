@@ -1308,8 +1308,8 @@ test('歌词面板平时不占位：选好歌播放后才出来，浏览到别�
     assert.equal(el.hidden, true, '浏览时收起');
     assert.ok(!hud.classList.contains('has-lyrics'), '版面还给选中卡');
     assert.equal(btn.getAttribute('aria-pressed'), 'false');
-    doc.querySelector('[data-act="now"]').click();
-    assert.equal(el.hidden, false, '定位当前播放：回到那首，歌词回来');
+    f.key('l', { ctrlKey: true });
+    assert.equal(el.hidden, false, '定位当前播放（Ctrl+L）：回到那首，歌词回来');
     btn.click();
     assert.equal(el.hidden, true, '按钮可以手动收起');
     btn.click();
@@ -1654,5 +1654,17 @@ test('键盘提示：用方向键时才出现，指针一按就收起', () => {
     assert.ok(hud.classList.contains('kbd'));
     f.w.document.getElementById('music-archive-view').dispatchEvent(new f.w.Event('pointerdown', { bubbles: true }));
     assert.equal(hud.classList.contains('kbd'), false);
+    f.close();
+});
+
+test('the toolbar has 进入舞台 where 正在播放 used to be; Ctrl+L still finds the playing track', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    assert.equal(doc.querySelector('.archive-nav [data-act="now"]'), null, '正在播放 button is gone');
+    const stage = doc.querySelector('.archive-nav [data-act="stage"]');
+    assert.ok(stage, '进入舞台 button is in the toolbar');
+    assert.match(stage.textContent, /进入舞台/);
+    stage.click();
+    assert.equal(f.app.stageHost.active, true, 'clicking it enters the stage');
     f.close();
 });
