@@ -100,7 +100,7 @@
 </div></div>
 <div class="md-hdl"><button type="button" data-md="handle" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="设置">
   <span class="md-sw md-g">${icon('settings-2', 20)}</span><span class="md-sw md-x">${icon('x', 20)}</span>
-</button></div>
+</button><span class="md-hdl-tip" id="music-dock-playhead-tip" data-md="hdl-tip"></span></div>
 <section class="md-pnl" id="music-dock-panel" role="dialog" aria-label="播放面板" aria-hidden="true">
   <div class="md-hd">
     <div class="md-hd-cv"></div>
@@ -158,6 +158,7 @@
             preview: $('[data-md="preview"]'),
             artist: $('[data-md="artist"]'),
             panelSlot: $('[data-md="panel"]'),
+            hdlTip: $('[data-md="hdl-tip"]'),
             seekTip: $('[data-md="seek-tip"]'),
             vrail: $('.md-vrail'),
             vfill: $('.md-vfill'),
@@ -397,16 +398,23 @@
             host.classList.toggle('md-vapor', !solid);
             fluid?.setSolid(solid);
             fluid?.setPlaying?.(app.isPlaying === true);
-            el.handle.title = state.panelOpen ? '关闭面板（Esc）' : '打开面板';
+            // 键盘焦点落在播放头上时和拖着它一样：放大、显示时间，暂停时也露出来，看得见焦点在哪。
+            const ringHeld = state.dragging?.fromRing === true || state.ringKbd === true;
+            fluid?.setRingFocus?.(state.ringHover === true || ringHeld, ringHeld);
+            const asPlayhead = !state.panelOpen;
+            el.hdl.classList.toggle('md-tip', asPlayhead && (state.ringHover === true || ringHeld));
+            // 读屏：当作播放头时把时间读出来，并说明方向键可以跳转。
+            if (asPlayhead) { el.handle.setAttribute('aria-describedby', 'music-dock-playhead-tip'); el.handle.title = '播放头：拖动或按左右方向键跳转，点一下打开面板'; }
+            else { el.handle.removeAttribute('aria-describedby'); el.handle.title = '关闭面板（Esc）'; }
         };
         const animateCapsule = () => { fluid?.layout(); };
 
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
-        // 白环平时收在播放条右端的面板按钮里（看不见），打开面板时从那里飞到抽屉右下角当关闭键。
-        // 以前的 playhead / fixed / hover / drop 几种摆法都去掉了；旧的 localStorage musicDockRingMode 不再读。
-        const ringMode = 'tucked';
+        // 白环：面板关着时是播放头（跟着进度走，可拖，点一下开面板）；面板开着时飞到右下角当关闭键。
+        // 以前备选的 fixed / hover / drop 摆法去掉了；旧的 localStorage musicDockRingMode 不再读。
+        const ringMode = 'playhead';
         const syncRing = () => {
             if (!fluid) return;
             if (fluid.ringMode !== ringMode) fluid.setRingMode(ringMode);
@@ -459,6 +467,8 @@
             fluid?.setProgress(fraction);
             const timeText = formatClock(t);
             const totalText = formatClock(d);
+            const tipText = `${timeText} / ${totalText}`;
+            if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             const durText = remainMode && d > 0 ? `−${formatClock(Math.max(0, d - t))}` : totalText;
             if (timeText !== state.lastTimeText) {
                 state.lastTimeText = timeText;
@@ -1734,11 +1744,12 @@
                 el.handle.setAttribute('aria-label', '关闭面板');
                 el.panelSlot.setAttribute('aria-expanded', 'true');
                 el.panelSlot.classList.add('md-on');
+                host.classList.add('md-panel-open');
                 fluid?.setRingDocked(false);
                 syncShift();
                 // 焦点进抽屉（落在当前页签上）；记住是从哪里打开的，关的时候还回去。
                 const from = document.activeElement;
-                panelReturn = from && from !== document.body && !el.pnl.contains(from) ? from : el.panelSlot;
+                panelReturn = from && from !== document.body && !el.pnl.contains(from) ? from : el.handle;
                 // 页签下划线要读排版，挪到下一帧和抽屉滑入的第一帧一起算：
                 // 同一下点击里和下面的焦点各读一次，会把刚插进来的行算两遍样式和排版。
                 renderTabs(false);
@@ -1765,6 +1776,7 @@
             el.handle.setAttribute('aria-label', '打开面板');
             el.panelSlot.setAttribute('aria-expanded', 'false');
             el.panelSlot.classList.remove('md-on');
+            host.classList.remove('md-panel-open');
             fluid?.setRingDocked(true);
             syncShift();
             // 焦点原来在抽屉里（或在关闭钮上）才还回去，不去抢别处的焦点。
@@ -1777,10 +1789,94 @@
             syncSolid();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
-        // 面板开关：播放条右端的面板按钮，和抽屉右下角的白环（面板开着时是关闭键）。
-        // 白环不再兼做播放头——以前面板一开它就飞去当关闭键，进度反而没处拖了；进度现在是条上独立的细轨。
-        listen(el.handle, 'click', () => togglePanel());
+        // 面板关着：白环是播放头（下面这段）；面板开着：白环飞到右下角当关闭键，进度改由条下沿的细轨拖。
+        // 播放条右端还有一个面板按钮，暂停时播放头沉下去也能打开面板。
         listen(el.panelSlot, 'click', (event) => { event.stopPropagation(); togglePanel(); });
+        // 播放头模式下白环就是播放头：按住横向拖动超过 4px 就是拖进度，松手跳过去；不拖就是普通点击（开关面板）。
+        {
+            let pending = null;
+            let swallow = false;
+            const trk = el.tracks[0];
+            listen(el.handle, 'pointerdown', (event) => {
+                if (event.button !== 0 || ringMode !== 'playhead' || state.panelOpen || !trk) return;
+                pending = { x: event.clientX, pointerId: event.pointerId };
+                el.handle.setPointerCapture?.(event.pointerId);
+            });
+            listen(el.handle, 'pointermove', (event) => {
+                if (!pending) return;
+                if (!state.dragging && Math.abs(event.clientX - pending.x) > 4) {
+                    const time = seekFromPointer(trk, event.clientX);
+                    if (time === null) { pending = null; return; }
+                    state.dragging = { time, trk, pointerId: pending.pointerId, fromRing: true };
+                    syncExpanded();
+                }
+                if (!state.dragging || state.dragging.trk !== trk) return;
+                const time = seekFromPointer(trk, event.clientX);
+                if (time === null) return;
+                state.dragging.time = time;
+                renderProgress();
+            });
+            const finish = (event, commit) => {
+                el.handle.releasePointerCapture?.(event.pointerId);
+                const was = pending;
+                pending = null;
+                if (!was || !state.dragging || state.dragging.trk !== trk) return;
+                const { time } = state.dragging;
+                state.dragging = null;
+                syncExpanded();
+                swallow = true;
+                if (commit) app.seekTo?.(time);
+                kickProgress();
+            };
+            listen(el.handle, 'pointerup', (event) => finish(event, true));
+            // 指针移到播放头上：放大成完整的环，上方显示当前时间，看得出它是播放头、可以拖。
+            listen(el.handle, 'pointerenter', () => { state.ringHover = true; syncSolid(); });
+            listen(el.handle, 'pointerleave', () => { state.ringHover = false; syncSolid(); });
+            // 键盘：Tab 能走到播放头；左右方向键每次跳 5 秒，回车/空格照常开面板。
+            listen(el.handle, 'focus', () => { state.ringKbd = el.handle.matches(':focus-visible'); syncSolid(); });
+            listen(el.handle, 'blur', () => { state.ringKbd = false; syncSolid(); });
+            listen(el.handle, 'keydown', (event) => {
+                if (ringMode !== 'playhead' || state.panelOpen) return;
+                const dir = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                const d = duration();
+                // 带修饰键的方向键留给全局快捷键（Shift + 方向键是上一首 / 下一首）。
+                if (!dir || !(d > 0) || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                state.ringKbd = true;
+                app.seekTo?.(Math.min(d, Math.max(0, currentTime() + dir * 5)));
+                kickProgress();
+            });
+            listen(el.handle, 'pointercancel', (event) => finish(event, false));
+            // 指针停在播放头上滚轮：一格跳 5 秒（往上是往后），触控板按累计距离算；只认播放头，别处滚轮不碰进度。
+            // 停手 0.3 秒或换方向就清零累计，免得上一回剩下的零头吞掉下一格。
+            let seekWheelAcc = 0;
+            let seekWheelAt = -1e9;
+            listen(el.handle, 'wheel', (event) => {
+                if (ringMode !== 'playhead' || state.panelOpen || state.dragging) return;
+                const d = duration();
+                if (!(d > 0)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+                const delta = (Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX) * unit;
+                if (event.timeStamp - seekWheelAt > 300 || Math.sign(delta) !== Math.sign(seekWheelAcc)) seekWheelAcc = 0;
+                seekWheelAt = event.timeStamp;
+                seekWheelAcc += delta;
+                const steps = Math.trunc(seekWheelAcc / 100);
+                if (!steps) return;
+                seekWheelAcc -= steps * 100;
+                state.ringHover = true;
+                syncSolid();
+                app.seekTo?.(Math.min(Math.max(0, d - 0.5), Math.max(0, currentTime() - steps * 5)));
+                kickProgress();
+            }, { passive: false });
+            listen(el.handle, 'click', (event) => {
+                if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
+                togglePanel();
+            });
+        }
+
 
         // ───────── 舞台设置：直接排在控制页里 ─────────
         // 原来舞台控制舱里的三块（当前舞台的专属设置、全局输出、演出阵列）和「恢复出厂编排」各自搬到控制页对应的位置

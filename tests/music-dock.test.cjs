@@ -488,7 +488,7 @@ test('hovering the title edges keeps the title; prev / next are plain buttons wi
     }
 });
 
-test('the progress strip is its own control: press jumps, drag follows, works with the panel open, and the ring is only the panel button', () => {
+test('panel closed: the ring is the playhead; panel open: the ring is the close button and the progress strip seeks', () => {
     const { window, doc, app, dock, calls } = setup();
     try {
         const cap = doc.querySelector('.md-cap');
@@ -503,6 +503,14 @@ test('the progress strip is its own control: press jumps, drag follows, works wi
         app.lastStateUpdateTime = Date.now();
         const popSeek = () => { const c = calls.pop(); return Array.isArray(c) ? [c[0], Math.round(c[1])] : c; };
         const ptr = (type, x) => trk.dispatchEvent(new window.MouseEvent(type, { clientX: x, button: 0, bubbles: true, cancelable: true }));
+        // 面板关着：白环是播放头，细轨藏着
+        const handle = doc.querySelector('[data-md="handle"]');
+        const root = doc.getElementById('music-dock-root');
+        assert.equal(dock.ringMode, 'playhead');
+        assert.equal(handle.getAttribute('aria-describedby'), 'music-dock-playhead-tip');
+        assert.ok(!root.classList.contains('md-panel-open'));
+        doc.querySelector('[data-md="panel"]').click();
+        assert.ok(root.classList.contains('md-panel-open'), 'the strip shows only while the panel is open');
         // 0% 在歌名左缘（100px），100% 在按钮组前 14px（800px）
         ptr('pointerdown', 450);
         ptr('pointerup', 450);
@@ -514,8 +522,7 @@ test('the progress strip is its own control: press jumps, drag follows, works wi
         assert.deepEqual(popSeek(), ['seek', 200]);
         assert.ok(!calls.includes('enter') && !calls.includes('stage'), 'seeking never opens the stage');
 
-        // 面板开着照样能拖
-        doc.querySelector('[data-md="panel"]').click();
+        // 面板开着细轨能拖，不影响面板
         assert.equal(dock.panelOpen, true);
         assert.equal(doc.querySelector('[data-md="panel"]').getAttribute('aria-expanded'), 'true');
         ptr('pointerdown', 275);
@@ -523,9 +530,7 @@ test('the progress strip is its own control: press jumps, drag follows, works wi
         assert.deepEqual(popSeek(), ['seek', 50]);
         assert.equal(dock.panelOpen, true, 'seeking leaves the panel alone');
 
-        // 白环只是面板的关闭键；不再当播放头
-        const handle = doc.querySelector('[data-md="handle"]');
-        assert.equal(dock.ringMode, 'tucked');
+        // 面板开着时白环是关闭键
         assert.equal(handle.hasAttribute('aria-describedby'), false);
         handle.click();
         assert.equal(dock.panelOpen, false);
@@ -579,7 +584,7 @@ test('fluid bar: no up-next titles on the bar, volume drop rail, ring docking an
         const root = doc.getElementById('music-dock-root');
         assert.ok(root.classList.contains('md-fl-on'), 'fluid layer is on by default');
         assert.ok(doc.querySelector('.md-fluid'), 'svg layer mounted');
-        assert.equal(dock.ringMode, 'tucked', 'the ring hides in the panel button until the panel opens');
+        assert.equal(dock.ringMode, 'playhead', 'the ring is the playhead while the panel is closed');
         assert.equal(doc.querySelector('.md-nx, [data-md="nx1"], [data-md="nx2"]'), null, 'next / after-next titles are gone');
         const slots = [...doc.querySelectorAll('.md-slots > button:not([hidden])')].map((b) => b.dataset.md);
         assert.deepEqual(slots, ['mode', 'stage', 'more', 'panel'], 'play order, stage, more and panel sit on the bar');

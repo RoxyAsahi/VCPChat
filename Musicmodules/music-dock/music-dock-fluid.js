@@ -110,7 +110,7 @@
 
         // ── 状态 ──
         // 每个量都有「当前」和「目标」，循环里按指数逼近；没有在动的量时循环停下。
-        const geo = { x: 0, y: 0, w: 0, h: 0, left: 0, bottom: 0, layerW: 0, playX: 0, volX: 0, ringX: 0, panelX: 0 };
+        const geo = { x: 0, y: 0, w: 0, h: 0, left: 0, bottom: 0, layerW: 0, playX: 0, volX: 0, ringX: 0 };
         const s = {
             progress: 0,
             // 进度在播放条宽度里走的区间（0～1）：起点由 music-dock.js 量成曲名左缘，终点在音量键前。
@@ -184,9 +184,6 @@
             geo.playX = pr && pr.width ? pr.left - sx + pr.width / 2 - geo.left : geo.x + geo.h / 2;
             geo.volX = vr && vr.width ? vr.left - sx + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
             geo.ringX = geo.x + geo.w * 0.63;
-            const panelBtn = bar.querySelector('[data-md="panel"]');
-            const pnr = panelBtn?.getBoundingClientRect();
-            geo.panelX = pnr && pnr.width ? pnr.left - sx + pnr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
             svg.setAttribute('width', geo.layerW);
             svg.setAttribute('height', LAYER_H);
             svg.setAttribute('viewBox', `0 0 ${geo.layerW} ${LAYER_H}`);
@@ -236,8 +233,6 @@
         const dockPoint = () => {
             // 暂停或让位时沉进条里（配合 showTarget 一起淡掉），播放时骑在条的上沿。
             if (s.ringMode === 'playhead') return { x: progressX(), y: geo.y + 2 + (playheadUp() ? 0 : 14) };
-            // tucked：收在播放条右端的面板按钮里（不露出来），打开面板时从这里飞去右下角。
-            if (s.ringMode === 'tucked') return { x: geo.panelX, y: geo.y + geo.h / 2 };
             if (s.ringMode === 'drop') {
                 const p = s.drop.p;
                 const fall = p < 0.5 ? 1 - Math.pow(p / 0.5, 2) : 0;
@@ -247,16 +242,11 @@
         };
         // 播放头只在真正播放（或正被拖动）时露出；快捷按钮升起时让开，不和它抢条上方那块位置。
         const playheadUp = () => s.ring.focusDrag || (s.playing && s.quick.t < 0.5);
-        const sizeTarget = () => {
-            if (!s.ring.docked) return 1;
-            if (s.ringMode === 'tucked') return 0.55;
-            return s.ringMode !== 'playhead' || s.ringFocus || s.ring.focusDrag ? 1 : 0.55;
-        };
+        const sizeTarget = () => (!s.ring.docked || s.ringMode !== 'playhead' || s.ringFocus || s.ring.focusDrag ? 1 : 0.55);
         // 小环该不该露出来：面板开着时它是关闭按钮，一直露着。
         const showTarget = () => {
             if (!s.ring.docked) return 1;
             if (s.ringMode === 'playhead') return playheadUp() ? 1 : 0;
-            if (s.ringMode === 'tucked') return 0;
             if (s.ringMode === 'hover') return s.ringHover ? 1 : 0;
             if (s.ringMode === 'drop') return s.drop.p < 1 ? (s.drop.p < 0.62 ? 1 : 0) : 0;
             return 1;
@@ -524,7 +514,7 @@
             get volumeOpen() { return s.vol.t === 1; },
             get ringDocked() { return s.ring.docked; },
             setRingMode(mode) {
-                s.ringMode = ['playhead', 'hover', 'drop', 'tucked'].includes(mode) ? mode : 'fixed';
+                s.ringMode = ['playhead', 'hover', 'drop'].includes(mode) ? mode : 'fixed';
                 s.drop.p = 1;
                 retargetRing(); kick();
             },

@@ -1497,6 +1497,27 @@ body.music-reduce-motion .md-mist { transition: none; }
 
 /* ───────── 播放头：平时是贴在进度线上的小珠子，指针移上去放大并显示时间 ───────── */
 #music-dock-root.md-fl-on .md-hdl.md-hdl-bead:not(.md-open) button { box-shadow: 0 0 10px 2px rgba(255, 255, 255, .55), inset 0 0 6px rgba(255, 255, 255, .7); }
+.md-hdl-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font: 600 12px/16px var(--md-font-num, inherit);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--md-t1);
+  background: var(--md-glass);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 0 0 1px rgba(var(--md-tp-rgb), .1), 0 0 18px color-mix(in srgb, var(--md-fl-tint, var(--md-accent)) 35%, transparent);
+  transform: translate(-50%, 4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s, transform .2s var(--mt-ease, ease);
+}
+.md-hdl.md-tip .md-hdl-tip { opacity: 1; transform: translate(-50%, 0); }
+.md-hdl.md-open .md-hdl-tip { display: none; }
 
 /* ───────── 提示：从播放条分出来的一滴 ─────────
  * 出现：从播放条的位置鼓出一滴，拉着一截细颈升上来再收圆；
@@ -1718,9 +1739,11 @@ body.music-archive-on:not(.music-stage-active):has(.archive-hud.beside-drawer.ly
 #music-dock-root .md-fx-sc.md-fx-park.md-fx-warm { content-visibility: visible; }
 
 /* ───────── 进度细轨（2026-11-24 底栏重排） ─────────
- * 进度不再借白环当播放头，也不靠拖播放条空白处：播放条下沿一条独立的细轨，从歌名左缘到右边按钮前
+ * 面板关着时进度由白环播放头表示和拖动，细轨藏起来（只隐藏不移除，播放头拖动要借它量尺寸）；
+ * 面板一开白环飞去当关闭键，细轨就出现在播放条下沿：从歌名左缘到右边按钮前
  * （--md-a / --md-b 由 music-dock.js 量出来写进去）。平时 2px，悬停变 4px、露出圆点和指针处的时间，
- * 按下就跳、按住拖动跟手。面板开着也一样能拖。 */
+ * 按下就跳、按住拖动跟手。 */
+#music-dock-root:not(.md-panel-open) .md-trk { visibility: hidden; pointer-events: none; }
 #music-dock-root .md-trk {
   inset: auto 0 3px 0;
   height: 14px;
@@ -1793,15 +1816,11 @@ body.music-archive-on:not(.music-stage-active):has(.archive-hud.beside-drawer.ly
   transition: opacity .12s, transform .12s;
 }
 #music-dock-root .md-trk.md-tipon .md-seek-tip { opacity: 1; transform: translate(-50%, 0); }
-/* 歌名和副标题整体往上让 3px，给细轨留出呼吸 */
-#music-dock-root .md-ttl { margin-top: -6px; }
+/* 细轨出现时歌名和副标题整体往上让一点，给它留出呼吸 */
+#music-dock-root .md-ttl { transition: filter .6s, opacity .6s, margin-top .3s; }
+#music-dock-root.md-panel-open .md-ttl { margin-top: -6px; }
 /* 节能档没有流体层，播放条不用再裁出整块进度底色 */
 .md-fl-low .md-cap { overflow: visible; }
 
 /* 面板按钮：播放条最右边；面板开着时亮着 */
 #music-dock-root .md-pnl-slot.md-on { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }
-/* 白环只在面板开着时出现（右下角的关闭键）；关着时收进面板按钮里 */
-#music-dock-root .md-hdl:not(.md-open) { pointer-events: none; }
-#music-dock-root.md-fl-low .md-hdl:not(.md-open) { opacity: 0; visibility: hidden; }
-#music-dock-root.md-fl-low .md-hdl { transition: opacity .2s, visibility 0s linear .2s; }
-#music-dock-root.md-fl-low .md-hdl.md-open { transition: opacity .2s; }
