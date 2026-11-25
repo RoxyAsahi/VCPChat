@@ -551,7 +551,9 @@
         };
 
         // ---------- 进出舞台：只看 body 上的类和舞台宿主公开的状态，不碰舞台代码 ----------
-        const SCENE_3D = ['diorama', 'tunnel', 'kowloon'];
+        // 3D 模式名单以舞台登记表为准（music-stage-advanced-modes.js 的 traits）；舞台脚本没加载时（测试）用这份
+        const SCENE_3D_FALLBACK = ['diorama', 'tunnel', 'kowloon'];
+        const isScene3d = (id) => (global.MusicStageModes?.traits ? global.MusicStageModes.traits(id).scene3d : SCENE_3D_FALLBACK.includes(id));
         const stageRoot = () => document.querySelector('.music-stage');
         const modeRoot = () => document.querySelector('.music-stage-mode-root');
         const modeLabel = (id) => global.MusicStageModes?.get?.(id)?.label
@@ -601,7 +603,7 @@
                 const run = start('enter', {
                     file: still ? '' : file,
                     still,
-                    loadingLabel: SCENE_3D.includes(app?.stageHost?.modeId),
+                    loadingLabel: isScene3d(app?.stageHost?.modeId),
                     gate: {
                         at: still ? 0 : TRANSIT.enterGate,
                         ready: stageModeReady,
@@ -737,7 +739,7 @@
             lastMode = next;
             if (!node.classList.contains('is-switching') || !host.active || next === previous) return;
             if (current) return; // 进出舞台的过场还在放，它自己会等加载
-            if (!SCENE_3D.includes(next) && !SCENE_3D.includes(previous)) return;
+            if (!isScene3d(next) && !isScene3d(previous)) return;
             transit('switch', { label: modeLabel(next) });
         };
         let modeObserver = null;

@@ -44,7 +44,7 @@ music-stage.css                              宿主和各模式样式（按模�
 4. `music-stage-config.js`：`MODE_META` 加元数据，`DEFAULTS.enabledModes` 加 id，`DEFAULTS.modes.<id>` 写默认参数，`VERSION` 加 1 并在 `ADDED_IN` 记 `<id>: 新版本号`（老用户的启用列表会自动补上）。
 5. `modules/ipc/musicHandlers.js` 的 `supportedStageModes` 加 id。
 6. `VCPDistributedServer/Plugin/MusicController/music-controller.js` 的 `stageModeAliases` 加英文 id 和中文名，报错文案里的列表和 `plugin-manifest.json` 的说明同步。
-7. 若画面自己铺满或是 3D/夜色：现在要在 `music-stage-host.js` `createMode` 里的 `stage-opaque` / `stage-scene-3d` / `stage-night` 名单加 id（治理中，会改成登记表里的特性字段）。
+7. 画面自己铺满、是 3D 场景或浅色主题下仍是夜色：在 `music-stage-advanced-modes.js` 那一行写 `traits: { opaque / scene3d / night }`（宿主、开场都从 `MusicStageModes.traits(id)` 读，不要另写名单）。
 8. 样式：`music-stage.css` 末尾加一段，段首注释 `/* 中文名（id）：一句话说明 */`，选择器以 `.music-stage-mode-<id>` 开头。
 9. 测试：至少一条创建→若干帧→销毁不泄漏的用例（参考 tests/music-stage-lifecycle.test.js）。
 

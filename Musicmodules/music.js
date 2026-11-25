@@ -434,6 +434,17 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setupMusicSleep?.(app); // 定时关闭（入口在底栏抽屉）
         window.setupMusicStats?.(app); // 听歌记录（次数、上次播放、跳过），只存本机
         window.setupMusicRadio?.(app); // 电台与自动续播：一组放完接着放相似的歌，右键「从这首开电台」
+        // 下面这些以前由 music-radio.js 在 setupMusicRadio 末尾顺带装上，顺序不变
+        const installLater = (name, lib, fn) => { try { window[lib]?.[fn]?.(app); } catch (e) { console.warn(`[Music] ${name} 没装上:`, e); } };
+        installLater('频谱检查', 'MusicSpectrum', 'setupMusicSpectrum'); // 右键「看频谱」
+        installLater('按设备记 EQ', 'MusicDeviceSound', 'setupMusicDeviceSound');
+        installLater('M3U 导入导出', 'MusicM3u', 'setupMusicM3u');
+        installLater('在文件夹中显示', 'MusicTrackFile', 'setupMusicTrackFile');
+        installLater('曲库文件夹', 'MusicFolders', 'setupMusicFolders');
+        installLater('EQ 预设', 'MusicEqPresets', 'setupMusicEqPresets');
+        installLater('声道', 'MusicChannels', 'setupMusicChannels'); // 新引擎才有
+        installLater('窗口标题', 'MusicWindowTitle', 'setupMusicWindowTitle');
+        installLater('撤销移除', 'MusicQueueUndo', 'setupMusicQueueUndo');
         window.setupMusicLyricsAi?.(app); // 外语歌词没有翻译时用 VCP 的模型翻成中文
         window.setupMusicSmart?.(app); // 智能歌单：检索框里的条件词（喜欢、没听过、次数>N……），存下来自己更新
         window.setupMusicDesktopLyrics?.(app); // 桌面歌词：开着时把当前行送给桌面上的歌词条

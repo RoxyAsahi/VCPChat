@@ -45,6 +45,7 @@
         "tests/music-share-error-text.test.cjs"
       ],
       "tools": [
+        "tests/music-window-bench/surface.cjs",
         "tests/music-window-bench/window-bench.cjs",
         "tests/music-window-bench/script-cost.cjs",
         "tests/music-window-bench/renderer-soak.cjs"
@@ -257,7 +258,8 @@
       "tests": [
         "tests/music-stage-lifecycle.test.js",
         "tests/music-stage-3d-regressions.test.js",
-        "tests/stream-stage2-animation-lifecycle.test.mjs"
+        "tests/stream-stage2-animation-lifecycle.test.mjs",
+        "tests/music-stage-traits.test.js"
       ],
       "tools": [
         "tests/music-stage-bench/bench.cjs",

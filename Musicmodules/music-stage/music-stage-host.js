@@ -7,6 +7,8 @@
     if (!Runtime || !Modes || !Config) throw new Error('Music stage runtime, config and modes must load before music-stage-host.js');
 
     const { clamp, DisposableScope } = Runtime;
+    // 模式外观特性（3D / 铺满 / 夜色）只在登记表里写一份，见 music-stage-advanced-modes.js
+    const modeTraits = (id) => Modes.traits?.(id) || { scene3d: false, opaque: false, night: false };
 
     // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
     const fileUrl = (path) => {
@@ -494,13 +496,14 @@
             state.stats.modeCreates += 1;
             localStorage.setItem('musicStageMode', state.modeId);
             // The 3D modes paint every pixel themselves; see .stage-scene-3d.
-            const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
+            const traits = modeTraits(state.modeId);
+            const scene3d = traits.scene3d;
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
-            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork' || state.modeId === 'orbit' || state.modeId === 'signal' || state.modeId === 'groupchat' || state.modeId === 'impression'));
+            root.classList.toggle('stage-opaque', scene3d || traits.opaque);
             // 雾笺、绘光的画面在浅色主题下也是夜色，左上角字标要换成浅色才看得见。
-            root.classList.toggle('stage-night', state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi');
+            root.classList.toggle('stage-night', traits.night);
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
@@ -1311,7 +1314,6 @@
         // Long enough for an in-world handover to have turned away from the old song.
         const SONG_TILT_MS = 900;
         const LYRICS_WAIT_MS = 2000;
-        const SCENE_MODES = new Set(['diorama', 'tunnel', 'kowloon']);
         const linesIds = new WeakMap();
         let nextLinesId = 1;
         const songKey = (frame) => {
@@ -1327,7 +1329,7 @@
             const instance = state.modeInstance;
             const { identity, key } = songKey(frame);
             const handover = state.handover;
-            if (!instance || !SCENE_MODES.has(state.modeId) || reducedMotion() || state.arriving
+            if (!instance || !modeTraits(state.modeId).scene3d || reducedMotion() || state.arriving
                 || state.committedSong === null || state.committedInstance !== instance) {
                 if (handover) instance?.root.classList.remove('is-song-leaving');
                 state.handover = null;

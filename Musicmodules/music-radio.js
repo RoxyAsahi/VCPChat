@@ -357,22 +357,6 @@
                 app.startRadio(app.contextMenuTrackIndex);
             });
         }
-        // 频谱检查（music-spectrum.js 在本文件之后加载、这里运行时已经在了）：右键菜单里接上「看频谱」
-        try { global.MusicSpectrum?.setupMusicSpectrum?.(app); } catch (e) { /* 没有频谱模块 */ }
-        // 按输出设备记住 EQ（music-device-sound.js，同样在本文件之后加载）
-        try { global.MusicDeviceSound?.setupMusicDeviceSound?.(app); } catch (e) { /* 没有这个模块 */ }
-        // 歌单导入导出 .m3u8（music-m3u.js，同样在本文件之后加载）
-        try { global.MusicM3u?.setupMusicM3u?.(app); } catch (e) { /* 没有这个模块 */ }
-        // 右键「在文件夹中显示」（music-track-file.js）
-        try { global.MusicTrackFile?.setupMusicTrackFile?.(app); } catch (e) { /* 没有这个模块 */ }
-        // 曲库文件夹管理（music-folders.js）
-        try { global.MusicFolders?.setupMusicFolders?.(app); } catch (e) { /* 没有这个模块 */ }
-        // 自己的 EQ 预设（music-eq-presets.js）
-        try { global.MusicEqPresets?.setupMusicEqPresets?.(app); } catch (e) { /* 没有这个模块 */ }
-        // 声道：平衡 / 互换 / 单声道（music-channels.js，新引擎才有）
-        try { global.MusicChannels?.setupMusicChannels?.(app); } catch (e) { /* 没有这个模块 */ }
-        try { global.MusicWindowTitle?.setupMusicWindowTitle?.(app); } catch (e) { /* 没有这个模块 */ }
-        try { global.MusicQueueUndo?.setupMusicQueueUndo?.(app); } catch (e) { /* 没有这个模块 */ }
     }
 
     const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };

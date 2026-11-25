@@ -57,8 +57,8 @@ AI 点歌：VCPDistributedServer/Plugin/MusicController → 主进程 handleMusi
 ```
 setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPlayer → setupOutput → setupEffects
 → setupWebDav → setupSidebar → setupUI → setupMusicStage → setupMusicSkin → MusicArchive.init
-→ 事件/IPC 监听 → setupMusicLikes → Goto → Sleep → Stats → Radio（顺带装：Spectrum、DeviceSound、M3u、
-  TrackFile、Folders、EqPresets、Channels、WindowTitle、QueueUndo）→ LyricsAi → Smart → DesktopLyrics
+→ 事件/IPC 监听 → setupMusicLikes → Goto → Sleep → Stats → Radio → Spectrum → DeviceSound → M3u
+  → TrackFile → Folders → EqPresets → Channels → WindowTitle → QueueUndo → LyricsAi → Smart → DesktopLyrics
 → 连引擎 WebSocket → 主题 → 开场 → initMusicDock → 读曲库/恢复上次会话
 ```
 
@@ -91,6 +91,7 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 - `node scripts/test-music.mjs --module <id>`：只跑一个模块；`node scripts/test-music.mjs tests/x.test.js`：只跑一个文件。
 - 渲染端测试用 jsdom `window.eval(文件内容)` 按 music.html 的顺序加载脚本；拆文件时要同步改测试里的加载列表。
 - 截图/性能脚本登记在各模块的 `tools`（`music:context` 会列出），用 Playwright + stub 起页面，不需要真引擎。
+- 装配或舞台外观的重构：重构前后各跑一次 `node tests/music-window-bench/surface.cjs --out=a.json`（`--root=` 可指向另一份检出），diff 两份指纹（app 上每个属性的类型、每个舞台的类、页面报错）应当相同。
 - 云端没有声卡：引擎能起，但 `is_playing` 不会变 true；播放态的帧率数据不可信。
 
 ## 装到本机（Roxy 的 FlowX13）
@@ -131,8 +132,8 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 1. **方法套娃**：`app.showContextMenu`（music.js → music-sidebar → likes → goto 各包一层）、`app.updateUIWithState`（music.js → channels → device-sound）、
    `app.fetchAndDisplayLyrics`（lyrics → player → lyrics-ai）、`app.renderPlaylist`（music.js / music-ui / 经典列表）。顺序靠 setup 调用顺序维持。
 2. **共写的列表状态**：`app.currentFilteredTracks`（11 个文件写）、`app.customPlaylists`（7 个）、`app.filteredPlaylistSource`（6 个）、`app.currentTrackIndex`（5 个）。
-3. **装配散落**：`music-radio.js` 末尾顺带装了 9 个无关模块；`connectWebSocket` 住在 `music-visualizer.js`。
+3. **装配散落**：`connectWebSocket` 住在 `music-visualizer.js`。
 4. **巨型文件**：22 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB、music-dock.js 148 KB。
-5. **加一个舞台要改 7 个文件**，宿主里还按模式 id 写死了 3D/不透明/夜色三张名单。
+5. **加一个舞台要改 6 个文件**（`check:music` 会核对是否一致）。
 
 治理进度和每批 PR 记在 PR 描述里；做完一项就把上面对应条目删掉或改写。
