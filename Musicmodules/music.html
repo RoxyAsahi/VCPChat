@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="music.css">
     <link rel="stylesheet" href="music-theme/music-tokens.css">
     <link rel="stylesheet" href="music-archive/archive.css">
+    <link rel="stylesheet" href="music-archive/archive-wall.css">
     <link rel="stylesheet" href="music-stage/music-stage.css">
     <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
@@ -33,7 +34,18 @@
     <!-- Custom Title Bar -->
     <div id="custom-title-bar">
         <div class="title">VCP - 音乐播放器</div>
+        <!-- 歌词舞台打开时：左边「返回首页」，右边舞台下拉，都放在标题栏里 -->
+        <button type="button" class="music-stage-home" aria-label="返回音乐首页"
+            title="返回音乐首页（Esc）">
+            <span class="music-stage-home-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"
+                    fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                    stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
+            <span class="music-stage-home-text" aria-hidden="true">VCP</span>
+            <i aria-hidden="true"></i>
+            <span class="music-stage-home-text" aria-hidden="true">歌词舞台</span>
+        </button>
         <div class="titlebar-actions">
+            <nav class="music-stage-mode-picker" aria-label="歌词演出模式"></nav>
             <button id="music-theme-toggle-btn" class="window-control-btn" type="button"
                 title="切换到浅色" aria-label="切换到浅色">
                 <svg class="music-theme-sun" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -651,12 +663,6 @@
         <div class="music-stage-mode-root" aria-live="off"></div>
 
         <header class="music-stage-top-chrome">
-            <div class="music-stage-wordmark" aria-hidden="true">
-                <span>VCP</span>
-                <i></i>
-                <span>歌词舞台</span>
-            </div>
-            <nav class="music-stage-mode-switcher" aria-label="歌词演出模式"></nav>
         </header>
 
         <aside class="music-stage-settings" aria-label="舞台视觉设置">
@@ -983,6 +989,16 @@
     <script src="music-stage/modes/kowloon-signs.js" onerror="this.remove()"></script>
     <script src="music-stage/modes/kowloon-sandbox.js" onerror="this.remove()"></script>
     <script src="music-stage/modes/kowloon-manager.js"></script>
+    <script src="music-stage/modes/inkdraft-figures.js"></script>
+    <script src="music-stage/modes/inkdraft-manager.js"></script>
+    <script src="music-stage/modes/fogpane-manager.js"></script>
+    <script src="music-stage/modes/lumiere-manager.js"></script>
+    <script src="music-stage/modes/hanabi-manager.js"></script>
+    <script src="music-stage/modes/clockwork-manager.js"></script>
+    <script src="music-stage/modes/orbit-manager.js"></script>
+    <script src="music-stage/modes/signal-manager.js"></script>
+    <script src="music-stage/modes/groupchat-manager.js"></script>
+    <script src="music-stage/modes/impression-manager.js"></script>
     <script src="music-stage/music-stage-advanced-modes.js"></script>
     <script src="music-stage/music-stage-modes.js"></script>
     <script src="music-stage/music-stage-host.js"></script>
@@ -1001,6 +1017,19 @@
     <script src="music-sleep.js"></script>
     <script src="music-stats.js"></script>
     <script src="music-radio.js"></script>
+    <script src="music-stats-view.js"></script>
+    <script src="music-lyrics-ai.js"></script>
+    <script src="music-dupes.js"></script>
+    <script src="music-spectrum.js"></script>
+    <script src="music-device-sound.js"></script>
+    <script src="music-m3u.js"></script>
+    <script src="music-track-file.js"></script>
+    <script src="music-folders.js"></script>
+    <script src="music-eq-presets.js"></script>
+    <script src="music-channels.js"></script>
+    <script src="music-track-order.js"></script>
+    <script src="music-window-title.js"></script>
+    <script src="music-queue-undo.js"></script>
     <script src="music-smart.js"></script>
     <script src="music-legacy-switch.js"></script>
     <script src="music-desktop-lyrics.js"></script>
@@ -1016,12 +1045,15 @@
     <script src="music-archive/archive-index.js"></script>
     <script src="music-archive/archive-list.js"></script>
     <script src="music-archive/archive-lyrics.js"></script>
+    <script src="music-archive/archive-wall.js"></script>
+    <script src="music-archive/archive-grid.js"></script>
     <script src="music-archive/archive-view.js"></script>
     <!-- /music-archive -->
     <script src="music.js"></script>
 
     <!-- music-dock -->
     <link rel="stylesheet" href="music-dock/music-dock.css">
+    <link rel="stylesheet" href="music-stats-view.css">
     <link rel="stylesheet" href="music-dock/music-fluid-kit.css">
     <div id="music-dock-root"></div>
     <script src="music-dock/music-dock-icons.js"></script>

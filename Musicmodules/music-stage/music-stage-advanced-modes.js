@@ -7,7 +7,16 @@
         diorama: global.MusicStageDioramaManager,
         fume: global.MusicStageFumeManager,
         tunnel: global.MusicStageTunnelManager,
-        kowloon: global.MusicStageKowloonManager
+        kowloon: global.MusicStageKowloonManager,
+        inkdraft: global.MusicStageInkdraftManager,
+        fogpane: global.MusicStageFogpaneManager,
+        lumiere: global.MusicStageLumiereManager,
+        hanabi: global.MusicStageHanabiManager,
+        clockwork: global.MusicStageClockworkManager,
+        orbit: global.MusicStageOrbitManager,
+        signal: global.MusicStageSignalManager,
+        groupchat: global.MusicStageGroupchatManager,
+        impression: global.MusicStageImpressionManager
     };
 
     const definitions = [
@@ -16,7 +25,16 @@
         { id: 'diorama', label: '镜台', manager: managers.diorama },
         { id: 'fume', label: '浮名', manager: managers.fume },
         { id: 'tunnel', label: '隧图', manager: managers.tunnel },
-        { id: 'kowloon', label: '町景', manager: managers.kowloon }
+        { id: 'kowloon', label: '町景', manager: managers.kowloon },
+        { id: 'inkdraft', label: '墨痕', manager: managers.inkdraft },
+        { id: 'fogpane', label: '雾笺', manager: managers.fogpane },
+        { id: 'lumiere', label: '绘光', manager: managers.lumiere },
+        { id: 'hanabi', label: '花火', manager: managers.hanabi },
+        { id: 'clockwork', label: '时计', manager: managers.clockwork },
+        { id: 'orbit', label: '回环', manager: managers.orbit },
+        { id: 'signal', label: '信号', manager: managers.signal },
+        { id: 'groupchat', label: '群唱', manager: managers.groupchat },
+        { id: 'impression', label: '印象', manager: managers.impression }
     ];
 
     global.MusicStageAdvancedModes = Object.freeze({

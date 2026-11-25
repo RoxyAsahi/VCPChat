@@ -11,6 +11,8 @@
 //       app.musicStats.forgotten({ minPlays, days, limit }) → [path]（以前常听、很久没碰的）
 //       app.musicStats.lastPlayed(n) → [path]
 //       app.musicStats.resume() → { track, position, at } | null（上次没听完的那首，首页「接着听」）
+//       app.musicStats.summary({ days }) → 听歌统计页用：总秒数、次数、活跃天数、24 小时分布、按次数排的歌、daily（日期 → 秒）
+//         （days 为 0 或不填 = 全部；按天的流水从这一版开始记，之前的只有总次数）
 // 变化时在 document 上发 `music-stats-change`（detail: { path }）。
 
 (function (global) {
@@ -51,6 +53,27 @@
             const raw = JSON.parse(storage?.getItem(RESUME_KEY) || 'null');
             if (raw && typeof raw.path === 'string') resume = raw;
         } catch (e) { resume = null; }
+        // 按天的流水：{ v: 1, d: { 'YYYY-MM-DD'(本地日期): { s: [24 个小时各听了几秒], p: { 路径键: 次数 } } } }，只留最近 400 天
+        const LOG_KEY = 'musicListenLog';
+        const KEEP_DAYS = 400;
+        let log = {};
+        try {
+            const raw = JSON.parse(storage?.getItem(LOG_KEY) || 'null');
+            if (raw && raw.v === 1 && raw.d && typeof raw.d === 'object') log = raw.d;
+        } catch (e) { log = {}; }
+        const dayKey = (t) => {
+            const d = new Date(t);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        };
+        const dayOf = (t) => {
+            const k = dayKey(t);
+            if (!log[k]) {
+                log[k] = { s: new Array(24).fill(0), p: {} };
+                const keys = Object.keys(log).sort();
+                for (let i = 0; i < keys.length - KEEP_DAYS; i++) delete log[keys[i]];
+            }
+            return log[k];
+        };
         let resumeSaved = 0;
         const setResume = (next, force = false) => {
             const changed = (resume && resume.path) !== (next && next.path);
@@ -67,6 +90,7 @@
             saveTimer = global.setTimeout(() => {
                 saveTimer = null;
                 try { storage?.setItem(KEY, JSON.stringify({ v: 1, t: table })); } catch (e) { /* 存不下也不影响播放 */ }
+                try { storage?.setItem(LOG_KEY, JSON.stringify({ v: 1, d: log })); } catch (e) { /* 同上 */ }
             }, 1500);
         };
         const announce = (path) => {
@@ -82,7 +106,12 @@
             const e = entry(path);
             if (!e) return;
             const t = now();
-            if (kind === 'play') { e[0]++; e[1] = t; if (!e[3]) e[3] = t; }
+            if (kind === 'play') {
+                e[0]++; e[1] = t; if (!e[3]) e[3] = t;
+                const day = dayOf(t);
+                const k = normPath(path);
+                day.p[k] = (day.p[k] || 0) + 1;
+            }
             else e[2]++;
             save();
             announce(path);
@@ -90,6 +119,7 @@
 
         // ---- 一遍一遍地记 ----
         let session = null; // { path, listened, counted, lastTick, lastPos }
+        let unsaved = 0;
         const currentTrack = () => {
             return Array.isArray(app.playlist) ? app.playlist[app.currentTrackIndex] || null : null;
         };
@@ -114,7 +144,16 @@
             if (session.counted && pos + 5 < session.lastPos && pos < 5) {
                 session = { path, listened: 0, counted: false, lastTick: at, lastPos: pos };
             }
-            if (playing) session.listened += Math.min(5, Math.max(0, (at - session.lastTick) / 1000));
+            if (playing) {
+                const step = Math.min(5, Math.max(0, (at - session.lastTick) / 1000));
+                session.listened += step;
+                if (step > 0) {
+                    const day = dayOf(at);
+                    day.s[new Date(at).getHours()] += step;
+                    unsaved += step;
+                    if (unsaved >= 30) { unsaved = 0; save(); } // 听歌时长每半分钟存一次
+                }
+            }
             session.lastTick = at;
             session.lastPos = pos;
             if (d > 0 && pos >= d - 1.5) session.ended = true; // 放到结尾自然切走的不算跳过
@@ -174,11 +213,43 @@
                 const track = (app.playlist || []).find((t) => normPath(t && t.path) === k);
                 return track ? { track, position: resume.position, at: resume.at } : null;
             },
+            summary({ days = 0 } = {}) {
+                const hours = new Array(24).fill(0);
+                const plays = new Map();
+                let seconds = 0;
+                let activeDays = 0;
+                let count = 0;
+                const daily = {}; // 每天听了几秒（听歌日历用）
+                const from = days > 0 ? dayKey(now() - (days - 1) * DAY) : '';
+                for (const [k, day] of Object.entries(log)) {
+                    if (from && k < from) continue;
+                    let daySeconds = 0;
+                    (day.s || []).forEach((v, h) => { hours[h] += v; daySeconds += v; });
+                    seconds += daySeconds;
+                    if (daySeconds > 0) daily[k] = Math.round(daySeconds);
+                    let dayPlays = 0;
+                    for (const [p, n] of Object.entries(day.p || {})) { plays.set(p, (plays.get(p) || 0) + n); dayPlays += n; }
+                    count += dayPlays;
+                    if (daySeconds >= 60 || dayPlays > 0) activeDays++;
+                }
+                // 「全部」时次数用总表（流水是这一版才开始记的，总表更全）
+                if (!(days > 0)) {
+                    plays.clear();
+                    count = 0;
+                    for (const [k, e] of Object.entries(table)) if (e[0] > 0) { plays.set(k, e[0]); count += e[0]; }
+                }
+                const tracks = [...plays.entries()]
+                    .map(([k, n]) => ({ path: table[k] ? table[k][4] : k, plays: n, last: table[k] ? table[k][1] : 0 }))
+                    .sort((a, b) => b.plays - a.plays || b.last - a.last);
+                const firstDay = Object.keys(log).sort()[0] || '';
+                return { seconds: Math.round(seconds), plays: count, activeDays, hours: hours.map(Math.round), tracks, since: firstDay, daily };
+            },
             tick,
             sync,
             flush() {
                 if (saveTimer !== null) { global.clearTimeout(saveTimer); saveTimer = null; }
                 try { storage?.setItem(KEY, JSON.stringify({ v: 1, t: table })); } catch (e) { /* 同上 */ }
+                try { storage?.setItem(LOG_KEY, JSON.stringify({ v: 1, d: log })); } catch (e) { /* 同上 */ }
                 if (resume) setResume(resume, true);
             }
         };

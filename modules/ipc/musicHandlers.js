@@ -15,11 +15,57 @@ const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
+const { createMusicThumbar } = require('../musicThumbar');
+const { createLyricsTranslator } = require('../musicLyricsTranslate');
+const { createLibraryWatch } = require('../musicLibraryWatch');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
+const m3u = require('./musicM3u');
 const { randomUUID } = require('crypto');
 let fetch;
 
 let musicWindow = null;
+// 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
+// （主进程单测会把这几个辅助模块换成空对象，下面三个都留了什么都不做的退路）
+const musicThumbar = typeof createMusicThumbar === 'function'
+    ? createMusicThumbar({ nativeImage: electron.nativeImage })
+    : { update() { return false; }, reset() {} };
+// 曲库文件夹自动同步：记住加过的文件夹，音乐窗口开着时后台对磁盘、监听变化（modules/musicLibraryWatch.js）
+const musicFoldersFile = () => (MUSIC_PLAYLIST_FILE ? path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_folders.json') : null);
+const libraryWatch = typeof createLibraryWatch !== 'function'
+    ? { start() {}, stop() {}, rememberFolder: async () => {}, noteLibrarySaved: async () => {}, folders: async () => [], forgetFolder: async () => false }
+    : createLibraryWatch({
+    // 用户自己在加文件夹时先等它扫完：两边的结果同时回到窗口会互相打乱「正在扫描」和排序
+    scan: async (folderPath, signal) => {
+        while (activeUserScans > 0 && !signal.aborted) await new Promise((r) => setTimeout(r, 2000));
+        return scanFolder({
+        folderPath,
+        coverCachePath: MUSIC_COVER_CACHE_DIR,
+        knownTracks: await readPlaylistFile(),
+        signal
+        });
+    },
+    readKnown: () => readPlaylistFile(),
+    readFolders: async () => {
+        const file = musicFoldersFile();
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeFolders: async (list) => { const file = musicFoldersFile(); if (file) await writeJsonAtomic(file, list, { spaces: 2 }); },
+    readExcluded: async () => {
+        const file = musicFoldersFile() && path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json');
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeExcluded: async (list) => { if (MUSIC_PLAYLIST_FILE) await writeJsonAtomic(path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json'), list); },
+    send: (channel, payload) => { if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send(channel, payload); }
+});
+// 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
+const lyricsTranslator = typeof createLyricsTranslator !== 'function'
+    ? { translate: async () => ({ status: 'unavailable', message: '歌词翻译模块没有加载' }) }
+    : createLyricsTranslator({
+        getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
+        getCacheDir: () => (LYRIC_DIR ? path.join(LYRIC_DIR, 'translations') : null)
+    });
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
@@ -171,6 +217,11 @@ function createOrFocusMusicWindow() {
             musicWindow.show();
             musicCapsuleState = { ...musicCapsuleState, open: true };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
+        });
+        // 窗口藏起来再显示时 Windows 会丢掉缩略图按钮，重新设一遍
+        musicWindow.on('show', () => {
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
         });
 
         // Wait for the renderer to signal that it's ready
@@ -178,6 +229,7 @@ function createOrFocusMusicWindow() {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
                 desktopLyrics?.musicReady();
+                libraryWatch.start();
                 // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
@@ -224,6 +276,8 @@ function createOrFocusMusicWindow() {
             currentSongInfo = null; // 清理歌曲信息
             musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
             publishMusicCapsule();
+            musicThumbar.reset();
+            libraryWatch.stop();
             musicGrooveBus.publish({ playing: false });
             pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
@@ -251,6 +305,7 @@ function createOrFocusMusicWindow() {
             audioEngineApi('/pause', 'POST').catch(() => {});
             musicCapsuleState = { ...musicCapsuleState, playing: false };
             publishMusicCapsule();
+            musicThumbar.update(crashedWindow, { playing: false });
             musicGrooveBus.publish({ playing: false });
             const now = Date.now();
             crashTimes = crashTimes.filter((at) => now - at < MUSIC_CRASH_WINDOW_MS).concat(now);
@@ -302,7 +357,12 @@ function runLibraryScan(event, options = {}) {
     return scan;
 }
 
-async function scanLibrary(event, { folderPath = null, filePaths } = {}) {
+let activeUserScans = 0;
+async function scanLibrary(event, options = {}) {
+    activeUserScans++;
+    try { return await scanLibraryNow(event, options); } finally { activeUserScans--; }
+}
+async function scanLibraryNow(event, { folderPath = null, filePaths } = {}) {
     const sendToRequester = (channel, payload) => {
         if (event.sender && !event.sender.isDestroyed()) {
             event.sender.send(channel, payload);
@@ -501,6 +561,15 @@ async function handleMusicControl(args) {
         'fume',
         'tunnel',
         'kowloon',
+        'inkdraft',
+        'fogpane',
+        'lumiere',
+        'hanabi',
+        'clockwork',
+        'orbit',
+        'signal',
+        'groupchat',
+        'impression',
         'starborn'
     ]);
     const normalizedStageMode = typeof stageMode === 'string' && stageMode.trim()
@@ -691,6 +760,7 @@ function initialize(options) {
                 playing: state?.playing === true
             };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing });
             if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
             followTrackChange(state).catch(() => {});
         });
@@ -701,6 +771,133 @@ function initialize(options) {
         });
 
         ipcMain.handle('music-get-audio-engine-endpoint', () => audioEngineEndpoint.getEndpoint());
+        ipcMain.handle('music-translate-lyrics', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { status: 'error', message: '只有音乐窗口可以翻译歌词' };
+            }
+            return lyricsTranslator.translate(payload || {});
+        });
+
+        // 频谱检查（真假无损）：把本机音频文件的原始字节交给音乐窗口去解码分析。只认音频扩展名、只给音乐窗口。
+        ipcMain.handle('music-read-audio-file', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { ok: false, message: '只有音乐窗口可以读' };
+            }
+            const file = payload && typeof payload.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file) || !/\.(flac|mp3|wav|m4a|aac|ogg|opus|wv|aiff?|alac|ape|dsf|dff|wma)$/i.test(file)) {
+                return { ok: false, message: '只能分析本机的音频文件' };
+            }
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile()) return { ok: false, message: '文件不在了' };
+                if (stat.size > 400 * 1024 * 1024) return { ok: false, message: '文件太大（超过 400 MB），没法在窗口里分析' };
+                const data = await fs.readFile(file);
+                return { ok: true, data, size: stat.size };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
+
+        // 右键「在文件夹中显示」：只接受曲库里那种本机绝对路径，文件得还在
+        ipcMain.handle('music-show-in-folder', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file)) return { ok: false, message: '这首没有本机文件' };
+            const stat = await fs.stat(file).catch(() => null);
+            if (!stat || !stat.isFile()) return { ok: false, message: '文件已经不在原来的位置了' };
+            electron.shell.showItemInFolder(file);
+            return { ok: true };
+        });
+
+        // 曲库文件夹管理：列出加过的文件夹、打开、移出（曲目由音乐窗口先从曲库拿掉并存盘，这里只忘掉文件夹、重建监听）、立即重扫
+        ipcMain.handle('music-library-folders', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const op = payload?.op || 'list';
+            const dir = typeof payload?.path === 'string' ? payload.path : '';
+            try {
+                if (op === 'list') {
+                    const folders = typeof libraryWatch.folders === 'function' ? await libraryWatch.folders() : [];
+                    const withState = [];
+                    for (const d of folders) withState.push({ path: d, exists: Boolean((await fs.stat(d).catch(() => null))?.isDirectory()) });
+                    return { ok: true, folders: withState };
+                }
+                if (!dir || !path.isAbsolute(dir)) return { ok: false, message: '不是本机文件夹' };
+                if (op === 'open') {
+                    const stat = await fs.stat(dir).catch(() => null);
+                    if (!stat || !stat.isDirectory()) return { ok: false, message: '这个文件夹已经不在了' };
+                    const err = await electron.shell.openPath(dir);
+                    return err ? { ok: false, message: err } : { ok: true };
+                }
+                if (op === 'forget') {
+                    if (typeof libraryWatch.forgetFolder === 'function') await libraryWatch.forgetFolder(dir);
+                    libraryWatch.start();
+                    return { ok: true };
+                }
+                if (op === 'rescan') {
+                    await libraryWatch.rescanNow?.();
+                    return { ok: true };
+                }
+                return { ok: false, message: '不认识的操作' };
+            } catch (err) {
+                return { ok: false, message: String(err && err.message || err) };
+            }
+        });
+
+        // 歌单导出 / 导入 .m3u8（和别的播放器互通）。只给音乐窗口；导出走保存对话框，导入走打开对话框或拖进来的文件。
+        const fromMusicWindow = (event) => musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents;
+        ipcMain.handle('music-m3u-export', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导出' };
+            const name = String(payload?.name || '');
+            const tracks = Array.isArray(payload?.tracks) ? payload.tracks.slice(0, 50000) : [];
+            if (!tracks.length) return { ok: false, message: '这个歌单是空的' };
+            const result = await dialog.showSaveDialog(musicWindow, {
+                title: '导出歌单',
+                defaultPath: m3u.safeFileName(name) + '.m3u8',
+                filters: [{ name: 'M3U8 歌单', extensions: ['m3u8'] }, { name: 'M3U 歌单', extensions: ['m3u'] }]
+            });
+            if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+            try {
+                const text = m3u.buildM3u(name, tracks);
+                // .m3u 给老播放器用：带 BOM 让它们认出是 UTF-8
+                await fs.writeFile(result.filePath, /\.m3u$/i.test(result.filePath) ? '\uFEFF' + text : text, 'utf8');
+                return { ok: true, file: result.filePath, count: tracks.length };
+            } catch (err) {
+                return { ok: false, message: '写不进去：' + (err && err.message || err) };
+            }
+        });
+        ipcMain.handle('music-m3u-import', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导入' };
+            let file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file) {
+                const result = await dialog.showOpenDialog(musicWindow, {
+                    title: '导入歌单',
+                    filters: [{ name: '歌单', extensions: ['m3u8', 'm3u'] }],
+                    properties: ['openFile']
+                });
+                if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true };
+                file = result.filePaths[0];
+            }
+            if (!path.isAbsolute(file) || !/\.m3u8?$/i.test(file)) return { ok: false, message: '只认 .m3u / .m3u8 歌单' };
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile() || stat.size > 20 * 1024 * 1024) return { ok: false, message: '这个文件不像歌单' };
+                const parsed = m3u.parseM3u(m3u.decodeM3u(await fs.readFile(file), file), { baseDir: path.dirname(file) });
+                // 几千行的歌单逐个查文件太慢（网络盘、拔掉的盘每次都要等）：同一文件夹只查一次在不在，再 32 个一批并行查文件
+                const list = parsed.entries.slice(0, 50000);
+                const dirs = new Map();
+                const dirOk = (d) => { if (!dirs.has(d)) dirs.set(d, fs.stat(d).then((s) => s.isDirectory(), () => false)); return dirs.get(d); };
+                const entries = new Array(list.length);
+                for (let at = 0; at < list.length; at += 32) {
+                    await Promise.all(list.slice(at, at + 32).map(async (entry, k) => {
+                        const s = (await dirOk(path.dirname(entry.path))) ? await fs.stat(entry.path).catch(() => null) : null;
+                        entries[at + k] = { ...entry, exists: Boolean(s && s.isFile()) };
+                    }));
+                }
+                return { ok: true, file, name: parsed.name || path.basename(file).replace(/\.m3u8?$/i, ''), entries, skipped: parsed.skipped };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
 
         audioEngineEndpoint.onStatus((endpoint) => {
             if (musicWindow && !musicWindow.isDestroyed()) {
@@ -840,6 +1037,11 @@ function initialize(options) {
             return audioEngineApi('/set_saturation', 'POST', data);
         });
 
+        // --- 声道（左右平衡 / 互换 / 单声道），新引擎才有 /set_channels ---
+        ipcMain.handle('music-set-channels', (event, data) => {
+            return audioEngineApi('/set_channels', 'POST', data);
+        });
+
         // --- Crossfeed Handlers ---
         ipcMain.handle('music-get-crossfeed', async () => {
             return await audioEngineApi('/crossfeed', 'GET');
@@ -967,6 +1169,7 @@ function initialize(options) {
             }
 
             await runLibraryScan(event, { folderPath: result.filePaths[0] });
+            await libraryWatch.rememberFolder(result.filePaths[0]);
         });
 
         // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
@@ -980,7 +1183,10 @@ function initialize(options) {
                 if (stat?.isDirectory()) folders.push(raw);
                 else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
-            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
+            for (const folderPath of folders) {
+                await runLibraryScan(event, { folderPath });
+                await libraryWatch.rememberFolder(folderPath);
+            }
             if (files.length) await runLibraryScan(event, { filePaths: files });
             return { folders: folders.length, files: files.length };
         });
@@ -993,7 +1199,10 @@ function initialize(options) {
                 if (!Array.isArray(playlist)) throw new TypeError('playlist must be an array');
                 // 一份非空曲库被清空时先留个备份：曲库读取失败后界面以空列表存盘，整个曲库就没了。
                 if (playlist.length === 0) await backupBeforeEmptying(MUSIC_PLAYLIST_FILE);
+                // 用户移出曲库的歌记下来，后台同步文件夹时不再加回来（空列表多半是读取失败，不算）
+                const previous = playlist.length ? await readPlaylistFile() : null;
                 await writeJsonAtomic(MUSIC_PLAYLIST_FILE, playlist);
+                if (previous) libraryWatch.noteLibrarySaved(previous, playlist);
                 return { success: true };
             } catch (error) {
                 console.error('Error saving music playlist:', error);
@@ -1083,8 +1292,36 @@ function initialize(options) {
             return { success: false, message: '主窗口没有打开' };
         });
 
-        ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject }) => {
+        // 和歌放在一起的歌词（同目录同名的 .ttml / .lrc，很多人整理曲库时就这么放）：比歌词目录里自动下载的优先
+        const readSidecarLyrics = async (trackPath) => {
+            const p = typeof trackPath === 'string' ? trackPath : '';
+            if (!p || /^[a-z][a-z0-9+.-]{2,}:\/\//i.test(p) || !path.isAbsolute(p)) return null;
+            const base = p.slice(0, p.length - path.extname(p).length);
+            if (!base || base === p) return null;
+            for (const ext of ['.ttml', '.lrc']) {
+                const file = base + ext;
+                try {
+                    const stat = await fs.stat(file);
+                    if (!stat.isFile() || stat.size > 2 * 1024 * 1024) continue;
+                    const text = require('../lyrics/decodeLyricText').decodeLyricText(await fs.readFile(file));
+                    if (ext === '.ttml') {
+                        const parsed = require('../lyrics/parserCore').parseTTML(text);
+                        if (parsed && parsed.lines.length) return { ...parsed, source: 'sidecar' };
+                        continue;
+                    }
+                    if (/\[\d{1,3}:\d{2}/.test(text)) return text;
+                } catch (err) {
+                    if (err && err.code !== 'ENOENT') console.warn(`[Music] Error reading lyrics next to the track ${file}:`, err.message);
+                }
+            }
+            return null;
+        };
+
+        ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject, path: trackPath }) => {
             if (!title) return null;
+
+            const sidecar = await readSidecarLyrics(trackPath);
+            if (sidecar) return sidecar;
 
             const sanitize = (str) => (str || '').replace(/[\\/:"*?<>|]/g, '_').trim();
             const sanitizedTitle = sanitize(title);
