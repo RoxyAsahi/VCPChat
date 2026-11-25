@@ -725,6 +725,13 @@
             fluid?.pointer(event.clientX);
         });
         listen(el.cap, 'pointerleave', () => fluid?.pointer(null));
+        // 指针在底栏上时，窗口即使没有焦点（比如刚从别的窗口移过来）也让流体层照常播过渡，悬停不会一下跳变。
+        let attendTimer = null;
+        listen(el.dockIn, 'pointerenter', () => { cancel(attendTimer); attendTimer = null; fluid?.setAttended?.(true); });
+        listen(el.dockIn, 'pointerleave', () => {
+            cancel(attendTimer);
+            attendTimer = later(() => { attendTimer = null; fluid?.setAttended?.(false); }, 2500);
+        });
         listen(el.dockIn, 'pointerleave', () => {
             cancel(expandTimer); expandTimer = null;
             cancel(dwellTimer); dwellTimer = null;

@@ -134,6 +134,7 @@
             enabled: true,
             hidden: false,     // 窗口不可见
             suspended: false,  // 窗口失焦
+            attended: false,   // 指针正停在底栏上（窗口失焦时也照常播过渡动画）
             dirty: false
         };
         let frame = 0;
@@ -406,7 +407,8 @@
             s.show.t = showTarget();
             if (!moving()) return;
             if (s.hidden) { s.dirty = true; return; }
-            if (s.suspended) { settle(); draw(); return; }
+            // 失焦时平时直接落位省电；但指针正在底栏上（用户在看、在碰），悬停的凝固/鼓包要照常慢慢过去，不能一下跳变。
+            if (s.suspended && !s.attended) { settle(); draw(); return; }
             last = (win.performance || Date).now();
             frame = win.requestAnimationFrame(step);
         };
@@ -447,9 +449,10 @@
                 const next = Boolean(on);
                 if (s.suspended === next) return;
                 s.suspended = next;
-                if (next && frame) { settle(); draw(); }
+                if (next && frame && !s.attended) { settle(); draw(); }
                 if (next && glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; glow.paintTarget?.(); }
             },
+            setAttended(on) { s.attended = Boolean(on); if (on) kick(); },
             get animating() { return Boolean(frame) || Boolean(glow.frame); },
             setProgressRange(a, b) {
                 const na = Math.min(0.6, Math.max(0, Number(a) || 0)); const nb = Math.min(1, Math.max(na + 0.1, Number(b) || 1));
