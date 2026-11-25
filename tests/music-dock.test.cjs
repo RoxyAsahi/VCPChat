@@ -100,8 +100,13 @@ test('dock drives the existing player methods and keeps the old slider as the vo
         doc.querySelector('[data-act="mute"]').click();
         assert.deepEqual(calls.pop(), ['volume', '0.5']);
 
+        // 舞台那一行只在舞台里出现
+        assert.equal(doc.querySelector('[data-act="scene-step"]'), null);
+        app.isStageActive = true;
+        dock.openPanel('控制');
         doc.querySelector('[data-act="scene-step"][data-d="1"]').click();
         assert.deepEqual(calls.pop(), ['mode', 'partita']);
+        app.isStageActive = false;
 
         window.MusicIntro = { replay() { calls.push('intro'); } };
         dock.openPanel('控制');
@@ -643,7 +648,8 @@ test('stage settings sit on the control page itself: each part is moved in, comm
         assert.ok(doc.querySelector('[data-md="adv-acts"] .music-stage-settings-reset'));
         assert.ok(doc.body.classList.contains('music-dock-stage-settings'), 'old drawer is hidden by css');
 
-        // 舞台专属设置直接在控制页里：没有子页，面板一开就看得见。
+        // 舞台专属设置直接在控制页里：没有子页，演出时面板一开就看得见。
+        app.isStageActive = true;
         again.openPanel('控制');
         assert.equal(doc.querySelector('[data-md="ext"]').hidden, false);
         assert.equal(doc.querySelector('.md-pnl').classList.contains('md-sub'), false);
@@ -866,11 +872,13 @@ test('keyboard: focus enters and leaves the drawer, tabs rove with arrow keys, t
         assert.equal(doc.activeElement.textContent, '声音', 'wraps around');
         assert.equal(doc.getElementById('music-dock-panel-body').getAttribute('role'), 'tabpanel');
 
-        // 没有子页了：直达舞台设置时焦点落在舞台那一行上，页面里也没有返回按钮
+        // 没有子页了：演出时直达舞台设置，焦点落在舞台那一行上，页面里也没有返回按钮
+        app.isStageActive = true;
         dock.openStageSettings();
         assert.equal(doc.activeElement.dataset.act, 'scene-pick');
         assert.equal(doc.activeElement.getAttribute('aria-expanded'), 'false');
         assert.equal(doc.querySelector('[data-md="fx-back"], [data-md="sp-back"]'), null);
+        app.isStageActive = false;
 
         // 关闭：焦点回到打开前的地方
         dock.closePanel();
@@ -937,7 +945,9 @@ test('the heart on the bar follows the like API: click toggles, outside changes 
     try {
         const heart = doc.querySelector('[data-md="like"]');
         assert.equal(heart.hidden, false);
-        assert.deepEqual([...doc.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['like', 'more']);
+        // 心形挪进了悬停时展开的快捷行；右侧槽位是播放模式、舞台、更多、面板
+        assert.equal(heart.closest('.md-slots'), null);
+        assert.deepEqual([...doc.querySelectorAll('.md-slots button')].filter((b) => !b.hidden).map((b) => b.dataset.md), ['mode', 'stage', 'more', 'panel']);
         assert.equal(heart.getAttribute('aria-pressed'), 'false');
         heart.click();
         assert.ok(liked.has('C:/a.flac'));
@@ -960,10 +970,10 @@ test('the heart on the bar follows the like API: click toggles, outside changes 
     }
 });
 
-test('sleep timer entry: third tile on the control page, choices call the timer, the bar shows time left', () => {
+test('sleep timer entry: a tile on the control page (third in the stage), choices call the timer, the bar shows time left', () => {
     let st = { mode: 'off', endsAt: 0, remaining: 0 };
     const calls = [];
-    const { window, doc, dock } = setup((a, w) => {
+    const { window, doc, app, dock } = setup((a, w) => {
         const announce = () => w.document.dispatchEvent(new w.CustomEvent('music-sleep-change', { detail: st }));
         a.sleepTimer = {
             state: () => st,
@@ -976,9 +986,14 @@ test('sleep timer entry: third tile on the control page, choices call the timer,
         const badge = doc.querySelector('[data-md="sleep"]');
         assert.equal(badge.hidden, true, 'nothing on the bar while off');
         dock.openPanel('控制');
+        assert.ok(doc.querySelector('[data-act="sleep-pick"]'), 'tile present when the timer exists');
+        assert.ok(doc.querySelector('.md-tiles').classList.contains('md-tiles-2'), 'play mode + sleep outside the stage');
+        app.isStageActive = true;
+        dock.openPanel('控制');
+        assert.ok(doc.querySelector('.md-tiles').classList.contains('md-tiles-3'), 'the stage tile joins in the stage');
+        app.isStageActive = false;
+        dock.openPanel('控制');
         const tile = doc.querySelector('[data-act="sleep-pick"]');
-        assert.ok(tile, 'third tile present when the timer exists');
-        assert.ok(!doc.querySelector('.md-tiles').classList.contains('md-tiles-2'));
         tile.click();
         const chips = [...doc.querySelectorAll('.md-slp [data-v]')].map((b) => b.dataset.v);
         assert.deepEqual(chips, ['off', '15', '30', '45', '60', '90', 'track']);
@@ -1007,12 +1022,16 @@ test('sleep timer entry: third tile on the control page, choices call the timer,
     }
 });
 
-test('without a sleep timer the control page keeps two tiles and the bar has no badge', () => {
-    const { window, doc, dock } = setup();
+test('without a sleep timer the control page has no sleep tile (one tile, two in the stage) and the bar has no badge', () => {
+    const { window, doc, app, dock } = setup();
     try {
         dock.openPanel('控制');
         assert.equal(doc.querySelector('[data-act="sleep-pick"]'), null);
+        assert.ok(doc.querySelector('.md-tiles').classList.contains('md-tiles-1'));
+        app.isStageActive = true;
+        dock.openPanel('控制');
         assert.ok(doc.querySelector('.md-tiles').classList.contains('md-tiles-2'));
+        app.isStageActive = false;
         assert.equal(doc.querySelector('[data-md="sleep"]').hidden, true);
     } finally {
         dock?.destroy?.();

@@ -88,7 +88,7 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 
 ## 验证
 
-- `npm run test:music`：约 40 秒。已知失败在 [tests/music-known-failures.json](../tests/music-known-failures.json)（按旧界面写的断言，本机新版界面已改掉）。
+- `npm run test:music`：约 40 秒，应当全过。[tests/music-known-failures.json](../tests/music-known-failures.json) 现在是空的：界面改了就同步改测试，不要往清单里塞新失败。
   修好一条就从清单删一条；**不要把新回归加进清单**。
 - `node scripts/test-music.mjs --module <id>`：只跑一个模块；`node scripts/test-music.mjs tests/x.test.js`：只跑一个文件。
 - 渲染端测试用 jsdom `window.eval(文件内容)` 按 music.html 的顺序加载脚本；拆文件时要同步改测试里的加载列表。

@@ -25,5 +25,5 @@
 
 ## 测试与截图
 
-`node scripts/test-music.mjs --module archive`。`tests/music-archive-view.test.cjs` 有 38 条按旧首页（大标题 HUD）写的已知失败，见 tests/music-known-failures.json。
+`node scripts/test-music.mjs --module archive`。`tests/music-archive-view.test.cjs` 按现在的首页写（没有左上大标题、「播放这一组」「接着听」和取出详情；回车只播放，Shift+回车进舞台；歌词面板只由「歌词」按钮开合）。要测和 3D 场景打交道的部分，用文件里的 `withFakeScene`。
 截图：`node tests/music-archive/shots.cjs`（Playwright + harness.html，不需要真引擎）。

@@ -357,9 +357,12 @@ test('music stage keeps one mode instance and releases canvases across switches'
 
     // A switch builds the new mode behind the old one and keeps both for one
     // soft-focus crossfade; drive frames until only the new one is left.
-    const settleSwitch = async (time) => {
+    // 宿主按帧时间限帧：同一个时间戳只画一次，所以每轮往前走一步
+    let clock = 1000;
+    const settleSwitch = async () => {
         for (let i = 0; i < 40; i++) {
-            app.stageHost.updateFrame(time);
+            clock += 100;
+            app.stageHost.updateFrame(clock);
             if (!app.stageHost.getDebugSnapshot().switching) return;
             await wait(dom.window, 100);
         }
@@ -370,7 +373,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
         app.stageHost.setMode(mode);
         const during = app.stageHost.getDebugSnapshot();
         assert.ok(during.modeRootChildren <= 2, 'at most the old and the new mode at once');
-        await settleSwitch(1000);
+        await settleSwitch();
         const snapshot = app.stageHost.getDebugSnapshot();
         assert.equal(snapshot.modeId, mode);
         assert.equal(snapshot.modeRootChildren, 1);
@@ -384,7 +387,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     }
 
     app.stageHost.setMode('starborn');
-    await settleSwitch(1200);
+    await settleSwitch();
     const starborn = app.stageHost.getDebugSnapshot();
     assert.equal(starborn.modeId, 'starborn');
     assert.equal(starborn.mode.excludesWebGLModes, true);
@@ -393,7 +396,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     assert.equal(starborn.mode.candidateModes.includes('sonnet'), true);
 
     app.stageHost.setMode('luminous');
-    await settleSwitch(1300);
+    await settleSwitch();
     const afterFume = app.stageHost.getDebugSnapshot();
     assert.equal(afterFume.canvasCount, 0);
     assert.equal(afterFume.modeRootChildren, 1);
