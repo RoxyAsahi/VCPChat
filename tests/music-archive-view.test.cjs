@@ -108,7 +108,7 @@ test('目录里回车只播放不进播放页；→ 进播放页；Esc 先清空
     listKey(f, input, 'Enter');
     assert.deepEqual(f.calls, [['load', 7, 3]]); // 从检索结果点播：队列就是这 3 条结果
     assert.equal(f.app.filteredPlaylistSource.name, '检索结果');
-    assert.equal(f.text('queue'), '检索结果');
+    assert.equal(f.app.queueSourceName, '检索结果');
     f.calls.length = 0;
     f.app.isPlaying = true;
     input.setSelectionRange(input.value.length, input.value.length);
@@ -206,7 +206,12 @@ test('空格切换播放暂停；Home/End 到这一列第一首和最后一首�
 
 test('经典视图隐藏档案页并记住；返回按钮回来', () => {
     const f = fixture();
-    f.w.document.querySelector('[data-act="classic"]').click();
+    assert.equal(f.w.document.querySelector('.archive-footer [data-act="classic"]'), null, '页脚不再单独放「经典视图」');
+    const sel = f.w.document.querySelector('.archive-layout-select');
+    const before = sel.value;
+    sel.value = 'classic';
+    sel.dispatchEvent(new f.w.Event('change', { bubbles: true }));
+    assert.equal(sel.value, before, '视图菜单仍然记着首页布局');
     assert.equal(f.view.mode, 'classic');
     assert.ok(f.w.document.body.classList.contains('music-archive-off'));
     assert.equal(f.w.localStorage.getItem('musicArchiveView'), 'classic');
@@ -354,13 +359,13 @@ test('目录里按歌手点播，队列是这位歌手的歌；全部曲目里�
     const rows = [...f.view.list.el.querySelectorAll('.archive-list-row')];
     rows[0].dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
     assert.equal(f.calls[0][2], 15);
-    assert.equal(f.text('queue'), '歌手：Aki');
+    assert.equal(f.app.queueSourceName, '歌手：Aki');
     f.calls.length = 0;
     f.view.list.setKind('all');
     const row = [...f.view.list.el.querySelectorAll('.archive-list-row')][4];
     row.dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
     assert.equal(f.calls[0][2], null);
-    assert.equal(f.text('queue'), '全部曲目');
+    assert.equal(f.app.queueSourceName, '全部曲目');
     f.close();
 });
 
@@ -866,14 +871,17 @@ test('目录检索时左上标题写检索词和结果数，清掉检索恢复�
     f.close();
 });
 
-test('还没放过歌时底栏不写「正在播放」', () => {
-    const f = fixture({ setup: (w, app) => { app.currentTrackIndex = -1; } });
-    const q = f.w.document.querySelector('.archive-queue');
-    assert.ok(q.hidden, '没有在播放的歌');
+test('首页不再写「正在播放 全部曲目」：队列来源交给底栏面板（app.queueSourceName）', () => {
+    const f = fixture();
+    assert.equal(f.w.document.querySelector('.archive-queue'), null);
+    let fired = 0;
+    f.w.document.addEventListener('music-queue-source-change', () => { fired += 1; });
+    f.key('ArrowDown');
+    f.key('Enter');
+    assert.equal(typeof f.app.queueSourceName, 'string');
+    assert.ok(f.app.queueSourceName.length > 0);
+    assert.ok(fired >= 1, '换了队列会通知底栏刷新');
     f.close();
-    const g = fixture();
-    assert.equal(g.w.document.querySelector('.archive-queue').hidden, false, '播放器里有当前曲目时显示');
-    g.close();
 });
 
 test('空的原因各有说法：检索没结果、空歌单、还没有播放记录', () => {

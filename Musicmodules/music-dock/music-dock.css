@@ -1824,3 +1824,7 @@ body.music-archive-on:not(.music-stage-active):has(.archive-hud.beside-drawer.ly
 
 /* 面板按钮：播放条最右边；面板开着时亮着 */
 #music-dock-root .md-pnl-slot.md-on { opacity: 1; background: rgba(var(--md-fl-ink-rgb), .1); }
+
+/* 播放列表页头：队列来自哪一组（原来写在首页页脚「正在播放 全部曲目」） */
+.md-qh .md-qsrc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-t3); }
+.md-qh .md-qsrc::before { content: "·"; margin-right: 6px; }

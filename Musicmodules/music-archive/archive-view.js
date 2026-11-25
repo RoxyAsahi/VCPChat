@@ -39,7 +39,7 @@
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
-                <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option></select></span>
+                <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option><option value="classic">经典列表</option></select></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="stage" title="进入歌词舞台（Shift+Enter 播放选中并进舞台；回到正在播放用 Ctrl+L）"><svg class="archive-glyph-stage" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6c.55 4.9 4.5 8.85 9.4 9.4-4.9.55-8.85 4.5-9.4 9.4-.55-4.9-4.5-8.85-9.4-9.4 4.9-.55 8.85-4.5 9.4-9.4Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg> 进入舞台</button>
@@ -53,7 +53,7 @@
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><div class="archive-lanes" data-ref="lanes"><button type="button" data-act="lane-prev" title="上一组（←）" aria-label="上一组">←</button><button type="button" class="archive-lanes-name" data-act="list" title="打开目录，看全部分组"><span class="archive-tiny" data-ref="laneN"></span><b data-ref="laneName"></b></button><button type="button" data-act="lane-next" title="下一组（→）" aria-label="下一组">→</button></div><span class="archive-tiny">这一组里的位置</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div><div class="archive-ruler" data-ref="ruler"><button type="button" data-act="row-prev" title="上一首（↑）" aria-label="上一首">↑</button><div class="archive-ruler-track" data-ref="rulerTrack" role="slider" tabindex="-1" aria-label="这一组里的位置：按住拖动跳到别的曲目"><i class="archive-ruler-at" data-ref="rulerAt" aria-hidden="true"></i><b class="archive-ruler-tip" data-ref="rulerTip" aria-hidden="true"></b></div><button type="button" data-act="row-next" title="下一首（↓）" aria-label="下一首">↓</button></div></div>
-                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span class="archive-queue" title="播放队列来自哪一组">正在播放 <b data-ref="queue">全部曲目</b></span><span>曲库 <span data-ref="files">0</span> 首</span><button type="button" data-act="classic" title="切换到经典列表视图">经典视图 ↗</button></footer>
+                <footer class="archive-footer"><span class="archive-status" role="status"><i class="archive-status-light"></i> <span data-ref="status"></span></span><span>曲库 <span data-ref="files">0</span> 首</span></footer>
             </div>
         </div>`;
 
@@ -1068,7 +1068,12 @@
             }, t + (reducedMotion() ? 0 : 450)));
         };
         /* 底部显示正在放的这一组（队列）叫什么 */
-        const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
+        /* 正在放的这一组（队列）叫什么：首页不再单独写一行，交给底栏面板的「播放列表」页头显示（app.queueSourceName） */
+        const setQueueName = (name) => {
+            if (refs.queue) refs.queue.textContent = name || '全部曲目';
+            app.queueSourceName = name || '全部曲目';
+            try { document.dispatchEvent(new CustomEvent('music-queue-source-change')); } catch (e) { /* 只是提示刷新 */ }
+        };
         /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
         const locatePlaying = () => {
             goToPlaying();
@@ -2111,7 +2116,11 @@
         /* 视图切换是一个下拉框（音乐窗口里的 <select> 会被 music-fluid-select 换成主程序同款的选项卡片），这里只同步它的值 */
         const layoutSelect = refs.layouts.querySelector('.archive-layout-select');
         const markLayoutButtons = (layout) => { if (layoutSelect && layoutSelect.value !== layout) layoutSelect.value = layout; };
-        layoutSelect?.addEventListener('change', () => setLayout(layoutSelect.value));
+        // 「经典列表」也在这个菜单里（原来是页脚单独一个按钮）：选它就切到经典视图，菜单里仍然记着当前的首页布局。
+        layoutSelect?.addEventListener('change', () => {
+            if (layoutSelect.value === 'classic') { layoutSelect.value = state.layout; setMode('classic'); return; }
+            setLayout(layoutSelect.value);
+        });
         const revealSweep = (el, w) => {
             el.classList.remove('is-covering');
             // 纸盖着时新视图的翻入动画是暂停的（layout-holding），揭开这一刻一起放，和扫描线对得上
