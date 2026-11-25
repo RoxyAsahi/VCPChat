@@ -42,7 +42,7 @@
                 <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option></select></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
                 <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
-                <button type="button" data-act="stage" title="进入歌词舞台（Shift+Enter 播放选中并进舞台；回到正在播放用 Ctrl+L）"><span class="archive-glyph-stage" aria-hidden="true"></span> 进入舞台</button>
+                <button type="button" data-act="stage" title="进入歌词舞台（Shift+Enter 播放选中并进舞台；回到正在播放用 Ctrl+L）"><svg class="archive-glyph-stage" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6c.55 4.9 4.5 8.85 9.4 9.4-4.9.55-8.85 4.5-9.4 9.4-.55-4.9-4.5-8.85-9.4-9.4 4.9-.55 8.85-4.5 9.4-9.4Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg> 进入舞台</button>
             </nav>
             <div class="archive-empty" role="status">
                 <h2 data-ref="emptyTitle">曲库是空的</h2>

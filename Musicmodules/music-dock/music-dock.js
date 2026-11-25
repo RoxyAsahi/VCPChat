@@ -91,7 +91,7 @@
     <div class="md-slots">
       <button class="md-slot md-sleep" type="button" data-md="sleep" hidden>${icon('moon', 14)}<span data-md="sleep-t"></span></button>
       <button class="md-slot" type="button" data-md="mode"></button>
-      <button class="md-slot md-stage-slot" type="button" data-md="stage" aria-label="歌词舞台" aria-pressed="false" title="进入歌词舞台">${icon('captions', 18)}</button>
+      <button class="md-slot md-stage-slot" type="button" data-md="stage" aria-label="歌词舞台" aria-pressed="false" title="进入歌词舞台">${icon('sparkle', 18)}</button>
       <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="播放列表、喜欢、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
       <button class="md-slot md-pnl-slot" type="button" data-md="panel" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="面板：封面、歌词、控制、播放列表、声音">${icon('settings-2', 18)}</button>
     </div>
@@ -1108,7 +1108,7 @@
                 const tileCount = 1 + Number(inStage) + Number(sleepOn);
                 html += `<div class="md-tiles md-tiles-${tileCount}">`
                     + `<button class="md-tile${mode !== 'repeat' ? ' md-lit' : ''}" type="button" data-act="mode"><span class="md-ti">${icon(MODE_ICONS[mode] || 'repeat', 18)}</span><span>${MODE_LABELS[mode] || '播放模式'}</span></button>`
-                    + (inStage ? `<button class="md-tile md-lit" type="button" data-act="stage" aria-pressed="true"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>` : '')
+                    + (inStage ? `<button class="md-tile md-lit" type="button" data-act="stage" aria-pressed="true"><span class="md-ti">${icon('sparkle', 18)}</span><span>歌词舞台</span></button>` : '')
                     + (sleepOn ? sleepTileHtml() : '')
                     + '</div>' + (sleepOn && state.sleepOpen ? sleepChipsHtml() : '');
                 if (scene) {
