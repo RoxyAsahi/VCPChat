@@ -30,7 +30,7 @@ function setup(api = {}) {
         navigator: {}
     });
     vm.runInContext('globalThis.__now = 0; const realNow = Date.now; Date.now = () => globalThis.__now || realNow();', context);
-    for (const name of ['music-lyrics.js', 'music-player.js']) {
+    for (const name of ['music-app-hooks.js', 'music-lyrics.js', 'music-player.js']) {
         vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules', name), 'utf8'), context);
     }
     // updateUIWithState 定义在 music.js 的大闭包里，单独取出来和播放逻辑一起测。

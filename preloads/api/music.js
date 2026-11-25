@@ -18,6 +18,13 @@ module.exports = {
         publishMusicCapsuleState: send('music-capsule-publish', 'state'),
         publishMusicGroove: send('music-groove-publish', 'payload'),
         getMusicPendingTrack: invoke('music-get-pending-track'),
+        // 外语歌词没有翻译时用 VCP 的模型翻成中文（modules/musicLyricsTranslate.js）
+        translateMusicLyrics: invoke('music-translate-lyrics', 'payload'),
+        readMusicAudioFile: invoke('music-read-audio-file', 'payload'),
+        exportMusicM3u: invoke('music-m3u-export', 'payload'),
+        importMusicM3u: invoke('music-m3u-import', 'payload'),
+        showMusicInFolder: invoke('music-show-in-folder', 'payload'),
+        musicLibraryFolders: invoke('music-library-folders', 'payload'),
         // 新版 / 旧版（上游原版）音乐界面
         getMusicLegacyUI: invoke('music-get-legacy-ui'),
         setMusicLegacyUI: invoke('music-set-legacy-ui', 'enabled'),
@@ -88,6 +95,7 @@ module.exports = {
         setMusicSaturation: invoke('music-set-saturation', 'options'),
         getMusicCrossfeed: invoke('music-get-crossfeed'),
         setMusicCrossfeed: invoke('music-set-crossfeed', 'options'),
+        setMusicChannels: invoke('music-set-channels', 'options'),
         getMusicDynamicLoudness: invoke('music-get-dynamic-loudness'),
         setMusicDynamicLoudness: invoke('music-set-dynamic-loudness', 'options'),
         getMusicSettings: invoke('music-get-settings'),

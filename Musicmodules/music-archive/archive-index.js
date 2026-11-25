@@ -491,7 +491,9 @@
                 .forEach(([name, items]) => {
                     const ctx = field === 'album' ? 'album:' + name : null;
                     head(name, field + ':' + name, items.length);
-                    (q ? items : items.sort(byTitle)).forEach((i) => push(i, ctx || allCtx(i)));
+                    // 专辑按碟号、曲号排（排序方式是默认的「标题」时）；选了时长、加入时间就照选的排
+                    const inAlbum = field === 'album' && sp.mode === 'title' && global.MusicTrackOrder ? global.MusicTrackOrder.albumCompare(list, byTitle) : byTitle;
+                    (q ? items : items.sort(inAlbum)).forEach((i) => push(i, ctx || allCtx(i)));
                 });
             return { rows, count };
         }

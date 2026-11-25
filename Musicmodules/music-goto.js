@@ -92,8 +92,7 @@
                 item.title = show ? `${label}「${name}」` : '';
             }
         };
-        const show = app.showContextMenu;
-        if (typeof show === 'function') app.showContextMenu = (...args) => { paint(); return show(...args); };
+        (global.MusicAppHooks || require('./music-app-hooks.js')).before(app, 'showContextMenu', 'goto', () => paint());
     }
 
     global.setupMusicGoto = setupMusicGoto;

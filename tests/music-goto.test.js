@@ -12,7 +12,6 @@ function setup({ mode = 'archive', stage = false } = {}) {
         playlist: [{ path: 'a', title: 'a', artist: 'Ren', album: '窗边' }, { path: 'b', title: 'b', artist: '', album: 'X' }],
         archiveView: {
             mode,
-            closeDetail: () => calls.push('closeDetail'),
             setListOpen: (open) => calls.push('open:' + open),
             list: { goToGroup: (i, kind) => { calls.push(`go:${i}:${kind}`); return true; } }
         }
@@ -24,7 +23,7 @@ function setup({ mode = 'archive', stage = false } = {}) {
 test('goes to the artist group in the archive directory', () => {
     const { app, calls } = setup();
     assert.equal(app.goToGroup(0, 'artist'), true);
-    assert.deepEqual(calls, ['closeDetail', 'open:true', 'go:0:artist']);
+    assert.deepEqual(calls, ['open:true', 'go:0:artist']);
 });
 
 test('refuses when the track has no artist, or the archive page is not showing', () => {

@@ -8,8 +8,9 @@
     'use strict';
 
     const LETTER_H = 34;  // 首字母分组的行内小标题（字母 + 首数，上面压一条结构线）
+    const EDGE_FADE = 26; // 和 archive-list.css 里 .archive-list-viewport 上下渐隐的高度一致
     const LABEL_H = 40;   // 歌手/专辑/歌单分组的小标题行
-    const ROW_H = 52;     // 曲目行高（58 → 52：同样高度多放一行）
+    const ROW_H = 48;     // 曲目行高（58 → 52 → 48：去掉表头后行再收一点，两行字上下各留约 6px）
     // 分组标题都在行内（档案目录表的排法），左侧外边距不再放吸附的大字母，也不画跟着它走的液态记号
     const INLINE_HEADS = true;
     const LETTER_PUSH = 78; // 下一组的字母离顶端不到这么远时，把吸附的字母往上推走（避免两个字母叠在一起）
@@ -73,12 +74,12 @@
             ${KINDS.map(([k, zh, en]) => `<button type="button" role="tab" data-kind="${k}" title="按${zh === '全部' ? '曲名' : zh}浏览">${zh}</button>`).join('')}
             <span class="archive-list-sort">
                 <button type="button" data-l="sortBtn" aria-haspopup="menu" aria-expanded="false" title="排序方式（阵列跟着重排）"><span class="archive-glyph-sort" aria-hidden="true"></span><span data-l="sortName">标题</span></button>
-                <span class="archive-list-sort-menu" role="menu" data-l="sortMenu" hidden>
+                <span class="archive-list-sort-menu mf-glass" role="menu" data-l="sortMenu" hidden>
                     ${SORTS.map(([k, zh, en]) => `<button type="button" role="menuitemradio" data-sort="${k}" aria-checked="false"><span>${zh}</span></button>`).join('')}
                 </span>
             </span>
         </div>
-        <div class="archive-list-cols" aria-hidden="true"><span>编号</span><span>曲目 / TITLE</span><span>时长 / TIME</span></div>
+        <div class="archive-list-cols" data-l="cols"><button type="button" data-col="added" title="按添加时间排">编号</button><button type="button" data-col="title" data-l="colTitle" title="按标题排（再点一次按歌手）">曲目 / TITLE</button><button type="button" data-col="duration" title="按时长排">时长 / TIME</button></div>
         <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单</button></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
@@ -205,6 +206,85 @@
         el.querySelectorAll('[data-l]').forEach((n) => { r[n.dataset.l] = n; });
 
         /*
+         * 手动调宽度（Roxy 11-25：低分辨率窗口里目录占比太大）。
+         * 右边缘外侧一条看不见的拖柄：悬停出一道细线，拖动改宽，松手记住；双击恢复默认（不存宽度时完全是原来的 CSS 宽度）。
+         * 宽度最小 290、最大 560 且不超过整页的 45%。改宽时发一次 resize，让卡片阵列、封面墙、歌词按新宽度让位。
+         */
+        const WIDTH_KEY = 'musicArchiveListWidth';
+        const W_MIN = 290, W_MAX = 560;
+        const grip = document.createElement('div');
+        grip.className = 'archive-list-grip';
+        grip.tabIndex = 0;
+        grip.setAttribute('role', 'separator');
+        grip.setAttribute('aria-orientation', 'vertical');
+        grip.setAttribute('aria-label', '调整目录宽度');
+        grip.title = '拖动调整目录宽度，双击恢复默认';
+        el.appendChild(grip);
+        const hostWidth = () => (el.offsetParent || el.parentElement)?.clientWidth || global.innerWidth || 1280;
+        const clampW = (w) => Math.round(Math.max(W_MIN, Math.min(W_MAX, hostWidth() * 0.45, w)));
+        let relayoutRaf = 0;
+        const relayout = () => {
+            if (relayoutRaf) return;
+            relayoutRaf = requestAnimationFrame(() => { relayoutRaf = 0; global.dispatchEvent(new Event('resize')); });
+        };
+        const applyWidth = (w, { save = false } = {}) => {
+            if (w == null) {
+                el.classList.remove('user-w');
+                el.style.removeProperty('--list-w-user');
+                if (save) { try { localStorage.removeItem(WIDTH_KEY); } catch (_) { /* 存不了就只管这次 */ } }
+            } else {
+                const v = clampW(w);
+                el.classList.add('user-w');
+                el.style.setProperty('--list-w-user', v + 'px');
+                grip.setAttribute('aria-valuenow', String(v));
+                if (save) { try { localStorage.setItem(WIDTH_KEY, String(v)); } catch (_) { /* 同上 */ } }
+            }
+            relayout();
+        };
+        // 目录被拖窄时，分类那一行收紧间距、去掉斜线，免得和右端的排序/搜索/添加图标挤在一起。
+        const paintSlim = () => el.classList.toggle('slim', el.offsetWidth > 0 && el.offsetWidth < 340);
+        if (typeof global.ResizeObserver === 'function') new global.ResizeObserver(paintSlim).observe(el);
+        try {
+            const saved = Number(localStorage.getItem(WIDTH_KEY));
+            if (saved > 0) applyWidth(saved);
+        } catch (_) { /* 读不到就用默认宽度 */ }
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = el.getBoundingClientRect();
+            const scale = el.offsetWidth ? rect.width / el.offsetWidth : 1; // 首页整体可能被缩放
+            const startX = e.clientX, startW = el.offsetWidth;
+            grip.setPointerCapture?.(e.pointerId);
+            el.classList.add('resizing');
+            const move = (ev) => applyWidth(startW + (ev.clientX - startX) / (scale || 1));
+            const up = () => {
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                grip.removeEventListener('pointercancel', up);
+                el.classList.remove('resizing');
+                applyWidth(el.offsetWidth, { save: true });
+            };
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+            grip.addEventListener('pointercancel', up);
+        });
+        grip.addEventListener('dblclick', (e) => { e.stopPropagation(); applyWidth(null, { save: true }); });
+        grip.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 48 : 16;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                e.stopPropagation(); // 别再被底栏当成切歌/快进
+                applyWidth(el.offsetWidth + (e.key === 'ArrowRight' ? step : -step), { save: true });
+            } else if (e.key === 'Home' || e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                applyWidth(null, { save: true });
+            }
+        });
+        for (const t of ['click', 'contextmenu', 'wheel']) grip.addEventListener(t, (e) => e.stopPropagation());
+
+        /*
          * 最近检索：检索后真的播了结果，才记下这个检索词（和 Spotify 一样，只是打字不算）。
          * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，叉号删一条，「清除」全删。
          * 只是这台机器上的方便，存在 localStorage 里。
@@ -321,7 +401,8 @@
             });
             state.rows = out.rows;
             state.count = out.count;
-            setBrand(state.query.trim() ? '检索结果' : (BRAND_TITLES[state.kind] || '全部曲目'));
+            // 检索时栏名写检索词本身：下面分组头已经写着「检索结果 N 首」，栏名再写一遍是重复
+            setBrand(state.query.trim() ? `「${state.query.trim()}」` : (BRAND_TITLES[state.kind] || '全部曲目'));
             state.offsets = new Array(out.rows.length + 1);
             state.ord = new Array(out.rows.length);
             state.ordWidth = Math.max(2, String(out.count || 0).length);
@@ -338,6 +419,7 @@
             state.offsets[out.rows.length] = y;
             r.spacer.style.height = y + 'px';
             r.empty.style.display = out.count ? 'none' : 'block';
+            el.classList.toggle('no-rows', !out.count);
             if (!out.count) setFoot(0, 0);   // 没有结果时 render 不会走到计数那里，别留着上一次的数
             // 告诉档案页当前检索词和结果数（左上标题跟着显示）
             const q0 = state.query.trim();
@@ -362,6 +444,8 @@
                 b.setAttribute('aria-selected', String(on));
             });
             placeKindMark();
+            // 歌单、为你、检索结果有自己的顺序，不跟排序菜单走；表头按这个决定标不标排序列
+            el.dataset.kind = state.query.trim() ? 'search' : state.kind;
             paintSort();
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
@@ -440,7 +524,9 @@
                 }
                 const gp = groupPlayable(row) ? `<button type="button" class="gplay" data-gplay title="播放这一组（${row.n} 首）" aria-label="播放这一组"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.2 6z"/></svg>播放</button>` : '';
                 const len = groupLength(k);
-                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${row.n} 首${len ? `<small> · ${len}</small>` : ''}</i>${gp}`
+                // 组长导轨：长度按首数取对数，三首和三千首的组都看得出差别
+                const rail = row.n > 0 ? Math.log1p(row.n) / Math.log1p(Math.max(row.n, tracks().length || 1)) : 0;
+                return `<span>${esc(row.label)}</span><i title="${row.n} 首${len ? ' · ' + len : ''}">${row.n} 首${len ? `<small> · ${len}</small>` : ''}</i><b class="rail" aria-hidden="true" style="--rail:${rail.toFixed(3)}"></b>${gp}`
                     + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4"/></svg></button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单"><svg class="archive-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>' : '');
             }
             const t = tracks()[row.i] || {};
@@ -559,6 +645,8 @@
             // 滚在最上面时顶上没有东西可淡出，第一行不该被遮淡
             r.viewport.classList.toggle('at-top', top <= 1);
             const h = r.viewport.clientHeight || 600;
+            // 滚到底时最后一行也不该被下沿渐隐遮淡
+            r.viewport.classList.toggle('at-bottom', top + h >= r.viewport.scrollHeight - 1);
             syncThumb(top, h);
             if (!state.rows.length) { r.sticky.textContent = ''; return; }
             const first = Math.max(0, rowAt(top) - OVERSCAN);
@@ -616,10 +704,14 @@
             if (!box) return;
             const cur = box.lastElementChild;
             if (cur && cur.textContent === text && !cur.classList.contains('out')) return;
-            const reduce = document.body.classList.contains('music-reduce-motion') || !cur || !cur.textContent;
+            // 打字时检索词一直在变，只换字不滚动；系统或设置里减少动效时也直接换
+            const typing = cur && cur.textContent.startsWith('「') && text.startsWith('「');
+            const reduce = typing || !cur || !cur.textContent || document.body.classList.contains('music-reduce-motion')
+                || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
             box.querySelectorAll('.out').forEach((n) => n.remove());
             const next = document.createElement('span');
             next.textContent = text;
+            if (text.startsWith('「')) next.classList.add('q'); // 全角括号左半边是空白，靠 CSS 往左挂出去，字和下面对齐
             if (reduce) { box.replaceChildren(next); return; }
             cur.classList.add('out');
             next.classList.add('in');
@@ -746,7 +838,8 @@
             const pad2 = LABEL_H;
             if (center) vp.scrollTop = Math.max(0, y - h / 2 + ROW_H / 2);
             else if (y < vp.scrollTop + pad2) vp.scrollTop = Math.max(0, y - pad2);
-            else if (y + ROW_H > vp.scrollTop + h) vp.scrollTop = y + ROW_H - h;
+            // 底部留出渐隐那一段（26px），键盘往下走时选中行不会落在半透明的边上
+            else if (y + ROW_H > vp.scrollTop + h - EDGE_FADE) vp.scrollTop = y + ROW_H - h + EDGE_FADE;
             schedule();
         };
 
@@ -781,7 +874,7 @@
         const inView = (k) => {
             const vp = r.viewport;
             const y = state.offsets[k];
-            return y >= vp.scrollTop && y + ROW_H <= vp.scrollTop + (vp.clientHeight || 600);
+            return y >= vp.scrollTop && y + ROW_H <= vp.scrollTop + (vp.clientHeight || 600) - EDGE_FADE;
         };
 
         /* 列表里换选中（键盘/单击）：告诉阵列 */
@@ -1651,6 +1744,11 @@
             const mode = sortMode();
             const entry = SORTS.find(([k]) => k === mode) || SORTS[0];
             r.sortName.textContent = entry[1];
+            r.sortBtn.title = `排序：${entry[1]}（阵列跟着重排）`;
+            r.sortBtn.setAttribute('aria-label', `排序：${entry[1]}`);
+            el.dataset.sort = entry[0]; // 表头跟着标出按哪一列排（CSS 用）
+            r.colTitle.textContent = entry[0] === 'artist' ? '歌手 / ARTIST' : '曲目 / TITLE';
+            r.cols.querySelectorAll('[data-col]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.col === entry[0] || (b.dataset.col === 'title' && entry[0] === 'artist'))));
             r.sortBtn.classList.toggle('on', mode !== 'title');
             r.sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sort === mode)));
         };
@@ -1679,6 +1777,14 @@
             opts.onSort?.(mode); // 阵列和目录一起按新顺序重建
         };
         r.sortBtn.addEventListener('click', (e) => { e.stopPropagation(); sortOpen() ? closeSort() : openSort(); });
+        // 表头即排序：点「编号」按添加时间，「曲目」在标题和歌手之间切换，「时长」按时长（排序菜单还在，只是不占一层）
+        r.cols.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-col]');
+            if (!b) return;
+            const cur = sortMode();
+            const col = b.dataset.col;
+            chooseSort(col === 'title' ? (cur === 'title' ? 'artist' : 'title') : col);
+        });
         r.sortMenu.addEventListener('click', (e) => {
             const b = e.target.closest('[data-sort]');
             if (!b) return;

@@ -15,16 +15,54 @@
     const KEY = 'musicAutoplay';
     const BATCH = 25;     // 一次续多少首
     const REFILL_AT = 4;  // 剩这么多首时再续
+    const SHUFFLE_KEY = 'musicDailyMixShuffle';
+    const SEEN_KEY = 'musicDailyMixSeen';
+    const SEEN_BATCHES = 4;              // 存当前这批 + 之前 3 批
+    const SEEN_DAMP = [0.15, 0.35, 0.6]; // 上一批、上上批、再往前一批
+    const SEEN_DAYS = 7;
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const localDay = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    // 之前推过的批次：去掉当前这批，只留 7 天内的前 3 批
+    const recentBatches = (batches, id, day) => {
+        const dayMs = Date.parse(day + 'T00:00:00');
+        return batches.filter((b) => {
+            if (b.id === id) return false;
+            const at = Date.parse(String(b.id).slice(0, 10) + 'T00:00:00');
+            return Number.isFinite(at) && dayMs - at <= SEEN_DAYS * 86400000 && dayMs >= at;
+        }).slice(0, SEEN_DAMP.length);
+    };
 
     const norm = (s) => String(s || '').trim().toLowerCase();
     const artistsOf = (t) => norm(t && t.artist).split(/\s*(?:\/|,|，|、|&|;|feat\.?|ft\.)\s*/).filter(Boolean);
+
+    // 同一首歌的不同文件（flac 和 mp3、专辑版和合辑里的同一首、本机和 WebDAV 各一份）：歌名去掉扩展名 + 完整歌手相同就算一首。
+    // 没有歌手的不合并：没标签时歌名常是「01」之类的文件名，会把不相干的歌并到一起。
+    const AUDIO_EXT = /\.(flac|mp3|wav|m4a|aac|ogg|opus|ape|wv|alac|aiff?|dsf|dff|wma)$/i;
+    const recordingKey = (t) => {
+        const artist = norm(t && t.artist);
+        const title = norm(String((t && t.title) || '').replace(AUDIO_EXT, ''));
+        return artist && title ? title + '\n' + artist : '';
+    };
+    // 同一首里放哪份：本机文件 > 网络；无损 > 有损；位深、采样率、码率高的优先。
+    const isRemote = (t) => Boolean(t && (t.isRemote || /^https?:\/\//i.test(String(t.path || ''))));
+    const versionRank = (t) => (isRemote(t) ? 0 : 1e9)
+        + (t.lossless === true || /\.(flac|wav|ape|wv|aiff?|alac|dsf|dff)$/i.test(String(t.path || '')) ? 1e8 : 0)
+        + (Number(t.bitsPerSample) || 0) * 1e6
+        + Math.min(999, Math.round((Number(t.sampleRate) || 0) / 1000)) * 1e3
+        + Math.min(999, Math.round((Number(t.bitrate) || 0) / 1000));
+    // 伴奏 / 纯音乐版 / 卡拉 OK：电台和推荐里往后放（种子本身是伴奏时不降）
+    const INSTRUMENTAL = /instrumental|\binst\.?(?=\s*[)\]）】]|$)|off[\s-]?vocal|karaoke|backing track|伴奏|纯音乐版|純音樂|カラオケ|オフボーカル/i;
+    const isInstrumental = (t) => INSTRUMENTAL.test(String((t && t.title) || '').replace(AUDIO_EXT, ''));
 
     /*
      * 从曲库里挑和种子相近的歌。seeds 是最近放的几首（越靠后越重要），exclude 是不要的（刚放过、已在队列里）。
      * 打分：同歌手 3、同专辑 1.5、同流派 1、常听 0..2、喜欢 1.5、跳得多的往后，再加一点随机让每次不一样；
      * 然后控制同一歌手不超过三分之一、同一专辑不超过 3 首，避免一串全是同一张专辑。
+     * 同一首歌的几个文件只出一份（挑 versionRank 最高的），种子和 exclude 里那首的其他文件也不出；
+     * 伴奏版分数打到四分之一；playable(t) 为 false 的（放不了的）不出。
      */
-    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, novelty = () => 0, random = Math.random } = {}) {
+    function pickSimilar(library, seeds, { size = BATCH, exclude = new Set(), affinity = () => 0, liked = () => false, novelty = () => 0, random = Math.random, playable = () => true, damp = () => 1 } = {}) {
         const seedArtists = new Map();
         const seedAlbums = new Set();
         const seedGenres = new Set();
@@ -34,9 +72,24 @@
             if (norm(t.album)) seedAlbums.add(norm(t.album) + '\n' + norm(t.artist));
             if (norm(t.genre)) seedGenres.add(norm(t.genre));
         });
+        const takenKeys = new Set();
+        for (const t of seeds) { const k = recordingKey(t); if (k) takenKeys.add(k); }
+        for (const t of exclude) { const k = recordingKey(t); if (k) takenKeys.add(k); }
+        const instrumentalOk = seeds.some(isInstrumental);
+        // 每首歌先挑出最好的那份文件，其余的不参加打分
+        const best = new Map();
+        for (const t of library) {
+            if (!t || !t.path || exclude.has(t) || !playable(t)) continue;
+            const k = recordingKey(t);
+            if (!k) continue;
+            const had = best.get(k);
+            if (!had || versionRank(t) > versionRank(had)) best.set(k, t);
+        }
         const scored = [];
         for (const t of library) {
             if (!t || !t.path || exclude.has(t)) continue;
+            const key = recordingKey(t);
+            if (key ? (best.get(key) !== t || takenKeys.has(key)) : !playable(t)) continue;
             let s = 0;
             let artistHit = 0;
             for (const a of artistsOf(t)) artistHit = Math.max(artistHit, seedArtists.get(a) || 0);
@@ -47,6 +100,8 @@
             if (liked(t)) s += 1.5;
             s += novelty(t); // 每日推荐里给没听过的歌一点加分，让曲库里沉着的歌浮上来
             s += 1.2 * random();
+            if (!instrumentalOk && isInstrumental(t)) s *= 0.25;
+            s *= damp(t); // 每日推荐：前几批刚推过的往后放
             scored.push([s, t]);
         }
         scored.sort((a, b) => b[0] - a[0]);
@@ -100,17 +155,32 @@
             for (const t of app.playlist || []) if (want.has(norm(String(t.path).replace(/\\/g, '/')))) set.add(t);
             return set;
         };
+        // 这次运行里已经放失败过的歌（文件不见了、格式不支持）不往电台里放
+        const playable = (t) => !(app.failedTracks instanceof Map && app.failedTracks.has(t));
         const pick = (seeds, exclude, size = BATCH) => pickSimilar(app.playlist || [], seeds, {
             size,
             exclude,
             affinity: (t) => app.musicStats?.affinity?.(t) || 0,
-            liked: (t) => Boolean(app.isLiked?.(t))
+            liked: (t) => Boolean(app.isLiked?.(t)),
+            playable
         });
         const setContext = (list) => {
             app.currentFilteredTracks = list;
             if (app.playbackContext) app.playbackContext.list = list;
             try { doc?.dispatchEvent?.(new CustomEvent('music-queue-change')); } catch (e) { /* 旧内核 */ }
             try { app.refreshPreload?.(); } catch (e) { /* 还没在放 */ }
+        };
+
+        // ---- 同一首的另一份文件（这份放不了时顶上）：同录音里挑 versionRank 最高、这次没放失败过的 ----
+        app.alternateCopy = (track) => {
+            const key = recordingKey(track);
+            if (!key) return null;
+            let best = null;
+            for (const t of app.playlist || []) {
+                if (!t || t === track || !t.path || t.path === track.path || !playable(t) || recordingKey(t) !== key) continue;
+                if (!best || versionRank(t) > versionRank(best)) best = t;
+            }
+            return best;
         };
 
         // ---- 从一首歌开电台 ----
@@ -137,12 +207,36 @@
             const want = new Map((app.playlist || []).map((t) => [norm(String(t.path).replace(/\\/g, '/')), t]));
             return paths.map((p) => want.get(norm(String(p).replace(/\\/g, '/')))).filter(Boolean);
         };
+        // 「今天」按本机时区算（以前按 UTC，东八区要到早上 8 点才换）
+        const today = () => localDay(new Date());
+        // 换一批：同一天里第几批（存本机，跨天归零）
+        const readShuffle = () => {
+            try {
+                const v = JSON.parse(storage?.getItem(SHUFFLE_KEY) || 'null');
+                return v && v.day === today() ? Math.max(0, Number(v.n) || 0) : 0;
+            } catch (e) { return 0; }
+        };
+        // 推过的批次（最新在前，最多 3 批、7 天内）：再挑时依次 ×0.15 / ×0.35 / ×0.6，
+        // 让每日推荐每天、每换一批都真的不一样，又不至于把喜欢的歌永远挡在外面
+        const readSeen = () => {
+            try {
+                const v = JSON.parse(storage?.getItem(SEEN_KEY) || 'null');
+                return v && v.v === 1 && Array.isArray(v.b) ? v.b.filter((b) => b && typeof b.id === 'string' && Array.isArray(b.p)) : [];
+            } catch (e) { return []; }
+        };
+        const writeSeen = (batches) => { try { storage?.setItem(SEEN_KEY, JSON.stringify({ v: 1, b: batches })); } catch (e) { /* 存不下就算了 */ } };
+        const pathKey = (t) => norm(String(t && t.path || '').replace(/\\/g, '/'));
         let mixCache = { key: '', list: [] };
+        app.dailyMixKey = () => today() + '#' + readShuffle();
         app.dailyMix = ({ size = 30 } = {}) => {
             const lib = app.playlist || [];
-            const day = new Date().toISOString().slice(0, 10);
-            const key = day + '|' + lib.length + '|' + size;
+            const day = today();
+            const id = app.dailyMixKey();
+            const key = id + '|' + lib.length + '|' + size;
             if (mixCache.key === key) return mixCache.list;
+            const earlier = recentBatches(readSeen(), id, day);
+            const damping = new Map();
+            earlier.forEach((b, k) => { for (const p of b.p) if (!damping.has(p)) damping.set(p, SEEN_DAMP[k]); });
             const stats = app.musicStats;
             let seeds = byPaths(stats ? stats.top(8, { minPlays: 1 }) : []);
             if (seeds.length < 3) {
@@ -150,24 +244,39 @@
                 try { recent = JSON.parse(global.localStorage?.getItem('musicArchiveRecent') || '[]'); } catch (e) { recent = []; }
                 seeds = seeds.concat(byPaths(recent.slice(0, 8)).filter((t) => !seeds.includes(t)));
             }
-            const random = seeded(day + '|' + lib.length);
+            const shuffle = readShuffle();
+            const random = seeded(day + '|' + lib.length + (shuffle ? '|' + shuffle : ''));
             const list = pickSimilar(lib, seeds, {
                 size,
                 exclude: new Set(byPaths(stats ? stats.lastPlayed(15) : [])),
                 affinity: (t) => app.musicStats?.affinity?.(t) || 0,
                 liked: (t) => Boolean(app.isLiked?.(t)),
                 novelty: (t) => (stats && !stats.get(t) ? 1.6 : 0),
-                random
+                random,
+                playable,
+                damp: (t) => damping.get(pathKey(t)) || 1
             });
             mixCache = { key, list };
+            if (list.length) writeSeen([{ id, p: list.map(pathKey) }, ...earlier].slice(0, SEEN_BATCHES));
+            return list;
+        };
+        // 换一批：今天的批号加一，目录和阵列重排
+        app.dailyMix.reshuffle = () => {
+            const n = readShuffle() + 1;
+            try { storage?.setItem(SHUFFLE_KEY, JSON.stringify({ day: today(), n })); } catch (e) { /* 只是偏好 */ }
+            mixCache = { key: '', list: [] };
+            try { app.archiveView?.refresh?.(); } catch (e) { /* 档案页还没起来 */ }
+            try { doc?.dispatchEvent?.(new CustomEvent('music-daily-mix-change', { detail: { id: app.dailyMixKey() } })); } catch (e) { /* 旧内核 */ }
+            const list = app.dailyMix();
+            toast(list.length ? `每日推荐换了一批：${list.length} 首` : '曲库里没有能推荐的歌');
             return list;
         };
         // 还没听过的歌：随机一批（同一天不变），按歌手打散
         app.neverPlayed = ({ size = 30 } = {}) => {
             const stats = app.musicStats;
             const lib = (app.playlist || []).filter((t) => t && t.path && !(stats && stats.get(t)));
-            const random = seeded('never|' + new Date().toISOString().slice(0, 10));
-            return pickSimilar(lib, [], { size, random });
+            const random = seeded('never|' + today());
+            return pickSimilar(lib, [], { size, random, playable });
         };
 
         // ---- 每换一首检查：电台快放完就续；一组放到最后一首就接上相似的歌 ----
@@ -206,24 +315,19 @@
                 }
             });
         };
-        const loadTrack = app.loadTrack;
-        if (typeof loadTrack === 'function') {
-            app.loadTrack = async function (...args) {
-                const result = await loadTrack.apply(this, args);
-                try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
-                return result;
-            };
-        }
+        const hooks = (global.MusicAppHooks || require('./music-app-hooks.js'));
+        hooks.wrap(app, 'loadTrack', 'radio', (loadTrack) => async function (...args) {
+            const result = await loadTrack.apply(this, args);
+            try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
+            return result;
+        });
 
         // 无缝切歌时引擎自己进了下一首，播放器走的是 syncTrackIndexByPath，不经过 loadTrack
-        const syncByPath = app.syncTrackIndexByPath;
-        if (typeof syncByPath === 'function') {
-            app.syncTrackIndexByPath = function (...args) {
-                const result = syncByPath.apply(this, args);
-                try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
-                return result;
-            };
-        }
+        hooks.wrap(app, 'syncTrackIndexByPath', 'radio', (syncByPath) => function (...args) {
+            const result = syncByPath.apply(this, args);
+            try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
+            return result;
+        });
 
         // 抽屉「声音」页里的开关
         const sw = doc?.getElementById?.('autoplay-switch');
@@ -250,7 +354,8 @@
         }
     }
 
-    const exported = { setupMusicRadio, pickSimilar };
+    const exported = { setupMusicRadio, pickSimilar, recordingKey, versionRank, isInstrumental, recentBatches, localDay };
     if (typeof module !== 'undefined' && module.exports) module.exports = exported;
     global.setupMusicRadio = setupMusicRadio;
+    global.MusicRadioUtils = exported; // 整理重复的歌（music-dupes.js）也用同一套「同一首」判断
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
 const read = (p) => fs.readFileSync(p, 'utf8');
-const SCRIPTS = ['model', 'scene', 'index', 'list', 'lyrics', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
+const SCRIPTS = [read('Musicmodules/music-app-hooks.js')].concat(['model', 'scene', 'index', 'list', 'lyrics', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`)));
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });
@@ -32,10 +32,41 @@ function fixture({ n = 30, playlists, tracks: given, setup } = {}) {
     const view = w.MusicArchive.init(app);
     const key = (k, extra = {}) => w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
     const text = (ref) => w.document.querySelector(`[data-ref="${ref}"]`).textContent;
+    // 首页不再在 HUD 上写曲名：选中的是哪首看 debug().selected
+    const selTitle = () => app.playlist[view.debug().selected]?.title;
     let closed = false;
     const close = () => { if (closed) return; closed = true; view.destroy(); w.close(); };
     open.push(close);
-    return { w, app, view, calls, key, text, close };
+    return { w, app, view, calls, key, text, selTitle, close };
+}
+
+// 没有 WebGL 时没有 3D 场景；要测和场景打交道的部分（滚轮、封面），换成记录调用的假场景重新初始化。
+// 画布是页面里真实的元素，事件才会落在它上面。
+function withFakeScene(f, { log = [] } = {}) {
+    f.view.destroy();
+    f.app.archiveView = null;
+    const w = f.w;
+    const root = w.document.getElementById('music-archive-view');
+    root.innerHTML = '';
+    let canvas = null;
+    const fake = {
+        create: () => {
+            canvas = w.document.createElement('canvas');
+            root.appendChild(canvas);
+            return {
+                canvas, tier: { fps: 60, idleFps: 12 }, target: { lane: 0, row: 0 }, dirty: false,
+                step: () => ({ moving: false, idle: false, animated: false }),
+                select() {}, jump() {}, resize() {}, setTheme() {}, setPlaying() {}, setHover() {}, setPointer() {},
+                touch() {}, raise() {}, setLabeler() {}, setLabelMask() {}, refreshLabels() {}, dispose() {}, pick: () => null, debug: () => ({}),
+                setDetail() {}, setDetailRoom() {}, hold() {}, unhold() {}, turn() {}, detail: null, detailRect: () => null, dragAxes: () => null, camAt: () => null,
+                setCover: (key, img, meta) => log.push({ img, title: meta.title })
+            };
+        }
+    };
+    const view = w.MusicArchive.init(f.app, { sceneLib: fake, pinyinSrc: false });
+    const closeFixture = f.close;
+    f.close = () => { view.destroy(); closeFixture(); };
+    return { view, canvas: () => canvas, log };
 }
 
 test('默认显示档案页，选中正在播放的那首', () => {
@@ -43,18 +74,18 @@ test('默认显示档案页，选中正在播放的那首', () => {
     assert.equal(f.view.mode, 'archive');
     assert.equal(f.w.document.getElementById('music-archive-view').hidden, false);
     assert.ok(f.w.document.body.classList.contains('music-archive-on'));
-    assert.equal(f.text('ftitle'), 'Song 0');
-    assert.equal(f.text('cat'), '全部曲目');
+    assert.equal(f.selTitle(), 'Song 0');
+    assert.equal(f.text('laneName'), '全部曲目');
     f.close();
 });
 
-test('方向键换曲目和歌单，HUD 跟着变', () => {
+test('方向键换曲目和歌单，底部计数跟着变', () => {
     const f = fixture();
     f.key('ArrowDown'); f.key('ArrowDown');
-    assert.equal(f.text('ftitle'), 'Song 2');
-    assert.match(f.text('catPos'), /^第 3 \/ \d+ 首$/);
+    assert.equal(f.selTitle(), 'Song 2');
+    assert.equal(f.text('selT'), '30');
     f.key('ArrowRight');
-    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.text('laneName'), '夜间散步');
     assert.equal(f.text('selT'), '03');
     assert.equal(f.view.debug().selected, 9); // 换列保持行号
     f.key('ArrowUp'); f.key('ArrowUp'); f.key('ArrowUp'); // 越过第一首，循环到这一列最后一首
@@ -62,19 +93,25 @@ test('方向键换曲目和歌单，HUD 跟着变', () => {
     f.close();
 });
 
-test('回车播放选中曲目：队列换成这一列，并进入播放页', () => {
+test('回车播放选中曲目、队列换成这一列，留在首页；Shift+回车播放并进舞台', () => {
     const f = fixture();
     f.key('ArrowRight'); f.key('ArrowDown');
     f.key('Enter');
-    assert.deepEqual(f.calls.filter((c) => c[0] !== 'ctx'), [['load', 7, 3], ['stage']]);
+    assert.deepEqual(f.calls.filter((c) => c[0] !== 'ctx'), [['load', 7, 3]]);
     assert.equal(f.app.filteredPlaylistSource.type, 'playlist');
+    f.calls.length = 0;
+    f.key('ArrowDown');
+    f.key('Enter', { shiftKey: true });
+    assert.deepEqual(f.calls.filter((c) => c[0] !== 'ctx'), [['load', 9, 3], ['stage']]);
     f.close();
 });
 
-test('已经在放的那首再按回车只进播放页，不重新加载', () => {
+test('已经在放的那首再按回车不重新加载；Shift+回车只进舞台', () => {
     const f = fixture();
     f.app.isPlaying = true;
     f.key('Enter');
+    assert.deepEqual(f.calls, []);
+    f.key('Enter', { shiftKey: true });
     assert.deepEqual(f.calls, [['stage']]);
     f.close();
 });
@@ -95,7 +132,7 @@ test('「/」打开目录并聚焦检索框；输入即筛，第一条自动选�
     assert.equal(f.view.debug().selected, 1);
     listKey(f, input, 'ArrowDown');
     assert.equal(f.view.debug().selected, 10);
-    assert.equal(f.text('ftitle'), 'Song 10');
+    assert.equal(f.selTitle(), 'Song 10');
     f.close();
 });
 
@@ -146,7 +183,7 @@ test('目录单击只选中，双击播放；歌单分类里的歌在阵列里�
     const rows = [...f.view.list.el.querySelectorAll('.archive-list-row')];
     assert.equal(rows.length, 3);
     rows[1].dispatchEvent(new f.w.MouseEvent('click', { bubbles: true }));
-    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.text('laneName'), '夜间散步');
     assert.equal(f.view.debug().selected, 7);
     assert.deepEqual(f.calls, []);
     rows[1].dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
@@ -216,7 +253,7 @@ test('经典视图隐藏档案页并记住；返回按钮回来', () => {
     assert.ok(f.w.document.body.classList.contains('music-archive-off'));
     assert.equal(f.w.localStorage.getItem('musicArchiveView'), 'classic');
     f.key('ArrowDown');
-    assert.equal(f.text('ftitle'), 'Song 0'); // 经典视图里方向键不归档案页
+    assert.equal(f.selTitle(), 'Song 0'); // 经典视图里方向键不归档案页
     f.w.document.getElementById('music-archive-return').click();
     assert.equal(f.view.mode, 'archive');
     f.close();
@@ -233,8 +270,7 @@ test('空曲库显示空状态，回车什么也不做；刚打开的一小段�
     assert.deepEqual(f.calls, []);
     await wait(1650);
     assert.ok(root.classList.contains('is-empty'), '等过了还是没有歌才显示');
-    assert.equal(f.text('ctxName'), '曲库', '空曲库左上不写「全部曲目 · 0 首」');
-    assert.equal(f.text('ctxSub'), '还没有歌曲');
+    assert.equal(f.text('emptyTitle'), '曲库是空的');
     assert.equal(root.classList.contains('is-loading'), false);
     assert.equal(f.text('status'), '');
     f.close();
@@ -278,7 +314,7 @@ test('曲库够大时全部曲目按首字母拆列，歌少的相邻字母合�
     const f = fixture({ tracks: LIB, playlists: [] });
     const ids = f.view.debug().columns.map((c) => c.id);
     assert.deepEqual([...ids], ['letter:A', 'letter:B', 'letter:C', 'letter:D-E', 'letter:S-X', 'letter:Y-Z', 'letter:あ-か', 'letter:0-9']);
-    assert.equal(f.text('cat'), 'A');
+    assert.equal(f.text('laneName'), 'A');
     // 每首歌只出现在一个字母列里
     const lettered = f.view.debug().columns.filter((c) => c.id.startsWith('letter:')).reduce((n, c) => n + c.n, 0);
     assert.equal(lettered, LIB.length);
@@ -288,7 +324,7 @@ test('曲库够大时全部曲目按首字母拆列，歌少的相邻字母合�
 test('字母列里回车播放，队列是整个曲库；目录里的行落到对应字母列', () => {
     const f = fixture({ tracks: LIB, playlists: [] });
     f.key('ArrowRight'); // B 列
-    assert.equal(f.text('cat'), 'B');
+    assert.equal(f.text('laneName'), 'B');
     f.key('Enter');
     assert.equal(f.calls[0][0], 'load');
     assert.equal(f.calls[0][2], LIB.length);
@@ -297,7 +333,7 @@ test('字母列里回车播放，队列是整个曲库；目录里的行落到�
     const input = listEl(f, 'input');
     input.value = 'zest';
     listKey(f, input, 'Shift');
-    assert.equal(f.text('cat'), 'Y–Z');
+    assert.equal(f.text('laneName'), 'Y–Z');
     f.close();
 });
 
@@ -314,9 +350,9 @@ test('有最近播放和收藏时排在最前面', () => {
     f.close();
 });
 
-test('位置条：按下跳到对应位置，拖着走，提示首字母和第几首', () => {
+test('位置条：按下跳到对应位置，拖着走，悬停提示第几首和曲名', () => {
     const f = fixture({ tracks: LIB, playlists: [] });
-    const bar = f.w.document.querySelector('[data-ref="ticks"]');
+    const bar = f.w.document.querySelector('[data-ref="rulerTrack"]');
     bar.getBoundingClientRect = () => ({ left: 100, top: 0, width: 314, height: 40, right: 414, bottom: 40 });
     bar.setPointerCapture = () => {};
     const ev = (type, x) => {
@@ -325,31 +361,43 @@ test('位置条：按下跳到对应位置，拖着走，提示首字母和第�
         bar.dispatchEvent(e);
     };
     const n = f.view.debug().columns[0].n; // A 列
-    ev('pointerdown', 107 + 300);           // 最右边
-    assert.equal(f.text('selN').length >= 2, true);
+    ev('pointerdown', 100 + 313);           // 最右边
     assert.equal(bar.getAttribute('aria-valuenow'), String(n));
-    assert.ok(bar.classList.contains('is-scrubbing'));
-    ev('pointermove', 107);                 // 拖回最左
+    assert.ok(bar.classList.contains('drag'));
+    ev('pointermove', 100);                 // 拖回最左
     assert.equal(bar.getAttribute('aria-valuenow'), '1');
-    assert.match(bar.querySelector('.archive-ticks-tip').textContent, /^A · 001$/);
-    ev('pointerup', 107);
-    assert.ok(!bar.classList.contains('is-scrubbing'));
+    assert.equal(f.view.debug().row, 0);
+    const tip = f.w.document.querySelector('[data-ref="rulerTip"]');
+    assert.ok(tip.classList.contains('on'));
+    assert.match(tip.textContent, /^01 {2}\S/);
+    ev('pointerup', 100);
+    assert.ok(!bar.classList.contains('drag'));
     f.close();
 });
 
-test('滚轮快速滚动松手后会再滑几格', async () => {
+test('滚轮停在位置条上逐首走、停在分组名上换组；场景里快速滚动松手后会再滑几格', async () => {
     const f = fixture({ n: 200 });
-    const root = f.w.document.getElementById('music-archive-view');
+    const wheel = (target, deltaY) => target.dispatchEvent(new f.w.WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+    const ruler = f.w.document.querySelector('[data-ref="rulerTrack"]');
+    wheel(ruler, 100); wheel(ruler, 100);
+    assert.equal(f.view.debug().row, 2);
+    const laneBefore = f.view.debug().lane;
+    wheel(f.w.document.querySelector('[data-ref="laneName"]'), 100);
+    assert.equal(f.view.debug().lane, laneBefore + 1);
+    f.close();
+
+    // 场景画布上的滚轮
+    const g = fixture({ n: 200 });
+    const { view, canvas } = withFakeScene(g);
     for (let k = 0; k < 6; k++) {
-        root.dispatchEvent(new f.w.WheelEvent('wheel', { deltaY: 60, bubbles: true, cancelable: true }));
+        wheel(canvas(), 60);
         await new Promise((r) => setTimeout(r, 15));
     }
-    const start = 0;
-    const afterWheel = f.view.debug().row;
-    assert.equal(afterWheel - start, 6);
+    const afterWheel = view.debug().row;
+    assert.equal(afterWheel, 6);
     await new Promise((r) => setTimeout(r, 900));
-    assert.ok(f.view.debug().row > afterWheel, `停在第 ${f.view.debug().row} 行`);
-    f.close();
+    assert.ok(view.debug().row > afterWheel, `停在第 ${view.debug().row} 行`);
+    g.close();
 });
 
 test('目录里按歌手点播，队列是这位歌手的歌；全部曲目里点播，队列是整个曲库', () => {
@@ -424,7 +472,7 @@ test('目录排序菜单：换成按歌手排，阵列按歌手首字母重排�
     const ids = f.view.debug().columns.map((c) => c.id);
     assert.ok(ids.includes('sort-artist:A') && ids.includes('sort-artist:R'), ids.join());
     assert.equal(f.view.debug().selected, before);
-    assert.equal(f.text('cat'), 'A');
+    assert.equal(f.text('laneName'), 'A');
     assert.equal(f.w.localStorage.getItem('musicArchiveSort'), 'artist');
     // 目录的首字母组也按歌手
     f.view.list.el.querySelector('[data-l="viewport"]').scrollTop = 0;
@@ -436,7 +484,7 @@ test('目录排序菜单：换成按歌手排，阵列按歌手首字母重排�
     const kd = (k) => doc.activeElement.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
     kd('ArrowDown'); kd('Enter');
     assert.equal(f.view.sort, 'duration');
-    assert.equal(f.text('cat'), '时长未知');
+    assert.equal(f.text('laneName'), '时长未知');
     f.close();
 });
 
@@ -473,7 +521,7 @@ test('在档案页直接打字：打开目录、聚焦检索框并带入这个�
 test('重启回到上次的列和那张卡，不自动播放；上次在播放页就回到播放页', async () => {
     const place = { mode: 'archive', stage: true, col: 'playlist:p', row: 2, path: '/m/9' };
     const f = fixture({ setup: (w) => w.localStorage.setItem('musicArchivePlace', JSON.stringify(place)) });
-    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.text('laneName'), '夜间散步');
     assert.equal(f.view.debug().selected, 9);
     await new Promise((r) => setTimeout(r, 10));
     assert.deepEqual(f.calls, [['stage']]); // 只进播放页，没有 load / play
@@ -513,7 +561,7 @@ test('没有记录时：播放器晚一点恢复上次那首，选中直接落�
     f.close();
 });
 
-test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页盖住时一帧不画', () => {
+test('帧率：操作时按档位上限画，播放中静止 2 秒后 12 帧，播放页盖住时一帧不画（暂停时静止不画见 music-archive-idle）', () => {
     // 假场景：记录 step 次数；idle 由「距上次操作」决定，和真场景一致
     let now = 0;
     let lastInput = 0;
@@ -524,7 +572,8 @@ test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页�
             canvas, tier: { fps: 60, idleFps: 12 }, target: { lane: 0, row: 0 }, dirty: false,
             step: () => { steps++; return { moving: false, idle: now - lastInput > 2000, animated: true }; },
             select: () => { lastInput = now; }, jump() {}, resize() {}, setTheme() {}, setPlaying() {}, setHover() {}, setPointer() {},
-            touch: () => { lastInput = now; }, raise() {}, setLabeler() {}, setLabelMask() {}, refreshLabels() {}, dispose() {}, pick: () => null, debug: () => ({})
+            touch: () => { lastInput = now; }, raise() {}, setLabeler() {}, setLabelMask() {}, refreshLabels() {}, dispose() {}, pick: () => null, debug: () => ({}),
+            setDetail() {}, setDetailRoom() {}, setCover() {}, hold() {}, unhold() {}, turn() {}, detail: null, detailRect: () => null, dragAxes: () => null, camAt: () => null
         })
     };
     const queue = [];
@@ -538,14 +587,23 @@ test('帧率：操作时按档位上限画，静止 2 秒后 12 帧，播放页�
     // 换成假场景重新初始化
     f.view.destroy();
     f.app.archiveView = null;
+    f.app.isPlaying = true;
     const w = f.w;
     w.document.getElementById('music-archive-view').innerHTML = '';
+    // 待机时下一帧用定时器睡到点再要显示帧：定时器也走虚拟时钟
+    let timers = [];
+    let timerId = 0;
+    w.setTimeout = (cb, ms = 0) => { timers.push({ id: ++timerId, at: now + ms, cb }); return timerId; };
+    w.clearTimeout = (id) => { timers = timers.filter((t) => t.id !== id); };
     const view = w.MusicArchive.init(f.app, { sceneLib: fake, pinyinSrc: false });
     const run = (ms) => {
         const start = steps;
         const end = now + ms;
         while (now < end) {
             now += 1000 / 60;
+            const due = timers.filter((t) => t.at <= now);
+            timers = timers.filter((t) => t.at > now);
+            for (const t of due) t.cb();
             const cbs = queue.splice(0);
             for (const cb of cbs) cb(now);
         }
@@ -691,7 +749,7 @@ test('右侧滚动歌词：播放器有歌词时显示，当前行跟着进度�
     const el = f.w.document.querySelector('.archive-lyrics');
     f.w.document.querySelector('[data-act="lyrics"]').click(); // 歌词面板平时收着，这里手动打开
     assert.ok(el && !el.hidden);
-    assert.ok(f.w.document.querySelector('.archive-hud').classList.contains('has-lyrics'));
+    assert.ok(f.w.document.querySelector('.archive-hud').classList.contains('lyrics-open'));
     const d = f.view.debug().lyrics;
     assert.equal(d.lines, 3); // 空行不显示
     assert.equal(d.index, 1);
@@ -707,7 +765,6 @@ test('右侧滚动歌词：播放器有歌词时显示，当前行跟着进度�
     f.app.currentTrackIndex = 3;
     f.view.refresh();
     assert.ok(el.hidden);
-    assert.ok(!f.w.document.querySelector('.archive-hud').classList.contains('has-lyrics'));
     assert.ok(!f.view.debug().lyrics.ticking);
     f.close();
 });
@@ -736,10 +793,10 @@ test('右侧歌词：经典视图和播放页里不显示，暂停时不走表',
     f.w.document.body.classList.remove('music-stage-active');
     f.w.dispatchEvent(new f.w.Event('resize'));
     assert.ok(!el.hidden);
-    // 窄窗口放不下：收起
+    // 窄一些的窗口不收起，由版面让位（bento）
     Object.defineProperty(f.w, 'innerWidth', { value: 900 });
     f.w.dispatchEvent(new f.w.Event('resize'));
-    assert.ok(el.hidden);
+    assert.ok(!el.hidden);
     f.close();
 });
 
@@ -760,32 +817,6 @@ test('onMotion：换选中时回调方向、速度和在这一列里的位置，
     f.close();
 });
 
-test('流体小滴：底栏的流体标记模块在时，位置条和字母轴都挂上小滴，刻度按远近写 data-md-dist', (t) => {
-    const file = process.env.MUSIC_FLUID_MARKER || 'Musicmodules/music-dock/music-fluid-marker.js';
-    if (!fs.existsSync(file)) { t.skip('底栏的流体标记模块还没合进这个分支'); return; }
-    const src = read(file);
-    const f = fixture({ n: 60, setup: (w) => { w.eval(src); } });
-    const ticks = f.w.document.querySelector('.archive-ticks');
-    assert.ok(ticks.classList.contains('has-drop'));
-    assert.ok(ticks.querySelector('svg.mfm'));
-    for (let k = 0; k < 20; k++) f.key('ArrowDown');
-    const marks = [...ticks.querySelectorAll('span')].filter((m) => !m.hidden);
-    const on = marks.findIndex((m) => m.classList.contains('on'));
-    assert.equal(marks[on].dataset.mdDist, '0');
-    assert.equal(marks[Math.max(0, on - 1)].dataset.mdDist, on ? '1' : '0');
-    f.view.setListOpen(true);
-    f.view.list.render();
-    f.close();
-});
-
-test('没有流体标记模块时照旧用竖线游标', () => {
-    const f = fixture();
-    const ticks = f.w.document.querySelector('.archive-ticks');
-    assert.ok(!ticks.classList.contains('has-drop'));
-    assert.ok(!ticks.querySelector('svg'));
-    f.close();
-});
-
 test('封面：自带封面直接用，读不出来不留破图；没有封面时试同目录的图，每个目录只试一次', async () => {
     const asked = [];
     const f = fixture({
@@ -801,7 +832,9 @@ test('封面：自带封面直接用，读不出来不留破图；没有封面�
             w.Image = class {
                 constructor() { this.l = {}; }
                 addEventListener(type, fn) { (this.l[type] = this.l[type] || []).push(fn); }
+                get src() { return this.url; }
                 set src(v) {
+                    this.url = v;
                     asked.push(v);
                     const ok = /ok\.jpg$|\/b\/folder\.jpg$/.test(v);
                     w.setTimeout(() => { const t = ok ? 'load' : 'error'; this['on' + t]?.(); (this.l[t] || []).forEach((fn) => fn()); }, 0);
@@ -809,24 +842,24 @@ test('封面：自带封面直接用，读不出来不留破图；没有封面�
             };
         }
     });
-    const cover = f.w.document.querySelector('[data-ref="cover"]');
+    const { log } = withFakeScene(f);
     const wait = (ms = 200) => new Promise((r) => f.w.setTimeout(r, ms));
+    const shown = () => log[log.length - 1];
     await wait();
-    assert.equal(cover.dataset.state, 'ready');
-    assert.match(cover.style.backgroundImage, /ok\.jpg/);
+    assert.equal(shown().title, 'A0');
+    assert.match(shown().img.src, /ok\.jpg/);
     f.key('ArrowDown'); await wait();
-    assert.equal(cover.dataset.state, 'failed');
-    assert.equal(cover.style.backgroundImage, '');
-    assert.equal(cover.classList.contains('on'), false);
+    assert.equal(shown().title, 'A1');
+    assert.equal(shown().img, null, '读不出来就保留写有曲名的卡面');
     f.key('ArrowDown'); await wait();
-    assert.equal(cover.dataset.state, 'ready');
-    assert.match(cover.style.backgroundImage, /\/b\/folder\.jpg/);
+    assert.match(shown().img.src, /\/b\/folder\.jpg/);
     const probes = asked.filter((u) => /\/b\//.test(u)).length;
     f.key('ArrowDown'); await wait();
-    assert.equal(cover.dataset.state, 'ready', '同目录第二首直接用上次找到的图');
+    assert.equal(shown().title, 'A3');
+    assert.match(shown().img.src, /\/b\/folder\.jpg/, '同目录第二首直接用上次找到的图');
     assert.equal(asked.filter((u) => /\/b\//.test(u)).length, probes, '不再重新试');
     f.key('ArrowDown'); await wait();
-    assert.equal(cover.dataset.state, 'none', '远程曲目不去试本地目录');
+    assert.equal(shown().img, null, '远程曲目不去试本地目录');
     assert.equal(asked.some((u) => /x\.test/.test(u)), false);
     f.close();
 });
@@ -837,7 +870,7 @@ test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时�
     const f = fixture({ n: 0, playlists: [], setup: (w, app) => { app.api = api; } });
     const root = f.w.document.getElementById('music-archive-view');
     assert.equal(f.text('emptyTitle'), '曲库是空的');
-    assert.match(root.querySelector('[data-act="add-local"]').textContent, /添加音乐文件夹/);
+    assert.match(root.querySelector('[data-act="add-local"]').textContent, /添加本地文件夹/);
     fns.start();
     assert.ok(root.classList.contains('is-scanning'));
     assert.equal(f.text('emptyTitle'), '正在扫描曲库');
@@ -851,24 +884,6 @@ test('扫描曲库：空曲库时中间换成进度并收起入口，有歌时�
     assert.equal(f.text('emptyTitle'), '曲库是空的');
     f.close();
     assert.equal(fns.start, null, '关掉时取消订阅');
-});
-
-test('目录检索时左上标题写检索词和结果数，清掉检索恢复分组名', () => {
-    const f = fixture();
-    f.view.setListOpen(true);
-    const input = f.view.list.input;
-    input.value = 'Song 1';
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    assert.equal(f.text('ctxName'), '检索「Song 1」');
-    assert.match(f.text('ctxSub'), /^\d+ 首结果/);
-    assert.ok(f.w.document.querySelector('[data-ref="playCol"]').hidden, '检索时不显示「播放这一组」');
-    input.value = 'zzqx';
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    assert.match(f.text('ctxSub'), /没有结果/);
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    assert.equal(f.text('ctxName'), '全部曲目');
-    assert.equal(f.w.document.querySelector('[data-ref="playCol"]').hidden, false);
-    f.close();
 });
 
 test('首页不再写「正在播放 全部曲目」：队列来源交给底栏面板（app.queueSourceName）', () => {
@@ -897,13 +912,14 @@ test('空的原因各有说法：检索没结果、空歌单、还没有播放�
     assert.match(empty().textContent, /歌单里还没有歌.*右键/);
     f.view.list.el.querySelector('[data-kind="recent"]').click();
     assert.match(empty().textContent, /还没有播放记录/);
-    // 阵列走到空歌单那一列：说明是空的，并提示怎么加歌
+    // 阵列走到空歌单那一列：分组名是这个歌单，计数为 0，没有选中的歌
     const cols = f.view.debug().columns;
     const lane = cols.findIndex((c) => c.id === 'playlist:e');
     // 目录换分类时阵列会跟着跳（见下面「目录换分类」），这里从当前位置走过去
     for (let k = 0; k < cols.length && ((f.view.debug().lane % cols.length) + cols.length) % cols.length !== lane; k++) f.key('ArrowRight');
-    assert.equal(f.text('ftitle'), '这个歌单还是空的');
-    assert.match(f.text('fmeta'), /右键/);
+    assert.equal(f.text('laneName'), '空歌单');
+    assert.equal(Number(f.text('selT')), 0);
+    assert.equal(f.view.debug().selected, -1);
     f.close();
 });
 
@@ -918,13 +934,11 @@ test('右侧歌词：正在放的歌等一会儿还没有歌词，只留栏头�
     await wait(2700);
     assert.equal(el.hidden, false);
     assert.ok(el.classList.contains('none'));
-    assert.equal(hud.classList.contains('has-lyrics'), false);
     el.querySelector('[data-y="fetch"]').click();
     assert.equal(f.app.fetchAsked, 0);
     f.app.currentLyrics = [{ time: 1, text: '第一句' }, { time: 5, text: '第二句' }];
     f.view.refresh();
     assert.equal(el.classList.contains('none'), false);
-    assert.ok(hud.classList.contains('has-lyrics'));
     f.close();
 });
 
@@ -1294,7 +1308,7 @@ test('只用键盘：Shift+方向键选一段、回头收窄、不按 Shift 回�
     f.close();
 });
 
-test('歌词面板平时不占位：选好歌播放后才出来，浏览到别的歌就收起，定位当前播放或 LYRICS 按钮再打开', () => {
+test('歌词面板只由「歌词」按钮开合：打开这一页时不弹，播放、浏览别的歌、定位当前播放都不替你开关', () => {
     const f = fixture({
         setup: (w, app) => {
             Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
@@ -1308,20 +1322,20 @@ test('歌词面板平时不占位：选好歌播放后才出来，浏览到别�
     const hud = doc.querySelector('.archive-hud');
     const btn = doc.querySelector('[data-act="lyrics"]');
     assert.equal(el.hidden, true, '打开这一页时不弹');
-    assert.ok(!hud.classList.contains('has-lyrics'));
-    f.key('Enter'); // 选中的就是正在放的这首：选好了
+    f.key('Enter');
+    assert.equal(el.hidden, true, '回车播放不自动打开');
+    btn.click();
     assert.equal(el.hidden, false);
     assert.equal(btn.getAttribute('aria-pressed'), 'true');
-    f.key('ArrowDown'); // 去看别的歌
-    assert.equal(el.hidden, true, '浏览时收起');
-    assert.ok(!hud.classList.contains('has-lyrics'), '版面还给选中卡');
-    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+    assert.ok(hud.classList.contains('lyrics-open'));
+    f.key('ArrowDown'); // 去看别的歌：歌词还是正在放的那首，面板留着
+    assert.equal(el.hidden, false);
     f.key('l', { ctrlKey: true });
-    assert.equal(el.hidden, false, '定位当前播放（Ctrl+L）：回到那首，歌词回来');
+    assert.equal(el.hidden, false);
     btn.click();
     assert.equal(el.hidden, true, '按钮可以手动收起');
-    btn.click();
-    assert.equal(el.hidden, false);
+    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+    assert.ok(!hud.classList.contains('lyrics-open'));
     f.close();
 });
 
@@ -1378,7 +1392,7 @@ test('矮窗口不再整体缩到看不清：缩放不低于 0.9，改成挪位�
     f.close();
 });
 
-test('音乐窗口最小宽度（420）走很窄的排版：导航不压标题，分组切换不压曲名', () => {
+test('音乐窗口最小宽度（420）走很窄的排版：导航挪到左边，目录收起品牌和列头', () => {
     const f = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 420 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
     const hud = f.w.document.querySelector('.archive-hud');
     assert.ok(hud.classList.contains('tiny'));
@@ -1386,9 +1400,10 @@ test('音乐窗口最小宽度（420）走很窄的排版：导航不压标题�
     const g = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1024 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
     assert.ok(!g.w.document.querySelector('.archive-hud').classList.contains('tiny'), '1024 宽照常');
     g.close();
-    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive/archive.css'), 'utf8');
-    assert.match(css, /\.archive-hud\.tiny \.archive-nav \{[^}]*top:/);
-    assert.match(css, /\.archive-hud\.tiny \.archive-lanes > div \{ display: none; \}/);
+    const css = ['archive.css', 'archive-list.css', 'archive-lyrics.css', 'archive-tuning.css'].map((f) => require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive', f), 'utf8')).join('');
+    assert.match(css, /\.archive-hud\.tiny \.archive-nav \{[^}]*left:/);
+    assert.match(css, /\.archive-hud\.tiny \.archive-list-cols \{ display: none; \}/);
+    assert.match(css, /\.archive-hud\.tiny \.archive-list-brand \{ display: none; \}/);
 });
 
 test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检索、歌词这些入口不藏', () => {
@@ -1400,7 +1415,7 @@ test('笔记本尺寸（1280×800）走中等排版：目录默认开着，检�
     f.close();
 });
 
-test('跟着在听：选中停在正在放的那首时，播放器换到下一首，选中和歌词跟过去；在看别的歌时不动', async () => {
+test('跟着在听：选中停在正在放的那首时，播放器换到下一首，选中跟过去；在看别的歌时不动', async () => {
     const f = fixture({
         setup: (w, app) => {
             Object.defineProperty(w, 'innerWidth', { value: 1920 }); Object.defineProperty(w, 'innerHeight', { value: 1080 });
@@ -1411,6 +1426,7 @@ test('跟着在听：选中停在正在放的那首时，播放器换到下一�
     });
     const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
     const el = f.w.document.querySelector('.archive-lyrics');
+    f.w.document.querySelector('[data-act="lyrics"]').click();
     f.key('Enter');
     const first = f.view.debug().selected;
     assert.equal(first, f.app.currentTrackIndex);
@@ -1421,154 +1437,19 @@ test('跟着在听：选中停在正在放的那首时，播放器换到下一�
     await wait(1150);
     assert.equal(f.view.debug().selected, next, '选中跟到新的这首');
     assert.equal(el.hidden, false, '歌词面板留着');
-    // 去看别的歌：歌词收起，之后再换歌也不把选中拽回去
+    // 去看别的歌：之后再换歌也不把选中拽回去（歌词面板只由按钮开合）
     f.key('ArrowDown'); f.key('ArrowDown');
     const browsing = f.view.debug().selected;
-    assert.equal(el.hidden, true);
+    assert.equal(el.hidden, false);
     f.app.currentTrackIndex = (next + 5) % f.app.playlist.length;
     await wait(1150);
     assert.equal(f.view.debug().selected, browsing);
     f.close();
 });
 
-test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡按钮可用，Esc 放回；左右换分组也放回', () => {
+test('键盘：检索框里 Tab 只在有字时换分类，到最后一类就放焦点出去', () => {
     const f = fixture();
     const doc = f.w.document;
-    const root = doc.getElementById('music-archive-view');
-    f.app.queuePlayNext = (t) => { f.calls.push(['next', t.path]); return t; };
-    f.app.queueAdd = (t) => { f.calls.push(['queue', t.path]); return t; };
-    doc.querySelector('.archive-file-title').click();
-    assert.ok(f.view.detailOpen);
-    assert.ok(root.classList.contains('is-detail'));
-    assert.equal(doc.querySelector('.archive-detail').hasAttribute('inert'), false);
-    assert.equal(f.text('dTitle'), 'Song 0');
-    assert.equal(f.text('dArtist'), 'Ren');
-    assert.equal(f.text('dAlbum2'), 'A0');
-    // 同专辑的其他曲目（A0 = 0, 3, 6…），点一首就换过去
-    const more = [...doc.querySelectorAll('[data-act="d-goto"]')];
-    assert.ok(more.length > 0 && more.length <= 8);
-    assert.equal(more[0].querySelector('span').textContent, 'Song 3');
-    f.key('ArrowDown');
-    assert.ok(f.view.detailOpen, '↑↓ 换曲目时详情留着');
-    assert.equal(f.text('dTitle'), 'Song 1');
-    doc.querySelector('[data-act="d-next"]').click();
-    doc.querySelector('[data-act="d-queue"]').click();
-    assert.deepEqual(f.calls.filter((c) => c[0] === 'next' || c[0] === 'queue').map((c) => c.join(':')), ['next:/m/1', 'queue:/m/1']);
-    // 资料卡里的「播放」只播放，不进舞台
-    doc.querySelector('[data-act="d-play"]').click();
-    assert.ok(f.calls.some((c) => c[0] === 'load' && c[1] === 1));
-    assert.ok(!f.calls.some((c) => c[0] === 'stage'));
-    f.key('Escape');
-    assert.equal(f.view.detailOpen, false);
-    assert.equal(root.classList.contains('is-detail'), false);
-    assert.ok(doc.querySelector('.archive-detail').hasAttribute('inert'));
-    f.view.openDetail();
-    f.key('ArrowRight');
-    assert.equal(f.view.detailOpen, false, '换分组时把卡放回');
-    f.close();
-});
-
-test('取出详情时按顶栏「目录」：放回卡片并打开目录，不会把目录关掉', () => {
-    const f = fixture();
-    const doc = f.w.document;
-    const btn = doc.querySelector('.archive-nav [data-act="list"]');
-    if (btn.getAttribute('aria-pressed') !== 'true') btn.click();
-    assert.equal(btn.getAttribute('aria-pressed'), 'true');
-    f.view.openDetail();
-    btn.click();
-    assert.equal(f.view.detailOpen, false);
-    assert.equal(btn.getAttribute('aria-pressed'), 'true', '目录还开着');
-    btn.click();
-    assert.equal(btn.getAttribute('aria-pressed'), 'false', '不在详情里时照常开关');
-    f.close();
-});
-
-test('取出详情里的「喜欢」：有喜欢功能才显示，点了切换状态，外面改了也跟着变', () => {
-    const f = fixture();
-    const doc = f.w.document;
-    f.view.openDetail();
-    const like = doc.querySelector('[data-act="d-like"]');
-    f.view.closeDetail();
-    f.view.openDetail();
-    assert.ok(like.hidden, '没有 app.toggleLike 时不显示');
-    const liked = new Set();
-    f.app.isLiked = (t) => liked.has(t.path);
-    f.app.toggleLike = (t) => { if (liked.has(t.path)) liked.delete(t.path); else liked.add(t.path); };
-    f.view.closeDetail();
-    f.view.openDetail();
-    assert.equal(like.hidden, false);
-    assert.equal(like.getAttribute('aria-pressed'), 'false');
-    like.click();
-    assert.equal(like.getAttribute('aria-pressed'), 'true');
-    assert.equal(like.title, '取消喜欢');
-    liked.clear();
-    doc.dispatchEvent(new f.w.Event('music-like-change'));
-    assert.equal(like.getAttribute('aria-pressed'), 'false', '别处取消喜欢后资料卡跟着变');
-    f.close();
-});
-
-test('取出详情：从曲名打开、Esc 关掉后焦点回到曲名', () => {
-    const f = fixture();
-    const title = f.w.document.querySelector('.archive-file-title');
-    title.focus();
-    title.click();
-    assert.ok(f.view.detailOpen);
-    assert.equal(f.w.document.activeElement.dataset.act, 'd-play', '打开后焦点在「播放」');
-    f.key('Escape');
-    assert.equal(f.view.detailOpen, false);
-    assert.equal(f.w.document.activeElement, title, '关掉后焦点回到打开它的曲名');
-    f.close();
-});
-
-test('首页文字：没有装饰用的英文，左上是当前分组名和首数', () => {
-    const f = fixture();
-    const hud = f.w.document.querySelector('.archive-hud').textContent;
-    for (const word of ['SESSION AUTHORIZED', 'ACCESS FILE', 'FILE NUMBER', 'POWERED BY', 'ACOUSTIC', 'COLUMN', 'TRK-', 'ARCHIVE INDEX', 'CLASSIC VIEW']) {
-        assert.ok(!hud.includes(word), word);
-    }
-    assert.equal(f.text('ctxName'), '全部曲目');
-    assert.match(f.text('ctxSub'), /^\d+ 首/);
-    f.close();
-});
-
-test('接着听：有上次没听完的歌时显示在「播放这一组」旁边，点了放那首并跳到原位置', async () => {
-    let resume = null;
-    const seeks = [];
-    const f = fixture({ setup: (w, app) => {
-        app.musicStats = { resume: () => resume };
-        app.seekTo = (s) => { seeks.push(s); };
-    } });
-    const doc = f.w.document;
-    const btn = doc.querySelector('[data-act="resume"]');
-    assert.ok(btn.hidden, '没有记录时不显示');
-    resume = { track: f.app.playlist[12], position: 133, at: Date.now() };
-    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change', { detail: { path: '/m/12' } }));
-    assert.equal(btn.hidden, false);
-    assert.equal(f.text('resumeLabel'), '接着听');
-    assert.equal(f.text('resumeName'), 'Song 12');
-    assert.equal(f.text('resumeAt'), '2:13');
-    btn.click();
-    assert.equal(f.app.currentTrackIndex, 12);
-    f.app.engineTrackPath = '/m/12';
-    await new Promise((r) => f.w.setTimeout(r, 400));
-    assert.deepEqual(seeks, [133]);
-    // 正在放的就是它：不显示；停在这首没放：写「继续播放」
-    f.app.isPlaying = true;
-    f.view.refresh?.();
-    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change'));
-    assert.ok(btn.hidden);
-    f.app.isPlaying = false;
-    doc.dispatchEvent(new f.w.CustomEvent('music-stats-change'));
-    assert.equal(btn.hidden, false);
-    assert.equal(f.text('resumeLabel'), '继续播放');
-    f.close();
-});
-
-test('键盘：目录在 Tab 顺序里紧跟左上标题；检索框里 Tab 只在有字时换分类，到最后一类就放焦点出去', () => {
-    const f = fixture();
-    const doc = f.w.document;
-    const brand = doc.querySelector('.archive-brand');
-    assert.ok(brand.nextElementSibling.classList.contains('archive-list'), '目录挪到标题后面');
     const input = doc.querySelector('.archive-list-search input');
     const tab = (shiftKey = false) => {
         const e = new f.w.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
@@ -1586,15 +1467,16 @@ test('键盘：目录在 Tab 顺序里紧跟左上标题；检索框里 Tab 只�
     f.close();
 });
 
-test('每日推荐：有推荐时阵列最前面多一列「每日推荐」，播放这一组就放这 30 首', () => {
+test('每日推荐：有推荐时阵列最前面多一列「每日推荐」，在这一列里点播就放这 30 首', () => {
     const f = fixture({ n: 80, setup: (w, app) => { app.dailyMix = () => app.playlist.slice(10, 40); } });
     const cols = f.view.debug().columns;
     assert.equal(cols[0].id, 'daily');
     assert.equal(cols[0].n, 30);
-    // 跳到这一列，标题写「每日推荐」，播放这一组的队列就是这 30 首
+    // 跳到这一列，分组名写「每日推荐」，在这一列里点播，队列就是这 30 首
     while (f.view.debug().lane !== 0) f.key('ArrowLeft');
-    assert.equal(f.text('ctxName'), '每日推荐');
-    f.w.document.querySelector('[data-act="play-col"]').click();
+    assert.equal(f.text('laneName'), '每日推荐');
+    f.key('Home');
+    f.key('Enter');
     const load = f.calls.find((c) => c[0] === 'load');
     assert.equal(f.app.playlist[load[1]].path, '/m/10');
     assert.equal(load[2], 30);
@@ -1604,64 +1486,33 @@ test('每日推荐：有推荐时阵列最前面多一列「每日推荐」，�
     g.close();
 });
 
-test('目录换分类：阵列和左上标题跟过去；检索第一条结果带着阵列走，没有结果时收起中间说明', () => {
+test('目录换分类：阵列跟过去（歌手没有对应的列时不动）；检索第一条结果带着阵列走', () => {
     const f = fixture({ n: 60, playlists: [{ id: 'p', name: '夜间散步', tracks: ['/m/5', '/m/7', '/m/9'] }] });
-    const doc = f.w.document;
-    const hud = doc.querySelector('.archive-hud');
     f.view.setListOpen(true);
     const colKind = () => { const d = f.view.debug(); const n = d.columns.length; return d.columns[((d.lane % n) + n) % n].id; };
     f.view.list.el.querySelector('[data-kind="playlist"]').click();
     assert.equal(colKind(), 'playlist:p');
-    assert.equal(f.text('ctxName'), '夜间散步');
-    // 歌手没有对应的列：阵列不动，左上跟着目录写「歌手」，不再停在「全部曲目 · 首字母」
+    assert.equal(f.text('laneName'), '夜间散步');
+    // 歌手没有对应的列：阵列不动
     f.view.list.el.querySelector('[data-kind="artist"]').click();
-    assert.equal(f.text('ctxName'), '歌手');
-    assert.equal(f.text('ctxSub'), '2 位歌手 · 曲库共 60 首');
-    assert.ok(f.w.document.querySelector('[data-act="play-col"]').hidden);
-    // 专辑有列时阵列跳到专辑列，标题就是那张专辑
+    assert.equal(colKind(), 'playlist:p');
+    // 专辑有列时阵列跳到专辑列，分组名就是那张专辑
     f.view.list.el.querySelector('[data-kind="album"]').click();
     assert.ok(/^album:/.test(colKind()), colKind());
-    assert.equal(f.text('ctxName'), colKind().slice(6));
+    assert.equal(f.text('laneName'), colKind().slice(6));
     f.view.list.el.querySelector('[data-kind="all"]').click();
     assert.ok(/^letter:|^all$/.test(colKind()), colKind());
-    assert.notEqual(f.text('ctxName'), '歌手');
     // 检索：第一条结果带着阵列走
     f.view.list.input.value = 'Song 42';
     f.view.list.input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
-    assert.equal(f.text('ftitle'), 'Song 42');
-    assert.equal(doc.querySelector('.archive-brand-q').textContent, 'Song 42');
-    assert.ok(f.text('ctxName').endsWith('」'));
-    // 没有结果：中间说明收起，副标题不再重复 Esc
+    assert.equal(f.selTitle(), 'Song 42');
+    // 没有结果：目录底部计数归零，选中不动
     f.view.list.input.value = 'zzqx';
     f.view.list.input.dispatchEvent(new f.w.Event('input', { bubbles: true }));
     f.view.list.input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
-    assert.ok(hud.classList.contains('no-match'));
-    assert.equal(f.text('ctxSub'), '没有结果');
     assert.ok(f.view.list.el.querySelector('.archive-list-foot').classList.contains('zero'));
-    f.close();
-});
-
-test('目录切到专辑但没有专辑列（每张都只有一首）：左上写「专辑」，关掉目录回到原来的列名', () => {
-    const f = fixture({ tracks: LIB, playlists: [] });
-    f.view.setListOpen(true);
-    const before = f.text('ctxName');
-    f.view.list.el.querySelector('[data-kind="album"]').click();
-    assert.equal(f.text('ctxName'), '专辑');
-    assert.equal(f.text('ctxSub'), '46 张专辑 · 曲库共 46 首');
-    f.view.setListOpen(false);
-    assert.equal(f.text('ctxName'), before);
-    f.close();
-});
-
-test('键盘提示：用方向键时才出现，指针一按就收起', () => {
-    const f = fixture();
-    const hud = f.w.document.querySelector('.archive-hud');
-    assert.equal(hud.classList.contains('kbd'), false);
-    f.key('ArrowDown');
-    assert.ok(hud.classList.contains('kbd'));
-    f.w.document.getElementById('music-archive-view').dispatchEvent(new f.w.Event('pointerdown', { bubbles: true }));
-    assert.equal(hud.classList.contains('kbd'), false);
+    assert.equal(f.selTitle(), 'Song 42');
     f.close();
 });
 

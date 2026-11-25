@@ -74,6 +74,7 @@
                 .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
                 .slice(0, maxAlbums)
                 .forEach(([name, items], order) => {
+                    if (global.MusicTrackOrder) items.sort(global.MusicTrackOrder.albumCompare(list, (a, b) => a - b)); // 碟号、曲号
                     columns.push({
                         id: 'album:' + name,
                         kind: 'album',

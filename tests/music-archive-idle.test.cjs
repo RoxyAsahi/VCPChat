@@ -63,6 +63,7 @@ function setup({ playing = false, lyrics = false, fluid = false } = {}) {
         },
         PMREMGenerator: class { fromScene() { return { texture: null, dispose() {} }; } compileEquirectangularShader() {} dispose() {} }
     });
+    w.eval(read('Musicmodules/music-app-hooks.js'));
     for (const n of ['model', 'scene', 'index', 'list', 'lyrics']) w.eval(read(`Musicmodules/music-archive/archive-${n}.js`));
     if (fluid) w.eval(read(fluid));
     w.eval(read('Musicmodules/music-archive/archive-view.js'));

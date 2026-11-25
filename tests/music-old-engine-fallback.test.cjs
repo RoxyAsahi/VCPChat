@@ -115,7 +115,7 @@ function startWindow(engine, { dir = 'Musicmodules' } = {}) {
     vm.runInContext('globalThis.window = globalThis;', context);
     const musicDir = path.join(__dirname, '..', dir);
     // 旧版页面靠 legacy-bridge.js 把写死的 63789 换成引擎实际地址，和真窗口一样先载入它。
-    const scripts = dir === 'Musicmodules-legacy' ? ['legacy-bridge.js'] : [];
+    const scripts = dir === 'Musicmodules-legacy' ? ['legacy-bridge.js'] : ['music-app-hooks.js'];
     for (const name of [...scripts, 'music-lyrics.js', 'music-player.js', 'music-visualizer.js']) {
         vm.runInContext(fs.readFileSync(path.join(musicDir, name), 'utf8'), context, { filename: name });
     }

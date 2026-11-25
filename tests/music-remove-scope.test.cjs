@@ -43,6 +43,7 @@ function setup({ confirmAnswer = true } = {}) {
         archiveView: { lane: 0, columns: [{ id: 'all', n: 4 }], debug() { return { lane: this.lane, columns: this.columns }; }, refresh() { calls.push('archiveRefresh'); } }
     };
     window.__app = app;
+    window.eval(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-app-hooks.js'), 'utf8'));
     window.eval(`(function (app) { ${musicJs.slice(start, end)} })(window.__app);`);
     const rightClick = (selector) => {
         window.document.querySelector(selector).dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));

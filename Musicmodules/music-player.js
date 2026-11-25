@@ -293,6 +293,21 @@ function setupPlayer(app) {
             failureToast({ message: `无法播放「${name}」：${detail}` });
             return;
         }
+        // 曲库里还有同一首的另一份文件（别的格式、别的文件夹）：直接换那份接着放，不跳到下一首
+        const alt = typeof app.alternateCopy === 'function' ? app.alternateCopy(track) : null;
+        const altIndex = alt ? (app.playlist || []).indexOf(alt) : -1;
+        if (altIndex >= 0 && requestId === app.pendingLoadRequestId) {
+            app.cancelFailureSkip();
+            const queue = app.currentFilteredTracks;
+            if (Array.isArray(queue) && queue !== app.playlist) {
+                const at = queue.indexOf(track);
+                if (at >= 0 && !queue.includes(alt)) queue[at] = alt;
+            }
+            const ext = (t) => String(t.path || '').split('.').pop().toUpperCase();
+            failureToast({ message: `「${name}」这份文件放不了（${detail}），换成了同一首的 ${ext(alt)} 版本` });
+            app.loadTrack(altIndex, true);
+            return;
+        }
         app.failureStreak += 1;
         if (app.failureStreak >= FAILURE_STOP_AFTER) {
             const count = app.failureStreak;
@@ -913,13 +928,10 @@ function setupPlayer(app) {
         return app.lyricsTranslation;
     };
     // 换歌取歌词前先换成这首的偏移。
-    if (typeof app.fetchAndDisplayLyrics === 'function') {
-        const fetchLyricsBase = app.fetchAndDisplayLyrics;
-        app.fetchAndDisplayLyrics = (artist, title, options = {}) => {
-            app.lyricOffset = app.lyricOffsetFor(options.path || lyricTrackPath());
-            return fetchLyricsBase(artist, title, options);
-        };
-    }
+    (globalThis.MusicAppHooks || require('./music-app-hooks.js')).wrap(app, 'fetchAndDisplayLyrics', 'player', (base) => (artist, title, options = {}) => {
+        app.lyricOffset = app.lyricOffsetFor(options.path || lyricTrackPath());
+        return base(artist, title, options);
+    });
 
     // ───────── 重启恢复：队列、上下文、进度 ─────────
     // 和「上次那首」「播放模式」一样存在 localStorage：
@@ -1370,12 +1382,11 @@ function setupPlayer(app) {
         adoptSwitchedTrack(index);
     };
 
-    const syncTrackIndexByPath = app.syncTrackIndexByPath;
     const sameFile = (a, b) => {
         const x = app.normalizePathForCompare(a), y = app.normalizePathForCompare(b);
         return Boolean(x && y) && (x === y || x.split('/').pop() === y.split('/').pop());
     };
-    app.syncTrackIndexByPath = (path) => {
+    (globalThis.MusicAppHooks || require('./music-app-hooks.js')).wrap(app, 'syncTrackIndexByPath', 'player-queue', (syncTrackIndexByPath) => (path) => {
         // 引擎无缝切进了一首曲库里已经没有的歌（预载之后被移除，重填又没赶上）：
         // 界面没法显示它，直接按现在的队列切到下一首，不让声音和界面对不上。
         if (path && !app.playlist.some(t => sameFile(t.path, path))) {
@@ -1389,7 +1400,7 @@ function setupPlayer(app) {
         syncTrackIndexByPath(path);
         scheduleSessionSave();
         app.publishCapsuleState();
-    };
+    });
 
     // 歌词和进度在两次查询之间按本地时钟推算，查询只用来校准，不需要每秒 4 次。
     // 窗口不可见时再降到 2 秒一次，只为外部的“正在播放”信息保持更新。
