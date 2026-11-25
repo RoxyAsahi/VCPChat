@@ -22,7 +22,9 @@ npm run test:music                   # 全部音乐测试，和已知失败清�
 Rust 音频引擎 rust_audio_engine/（HTTP + /ws 状态推送，端口见 modules/services/audioEngineEndpoint.js）
         ▲ HTTP（musicHandlers.audioEngineApi）            ▲ WebSocket（渲染端 app.connectWebSocket，在 music-visualizer.js）
         │                                                 │
-主进程 modules/ipc/musicHandlers.js ── 窗口、IPC、曲库扫描/存盘、歌词抓取、WebDAV、AI 点歌转发
+主进程 modules/ipc/musicHandlers.js ── 窗口、播放/曲库/歌单 IPC、AI 点歌转发
+       ├─ musicEngineHandlers.js  引擎设置（设备、EQ、DSP、预载、IR）  ├─ musicLyricsHandlers.js  歌词读取/抓取/候选
+       ├─ musicWebdavHandlers.js  WebDAV                              └─ musicM3u.js / musicDesktopLyrics.js
         ▲ ipcMain.handle / on
 预加载 preloads/api/music.js（utility 角色）→ 页面上的 window.utilityAPI，在渲染端是 app.api
         ▲
@@ -69,12 +71,12 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 | 想改的东西 | 去哪里 | 备注 |
 | --- | --- | --- |
 | 播放/暂停/切歌/跳转/无缝/预载 | `music-player.js` | 竞态多，改前读 tests/music-playback-races.test.js |
-| 输出设备、独占、位深 | `music-output.js`、`music-device-sound.js` | 设备以名字为准，id 只是列表下标 |
+| 输出设备、独占、位深 | `music-output.js`、`music-device-sound.js`；主进程 `modules/ipc/musicEngineHandlers.js` | 设备以名字为准，id 只是列表下标 |
 | EQ、响度、饱和、交叉馈送、卷积 | `music-effects.js`、`music-eq-presets.js`、`music-channels.js` | 引擎参数名见 rust_audio_engine/src/server |
-| WebDAV | 渲染端 `music-webdav.js`，主进程 `modules/webdavManager.js` | 报错文案统一走 `app.webdavReason` |
+| WebDAV | 渲染端 `music-webdav.js`，主进程 `modules/ipc/musicWebdavHandlers.js` + `modules/webdavManager.js` | 报错文案统一走 `app.webdavReason` |
 | 曲库扫描、增量、监视文件夹 | `modules/musicLibraryScanner.js`、`musicScannerWorker.js`、`musicLibraryWatch.js` | 主进程，改完要重启整个 VCPChat |
 | 歌单侧栏、右键菜单 | `music-sidebar.js`（菜单入口在 music.js `app.showContextMenu`） | 菜单被多个模块包过，见历史债 |
-| 歌词显示/滚动/点击跳转 | `music-lyrics.js` | 抓词在主进程 `modules/lyrics/lyricFetcherUnified.js` |
+| 歌词显示/滚动/点击跳转 | `music-lyrics.js` | 读词/抓词 IPC 在 `modules/ipc/musicLyricsHandlers.js`，抓词实现在 `modules/lyrics/` |
 | 首页（档案阵列、封面墙、目录表、检索） | `music-archive/` | 见 [music-archive/AGENTS.md](music-archive/AGENTS.md) |
 | 底栏、面板、命令面板、toast、对话框、下拉 | `music-dock/` | 见 [music-dock/AGENTS.md](music-dock/AGENTS.md) |
 | 歌词舞台（加模式、改某个舞台） | `music-stage/` | 见 [music-stage/AGENTS.md](music-stage/AGENTS.md) |
@@ -133,7 +135,7 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
    `app.fetchAndDisplayLyrics`（lyrics → player → lyrics-ai）、`app.renderPlaylist`（music.js / music-ui / 经典列表）。顺序靠 setup 调用顺序维持。
 2. **共写的列表状态**：`app.currentFilteredTracks`（11 个文件写）、`app.customPlaylists`（7 个）、`app.filteredPlaylistSource`（6 个）、`app.currentTrackIndex`（5 个）。
 3. **装配散落**：`connectWebSocket` 住在 `music-visualizer.js`。
-4. **巨型文件**：22 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB、music-dock.js 148 KB。
+4. **巨型文件**：21 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB、music-dock.js 148 KB。
 5. **加一个舞台要改 6 个文件**（`check:music` 会核对是否一致）。
 
 治理进度和每批 PR 记在 PR 描述里；做完一项就把上面对应条目删掉或改写。

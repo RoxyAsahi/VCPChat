@@ -58,7 +58,9 @@ function trackedFiles() {
 // 音乐相关文件：Musicmodules 目录，加上登记表里明确列出的目录外路径。
 function musicFiles(registry, all) {
     const patterns = registry.modules.flatMap((m) => m.paths.map(globToRegExp));
-    return all.filter((f) => f.startsWith('Musicmodules/') || f.startsWith('Musicmodules-legacy/') || patterns.some((re) => re.test(f)));
+    // modules/、preloads/ 下文件名带 music 的也算音乐文件，没登记就报出来
+    const named = (f) => /^(modules|preloads)\/(.*\/)?[^/]*music[^/]*$/i.test(f);
+    return all.filter((f) => f.startsWith('Musicmodules/') || f.startsWith('Musicmodules-legacy/') || named(f) || patterns.some((re) => re.test(f)));
 }
 
 function ownerIndex(registry, files) {

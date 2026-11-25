@@ -346,9 +346,7 @@
       "title": "主进程",
       "purpose": "音乐窗口创建与崩溃恢复、IPC 处理、曲库扫描/监视、歌单存盘、歌词抓取与翻译、WebDAV、缩略图按钮、引擎启动与端口。",
       "paths": [
-        "modules/ipc/musicHandlers.js",
-        "modules/ipc/musicM3u.js",
-        "modules/ipc/musicDesktopLyrics.js",
+        "modules/ipc/music*.js",
         "modules/music*.js",
         "modules/lyricFetcher.js",
         "modules/lyrics/**",
@@ -375,7 +373,8 @@
         "tests/lyric-cross-provider-audit.test.js",
         "tests/audio-engine-orphan.test.cjs",
         "tests/audio-engine-port.test.js",
-        "tests/deskpet-music-groove.test.mjs"
+        "tests/deskpet-music-groove.test.mjs",
+        "tests/music-ipc-split.test.cjs"
       ]
     },
     {
@@ -433,10 +432,9 @@
     "Musicmodules/music-stage/modes/stage-mode-utils.js": 76914,
     "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79075,
     "Musicmodules/music-stage/modes/tunnel-manager.js": 286561,
-    "Musicmodules/music-stage/music-stage-host.js": 117383,
+    "Musicmodules/music-stage/music-stage-host.js": 117182,
     "Musicmodules/music-stage/music-stage.css": 131374,
-    "Musicmodules/music.js": 86684,
-    "modules/ipc/musicHandlers.js": 77178
+    "Musicmodules/music.js": 87687
   },
   "appWriterBaseline": {
     "_gaplessSwitchTimer": [
