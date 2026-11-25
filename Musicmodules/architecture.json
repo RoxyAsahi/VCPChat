@@ -249,8 +249,8 @@
         "Musicmodules/music-stage/music-stage-config.js",
         "Musicmodules/music-stage/music-stage-modes.js",
         "Musicmodules/music-stage/music-stage-advanced-modes.js",
-        "Musicmodules/music-stage/music-stage.css",
-        "Musicmodules/music-stage/*.md"
+        "Musicmodules/music-stage/*.md",
+        "Musicmodules/music-stage/music-stage*.css"
       ],
       "docs": [
         "Musicmodules/music-stage/AGENTS.md"
@@ -414,12 +414,10 @@
   },
   "sizeBudgetBytes": 65536,
   "sizeBaseline": {
-    "Musicmodules/music-archive/archive-list.js": 116566,
+    "Musicmodules/music-archive/archive-list.js": 116571,
     "Musicmodules/music-archive/archive-scene.js": 100013,
     "Musicmodules/music-archive/archive-view.js": 132517,
     "Musicmodules/music-archive/archive-wall.js": 69010,
-    "Musicmodules/music-archive/archive.css": 97774,
-    "Musicmodules/music-dock/music-dock.css": 84049,
     "Musicmodules/music-dock/music-dock.js": 151283,
     "Musicmodules/music-player.js": 75562,
     "Musicmodules/music-stage/modes/diorama-world.js": 397621,
@@ -433,7 +431,7 @@
     "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79075,
     "Musicmodules/music-stage/modes/tunnel-manager.js": 286561,
     "Musicmodules/music-stage/music-stage-host.js": 117182,
-    "Musicmodules/music-stage/music-stage.css": 131374,
+    "Musicmodules/music.html": 66140,
     "Musicmodules/music.js": 87687
   },
   "appWriterBaseline": {
@@ -718,6 +716,36 @@
     "ws": [
       "Musicmodules/music-visualizer.js",
       "Musicmodules/music.js"
+    ]
+  },
+  "cssChains": {
+    "$comment": "按段拆开的样式表。数组顺序就是层叠顺序，music.html 里必须按这个顺序紧挨着加载；拆分时拼回去和原文件逐字节相同。",
+    "stage": [
+      "Musicmodules/music-stage/music-stage.css",
+      "Musicmodules/music-stage/music-stage-core-modes.css",
+      "Musicmodules/music-stage/modes/tunnel.css",
+      "Musicmodules/music-stage/music-stage-settings.css",
+      "Musicmodules/music-stage/music-stage-pixi-3d.css",
+      "Musicmodules/music-stage/modes/inkdraft.css",
+      "Musicmodules/music-stage/modes/fogpane.css",
+      "Musicmodules/music-stage/modes/lumiere.css",
+      "Musicmodules/music-stage/modes/hanabi.css",
+      "Musicmodules/music-stage/modes/clockwork.css",
+      "Musicmodules/music-stage/modes/orbit.css",
+      "Musicmodules/music-stage/modes/signal.css",
+      "Musicmodules/music-stage/modes/groupchat.css",
+      "Musicmodules/music-stage/modes/impression.css"
+    ],
+    "archive": [
+      "Musicmodules/music-archive/archive.css",
+      "Musicmodules/music-archive/archive-list.css",
+      "Musicmodules/music-archive/archive-lyrics.css",
+      "Musicmodules/music-archive/archive-tuning.css"
+    ],
+    "dock": [
+      "Musicmodules/music-dock/music-dock.css",
+      "Musicmodules/music-dock/music-dock-panel.css",
+      "Musicmodules/music-dock/music-dock-drawer.css"
     ]
   }
 }

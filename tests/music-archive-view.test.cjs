@@ -1386,7 +1386,7 @@ test('音乐窗口最小宽度（420）走很窄的排版：导航不压标题�
     const g = fixture({ setup: (w) => { Object.defineProperty(w, 'innerWidth', { value: 1024 }); Object.defineProperty(w, 'innerHeight', { value: 600 }); } });
     assert.ok(!g.w.document.querySelector('.archive-hud').classList.contains('tiny'), '1024 宽照常');
     g.close();
-    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive/archive.css'), 'utf8');
+    const css = ['archive.css', 'archive-list.css', 'archive-lyrics.css', 'archive-tuning.css'].map((f) => require('node:fs').readFileSync(require('node:path').join(__dirname, '../Musicmodules/music-archive', f), 'utf8')).join('');
     assert.match(css, /\.archive-hud\.tiny \.archive-nav \{[^}]*top:/);
     assert.match(css, /\.archive-hud\.tiny \.archive-lanes > div \{ display: none; \}/);
 });

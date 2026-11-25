@@ -14,7 +14,7 @@
 | `archive-wall.js/.css` | `MusicArchiveWall` | 第二种视图「封面墙」 |
 | `archive-grid.js` | `MusicArchiveGrid` | 分节网格视图 |
 | `archive-view.js` | `MusicArchive` | 主视图：把上面拼起来，顶栏、布局切换（阵列 / 封面墙 / 平放 / 网格 / 经典列表）、键盘、和播放器对接 |
-| `archive.css` | | 首页样式 |
+| `archive.css` → `archive-list.css` → `archive-lyrics.css` → `archive-tuning.css` | | 首页样式按段拆开，顺序即层叠顺序：主视图/HUD → 目录表 → 右侧歌词 → 后续各轮打磨（会覆盖前面的同名规则，改样式先在这里搜） |
 
 ## 约定
 

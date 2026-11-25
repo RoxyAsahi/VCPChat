@@ -6,9 +6,27 @@
     <title>音乐播放器</title>
     <link rel="stylesheet" href="music.css">
     <link rel="stylesheet" href="music-theme/music-tokens.css">
+    <!-- 首页样式按段拆开，顺序即层叠顺序 -->
     <link rel="stylesheet" href="music-archive/archive.css">
+    <link rel="stylesheet" href="music-archive/archive-list.css">
+    <link rel="stylesheet" href="music-archive/archive-lyrics.css">
+    <link rel="stylesheet" href="music-archive/archive-tuning.css">
     <link rel="stylesheet" href="music-archive/archive-wall.css">
+    <!-- 舞台样式按段拆成多个文件，顺序就是原来 music-stage.css 里的顺序，不能调换（后面的覆盖前面的） -->
     <link rel="stylesheet" href="music-stage/music-stage.css">
+    <link rel="stylesheet" href="music-stage/music-stage-core-modes.css">
+    <link rel="stylesheet" href="music-stage/modes/tunnel.css">
+    <link rel="stylesheet" href="music-stage/music-stage-settings.css">
+    <link rel="stylesheet" href="music-stage/music-stage-pixi-3d.css">
+    <link rel="stylesheet" href="music-stage/modes/inkdraft.css">
+    <link rel="stylesheet" href="music-stage/modes/fogpane.css">
+    <link rel="stylesheet" href="music-stage/modes/lumiere.css">
+    <link rel="stylesheet" href="music-stage/modes/hanabi.css">
+    <link rel="stylesheet" href="music-stage/modes/clockwork.css">
+    <link rel="stylesheet" href="music-stage/modes/orbit.css">
+    <link rel="stylesheet" href="music-stage/modes/signal.css">
+    <link rel="stylesheet" href="music-stage/modes/groupchat.css">
+    <link rel="stylesheet" href="music-stage/modes/impression.css">
     <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
     <link rel="stylesheet" href="../styles/themes.css">
@@ -1053,6 +1071,8 @@
 
     <!-- music-dock -->
     <link rel="stylesheet" href="music-dock/music-dock.css">
+    <link rel="stylesheet" href="music-dock/music-dock-panel.css">
+    <link rel="stylesheet" href="music-dock/music-dock-drawer.css">
     <link rel="stylesheet" href="music-stats-view.css">
     <link rel="stylesheet" href="music-dock/music-fluid-kit.css">
     <div id="music-dock-root"></div>

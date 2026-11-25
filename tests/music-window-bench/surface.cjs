@@ -1,6 +1,6 @@
 /*
  * 整个音乐窗口的「外形指纹」：真 music.html + 假预加载接口，打开后记录
- *   - app 上每个属性的类型（谁装上了什么）
+ *   - app 上有哪些属性、哪些是方法（谁装上了什么）
  *   - 每个舞台模式进入后舞台根节点和 body 上的类
  *   - 页面报错
  * 重构前后各跑一次、diff 两份输出，就能看出装配或舞台外观有没有变。
@@ -62,7 +62,8 @@ const FAKE = () => {
     await page.waitForTimeout(3000);
     const appShape = await page.evaluate(() => Object.fromEntries(Object.keys(window.__app).sort().map((k) => {
         const v = window.__app[k];
-        return [k, v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v];
+        // 只分「方法」和「数据」：数据的具体类型随连接、计时器等运行时状态变（ws 连没连上），比较时是噪声
+        return [k, typeof v === 'function' ? 'function' : 'data'];
     })));
     const modes = await page.evaluate(() => [...document.querySelectorAll('[data-stage-mode]')].map((b) => b.dataset.stageMode)
         .filter((v, i, a) => a.indexOf(v) === i));

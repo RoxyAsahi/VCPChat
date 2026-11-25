@@ -269,10 +269,21 @@ function check() {
         }
     }
 
-    // 6. 舞台模式登记一致
+    // 6. 按段拆开的样式表在 music.html 里按登记顺序紧挨着加载（顺序就是层叠顺序）
+    const cssOrder = shellRefs.filter((r) => r.tag === 'link').map((r) => r.file);
+    for (const [name, chain] of Object.entries(registry.cssChains || {})) {
+        if (name.startsWith('$')) continue;
+        const at = cssOrder.indexOf(chain[0]);
+        const actual = at < 0 ? [] : cssOrder.slice(at, at + chain.length);
+        if (actual.join('|') !== chain.join('|')) {
+            errors.push(`样式链 ${name} 在 music.html 里的加载顺序不对，应当紧挨着依次是：${chain.map((f) => path.posix.basename(f)).join(' → ')}`);
+        }
+    }
+
+    // 7. 舞台模式登记一致
     checkStageModes(errors);
 
-    // 7. 旧版界面冻结
+    // 8. 旧版界面冻结
     if (exists('Musicmodules-legacy/UPSTREAM.sha256')) notes.push('旧版界面逐字节核对由 tests/music-legacy.test.js 负责');
 
     const giant = Object.keys(registry.sizeBaseline || {}).length;

@@ -12,7 +12,9 @@ modes/*-manager.js       MusicStage<Name>Manager  每个模式一个工厂 { cre
 music-stage-advanced-modes.js                进阶模式登记（id、中文名、manager）
 music-stage-modes.js     MusicStageModes     核心三模式 + 进阶登记合成注册表；星诞（starborn）自动导演
 music-stage-host.js      setupMusicStage     舞台开关、唯一帧时钟、模式创建/销毁/软切换、设置抽屉、顶栏控件
-music-stage.css                              宿主和各模式样式（按模式分段，段首注释写模式名）
+music-stage*.css                             宿主样式：music-stage.css（骨架、顶栏、切换器、歌词基础）、-core-modes（流光/云阶/心象/浮名/星诞）、
+                                             -settings（响应式、浅色主题、设置抽屉）、-pixi-3d（凝彩/商籁/镜台）
+modes/<id>.css                               各模式自己的样式（tunnel、inkdraft、fogpane、lumiere、hanabi、clockwork、orbit、signal、groupchat、impression）
 ```
 
 依赖只能往下：模式不能引用 host，host 只通过注册表创建模式。
@@ -45,7 +47,8 @@ music-stage.css                              宿主和各模式样式（按模�
 5. `modules/ipc/musicHandlers.js` 的 `supportedStageModes` 加 id。
 6. `VCPDistributedServer/Plugin/MusicController/music-controller.js` 的 `stageModeAliases` 加英文 id 和中文名，报错文案里的列表和 `plugin-manifest.json` 的说明同步。
 7. 画面自己铺满、是 3D 场景或浅色主题下仍是夜色：在 `music-stage-advanced-modes.js` 那一行写 `traits: { opaque / scene3d / night }`（宿主、开场都从 `MusicStageModes.traits(id)` 读，不要另写名单）。
-8. 样式：`music-stage.css` 末尾加一段，段首注释 `/* 中文名（id）：一句话说明 */`，选择器以 `.music-stage-mode-<id>` 开头。
+8. 样式：新建 `modes/<id>.css`，首行注释 `/* 中文名（id）：一句话说明 */`，选择器以 `.music-stage-mode-<id>` 开头；在 music.html 里 `modes/impression.css` 之后、`stage-lyric-performance.css` 之前加 `<link>`。
+   舞台样式的 `<link>` 顺序就是层叠顺序，不要调换。
 9. 测试：至少一条创建→若干帧→销毁不泄漏的用例（参考 tests/music-stage-lifecycle.test.js）。
 
 ## 质量与性能

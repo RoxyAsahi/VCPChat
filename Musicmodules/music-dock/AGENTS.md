@@ -15,7 +15,7 @@
 | `music-fluid-select.js` | `MusicFluidSelect` | 把原生 `<select>` 换成主程序同款选项卡片（所有下拉都用它） |
 | `music-toast.js` | `MusicToast` | 全窗口提示 |
 | `music-dialog.js` | `MusicDialog` | 替代原生 `confirm()` 的确认框 |
-| `music-dock.css` | | 底栏和面板样式，颜色只用 `--md-*` / `--mt-*` 变量 |
+| `music-dock.css` → `music-dock-panel.css` → `music-dock-drawer.css` | | 底栏样式按段拆开，顺序即层叠顺序：播放条/小环 → 统一面板、命令面板、toast、快捷键表 → 右侧抽屉和之后各轮打磨（后面覆盖前面）。颜色只用 `--md-*` / `--mt-*` 变量 |
 
 ## music-dock.js 里面的分段
 
