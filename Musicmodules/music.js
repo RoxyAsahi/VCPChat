@@ -1622,5 +1622,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    init();
+    // 启动中途出错就别让开窗底色层继续盖着；错误照常往外抛
+    init().catch((error) => { window.MusicIntroLib?.dropCover?.(); throw error; });
 });

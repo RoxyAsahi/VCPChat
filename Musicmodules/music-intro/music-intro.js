@@ -115,6 +115,10 @@
         n.flash = document.createElement('div');
         n.flash.className = 'mi-flash';
         root.appendChild(n.flash);
+        // 收尾揭开时的扫描头：整层不再半透明淡出（那样会透出底下还在搭的首页），改成从左往右一刀切开
+        n.wipe = document.createElement('div');
+        n.wipe.className = 'mi-wipe';
+        root.appendChild(n.wipe);
         return n;
     };
 
@@ -281,10 +285,11 @@
             n.welcome.style.opacity = String(1 - Math.pow(exit, 3));
             n.welcome.style.filter = exit > 0 ? `blur(${(8 * exit).toFixed(2)}px)` : '';
         }
-        // 白场，然后整层淡出露出主界面
+        // 白场，然后从左往右揭开露出主界面（没揭到的部分始终不透明）
         const white = smooth(progress(t, FULL.exit - 0.05, FULL.exit + 0.35));
         n.flash.style.opacity = String(white * ctx.flashPeak);
-        return 1 - smooth(progress(t, FULL.exit + 0.35, FULL.end));
+        ctx.wipe = smooth(progress(t, FULL.exit + 0.35, FULL.end));
+        return 1;
     };
 
     const renderShort = (n, t, ctx) => {
@@ -296,7 +301,8 @@
         });
         const white = smooth(progress(t, 1.35, 1.8));
         n.flash.style.opacity = String(white * ctx.flashPeak);
-        return 1 - smooth(progress(t, 1.8, SHORT.end));
+        ctx.wipe = smooth(progress(t, 1.8, SHORT.end));
+        return 1;
     };
 
     // ---------- 进出舞台、舞台里换模式 ----------
@@ -373,6 +379,14 @@
 
     // 降低动态：不放过场，但加载中的画面也不能露出来。直接盖一层纸色底，加载好了直接撤，没有任何动画；
     // 等得久（超过 0.4 秒）才在中间写一行 LOADING STAGE。
+    // 揭开：裁掉左边已经扫过的部分，扫描头停在切口上；0 和 1 都不画扫描头
+    const applyWipe = (root, n, wipe = 0) => {
+        const on = wipe > 0 && wipe < 1;
+        root.style.clipPath = wipe > 0 ? `inset(0 0 0 ${(wipe * 100).toFixed(3)}%)` : '';
+        n.wipe.style.opacity = on ? '1' : '0';
+        if (on) n.wipe.style.left = `${(wipe * 100).toFixed(3)}%`;
+    };
+
     const renderStill = (n, t, ctx) => {
         const releaseAt = ctx.direction === 'enter' ? 0.001 : 0;
         if (!ctx.released && t >= releaseAt) { ctx.released = true; ctx.release?.(); }
@@ -525,6 +539,7 @@
                 root.toggleAttribute('data-waiting', Boolean(ctx.waiting));
                 const opacity = render(nodes, t, ctx);
                 root.style.opacity = String(opacity);
+                applyWipe(root, nodes, ctx.wipe);
                 if (fixed == null && t >= length) { current = null; run.flush(); releaseStage(); run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
                 run.raf = requestAnimationFrame(tick);
             };
@@ -783,5 +798,6 @@
         return api;
     };
 
-    global.MusicIntroLib = { init };
+    // dropCover：启动中途出错时由 music.js 撤掉开窗底色层，免得界面被挡住
+    global.MusicIntroLib = { init, dropCover };
 })(window);
