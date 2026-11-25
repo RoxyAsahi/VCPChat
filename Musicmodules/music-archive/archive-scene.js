@@ -41,8 +41,8 @@
      * tag / tagInk / tagRing 是取出卡片时卡面说明文字用的。
      */
     const LIGHTING = Object.freeze({
-        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', etchHi: 'rgba(255,253,249,.85)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
-        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', etchHi: 'rgba(0,0,0,.35)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
+        light: { bg: [1.7461, 1.4294, 1.231], fog: [0.918, 0.898, 0.882], exposure: 0.76, theme: 0, fogNear: 5, fogFar: 25, sticker: ['#faf8f4', 'rgba(38,40,40,.86)', 'rgba(70,66,60,.22)'], tag: '#ece6dc', tagInk: 'rgba(52,54,54,.78)', tagRing: 'rgba(60,55,48,.55)', etch: 'rgba(110,104,96,.6)', etchHi: 'rgba(255,253,249,.85)', mat: ['#ffffff', 0.5], fit: ['#cfc4b6', '#67625d'] },
+        dark: { bg: [0.017, 0.0237, 0.0269], fog: [0.06, 0.075, 0.08], exposure: 0.98, theme: 1, fogNear: 1, fogFar: 16, sticker: ['#3a4448', 'rgba(228,231,224,.84)', 'rgba(220,226,222,.18)'], tag: '#2c363b', tagInk: 'rgba(224,227,220,.75)', tagRing: 'rgba(220,226,222,.45)', etch: 'rgba(214,220,218,.3)', etchHi: 'rgba(0,0,0,.35)', mat: ['#c9cfcf', 0.18], fit: ['#85765a', '#9aa0a1'] }
     });
 
     /* ACES 色调映射曲线部分的反函数：给定映射后的值，求映射前的值（和 three 的 ACESFilmicToneMapping 同一组系数） */
@@ -214,9 +214,21 @@ void main() {
         // 颜色按参考截图里这两处的实际亮度取（索引片灰褐、螺钉略暗于卡面），不搬原版贴图。
         float q = selected * uQuality;
         bool notch = vLocal.x < -2.0 && vLocal.y > 3.4;
-        vec3 browse = mix(uCenter[1], uCenter[7], dark);
+        // 缺口按参考截图：里面和面板同一个色调（看下去是一道浅浅的凹槽，只靠边上的暗线显形），不是一块更白的方片
+        vec3 browse = notch ? faceSample(2, surfaceUv(2, vec3(vLocal.xy, 0.206)), dark).rgb * 0.97 : mix(uCenter[1], uCenter[7], dark);
         vec3 part = notch ? radiance(mix(vec3(0.78, 0.73, 0.66), vec3(0.62, 0.52, 0.36), dark))
                           : radiance(mix(vec3(0.70, 0.67, 0.63), vec3(0.58, 0.61, 0.62), dark));
+        // 孔和缺口底下是空心盒子（参考 Ivory_Edges 只是一圈外框）：靠面板边的那一侧落进阴影，
+        // 浏览时看着是一个有深度的凹孔（左侧一道暗月牙），不是平贴的白点
+        float pit;
+        if (notch) {
+            pit = max(smoothstep(0.06, 0.0, vLocal.x + 2.284), smoothstep(0.05, 0.0, vLocal.y - 3.476) * 0.7);
+        } else {
+            vec2 hc = vLocal.x > 0.0 ? vec2(2.389, 3.526) : vec2(-2.335, 0.14);
+            vec2 d = (vLocal.xy - hc) / 0.082;
+            pit = smoothstep(0.35, 0.95, length(d)) * smoothstep(0.15, -0.65, d.x + 0.35 * d.y);
+        }
+        browse *= 1.0 - mix(0.5, 0.35, dark) * pit;
         baked.rgb = mix(browse, part, q);
         // 端详：螺钉换成钛灰（象牙白卡面上暗色螺钉像个黑洞），索引片保留
         if (!notch) baked.rgb = mix(baked.rgb, radiance(mix(vec3(0.43, 0.45, 0.46), vec3(0.55, 0.57, 0.58), dark)), hero);
@@ -339,7 +351,7 @@ void main() {
      * 两块合成一个几何体，只有位置和法线。
      */
     const cassetteGeometry = (THREE) => {
-        const tray = roundedBox(THREE, 4.986, 3.68, 0.32, 2, 0.03);
+        const tray = roundedBox(THREE, 4.986, 3.68, 0.32, 3, 0.022);   // 外框圆角照参考模型量的 0.018–0.035，取 0.022
         tray.translate(0, 1.85, 0.03);            // z -0.13 … 0.19
         const B = 0.012;                          // 面板倒角
         const shape = new THREE.Shape();
@@ -387,6 +399,9 @@ void main() {
             const head = new THREE.LatheGeometry(profile, 28);
             head.rotateX(Math.PI / 2);         // 车床绕 y 轴转，转到朝 +z
             head.translate(cx, cy, 0);
+            // 轮廓按半径从里往外排，车床算出的法线朝里（所以面也是反的、要双面画）：法线翻回朝外，端详打主光时钉帽才是亮面
+            const hn = head.attributes.normal.array;
+            for (let i = 0; i < hn.length; i++) hn[i] = -hn[i];
             parts.push([head, FITTING_SCREW]);
             for (const a of [0.23, 0.23 + Math.PI / 2]) {   // 十字槽：两条细长的深色条，略斜
                 const slot = new THREE.PlaneGeometry(0.07, 0.013);
@@ -397,10 +412,11 @@ void main() {
         }
         const flat = parts.map(([g, k]) => [g.index ? g.toNonIndexed() : g, k]);
         const count = flat.reduce((n, [g]) => n + g.attributes.position.count, 0);
-        const pos = new Float32Array(count * 3), kind = new Uint8Array(count);
+        const pos = new Float32Array(count * 3), nrm = new Float32Array(count * 3), kind = new Uint8Array(count);
         let o = 0;
         for (const [g, k] of flat) {
             pos.set(g.attributes.position.array, o * 3);
+            nrm.set(g.attributes.normal.array, o * 3);
             kind.fill(k, o, o + g.attributes.position.count);
             o += g.attributes.position.count;
         }
@@ -408,6 +424,9 @@ void main() {
         for (const [g] of flat) g.dispose();
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));   // 端详时打主光要用
+        // 十字槽是凹进去的，主光高光照不进槽底：槽不加高光，否则和钉帽一样亮、十字就没了
+        geo.setAttribute('keySpec', new THREE.BufferAttribute(Float32Array.from(kind, (k) => (k === FITTING_SLOT ? 0 : 1)), 1));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geo.userData.kind = kind;
         return geo;
@@ -734,6 +753,7 @@ vec3 archiveUntone(vec3 y) {
             labelEpoch++;
             drawEtch();
             paintFittings();
+            stickerKey = '';
             frameMat.color.set(lighting.mat[0]);
             const to = lookOf(lighting);
             accentIdx = -1;
@@ -774,7 +794,7 @@ vec3 archiveUntone(vec3 y) {
         frameGeo.translate(0.78, 1.86, FRONT + 0.005);
         const coverMat = (extra) => keepColors(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra }));
         const frameMat = coverMat({ color: '#ffffff' });
-        const artMat = coverMat({});
+        const artMat = coverMat({ polygonOffset: false });   // 浏览时也会隐约露出，深度偏移在掠射角下会透过前排卡
         const captionGeo = new THREE.PlaneGeometry(1.54, 2.32);
         captionGeo.translate(-1.54, 1.36, FRONT + 0.009);
         const captionCanvas = document.createElement('canvas');
@@ -845,6 +865,25 @@ vec3 archiveUntone(vec3 y) {
             g.font = `400 26px ${fontStack}`;
             g.textBaseline = 'alphabetic';
             g.fillText('MUSIC ARCHIVE', X(-1.15), Y(0.27));
+            // 左边台阶里一行竖排模压字（位置照参考播放器 Moulded_Lettering，字是我们自己的）：从上往下读，压出来的凹字配亮边
+            // 字高、长度照原版比例（原版这行字高约 0.1、长约 1.2），收进我们台阶里两道刻线中间（x −2.24…−2.1，y 1.28…2.6）
+            g.save();
+            g.translate(X(-2.17), Y(2.49));
+            g.rotate(Math.PI / 2);
+            const word = 'MUSIC ARCHIVE', capPx = 0.082 * S, longPx = 1.1 * S;
+            g.textBaseline = 'alphabetic';
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            g.font = `500 40px ${fontStack}`;
+            const cap40 = g.measureText('M').actualBoundingBoxAscent || 29;
+            let size = 40 * capPx / cap40;
+            g.font = `500 ${size.toFixed(1)}px ${fontStack}`;
+            let w = g.measureText(word).width;
+            if (w > longPx) { size *= longPx / w; g.font = `500 ${size.toFixed(1)}px ${fontStack}`; w = longPx; }
+            if ('letterSpacing' in g) g.letterSpacing = `${((longPx - w) / (word.length - 1)).toFixed(1)}px`;
+            const base = size * cap40 / 40 / 2;   // 字身竖直居中在两道线中间
+            g.fillStyle = lighting.etchHi; g.fillText(word, 1.6, base - 1.6);
+            g.fillStyle = lighting.etch; g.fillText(word, 0, base);
+            g.restore();
             etchMap.needsUpdate = true;
         };
         coverGroup.add(frameMesh, artMesh, captionMesh);
@@ -853,13 +892,99 @@ vec3 archiveUntone(vec3 y) {
         // 选中卡的索引片和螺钉（颜色按参考播放器截图里和卡面的明暗比例取）
         const fittingsGeo = fittingsGeometry(THREE);
         const fittingsMat = keepColors(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }));
+        {
+            // 取出端详时参考播放器给索引片、螺钉也打同一束主光（keyLight，gloss 0.15）；浏览时不打
+            const untone = fittingsMat.onBeforeCompile;
+            fittingsMat.onBeforeCompile = (sh, r) => {
+                sh.uniforms.uKeyHero = glowUniforms.uHero;
+                sh.uniforms.uFitQ = glowUniforms.uQuality;
+                sh.vertexShader = 'attribute float keySpec;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.vertexShader.replace('#include <project_vertex>',
+                    '#include <project_vertex>\nvKeySpec = keySpec;\nvKeyW = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvKeyN = mat3(modelMatrix) * normal;');
+                sh.fragmentShader = 'uniform float uKeyHero;\nuniform float uFitQ;\nvarying float vKeySpec;\nvarying vec3 vKeyN;\nvarying vec3 vKeyW;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `// 参考播放器非实例部件（flags 2）按 quality 做抖动显现：卡抬起时一点点长出来，不是一下子贴上
+    if (uFitQ <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+    if (uKeyHero > 0.0) {
+        vec3 kn = normalize(vKeyN);
+        const vec3 KEY = vec3(0.0, 0.5477, 0.8367);
+        vec3 kv = normalize(cameraPosition - vKeyW);
+        float kspec = pow(max(dot(kn, normalize(KEY + kv)), 0.0), 30.5) * 0.2805 * vKeySpec;
+        outgoingLight = mix(outgoingLight, outgoingLight * (0.55 + 0.45 * max(dot(kn, KEY), 0.0)) + kspec, uKeyHero);
+    }
+    #include <opaque_fragment>`);
+                if (untone) untone(sh, r);
+            };
+            fittingsMat.customProgramCacheKey = () => 'archive-fittings-key';
+        }
         const fittings = new THREE.Mesh(fittingsGeo, fittingsMat);
         fittings.matrixAutoUpdate = false;
         fittings.visible = false;
         scene.add(fittings);
         // 刻线跟着选中卡一直在（参考播放器只给焦点卡画 Case_Engraving，浏览时也画），不再等取出才淡入
-        etchMat.opacity = 1;
         fittings.add(etchMesh);
+        // 左上角的小标签纸（参考播放器焦点卡 Printed_Label 那块：x −1.855…−0.865，y 2.835…3.245）：曲名、歌手、一行小字，比卡面白一档
+        const stickerGeo = new THREE.PlaneGeometry(0.99, 0.41);
+        stickerGeo.translate(-1.36, 3.04, FRONT + 0.006);
+        const stickerCanvas = document.createElement('canvas');
+        stickerCanvas.width = 512;
+        stickerCanvas.height = 212;
+        const stickerMap = new THREE.CanvasTexture(stickerCanvas);
+        stickerMap.colorSpace = THREE.SRGBColorSpace;
+        stickerMap.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        // 标签纸本身就离面板 0.006，不再做深度偏移：偏移在掠射角下很大，浏览时会透过前一排卡露出来
+        const stickerMat = coverMat({ map: stickerMap, polygonOffset: false });
+        const stickerMesh = new THREE.Mesh(stickerGeo, stickerMat);
+        stickerMesh.visible = false;
+        fittings.add(stickerMesh);
+        // 标签纸跟着当前选中格走（浏览时也在），曲名取卡面标题；歌手只有取出过这首、知道是谁时才写，否则写时长
+        let stickerInfo = { title: '', artist: '' };
+        let coverInfo = { title: '', artist: '' };
+        let stickerKey = '';
+        let coverPath = '', targetPath = '';   // 封面是哪首（setCover 的 key 第一项是路径）、选中格是哪首（标题 key 是「序号:路径」）
+        const syncSticker = () => {
+            const at = `${target.lane},${target.row},${labelEpoch},${coverPath}`;
+            if (at === stickerKey) return;
+            stickerKey = at;
+            const info = labelFor ? labelFor(target.lane, target.row) : null;
+            targetPath = info && typeof info.key === 'string' ? info.key.slice(info.key.indexOf(':') + 1) : '';
+            const no = info && typeof info.key === 'string' ? parseInt(info.key, 10) : NaN;   // 标题 key 是「序号:路径」，序号从 0 起
+            stickerInfo = info ? { title: info.title || '', artist: (coverPath && coverPath === targetPath && coverInfo.artist) || info.code || '', no: Number.isFinite(no) ? String(no + 1).padStart(3, '0') : '' } : { title: '', artist: '' };
+            drawSticker();
+        };
+        const drawSticker = () => {
+            const title = String(stickerInfo.title || '').trim(), artist = String(stickerInfo.artist || '').trim();
+            stickerMesh.visible = Boolean(title);
+            if (!title) return;
+            const g = stickerCanvas.getContext('2d'), Wc = stickerCanvas.width, Hc = stickerCanvas.height;
+            const [paper, ink, rule] = lighting.sticker;
+            g.clearRect(0, 0, Wc, Hc);
+            g.fillStyle = paper;
+            g.fillRect(0, 0, Wc, Hc);
+            g.strokeStyle = rule; g.lineWidth = 2;
+            g.strokeRect(1, 1, Wc - 2, Hc - 2);
+            const fit = (text, maxW) => {
+                if (g.measureText(text).width <= maxW) return text;
+                let t = text;
+                while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+                return t + '…';
+            };
+            g.fillStyle = ink;
+            g.textBaseline = 'alphabetic';
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            g.font = `650 34px ${fontStack}`;
+            g.fillText(fit(title, Wc - 48), 24, 60);
+            g.font = `500 25px ${fontStack}`;
+            g.fillText(fit(artist, Wc - 48), 24, 104);
+            g.fillStyle = rule;
+            g.fillRect(24, 132, Wc - 48, 2);
+            g.fillStyle = ink;
+            g.globalAlpha = 0.62;
+            g.font = `500 18px ${fontStack}`;
+            if ('letterSpacing' in g) g.letterSpacing = '3px';
+            // 照参考那行「档案 / 编号」：编号是这首在目录里的序号
+            g.fillText(stickerInfo.no ? `MUSIC ARCHIVE / ${stickerInfo.no}` : 'MUSIC ARCHIVE', 24, 176);
+            g.globalAlpha = 1;
+            if ('letterSpacing' in g) g.letterSpacing = '0px';
+            stickerMap.needsUpdate = true;
+        };
         const paintFittings = () => {
             const c = [new THREE.Color(lighting.fit[0]), new THREE.Color(lighting.fit[1]), new THREE.Color(lighting.fit[1]).multiplyScalar(0.62)];
             const kind = fittingsGeo.userData.kind, col = fittingsGeo.attributes.color.array;
@@ -909,6 +1034,8 @@ vec3 archiveUntone(vec3 y) {
             if (key === coverKey && artMat.map) return;
             coverKey = key;
             freeCoverTex();
+            coverInfo = { title: info.title || '', artist: info.artist || '' };
+            try { coverPath = String(JSON.parse(key)[0] || ''); } catch (e) { coverPath = ''; }
             captionMesh.visible = Boolean(source || info.format || info.bitrate);
             if (captionMesh.visible) drawCaption(info, Boolean(source));
             let img = source;
@@ -947,6 +1074,9 @@ vec3 archiveUntone(vec3 y) {
         // ---- 状态 ----
         const target = { lane: 0, row: 0 };
         const camLane = { v: 0, vel: 0 }, camRow = { v: 0, vel: 0 }, shoulder = { v: 0, vel: 0 }, focus = { v: 0, vel: 0 }, lift = { v: 0.4, vel: 0 };
+        // 第一次出现时整片档案从雾里沿行方向滑进来（参考播放器 m_reveal：按 2.8 跟到 1，entryZ = −28·(1 − reveal)，
+        // 选中卡的抬起也乘 reveal）。减少动态时直接到位。
+        let reveal = reducedMotion() ? 1 : 0;
         let liftGoal = 0.4;   // 选中卡抬起的高度；进播放页前会再抬高一些
         /*
          * 取出：选中卡从列里抬到 DETAIL_LIFT，镜头推近到它正面、把它放进目录与歌词之间，卡面上显出封面。
@@ -1009,7 +1139,7 @@ vec3 archiveUntone(vec3 y) {
             if (lane === target.lane && row === target.row) return;
             if (pulse && !reducedMotion()) pulses.push({ lane, row, t: performance.now() / 1000 });
             // 旧卡从当时的高度落回去，不瞬间掉下（参考播放器 NativeScene::select：抬起高于 0.0001 就进归位队列）
-            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v });
+            if (lift.v > 0.0001 && !reducedMotion()) returning.set(target.lane + ':' + target.row, { v: lift.v, vel: 0, rot: inspect.v, hold: detailOn, lane: target.lane, row: target.row });
             // 选回一张还在落的卡：从它当时的高度和角度接着走，不先掉到底再升起
             const back = returning.get(lane + ':' + row);
             returning.delete(lane + ':' + row);
@@ -1017,7 +1147,6 @@ vec3 archiveUntone(vec3 y) {
             lift.v = back ? back.v : 0; lift.vel = 0;
             inspect.v = back ? back.rot || 0 : 0; inspect.vel = inspect.goal = 0;
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         /*
@@ -1029,7 +1158,6 @@ vec3 archiveUntone(vec3 y) {
         const hold = (lane, row, vl = 0, vr = 0) => {
             held = { lane, row, vl, vr };
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         const unhold = () => { if (held) { held = null; invalidate(); } };
@@ -1059,6 +1187,7 @@ vec3 archiveUntone(vec3 y) {
         const glowMat4 = new THREE.Matrix4();
         const cardAim = new THREE.Vector3();
         let snapCardAim = true;
+        let fitQ = 0;   // 选中卡的 quality = smooth(lift / 0.4)：倾斜收平、装配件和刻线显现都用它
         let pulseGain = 1;
         const camDir = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), detailAim = new THREE.Vector3(), camAim = new THREE.Vector3();
         const WORLD_UP = new THREE.Vector3(0, 1, 0);
@@ -1093,7 +1222,9 @@ vec3 archiveUntone(vec3 y) {
             }
             camera.position.copy(camAim).addScaledVector(camDir, distance);
             if (!reduced) {
-                const par = 0.12 * (1 - 0.75 * k);
+                // 参考播放器 NativeSceneCamera.cpp：横屏取出端详也保留整幅视差（指针那时已冻结，镜头不会跟着晃），
+                // 只有竖屏才随推近消掉；原来按 0.25 收，推近途中镜头会自己漂一段
+                const par = 0.12 * (aspect < 1 ? 1 - k : 1);
                 camera.position.x += pointer.x * par; camera.position.y -= pointer.y * par;
             }
             camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(viewSpan / (2 * distance)));
@@ -1105,13 +1236,15 @@ vec3 archiveUntone(vec3 y) {
         };
         const placeCover = (targetVisible) => {
             const appear = targetVisible && artMat.map ? smooth((lift.v - 1.2) / 1.6) : 0;
-            const show = appear > 0.001;
+            // 参考播放器浏览时选中卡的半透面板后面隐约透出唱片；我们透出封面，按面板透光 0.38 再打个折
+            const through = targetVisible && artMat.map && coverPath && coverPath === targetPath ? 0.22 * fitQ : 0;
+            const show = Math.max(appear, through) > 0.001;
             coverGroup.visible = show;
             if (!show) return;
             coverGroup.position.copy(targetPos);
             coverGroup.rotation.set(0, inspect.v, 0);
             frameMat.opacity = lighting.mat[1] * appear;
-            artMat.opacity = appear;
+            artMat.opacity = Math.max(appear, through);
             captionMat.opacity = appear;
         };
         const setDetailRoom = (bounds) => {
@@ -1126,7 +1259,6 @@ vec3 archiveUntone(vec3 y) {
             detailOn = on;
             if (!on) inspect.goal = 0;
             lastInput = performance.now();
-            idleGain = 0;
             invalidate();
         };
         /* 取出后拖动转卡：delta 是弧度；release 后转回正面 */
@@ -1205,17 +1337,27 @@ vec3 archiveUntone(vec3 y) {
             damp(focus, target.lane, reduced ? rate : 4, dt);
             // 取出用慢一点的弹簧（约一秒到位），平时的选中抬起保持干脆
             liftRate = reduced ? 40 : detailOn || lift.v > 1 ? 4.2 : 8;
-            damp(lift, detailOn ? DETAIL_LIFT : liftGoal, liftRate, dt);   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
+            if (reveal < 1) { reveal += (1 - reveal) * (reduced ? 1 : 1 - Math.exp(-dt * 2.8)); if (1 - reveal < 0.0005) reveal = 1; }
+            // 放回时卡若还转着：先在原高度转回正面再落下（参考播放器 returnY：m_rotation 回到 0 之前 lift 不动）
+            if (!detailOn && inspect.v !== 0 && lift.v > liftGoal) lift.vel = 0;
+            else {
+                // 浏览时旁边（同列 5 行内）还有一张转着、等着转正的旧卡，新卡先不升，免得两张卡在半空叠在一起（参考播放器同一规则）
+                let aligning = false;
+                for (const r of returning.values()) if (r.hold && r.rot && r.lane === target.lane && Math.abs(r.row - target.row) < 5) { aligning = true; break; }
+                damp(lift, detailOn ? DETAIL_LIFT : aligning ? 0 : liftGoal * reveal, liftRate, dt);
+            }   // 浏览时 8：比镜头（3.7）快一点先探出来，但不再「啪」地弹起
             for (const [k, r] of returning) {
                 // 落回原位用与帧率无关的指数衰减（参考播放器 SceneLifetimePolicy.h returningLiftStep，速率 4.5）
-                r.v *= Math.exp(-dt * (reduced ? 35 : 4.5)); r.vel = 0;
+                // 取出时换下的、还转着的卡：先转回正面再落（参考播放器 returning actor 的 returnY）
+                if (!(r.hold && r.rot)) r.v *= Math.exp(-dt * (reduced ? 35 : 4.5));
+                r.vel = 0;
                 // 转着看的卡被换下时边落边转回正面（参考播放器 returning actor 的 returnStep，速率 7）
                 r.rot = Math.abs(r.rot || 0) <= 0.001 ? 0 : r.rot * Math.exp(-dt * (reduced ? 35 : 7));
                 if (Math.abs(r.v) < 0.002 && !r.rot) returning.delete(k);
             }
             {
                 // 镜头进度跟着抬起高度走；取出期间换卡（新卡从低处升起）镜头不退回去
-                const fromLift = detailOn ? smooth((lift.v - 0.8) / 2.4) : smooth((lift.v - 0.7) / (DETAIL_LIFT - 0.7));
+                const fromLift = detailOn ? smoother((lift.v - 0.8) / 2.4) : smoother((lift.v - 0.7) / (DETAIL_LIFT - 0.7));   // 参考 SceneMotion::smooth 是五次的
                 const goal = detailOn ? Math.max(fromLift, Math.min(detailK, 1)) : fromLift;
                 detailK = reduced ? goal : detailK + (goal - detailK) * (1 - Math.exp(-dt * 2.8));   // 镜头推近的跟随速度，参考播放器 blend 2.8
                 if (Math.abs(detailK - goal) < 0.0005) detailK = goal;
@@ -1234,7 +1376,7 @@ vec3 archiveUntone(vec3 y) {
             const idleTarget = !reduced && isPlaying && !detailOn && detailK < 0.01 && now - lastInput > 2500 ? 1 : 0;
             bounceGain += ((detailOn ? 0 : 1) - bounceGain) * (reduced ? 1 : 1 - Math.exp(-dt * 4));
             if (bounceGain < 0.001) bounceGain = 0;
-            idleGain += (idleTarget - idleGain) * Math.min(1, dt * (idleTarget ? 0.8 : 4));   // 参考播放器：起伏 0.8 慢慢起、4 快速收
+            idleGain += (idleTarget - idleGain) * (reduced ? 1 : 1 - Math.exp(-dt * (idleTarget ? 0.8 : 4)));   // 参考播放器：起伏 0.8 慢慢起、4 收；有操作时也是淡出，不清零
             if (!idleTarget && idleGain < 0.002) idleGain = 0;
             for (let k = pulses.length - 1; k >= 0; k--) if (T - pulses[k].t > 3.3) pulses.splice(k, 1);
 
@@ -1256,6 +1398,7 @@ vec3 archiveUntone(vec3 y) {
             const baseRow = Math.round(camRow.v);
             for (const w of labelWanted.values()) wantSpare.push(w);
             labelWanted.clear();
+            fitQ = smoother(lift.v / 0.4);
             let i = 0, targetIdx = -1;
             for (let li = -LANES_HALF; li <= LANES_HALF; li++) {
                 let upper = fieldAt(baseRow + ROWS_AFTER - 0.5, baseLane + li);   // 行从后往前走，这一行的下半格就是上一行的上半格，复用省掉三分之一的采样
@@ -1276,10 +1419,11 @@ vec3 archiveUntone(vec3 y) {
                     const isTarget = lane === target.lane && row === target.row;
                     if (isTarget) y += lift.v;
                     let backRot = 0;
-                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; } }
-                    dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17);
-                    // 选中卡抬起后不再跟着坡度倾斜（× (1 − smoother(lift / 0.4))），取出时可以转着看
-                    dummy.rotation.x = isTarget ? tilt * (1 - smoother(lift.v / 0.4)) : tilt;
+                    let backQ = 0;
+                    if (!isTarget && returning.size) { const r = returning.get(cellKey(lane, row)); if (r) { y += r.v; backRot = r.rot || 0; backQ = smoother(r.v / 0.4); } }
+                    dummy.position.set((lane - camLane.v) * COLUMN_SPACING, y, (row - camRow.v) * ROW_SPACING - 2.17 - 28 * (1 - reveal));
+                    // 参考播放器：坡度倾斜 × (1 − quality)，quality = smooth(lift / 0.4)；落回中的卡也一样，抬着时不跟坡度晃
+                    dummy.rotation.x = tilt * (1 - (isTarget ? fitQ : backQ));
                     dummy.rotation.y = isTarget ? inspect.v : backRot;
                     if (isTarget) { targetPos.copy(dummy.position); targetIdx = i; }
                     // 贴标题的范围按选中格算（不按还在飞的相机），当前列就是选中的那一列
@@ -1325,6 +1469,7 @@ vec3 archiveUntone(vec3 y) {
 
             // 选中格可以一帧跳过好几张卡，镜头的瞄准点随画面平滑移动。
             const targetVisible = targetIdx >= 0;
+            if (targetVisible) syncSticker();
             if (targetVisible) {
                 if (snapCardAim || reduced || detailK < 0.001) cardAim.copy(targetPos);
                 else cardAim.lerp(targetPos, 1 - Math.exp(-dt * 10));
@@ -1345,7 +1490,9 @@ vec3 archiveUntone(vec3 y) {
             }
             glowUniforms.uLightOn.value = targetVisible ? 1 : 0;
             glowUniforms.uHero.value = detailK;
-            glowUniforms.uQuality.value = smoother(lift.v / 0.4);
+            glowUniforms.uQuality.value = fitQ;
+            etchMat.opacity = fitQ;
+            stickerMat.opacity = fitQ;
             // 取出端详时面板透得少一些：卡面上压着封面，内衬的光斑透出来会显脏
             glowUniforms.uSeeThrough.value = 0.38;
             if (post.on) {
@@ -1385,7 +1532,7 @@ vec3 archiveUntone(vec3 y) {
             // 行方向按屏幕像素算：剩下没走完的距离（位置差 + 速度/速率）不到半个像素就停。原来按 0.001 行、
             // 速度 0.001 行/秒判，最后约半秒都在画一帧挪零点几像素的画面（参考播放器也是位移不变才休眠）。
             const rowRest = (Math.abs(camRow.v - target.row) + Math.abs(camRow.vel) / 3.7) * ROW_SPACING * pxPerUnit;
-            const settled = !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
+            const settled = reveal === 1 && !roomMoving && !aimMoving && Math.abs(camLane.v - target.lane) < 0.001 && rowRest < 0.5
                 && (Math.abs(lift.v - (detailOn ? DETAIL_LIFT : liftGoal)) + Math.abs(lift.vel) / liftRate) * pxPerUnit < 0.5 && !returning.size
                 && Math.abs(detailK - (detailOn ? 1 : 0)) < 0.001 && Math.abs(inspect.v - inspect.goal) < 0.001
                 && !themeBusy() && Math.abs(camLane.vel) < 0.001
@@ -1425,7 +1572,7 @@ vec3 archiveUntone(vec3 y) {
         const setHover = (cell) => {
             const k = cell ? cell.lane + ':' + cell.row : null;
             if (k === hovered) return;
-            hovered = reducedMotion() ? null : k;
+            hovered = k;   // 减少动态时也探出，只是直接到位不带过渡（参考播放器 m_reduced 下 next = target）
             invalidate();
         };
         /*
@@ -1444,7 +1591,7 @@ vec3 archiveUntone(vec3 y) {
             playing = cell; isPlaying = Boolean(playingNow);
             invalidate();
         };
-        const touch = () => { lastInput = performance.now(); idleGain = 0; };
+        const touch = () => { lastInput = performance.now(); };   // 起伏不清零，按 4 淡出（参考播放器），一碰键盘不会整片一下子跳平
         /* 选中卡的抬起高度，不传回到默认 0.4 */
         const raise = (amount) => {
             const goal = Number.isFinite(amount) ? amount : 0.4;
@@ -1455,9 +1602,9 @@ vec3 archiveUntone(vec3 y) {
 
         const dispose = () => {
             for (const layer of layers) { layer.geometry.dispose(); layer.dispose?.(); }
-            for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat]) m.dispose();
+            for (const m of [cassetteMat, frameMat, artMat, captionMat, etchMat, stickerMat]) m.dispose();
             if (post.on) { post.rt.dispose(); post.mat.dispose(); post.scene.children[0].geometry.dispose(); host.classList.remove('archive-post-atmos'); }
-            freeCoverTex(); fittingsGeo.dispose(); fittingsMat.dispose(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose();
+            freeCoverTex(); fittingsGeo.dispose(); fittingsMat.dispose(); coverGeo.dispose(); frameGeo.dispose(); captionGeo.dispose(); captionMap.dispose(); etchGeo.dispose(); etchMap.dispose(); stickerGeo.dispose(); stickerMap.dispose();
             for (const L of labels) { L.tex.dispose(); L.mat.dispose(); }
             labelGeo.dispose();
             renderer.dispose();
