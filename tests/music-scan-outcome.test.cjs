@@ -20,7 +20,7 @@ function dockWithScan() {
     window.MusicToast = { show: (o) => { shown.push(o); return {}; }, dismiss() {} };
     window.eval(read('Musicmodules/music-error-text.js'));
     window.eval(read('Musicmodules/music-app-hooks.js'));
-    for (const f of ['music-dock-icons.js', 'music-dock-palette.js', 'music-dock-fluid.js', 'music-dock.js']) window.eval(read('Musicmodules/music-dock/' + f));
+    for (const f of ['music-dock-icons.js', 'music-dock-palette.js', 'music-dock-fluid.js', 'music-dock-queue.js', 'music-dock-stage-settings.js', 'music-dock.js']) window.eval(read('Musicmodules/music-dock/' + f));
     let complete = null;
     const app = {
         playlist: [], currentTrackIndex: 0, isPlaying: false, playModes: ['repeat'], currentPlayMode: 0,

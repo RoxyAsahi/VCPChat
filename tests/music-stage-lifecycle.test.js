@@ -344,6 +344,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     runScript(dom, 'Musicmodules/music-stage/modes/fume-manager.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-advanced-modes.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-modes.js');
+    runScript(dom, 'Musicmodules/music-stage/music-stage-edge.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-host.js');
 
     const { app, calls } = createApp();
@@ -432,6 +433,7 @@ test('stage transport synchronizes play mode, mute and volume with the existing 
     runScript(dom, 'Musicmodules/music-stage/modes/fume-manager.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-advanced-modes.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-modes.js');
+    runScript(dom, 'Musicmodules/music-stage/music-stage-edge.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-host.js');
 
     const { app, calls } = createApp();
@@ -475,7 +477,7 @@ test('3D stage waits for the new song\'s lyrics behind a fade instead of buildin
     for (const file of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js',
         'modes/stage-lyric-layout.js', 'modes/stage-lyric-performance.js', 'modes/luminous-manager.js',
         'modes/partita-manager.js', 'modes/cadenza-manager.js', 'modes/diorama-manager.js',
-        'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-host.js']) {
+        'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-edge.js', 'music-stage-host.js']) {
         runScript(dom, `Musicmodules/music-stage/${file}`);
     }
     dom.window.localStorage.setItem('musicStageMode', 'diorama');

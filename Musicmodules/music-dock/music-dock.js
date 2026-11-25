@@ -1098,7 +1098,7 @@
         }
 
         function renderBody() {
-            prebuilt = null;
+            queuePage.dropPrebuilt();
             const oldScroller = state.tab === '播放列表' ? el.body.querySelector('.md-ql') : null;
             const keepScroll = oldScroller ? oldScroller.scrollTop : null;
             const tab = state.tab;
@@ -1187,247 +1187,16 @@
         // 一张表里三段：正在播放 → 手动队列（可拖动排序、移除、清空）→ 接下来会放的上下文
         // （随机时就是洗好的真实顺序）。上下文可能有上千首：只画看得见的那几行。
         const QUEUE_HEAD_H = 36;
-        // 「把队列存为歌单」（Spotify、Feishin 都有）：正在放的 + 接下来播放 + 接着播放的这一组；
-        // 整个曲库顺序播放时只存正在放的和手动排的，不把整库存进去
-        function saveQueueAsPlaylist() {
-            const current = currentTrack();
-            const up = typeof app.getUpNext === 'function' ? app.getUpNext(2000) : { manual: [], context: [] };
-            const list = [current, ...up.manual, ...(app.currentFilteredTracks ? up.context : [])].filter((t) => t && t.path);
-            const paths = [...new Set(list.map((t) => t.path))];
-            if (!paths.length) return;
-            const d = new Date();
-            const pad = (n) => String(n).padStart(2, '0');
-            const pl = { id: 'q' + Date.now(), name: `队列 ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`, tracks: paths };
-            if (!Array.isArray(app.customPlaylists)) app.customPlaylists = [];
-            app.customPlaylists.push(pl);
-            const refresh = () => {
-                try { app.saveCustomPlaylists?.(); } catch (e) { /* 存不了也先在界面上生效 */ }
-                try { app.archiveView?.refresh?.(); } catch (e) { /* 档案页没开 */ }
-                if (app.currentSidebarView === 'playlists') { try { app.renderSidebarContent?.('playlists'); } catch (e) { /* 旧侧栏 */ } }
-            };
-            refresh();
-            global.MusicToast?.show?.({
-                message: `已存为歌单「${pl.name}」：${paths.length} 首`,
-                action: { label: '撤销', run: () => { const at = app.customPlaylists.indexOf(pl); if (at !== -1) { app.customPlaylists.splice(at, 1); refresh(); } } }
-            });
-        }
-
-        function buildQueueRows() {
-            const current = currentTrack();
-            const up = typeof app.getUpNext === 'function'
-                ? app.getUpNext(2000)
-                : { manual: [], context: activeList().filter((t) => t !== current) };
-            const rows = [];
-            let y = 0;
-            const push = (row, h) => { row.top = y; row.h = h; y += h; rows.push(row); };
-            // 播放过的（Apple Music 的「历史」、Spotify 的「最近播放」）：在正在放的上面，打开时先看到正在放的，往上翻才看到
-            const history = typeof app.getHistory === 'function' ? app.getHistory(30) : [];
-            if (history.length && current) {
-                push({ type: 'head', label: '播放过的', count: history.length }, QUEUE_HEAD_H);
-                history.forEach((track) => push({ type: 'hist', track }, QUEUE_ROW_H));
-            }
-            if (current) push({ type: 'now', track: current }, QUEUE_ROW_H);
-            rows.nowTop = current ? y - QUEUE_ROW_H : 0;
-            if (up.manual.length) {
-                push({ type: 'head', label: '接下来播放', count: up.manual.length, clear: true }, QUEUE_HEAD_H);
-                up.manual.forEach((track, i) => push({ type: 'manual', i, track }, QUEUE_ROW_H));
-            }
-            if (up.context.length) {
-                const mode = playMode();
-                const radio = app.radio && app.radio.list === app.currentFilteredTracks ? app.radio.label : '';
-                const name = radio || (app.playbackSourceName ? app.playbackSourceName() : app.filteredPlaylistSource?.name) || (app.currentFilteredTracks ? '当前列表' : '全部曲目');
-                const label = mode === 'shuffle' ? `随机 · ${name}` : mode === 'repeat-one' ? '单曲循环' : `接着播放 · ${name}`;
-                push({ type: 'head', label, count: up.context.length }, QUEUE_HEAD_H);
-                up.context.forEach((track) => push({ type: 'ctx', track }, QUEUE_ROW_H));
-            }
-            rows.total = y;
-            state.queueRows = rows;
-            return rows;
-        }
-
-        const queueRowHtml = (row, k, current) => {
-            const style = `top:${row.top}px;height:${row.h - 2}px`;
-            if (row.type === 'head') {
-                return `<div class="md-qhd" role="presentation" style="${style}"><span>${escapeHtml(row.label)}</span><em>${row.count}</em>`
-                    + (row.clear ? '<span class="md-g"></span><button class="md-qclr" type="button" data-qact="clear">清空</button>' : '') + '</div>';
-            }
-            const dur = queueDuration(row.track);
-            const text = `<span class="md-qi-tx"><b>${escapeHtml(trackTitle(row.track))}</b><span>${escapeHtml(trackArtist(row.track))}</span></span>`
-                + (dur && row.type !== 'now' ? `<span class="md-qdur">${dur}</span>` : '');
-            if (row.type === 'now') {
-                return `<div class="md-qi md-cur md-now" role="listitem" style="${style}">${text}<span class="md-g"></span><span class="md-qtag">正在播放</span></div>`;
-            }
-            if (row.type === 'manual') {
-                return `<div class="md-qi md-man" role="listitem" data-k="${k}" data-qi="${row.i}" style="${style}">`
-                    + `<span class="md-qgrip" title="拖动排序" aria-hidden="true">${icon('grip-vertical', 14)}</span>`
-                    + `<button class="md-qplay" type="button" data-qact="play" aria-label="现在播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
-                    + `<button class="md-qx" type="button" data-qact="remove" aria-label="从队列移除" title="从队列移除">${icon('x', 14)}</button></div>`;
-            }
-            if (row.type === 'hist') {
-                return `<div class="md-qi md-hist" role="listitem" data-k="${k}" style="${style}">`
-                    + `<button class="md-qplay" type="button" data-qact="play" aria-label="再放一次 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
-                    + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
-            }
-            return `<div class="md-qi${row.track === current ? ' md-cur' : ''}" role="listitem" data-k="${k}" style="${style}">`
-                + `<button class="md-qplay" type="button" data-qact="play" aria-label="播放 ${escapeHtml(trackTitle(row.track))}">${text}</button>`
-                + `<button class="md-qx md-qnext" type="button" data-qact="next" aria-label="下一首播放" title="下一首播放">${icon('list-plus', 15)}</button></div>`;
-        };
-
-        // 队列每行右边的时长：曲目自带的优先；没带的用档案页记下的（播放过一次就有，存在本机同一个键里）
-        let qDurs = null, qDursAt = 0;
-        const queueDuration = (t) => {
-            let sec = Number(t?.duration) > 0 ? Number(t.duration) : 0;
-            if (!sec && t?.path) {
-                const now = performance.now();
-                if (!qDurs || now - qDursAt > 5000) {
-                    try { qDurs = JSON.parse(localStorage.getItem('musicArchiveDurations') || '{}') || {}; } catch (e) { qDurs = {}; }
-                    qDursAt = now;
-                }
-                sec = Number(qDurs[t.path]) || 0;
-            }
-            sec = Math.round(sec);
-            if (!(sec > 0)) return '';
-            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = String(sec % 60).padStart(2, '0');
-            return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
-        };
-        function renderQueueWindow(scroller, force = false) {
-            if (state.queueDrag?.active) return; // 拖动时别重建行
-            const rows = state.queueRows || [];
-            const top = scroller.scrollTop - QUEUE_ROW_H * 4;
-            const bottom = scroller.scrollTop + (scroller.clientHeight || 300) + QUEUE_ROW_H * 4;
-            let first = 0;
-            while (first < rows.length && rows[first].top + rows[first].h < top) first++;
-            let last = first;
-            while (last < rows.length && rows[last].top < bottom) last++;
-            const key = `${first}:${last}:${app.currentTrackIndex}:${rows.length}`;
-            if (!force && scroller.dataset.window === key) return;
-            scroller.dataset.window = key;
-            const current = currentTrack();
-            // 手动队列的行总是全画出来，拖动排序时才有地方让位。
-            const keep = new Set();
-            for (let k = first; k < last; k++) keep.add(k);
-            rows.forEach((row, k) => { if (row.type === 'manual' && rows.length < 400) keep.add(k); });
-            scroller.firstElementChild.innerHTML = [...keep].sort((a, b) => a - b).map((k) => queueRowHtml(rows[k], k, current)).join('');
-        }
-
-        // 预先画好播放列表页：点开「更多」以后，在空闲时把队列页先画进（还藏着的）抽屉里，
-        // 真点「播放列表」时抽屉只需要滑出来。画好以后歌、列表或队列变了就作废，照常重画。
-        let prebuilt = null;
-        let prebuildTimer = 0;
-        const queueSig = () => [currentTrack()?.path, app.currentFilteredTracks, app.currentFilteredTracks?.length,
-            app.filteredPlaylistSource, app.playbackSourceName?.(), app.radio?.list, app.isPlaying === true, document.body.classList.contains('light-theme')];
-        const prebuiltFresh = () => Boolean(prebuilt) && performance.now() - prebuilt.at < 8000
-            && queueSig().every((value, index) => value === prebuilt.sig[index]);
-        const schedulePrebuild = () => {
-            clearTimeout(prebuildTimer);
-            // 等「更多」那组按钮展开的动画走完再画，别把卡顿挪到展开动画里。
-            prebuildTimer = setTimeout(() => {
-                const run = () => {
-                    if (state.panelOpen || state.destroyed || !el.quick.classList.contains('md-show') || prebuiltFresh()) return;
-                    const was = state.tab;
-                    state.tab = '播放列表';
-                    renderBody();
-                    state.tab = was;
-                    prebuilt = { sig: queueSig(), at: performance.now() };
-                };
-                if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 200 });
-                else run();
-            }, 320);
-        };
-        cleanups.push(() => clearTimeout(prebuildTimer));
-        listen(document, 'music-queue-change', () => { prebuilt = null; });
-
-        function rerenderQueue() {
-            if (!state.panelOpen || state.tab !== '播放列表' || state.queueDrag?.active) return;
-            renderBody();
-        }
-
-        // 拖动排序：按住超过 4px 才算拖；其他行 140ms 让位；靠近上下边 32px 自动滚动。
-        function onQueuePointerDown(event) {
-            const rowEl = event.target.closest('.md-man');
-            if (!rowEl || event.button !== 0 || event.target.closest('.md-qx')) return;
-            event.preventDefault(); // 拖动时别选中文字
-            const scroller = event.currentTarget;
-            const from = Number(rowEl.dataset.qi);
-            const manualEls = [...scroller.querySelectorAll('.md-man')];
-            state.queueDrag = { from, to: from, startY: event.clientY, startScroll: scroller.scrollTop, y: event.clientY, active: false, rowEl, manualEls, scroller, raf: 0, moved: false };
-            const move = (e) => {
-                const d = state.queueDrag;
-                if (!d) return;
-                d.y = e.clientY;
-                if (!d.active && Math.abs(e.clientY - d.startY) < 4) return;
-                if (!d.active) {
-                    d.active = true;
-                    d.moved = true;
-                    rowEl.classList.add('md-qdrag');
-                    scroller.classList.add('md-qdragging');
-                    const loop = () => {
-                        const r = scroller.getBoundingClientRect();
-                        if (d.y < r.top + 32) scroller.scrollTop -= 6;
-                        else if (d.y > r.bottom - 32) scroller.scrollTop += 6;
-                        layoutDrag();
-                        d.raf = requestAnimationFrame(loop);
-                    };
-                    d.raf = requestAnimationFrame(loop);
-                }
-                layoutDrag();
-            };
-            const layoutDrag = () => {
-                const d = state.queueDrag;
-                if (!d?.active) return;
-                const dy = (d.y - d.startY) + (scroller.scrollTop - d.startScroll);
-                const n = d.manualEls.length;
-                d.to = Math.max(0, Math.min(n - 1, d.from + Math.round(dy / QUEUE_ROW_H)));
-                d.rowEl.style.transform = `translateY(${dy}px)`;
-                for (const node of d.manualEls) {
-                    if (node === d.rowEl) continue;
-                    const i = Number(node.dataset.qi);
-                    let shift = 0;
-                    if (d.from < d.to && i > d.from && i <= d.to) shift = -QUEUE_ROW_H;
-                    if (d.from > d.to && i < d.from && i >= d.to) shift = QUEUE_ROW_H;
-                    node.style.transform = shift ? `translateY(${shift}px)` : '';
-                }
-            };
-            const up = () => {
-                document.removeEventListener('pointermove', move, true);
-                document.removeEventListener('pointerup', up, true);
-                document.removeEventListener('pointercancel', up, true);
-                const d = state.queueDrag;
-                if (!d) return;
-                cancelAnimationFrame(d.raf);
-                const { active, from: f, to } = d;
-                state.queueDrag = active ? { active: false, suppressClick: true } : null;
-                scroller.classList.remove('md-qdragging');
-                if (active) {
-                    if (f !== to) app.queueMove?.(f, to);
-                    rerenderQueue();
-                    setTimeout(() => { if (state.queueDrag?.suppressClick) state.queueDrag = null; }, 0);
-                }
-            };
-            document.addEventListener('pointermove', move, true);
-            document.addEventListener('pointerup', up, true);
-            document.addEventListener('pointercancel', up, true);
-        }
-
-        function onQueueAction(target) {
-            if (state.queueDrag?.suppressClick) { state.queueDrag = null; return; }
-            const act = target.dataset.qact;
-            if (act === 'clear') { app.queueClear?.(); return; }
-            const rowEl = target.closest('[data-k]');
-            const row = rowEl && state.queueRows?.[Number(rowEl.dataset.k)];
-            if (!row) return;
-            const index = app.playlist.indexOf(row.track);
-            if (act === 'remove' && row.type === 'manual') { app.queueRemove?.(row.i); return; }
-            if (act === 'next') {
-                if (app.queuePlayNext?.(row.track)) global.MusicToast?.show({ id: 'queue', kind: 'success', message: `下一首播放：${trackTitle(row.track)}` });
-                return;
-            }
-            if (act === 'play' && index !== -1) {
-                // 点手动队列里的歌：现在就放它，并把它从队列里拿掉。
-                if (row.type === 'manual') app.queueRemove?.(row.i);
-                app.loadTrack?.(index);
-            }
-        }
+        // 这一页的代码在 music-dock-queue.js；外框和切页在下面的 renderBody。
+        const queuePage = global.MusicDockQueue.create({
+            app, state, el, cleanups, listen, renderBody,
+            currentTrack, activeList, playMode, trackTitle, trackArtist,
+            escapeHtml, icon, QUEUE_ROW_H, QUEUE_HEAD_H
+        });
+        const {
+            saveQueueAsPlaylist, buildQueueRows, renderQueueWindow, schedulePrebuild, prebuiltFresh,
+            rerenderQueue, onQueuePointerDown, onQueueAction
+        } = queuePage;
 
         function syncLyricHighlight(force = false) {
             const box = el.body.querySelector('.md-lyrl');
@@ -1765,7 +1534,7 @@
                 // 同一下点击里和下面的焦点各读一次，会把刚插进来的行算两遍样式和排版。
                 renderTabs(false);
                 if (!(state.tab === '播放列表' && prebuiltFresh())) renderBody();
-                prebuilt = null;
+                queuePage.dropPrebuilt();
                 el.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true, focusVisible: lastKeyboard });
                 syncSolid();
                 requestAnimationFrame(() => { if (state.panelOpen && !state.destroyed) placeMarks(el.pnl); });
@@ -1893,139 +1662,12 @@
         // 原来舞台控制舱里的三块（当前舞台的专属设置、全局输出、演出阵列）和「恢复出厂编排」各自搬到控制页对应的位置
         // （appendChild，不重建），舞台宿主绑在上面的事件和引用都还在；原来的抽屉外壳和舞台右上角的入口按钮由 CSS 隐藏。
         // 控制页自上而下：音量 → 播放模式 / 歌词舞台 → 舞台（原地展开全部舞台）→ 这个舞台的设置 → 显示（所有舞台共用）→ 更多。
-        const stageRoot = document.getElementById('music-stage');
-        const stageParts = [
-            ['.music-stage-tuning-controls', el.tuneSlot],
-            ['.music-stage-common-controls', el.commonSlot],
-            ['.music-stage-mode-options', el.arraySlot],
-            ['.music-stage-settings-footer', el.advActs]
-        ].map(([selector, slot]) => ({ node: stageRoot?.querySelector(selector), slot })).filter((part) => part.node);
-        const stageSettingsHome = stageParts.map(({ node }) => ({ node, parent: node.parentNode, next: node.nextSibling }));
-        for (const { node, slot } of stageParts) slot.appendChild(node);
-        if (stageParts.length) document.body.classList.add('music-dock-stage-settings');
-        cleanups.push(() => {
-            for (const { node, parent, next } of stageSettingsHome.slice().reverse()) {
-                if (parent?.isConnected) parent.insertBefore(node, next?.parentNode === parent ? next : null);
-            }
-            document.body.classList.remove('music-dock-stage-settings');
+        // 这一段的代码在 music-dock-stage-settings.js。
+        const stageSettings = global.MusicDockStageSettings.create({
+            state, el, cleanups, listen, openPanel,
+            stageActive, currentStageMode, segment, escapeHtml, icon
         });
-        const tuningNode = el.tuneSlot.firstElementChild;
-
-        // 每个舞台先露出最常动的几项，其余的收在「全部 N 项」里原地展开。没列出的舞台按定义顺序取前几项。
-        const TUNE_FIRST = Object.freeze({
-            diorama: ['rain', 'lyricCarrier', 'showTranslation', 'letterbox', 'cameraCuts', 'fireworks'],
-            tunnel: ['cameraSpeed', 'showTranslation', 'fontScale', 'starfield', 'showPlanets', 'showShips'],
-            kowloon: ['rain', 'cameraMode', 'lightning', 'reflections', 'showTranslation', 'fog'],
-            orbit: ['tilt', 'roll', 'axisLine', 'showTranslation'],
-            signal: ['panel', 'showSpectrum', 'pulseRate', 'showTranslation'],
-            groupchat: ['echoes', 'voiceNotes', 'fontScale', 'showTranslation'],
-            impression: ['timeOfDay', 'flecks', 'frame', 'showTranslation'],
-            clockwork: ['secondHand', 'fontScale', 'waitingOpacity', 'showTranslation'],
-            hanabi: ['density', 'trails', 'reflection', 'showTranslation'],
-            lumiere: ['smoke', 'dust', 'fontScale', 'showTranslation'],
-            fogpane: ['fog', 'rain', 'drops', 'drips', 'cameraSpeed', 'showTranslation'],
-            inkdraft: ['cameraCuts', 'figures', 'collisions', 'halftone', 'inkFlip', 'showTranslation'],
-            luminous: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
-            partita: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
-            cadenza: ['fontScale', 'showTranslation', 'showUpcoming', 'heroEmphasis', 'glow'],
-            fume: ['cameraMode', 'cameraSpeed', 'geometricBackground', 'glow', 'heroScale']
-        });
-        const TUNE_FIRST_COUNT = 6;
-        let tuneBusy = false;
-        // 宿主每次换舞台都会重建这些行。这里只做三件事：把「名字（说明）」拆成名字和一行小字说明、
-        // 把常用项排到前面、给其余的行打上记号；控件本身和它上面的事件不动。
-        const dressTuning = () => {
-            if (!tuningNode || tuneBusy) return;
-            tuneBusy = true;
-            try {
-                const rows = Array.from(tuningNode.children);
-                const keyOf = (row) => row.querySelector('[data-stage-config-key]')?.dataset.stageConfigKey || '';
-                for (const row of rows) {
-                    const label = row.querySelector('.music-stage-tuning-label');
-                    if (!label || label.dataset.mdDone) continue;
-                    label.dataset.mdDone = '1';
-                    const match = /^(.+?)（(.+)）$/.exec(label.textContent || '');
-                    if (match) {
-                        label.textContent = match[1];
-                        const note = document.createElement('small');
-                        note.className = 'md-tune-note';
-                        note.textContent = match[2];
-                        label.appendChild(note);
-                    }
-                }
-                const scene = currentStageMode();
-                const wanted = TUNE_FIRST[scene?.id] || [];
-                let first = wanted.map((key) => rows.find((row) => keyOf(row) === key)).filter(Boolean);
-                if (rows.length <= TUNE_FIRST_COUNT + 2) first = rows.slice();
-                else if (first.length < 3) first = rows.slice(0, TUNE_FIRST_COUNT);
-                const rest = rows.filter((row) => !first.includes(row));
-                const ordered = first.concat(rest);
-                if (ordered.some((row, i) => row !== rows[i])) ordered.forEach((row) => tuningNode.appendChild(row));
-                rest.forEach((row) => row.classList.add('md-tune-rest'));
-                first.forEach((row) => row.classList.remove('md-tune-rest'));
-                el.tuneSec.hidden = rows.length === 0;
-                el.tuneMore.hidden = rest.length === 0;
-                el.tuneSlot.classList.toggle('md-tune-all', state.tuneAll || rest.length === 0);
-                el.tuneMore.setAttribute('aria-expanded', String(state.tuneAll));
-                el.tuneMore.innerHTML = `<span>${state.tuneAll ? '只看常用项' : `全部 ${rows.length} 项`}</span>${icon(state.tuneAll ? 'chevron-up' : 'chevron-down', 14)}`;
-                el.tuneTitle.textContent = scene ? `${scene.label}设置` : '舞台设置';
-                el.tuneHint.textContent = scene?.description || '';
-            } finally {
-                tuneBusy = false;
-            }
-        };
-        if (tuningNode) {
-            const tuneObserver = new MutationObserver(() => { dressTuning(); tuneObserver.takeRecords(); });
-            tuneObserver.observe(tuningNode, { childList: true });
-            cleanups.push(() => tuneObserver.disconnect());
-        }
-        listen(el.tuneMore, 'click', () => { state.tuneAll = !state.tuneAll; dressTuning(); });
-        listen(el.advToggle, 'click', () => {
-            const open = el.advBody.hidden;
-            el.advBody.hidden = !open;
-            el.advToggle.setAttribute('aria-expanded', String(open));
-            el.advToggle.classList.toggle('md-open', open);
-        });
-
-        // 「显示」和开场回放在曲库、舞台都可用；当前舞台和共用舞台选项只在演出时可见。
-        function renderExt(show) {
-            el.ext.hidden = !show;
-            if (!show) return;
-            dressTuning();
-            const light = document.body.classList.contains('light-theme');
-            let html = '<div class="md-grp-h"><b>显示</b></div>'
-                + `<div class="md-nrow"><span class="md-lb">外观</span><span class="md-r">`
-                + segment('data-act="theme"', [{ html: icon('sun', 15), aria: '浅色' }, { html: icon('moon', 15), aria: '深色' }], light ? 0 : 1, 'md-inline')
-                + '</span></div>';
-            const motion = global.MusicMotion;
-            if (motion && Array.isArray(motion.PREFERENCES)) {
-                const prefs = motion.PREFERENCES;
-                const at = Math.max(0, prefs.findIndex((p) => p.value === motion.preference));
-                html += `<div class="md-nrow"><span class="md-lb">降低动态</span><span class="md-r">`
-                    + segment('data-act="motion"', prefs.map((p) => ({ html: escapeHtml(p.label), aria: `降低动态：${p.label}` })), at, 'md-inline md-seg-tx')
-                    + '</span></div>';
-            }
-            el.body2.innerHTML = html;
-            const hasIntro = typeof global.MusicIntro?.replay === 'function';
-            el.advToggle.closest('.md-adv').hidden = !hasIntro && !stageActive();
-            let introBtn = el.advActs.querySelector('[data-act="intro"]');
-            if (hasIntro && !introBtn) {
-                el.advActs.insertAdjacentHTML('afterbegin', `<button class="md-wide md-intro" type="button" data-act="intro">${icon('clapperboard', 15)}<span>播放完整开场</span>${icon('chevron-right', 14)}</button>`);
-            } else if (!hasIntro && introBtn) introBtn.remove();
-        }
-        // 以前这里是「舞台调制」子页；现在只是打开控制页并滚到舞台那一段。
-        function openStageSettings() {
-            openPanel('控制');
-            if (!stageActive()) return;
-            // offsetTop counts from the panel, not from the scrolling body below its header,
-            // so it overshot by the header height and hid the section title and first label.
-            const scroller = el.ext.parentElement;
-            if (scroller) {
-                const top = el.tuneSec.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8;
-                if (top > 0) scroller.scrollTop = top;
-            }
-            el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true });
-        }
+        const { renderExt, openStageSettings } = stageSettings;
         function closePop() { state.scenesOpen = false; state.sleepOpen = false; }
 
         // 声音页：原来的音效卡片整块搬进来（appendChild，不重建），离开这一页或关掉面板时放回原处，事件和引用都不变。
@@ -2180,7 +1822,7 @@
         });
         // 手动队列增删、排序后跟着重画。
         listen(document, 'music-queue-change', rerenderQueue);
-        listen(document, 'music-queue-source-change', () => { prebuilt = null; if (state.panelOpen && state.tab === '播放列表') renderBody(); });
+        listen(document, 'music-queue-source-change', () => { queuePage.dropPrebuilt(); if (state.panelOpen && state.tab === '播放列表') renderBody(); });
         listen(global, 'music-motion-change', () => { if (state.panelOpen && state.tab === '控制') renderBody(); });
         observe(app.playlistEl, { subtree: true, attributes: true, attributeFilter: ['class'] }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;

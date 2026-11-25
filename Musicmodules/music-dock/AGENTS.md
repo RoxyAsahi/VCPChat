@@ -7,6 +7,8 @@
 | 文件 | 全局 | 管什么 |
 | --- | --- | --- |
 | `music-dock.js` | `initMusicDock(app)` | 底栏播放条、白环播放头、进度细轨、统一面板（封面 / 歌词 / 控制 / 播放列表 / 声音）、全窗口快捷键、提示层 |
+| `music-dock-queue.js` | `MusicDockQueue.create(ctx)` | 面板「播放列表」页：三段表、只画看得见的行、拖动排序、存为歌单、打开前预渲染 |
+| `music-dock-stage-settings.js` | `MusicDockStageSettings.create(ctx)` | 控制页里的舞台设置：把舞台控制舱的几块搬进来、专属设置排序，以及「显示」一组 |
 | `music-dock-fluid.js` | `createMusicDockFluid` | 播放条的 SVG 流体层（鼓包、水滴、切歌分裂） |
 | `music-dock-palette.js` | `createMusicDockPalette`、`MusicDockPaletteQuery` | Ctrl+K 命令面板：搜歌 + 命令 |
 | `music-dock-icons.js` | `MusicDockIcons` | 线性图标路径（Lucide，ISC）和自绘图标 |
@@ -24,7 +26,9 @@
 舞台设置 → 声音页 → 状态订阅 → 全窗口键位 → 命令面板 → 提示层 → 首次渲染。
 
 整个底栏是一个闭包 `initMusicDock(app)`，各段共享闭包里的 `state` 和 `render*`。
-**这个文件已在巨型文件基线里**：新面板页、新控件写成新文件（库形状 `global.MusicDockXxx`），在 `initMusicDock` 里调用。
+「播放队列页」「舞台设置」两段已经拆成 `music-dock-queue.js`、`music-dock-stage-settings.js`：代码原样搬过去，
+共用的 `state`、`el`、小工具通过 `create(ctx)` 传入，返回的函数在 music-dock.js 里按原名解构出来用。再拆别的段照这个做。
+**这个文件仍在巨型文件基线里**：新面板页、新控件写成新文件（库形状 `global.MusicDockXxx`），在 `initMusicDock` 里调用。
 
 ## 约定
 
@@ -36,4 +40,4 @@
 
 ## 测试与截图
 
-`node scripts/test-music.mjs --module dock`。底栏测试用 jsdom 按顺序 eval `music-dock-icons → palette → fluid → dock`；拆文件时同步改 tests/music-dock.test.cjs 的加载列表。
+`node scripts/test-music.mjs --module dock`。底栏测试用 jsdom 按顺序 eval `music-dock-icons → palette → fluid → queue → stage-settings → dock`；拆文件时同步改 tests/music-dock.test.cjs、music-toast、music-scan-outcome、music-time-format 的加载列表。

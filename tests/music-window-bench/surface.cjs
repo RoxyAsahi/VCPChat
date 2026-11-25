@@ -65,6 +65,24 @@ const FAKE = () => {
         // 只分「方法」和「数据」：数据的具体类型随连接、计时器等运行时状态变（ws 连没连上），比较时是噪声
         return [k, typeof v === 'function' ? 'function' : 'data'];
     })));
+    // 底栏面板各页的结构（标签、类名、data-act），拆底栏文件时比对用
+    const dockShape = () => page.evaluate(async () => {
+        const dock = window.__app.musicDock;
+        if (!dock?.openPanel) return null;
+        const shape = (node) => [...node.querySelectorAll('*')].map((n) => n.tagName.toLowerCase()
+            + (n.className && typeof n.className === 'string' ? '.' + n.className.trim().split(/\s+/).sort().join('.') : '')
+            + (n.dataset?.act ? `[${n.dataset.act}]` : '')).join(' ');
+        const out = {};
+        for (const tab of ['封面', '歌词', '控制', '播放列表', '声音']) {
+            dock.openPanel(tab);
+            await new Promise((r) => setTimeout(r, 60));
+            const pnl = document.querySelector('#music-dock-root .md-pnl');
+            out[tab] = pnl ? shape(pnl) : null;
+        }
+        dock.closePanel?.();
+        return out;
+    });
+    const dock = { library: await dockShape() };
     const modes = await page.evaluate(() => [...document.querySelectorAll('[data-stage-mode]')].map((b) => b.dataset.stageMode)
         .filter((v, i, a) => a.indexOf(v) === i));
     const stage = {};
@@ -76,10 +94,13 @@ const FAKE = () => {
         stage[id] = await page.evaluate(() => {
             const root = document.querySelector('.music-stage');
             const keep = (list) => [...list].filter((c) => /^(stage-|music-stage-scene)/.test(c)).sort();
-            return { root: keep(root?.classList || []), body: keep(document.body.classList) };
+            // 边框频谱：每边一条画布，画过之后有尺寸
+            const edges = [...document.querySelectorAll('.music-stage-edge-spectrum canvas')];
+            return { root: keep(root?.classList || []), body: keep(document.body.classList), edges: edges.length, edgesSized: edges.filter((c) => c.width > 1).length > 0 };
         });
     }
-    const out = { appShape, stage, errors };
+    dock.stage = await dockShape();
+    const out = { appShape, stage, dock, errors };
     if (args.out) fs.writeFileSync(args.out, JSON.stringify(out, null, 2));
     console.log(`app 属性 ${Object.keys(appShape).length} 个，舞台 ${modes.length} 个，页面报错 ${errors.length} 个`);
     errors.slice(0, 5).forEach((e) => console.log('  ' + e));

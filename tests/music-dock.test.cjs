@@ -21,6 +21,8 @@ function setup(patch) {
     window.eval(read('Musicmodules/music-dock/music-dock-icons.js'));
     window.eval(read('Musicmodules/music-dock/music-dock-palette.js'));
     window.eval(read('Musicmodules/music-dock/music-dock-fluid.js'));
+    window.eval(read('Musicmodules/music-dock/music-dock-queue.js'));
+    window.eval(read('Musicmodules/music-dock/music-dock-stage-settings.js'));
     window.eval(read('Musicmodules/music-dock/music-dock.js'));
     const doc = window.document;
     const calls = [];

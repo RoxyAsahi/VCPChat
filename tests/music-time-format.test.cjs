@@ -29,7 +29,7 @@ test('the dock clock keeps two-digit minutes and adds hours past one hour', asyn
         <div id="music-dock-root"></div></body>`, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const { window } = dom;
     window.MusicStageConfig = { modes: [] };
-    for (const f of ['music-dock-icons.js', 'music-dock-palette.js', 'music-dock-fluid.js', 'music-dock.js']) window.eval(read('Musicmodules/music-dock/' + f));
+    for (const f of ['music-dock-icons.js', 'music-dock-palette.js', 'music-dock-fluid.js', 'music-dock-queue.js', 'music-dock-stage-settings.js', 'music-dock.js']) window.eval(read('Musicmodules/music-dock/' + f));
     const doc = window.document;
     const app = {
         playlist: [{ path: 'C:/live.flac', title: 'Live.flac', artist: 'A' }], currentTrackIndex: 0, isPlaying: false,

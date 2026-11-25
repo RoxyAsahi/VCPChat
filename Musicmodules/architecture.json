@@ -244,9 +244,10 @@
     {
       "id": "stage-host",
       "title": "歌词舞台宿主",
-      "purpose": "舞台开关、帧时钟、模式创建/销毁/切换、舞台设置、播放状态快照（runtime）、模式登记表和星诞导演、舞台宿主样式。",
+      "purpose": "舞台开关、帧时钟、模式创建/销毁/切换、舞台设置、边框频谱（edge）、播放状态快照（runtime）、模式登记表和星诞导演、舞台宿主样式。",
       "paths": [
         "Musicmodules/music-stage/music-stage-host.js",
+        "Musicmodules/music-stage/music-stage-edge.js",
         "Musicmodules/music-stage/music-stage-runtime.js",
         "Musicmodules/music-stage/music-stage-config.js",
         "Musicmodules/music-stage/music-stage-modes.js",
@@ -420,7 +421,7 @@
     "Musicmodules/music-archive/archive-scene.js": 100013,
     "Musicmodules/music-archive/archive-view.js": 132461,
     "Musicmodules/music-archive/archive-wall.js": 69010,
-    "Musicmodules/music-dock/music-dock.js": 151137,
+    "Musicmodules/music-dock/music-dock.js": 127903,
     "Musicmodules/music-player.js": 75554,
     "Musicmodules/music-stage/modes/diorama-world.js": 397621,
     "Musicmodules/music-stage/modes/fogpane-manager.js": 80444,
@@ -432,8 +433,8 @@
     "Musicmodules/music-stage/modes/stage-mode-utils.js": 76914,
     "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79075,
     "Musicmodules/music-stage/modes/tunnel-manager.js": 286561,
-    "Musicmodules/music-stage/music-stage-host.js": 117182,
-    "Musicmodules/music.html": 66187,
+    "Musicmodules/music-stage/music-stage-host.js": 105320,
+    "Musicmodules/music.html": 66374,
     "Musicmodules/music.js": 87774
   },
   "appWriterBaseline": {
@@ -524,7 +525,7 @@
     ],
     "customPlaylists": [
       "Musicmodules/music-archive/archive-list.js",
-      "Musicmodules/music-dock/music-dock.js",
+      "Musicmodules/music-dock/music-dock-queue.js",
       "Musicmodules/music-dupes.js",
       "Musicmodules/music-likes.js",
       "Musicmodules/music-m3u.js",

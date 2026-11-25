@@ -150,7 +150,7 @@ const remove = MusicAppHooks.wrap(app, 'renderPlaylist', 'classic-list', (base) 
 1. ~~方法套娃~~ 已改成 `MusicAppHooks`（见上面「给 app 方法加前后逻辑」）。原来手写包装的 18 处（13 个文件）都换了，顺序不变。
 2. **共写的列表状态**：`app.currentFilteredTracks`（11 个文件写）、`app.customPlaylists`（7 个）、`app.filteredPlaylistSource`（6 个）、`app.currentTrackIndex`（5 个）。
 3. **装配散落**：`connectWebSocket` 住在 `music-visualizer.js`。
-4. **巨型文件**：21 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB、music-dock.js 148 KB。
+4. **巨型文件**：19 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB。music-dock.js 已拆出播放列表页和舞台设置（148 → 125 KB），music-stage-host.js 已拆出边框频谱（115 → 103 KB）；拆法见 music-dock/AGENTS.md。
 5. **加一个舞台要改 6 个文件**（`check:music` 会核对是否一致）。
 
 治理进度和每批 PR 记在 PR 描述里；做完一项就把上面对应条目删掉或改写。

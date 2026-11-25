@@ -12,6 +12,7 @@ modes/*-manager.js       MusicStage<Name>Manager  每个模式一个工厂 { cre
 music-stage-advanced-modes.js                进阶模式登记（id、中文名、manager）
 music-stage-modes.js     MusicStageModes     核心三模式 + 进阶登记合成注册表；星诞（starborn）自动导演
 music-stage-host.js      setupMusicStage     舞台开关、唯一帧时钟、模式创建/销毁/软切换、设置抽屉、顶栏控件
+music-stage-edge.js      MusicStageEdge      窗口外圈的边框频谱（四条细画布），宿主每帧 edge.draw(frame)
 music-stage*.css                             宿主样式：music-stage.css（骨架、顶栏、切换器、歌词基础）、-core-modes（流光/云阶/心象/浮名/星诞）、
                                              -settings（响应式、浅色主题、设置抽屉）、-pixi-3d（凝彩/商籁/镜台）
 modes/<id>.css                               各模式自己的样式（tunnel、inkdraft、fogpane、lumiere、hanabi、clockwork、orbit、signal、groupchat、impression）
