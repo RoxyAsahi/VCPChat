@@ -76,6 +76,8 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-glyph-search::after { content: ""; position: absolute; width: 42%; height: 2px; left: 9%; top: 82%; background: currentColor; transform: rotate(-45deg); transform-origin: left center; }
 .archive-key { font-size: 11px; border: 1px solid var(--ar-key); display: inline-flex; justify-content: center; align-items: center; min-width: 19px; height: 21px; line-height: 1; opacity: .6; margin-left: 6px; }
 .archive-glyph-now { font-size: 27px; }
+/* 进入舞台：四角闪光星（和底栏舞台按钮同一个图标） */
+.archive-glyph-stage { width: 17px; height: 17px; display: block; flex-shrink: 0; }
 /* 随机抽取：两颗错开的骰点框，抽取进行中框会转 */
 .archive-glyph-pick { width: 15px; height: 15px; display: block; flex-shrink: 0; position: relative; border: 1.5px solid currentColor; border-radius: 3px; box-sizing: border-box; background: radial-gradient(circle, currentColor 1.6px, transparent 2.1px) 25% 25% / 50% 50% no-repeat, radial-gradient(circle, currentColor 1.6px, transparent 2.1px) 75% 75% / 50% 50% no-repeat; transition: transform .3s; }
 .archive-nav > button.running { color: var(--ar-accent-text, var(--ar-accent)); }
@@ -112,6 +114,8 @@ body.music-reduce-motion .archive-nav > button.running .archive-glyph-pick { ani
 .archive-ruler-track:hover .archive-ruler-tick, .archive-ruler-track.drag .archive-ruler-tick { background: color-mix(in srgb, var(--ar-ink) 70%, transparent); }
 .archive-ruler-at { --at: 0; position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 2px; margin-left: -1px; background: var(--ar-accent); transition: left .32s var(--mt-ease, ease); pointer-events: none; }
 .archive-ruler-track.drag .archive-ruler-at { transition: none; }
+.archive-ruler-track::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: calc(var(--hover, 0) * 100%); width: 1px; margin-left: -.5px; background: var(--ar-ink); opacity: 0; transition: opacity .12s; pointer-events: none; }
+.archive-ruler-track.hovering::after { opacity: .85; }
 .archive-ruler-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); padding: 3px 8px; font-size: 11px; font-weight: 400; letter-spacing: .5px; line-height: 16px; white-space: pre; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--ar-paper, #fff); background: var(--ar-ink); opacity: 0; transition: opacity .15s; pointer-events: none; }
 .archive-ruler-tip.on { opacity: 1; }
 body.music-reduce-motion .archive-ruler-at { transition: none; }
@@ -546,8 +550,8 @@ body.music-reduce-motion .archive-lyrics-index i { transition: none; }
 .archive-lyrics-track { padding-top: 40px; transition: transform .6s var(--mt-ease, cubic-bezier(.32, .72, 0, 1)); will-change: transform; }
 .archive-lyrics-track p { position: relative; height: 52px; margin: 0 var(--lyrics-end) 0 0; padding-left: var(--lyrics-start); display: flex; flex-direction: column; justify-content: center; gap: 4px; cursor: pointer; }
 .archive-lyrics-track p.tr { height: 74px; }
-.archive-lyrics-track b { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .62; transition: color .3s, opacity .3s; }
-.archive-lyrics-track em { font-style: normal; font-size: 12px; letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
+.archive-lyrics-track b { font-size: calc(18px * var(--fit, 1)); line-height: 24px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .62; transition: color .3s, opacity .3s; }
+.archive-lyrics-track em { font-style: normal; font-size: calc(12px * var(--fit, 1)); letter-spacing: .6px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
 .archive-lyrics-track p:hover b { opacity: .9; }
 /* 正在唱：目录选中行同款记号（小方块 + 延伸到行尾的细线），字变成墨色加粗 */
 .archive-lyrics-track p.on b { color: var(--ar-ink); opacity: 1; font-weight: 750; }
@@ -567,6 +571,11 @@ body.music-reduce-motion .archive-lyrics-track p.on b.ww .w.singing { transition
 .archive-lyrics.browsing .archive-lyrics-track b { opacity: .8; }
 .archive-lyrics-track p.on em { color: var(--ar-ink); opacity: .8; }
 .archive-lyrics-track p.on::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--ar-square); }
+/* 逐句进度：正在唱那一行上方的细线按这一句的进度填成强调色（盖在细线上，起点和细线对齐） */
+@property --lp { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+.archive-lyrics-track p.on.lp { transition: --lp .22s linear; }
+.archive-lyrics-track p.on.lp::after { background: linear-gradient(90deg, var(--ar-accent) var(--lp), var(--ar-rule) var(--lp)); }
+body.music-reduce-motion .archive-lyrics-track p.on.lp { transition: none; }
 .archive-lyrics-track p.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 9.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
 /* 没有歌词：只留栏头和一行说明，不占右侧版面 */
 .archive-lyrics-none { display: none; margin-right: var(--lyrics-end); padding: 18px 0 0 var(--lyrics-start); }
@@ -697,7 +706,8 @@ body.music-dock-beside-lyrics:has(#music-dock-root.md-fl-low) .archive-hud.lyric
 #music-archive-view.is-empty .archive-nav > [data-act="list"],
 #music-archive-view.is-empty .archive-nav > [data-act="save"],
 #music-archive-view.is-empty .archive-nav > [data-act="lyrics"],
-#music-archive-view.is-empty .archive-nav > [data-act="now"] { display: none; }
+#music-archive-view.is-empty .archive-nav > [data-act="now"],
+#music-archive-view.is-empty .archive-nav > [data-act="stage"] { display: none; }
 
 /* 紧凑的曲目行和底部计数 */
 .archive-list-row { height: 52px; }
@@ -826,12 +836,33 @@ body.music-reduce-motion .archive-mode-sweep { display: none; }
 /* 无法播放：照原版写成状态字，不画框 */
 .archive-list-row.bad .tx b::after { content: "／ 无法播放"; padding: 0; border: 0; font-size: 11px; letter-spacing: .6px; vertical-align: 1px; }
 .archive-list-row.picked { --row-wash: color-mix(in srgb, var(--ar-ink) 8%, transparent); }
+
+/* 快捷键卡（按 ?）：一张纸面小卡，左边强调色竖线，和悬停提示同一套 */
+.archive-keys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: calc(var(--mt-z-archive-hud, 5) + 2); min-width: 340px; padding: 14px 18px 12px; background: rgba(var(--ar-paper-rgb), .96); border-left: 2px solid var(--ar-accent); box-shadow: 0 10px 30px rgba(0, 0, 0, .16); color: var(--ar-ink); font-size: 13px; }
+.archive-keys[hidden] { display: none; }
+.archive-keys-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ar-rule); }
+.archive-keys-head b { font-size: 15px; font-weight: 600; }
+.archive-keys-head button { margin-left: auto; border: 0; background: none; color: var(--ar-muted); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.archive-keys-head button:hover { color: var(--ar-ink); }
+.archive-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.archive-keys dt { font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .4px; color: var(--ar-accent-text, var(--ar-accent)); white-space: nowrap; }
+.archive-keys dd { margin: 0; color: var(--ar-ink); }
+.archive-keys p { margin: 10px 0 0; font-size: 11px; color: var(--ar-muted); }
+.archive-keys { max-width: 420px; }
+.archive-keys p.archive-keys-wall { line-height: 1.6; padding-top: 8px; border-top: 1px dashed var(--ar-rule); }
 /* 分组小标题：正在放的组只用琥珀导轨表示，去掉挂在表格外面的小圆点 */
 .archive-list-group.has-playing::before { display: none; }
 .archive-list-group.live-on .rail { animation: archive-list-rail-live 1.6s ease-in-out infinite; }
 @keyframes archive-list-rail-live { 50% { opacity: .45; } }
 body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 @media (prefers-reduced-motion: reduce) { .archive-list-group.live-on .rail { animation: none; } }
+
+/* 纯文本歌词（没有时间轴）：静静摆着，行距紧一点、字轻一点，不能点 */
+.archive-lyrics.plain .archive-lyrics-track p { height: 38px; cursor: default; }
+.archive-lyrics.plain .archive-lyrics-track p.plain-note { height: 30px; }
+.archive-lyrics.plain .archive-lyrics-track p.plain-note em { opacity: .85; }
+.archive-lyrics.plain .archive-lyrics-track b { font-size: calc(16px * var(--fit, 1)); font-weight: 500; color: var(--ar-ink); opacity: .78; }
+.archive-lyrics.plain .archive-lyrics-track p:hover b { opacity: .78; }
 /* 拖动落点线：从编号列尾部起画，和表格正文对齐，不再顶到最左边 */
 .archive-list .archive-list-row.drop-before::before, .archive-list .archive-list-row.drop-after::after { left: calc(var(--no-w) - 10px); }
 /* 分组名优先完整显示：挤的时候先缩导轨和首数，不先把名字截成「海边…」 */
@@ -842,14 +873,36 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
   .archive-list-group:not(:hover):not(:focus-within) :is(.gplay, .acts) { position: absolute; right: 0; bottom: 6px; }
   .archive-list-group:is(:hover, :focus-within) .rail { display: none; }
 }
+
+/* 网上还在找歌词：说明用中性的淡色，三个点慢慢呼吸 */
+.archive-lyrics.searching .archive-lyrics-none span { font-weight: 500; color: var(--ar-muted); animation: archive-lyrics-searching 1.6s ease-in-out infinite; }
+@keyframes archive-lyrics-searching { 50% { opacity: .55; } }
+body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { animation: none; }
+@media (prefers-reduced-motion: reduce) { .archive-lyrics.searching .archive-lyrics-none span { animation: none; } }
 /* 检索命中：副标题字小、又有 overflow 裁切，用贴身 1px 下划线，不再加粗 */
 .archive-list-row .tx em mark { font-weight: inherit; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .archive-list-brand-title > span.q { left: -.5em; max-width: calc(100% + .5em); }
+
+/* 纯文本歌词顶上「换一份带时间轴的」：和「获取歌词」同款文字按钮，挨着说明 */
+.archive-lyrics.plain .archive-lyrics-track p.plain-note { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; }
+.archive-lyrics.plain .archive-lyrics-track p.plain-note em { min-width: 0; }
+.archive-lyrics.plain .plain-fetch { flex: none; font-size: 12px; letter-spacing: .6px; color: var(--ar-ink); cursor: pointer; }
+.archive-lyrics.plain .plain-fetch i { margin-left: 6px; font-style: normal; font-size: 10px; color: var(--ar-muted); }
+.archive-lyrics.plain .plain-fetch:hover, .archive-lyrics.plain .plain-fetch:hover i { color: var(--ar-accent-text, var(--ar-accent)); }
 /* 表头标出当前排序列（照原版：排序那一列表头加重，时长排序时整列时长也提亮） */
 .archive-list:is([data-sort="title"], [data-sort="artist"]) .archive-list-cols span:nth-child(2),
 .archive-list[data-sort="duration"] .archive-list-cols span:nth-child(3) { color: var(--ar-ink); font-weight: 600; }
 .archive-list[data-sort="duration"] .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 86%, transparent); }
 .archive-list[data-sort="added"] .archive-list-cols span:nth-child(1) { color: var(--ar-ink); font-weight: 600; }
+/* 分组名太长时先让「组 n / N」退场，名字最后才省略（借鉴 RhinE 标题栏「名字始终显示，旁边的数字先让位」） */
+.archive-lanes-name > span { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.archive-lanes-name > b { flex: 0 1 auto; min-width: 3em; }
+/* 矮一点的窗口（如 1280×800）左下角其实空着：分组切换和位置标尺照样显示；真的很矮（<640）才收起 */
+.archive-hud.short .archive-lanes:not([hidden]) { display: flex; }
+.archive-hud.short .archive-ruler:not([hidden]) { display: flex; }
+@media (max-height: 640px) {
+    .archive-hud.short .archive-lanes, .archive-hud.short .archive-ruler { display: none; }
+}
 /* 歌单、为你、检索结果不跟排序菜单走，表头不标排序列 */
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols span:nth-child(n) { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); font-weight: inherit; }
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-row .rt { color: color-mix(in srgb, var(--ar-ink) 64%, transparent); }
@@ -868,6 +921,36 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list-row::after { right: var(--text-end-inset); }
 .archive-list-row .tx::before { right: var(--text-end-inset); }
 .archive-list-cols { margin-right: var(--text-end-inset); padding-right: var(--cell-end); }
+/* R25 歌词页标题旁的歌词类型小标签（逐字 / 逐句 / 纯文本 · 译），点它换一份 */
+.archive-lyrics-head .archive-lyrics-chip { flex: none; padding: 1px 6px; border: 1px solid var(--ar-rule); border-radius: 3px; background: transparent; color: var(--ar-muted); font: inherit; font-size: 10.5px; letter-spacing: .8px; line-height: 1.5; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.archive-lyrics-head .archive-lyrics-chip:hover:not(:disabled) { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-head .archive-lyrics-chip:disabled { cursor: default; }
+.archive-lyrics-head .archive-lyrics-chip:focus-visible { outline: 2px solid var(--ar-ink); outline-offset: 2px; }
+/* R26 歌词栏底部两角的裁切记号（借鉴 RhinE 歌词页框住歌词的角标）：和标题下的细线一起把歌词框成一块 */
+.archive-lyrics::after {
+    content: "";
+    position: absolute;
+    left: var(--lyrics-start); right: var(--lyrics-end); bottom: 0;
+    height: 9px;
+    --mark: var(--ar-rule);
+    background:
+        linear-gradient(var(--mark), var(--mark)) left bottom / 9px 1px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) left bottom / 1px 9px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) right bottom / 9px 1px no-repeat,
+        linear-gradient(var(--mark), var(--mark)) right bottom / 1px 9px no-repeat;
+    pointer-events: none;
+}
+.archive-lyrics.none::after { display: none; }
+/* R27 歌词滚轮翻看时的「回到当前句」 */
+.archive-lyrics-back { position: absolute; left: var(--lyrics-start); bottom: 16px; z-index: 2; display: none; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--ar-rule); border-radius: 999px; background: rgba(var(--ar-paper-rgb), .92); color: var(--ar-muted); font: inherit; font-size: 11px; letter-spacing: .6px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.archive-lyrics.browsing:not(.plain):not(.none) .archive-lyrics-back { display: inline-flex; }
+.archive-lyrics-back:hover { color: var(--ar-ink); border-color: var(--ar-ink); }
+.archive-lyrics-back i { font-style: normal; }
+.archive-lyrics-back[data-dir="up"] i::before { content: "↑"; }
+.archive-lyrics-back[data-dir="down"] i::before { content: "↓"; }
+.archive-lyrics.browsing:not(.plain):not(.none) .archive-lyrics-back { animation: archive-lyrics-back-in .18s ease both; }
+@keyframes archive-lyrics-back-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
 /* 检索框收小（Roxy 11-24：太大、和栏名/表头衔接突兀）：
    字号、图标、+ 按钮都降到和分类标签同一档，底线改成和表格同一种细线，聚焦时才变强调色 */
 .archive-list-toolbar { gap: 10px; border-bottom-color: color-mix(in srgb, var(--ar-ink) 24%, transparent); }
@@ -976,3 +1059,22 @@ body.music-reduce-motion .archive-list-group.live-on .rail { animation: none; }
 .archive-list .archive-list-search::after, .archive-list .archive-list-search:focus-within::after { content: none; display: none; }
 .archive-list:has(.archive-list-search input:focus) .archive-list-search { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ar-ink) 70%, transparent); }
 .archive-list:has(.archive-list-search input:focus) .archive-list-search .archive-glyph-search { color: var(--ar-ink); opacity: .75; }
+/* R29 键盘焦点：全局那条 2px 实线（1,3,0）压过了首页自己的样式，换回克制的细线；用鼠标时脚本挪过去的焦点不显示 */
+#music-archive-view button:focus-visible:not(#messageInput) { outline: 1px solid color-mix(in srgb, var(--ar-ink) 45%, transparent); outline-offset: 3px; }
+html.md-pointer-mode #music-archive-view button:focus-visible:not(#messageInput),
+html.md-pointer-mode #music-dock-root .md-dockrow button[role="tab"]:focus-visible:not(#messageInput) { outline: none; }
+/* R29 歌词进度条：替换一行一格的密刻度 */
+.archive-lyrics-index { display: block; right: 8px; width: 30px; height: clamp(120px, 46%, 420px); gap: 0; padding: 0; opacity: .5; transition: opacity .2s ease; touch-action: none; }
+.archive-lyrics:hover .archive-lyrics-index, .archive-lyrics-index.hovering { opacity: 1; }
+.archive-lyrics-index > span { position: absolute; pointer-events: none; }
+.archive-lyrics-index .rail { left: 50%; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ar-ink) 16%, transparent); }
+.archive-lyrics-index .fill { left: 50%; top: 0; width: 1px; height: calc(var(--at, 0) * 100%); background: color-mix(in srgb, var(--ar-ink) 50%, transparent); }
+.archive-lyrics-index .cur { left: calc(50% - 6px); width: 13px; height: 2px; top: calc(var(--at, 0) * 100% - 1px); background: var(--ar-accent); opacity: 0; transition: top .35s cubic-bezier(.2, .7, .2, 1), opacity .2s; }
+.archive-lyrics-index.started .cur { opacity: 1; }
+.archive-lyrics-index .hov { display: none; left: calc(50% - 9px); width: 19px; height: 1px; top: calc(var(--hv, 0) * 100%); background: var(--ar-ink); }
+.archive-lyrics-index .tip { display: none; right: 26px; top: calc(var(--hv, 0) * 100%); transform: translateY(-50%); max-width: min(300px, 60vw); align-items: baseline; gap: 8px; padding: 4px 10px; white-space: nowrap; font-size: 12px; letter-spacing: .3px; color: var(--ar-ink); background: rgba(var(--ar-paper-rgb), .95); border: 1px solid var(--ar-rule); border-radius: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+.archive-lyrics-index .tip b { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ar-muted); }
+.archive-lyrics-index .tip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.archive-lyrics-index.hovering .hov { display: block; }
+.archive-lyrics-index.hovering .tip { display: flex; }
+body.music-reduce-motion .archive-lyrics-index .cur { transition: none; }
