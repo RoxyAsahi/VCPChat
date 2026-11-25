@@ -11,7 +11,7 @@ npm run music:context -- <模块|文件>   # 打印阅读包：该模块的文�
 npm run test:music                   # 全部音乐测试，和已知失败清单比对，只有「新失败」才算挂
 ```
 
-`npm run music:context -- music-dock.js` 也可以直接给文件名。先读阅读包，再打开大文件；不要把 100 KB 的文件整份塞进上下文。
+`npm run music:context -- music-dock.js` 也可以直接给文件名。这三个命令要在 git 检出（RoxyAsahi/VCPChat）里跑，需要仓库里的 tests/ 和 scripts/；Roxy 本机运行目录只装了文档和登记表。先读阅读包，再打开大文件；不要把 100 KB 的文件整份塞进上下文。
 
 模块登记表是 [architecture.json](architecture.json)：每个音乐相关文件只属于一个模块，模块写明用途、文档、测试和调试脚本。
 **新增文件先在登记表里给它找模块**，否则 `check:music` 不过。
