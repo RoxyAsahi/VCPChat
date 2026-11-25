@@ -68,6 +68,7 @@ test('late initial snapshot cannot overwrite live push', async () => {
 test('player snapshot deduplicates state and gapless path publishes', () => {
     const context = { console, setInterval, clearInterval };
     vm.createContext(context);
+    vm.runInContext(fs.readFileSync('Musicmodules/music-app-hooks.js', 'utf8'), context);
     vm.runInContext(fs.readFileSync('Musicmodules/music-player.js', 'utf8'), context);
     const sent = [];
     const app = {

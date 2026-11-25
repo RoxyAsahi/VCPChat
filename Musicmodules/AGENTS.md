@@ -75,7 +75,7 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 | EQ、响度、饱和、交叉馈送、卷积 | `music-effects.js`、`music-eq-presets.js`、`music-channels.js` | 引擎参数名见 rust_audio_engine/src/server |
 | WebDAV | 渲染端 `music-webdav.js`，主进程 `modules/ipc/musicWebdavHandlers.js` + `modules/webdavManager.js` | 报错文案统一走 `app.webdavReason` |
 | 曲库扫描、增量、监视文件夹 | `modules/musicLibraryScanner.js`、`musicScannerWorker.js`、`musicLibraryWatch.js` | 主进程，改完要重启整个 VCPChat |
-| 歌单侧栏、右键菜单 | `music-sidebar.js`（菜单入口在 music.js `app.showContextMenu`） | 菜单被多个模块包过，见历史债 |
+| 歌单侧栏、右键菜单 | `music-sidebar.js`（菜单入口在 music.js `app.showContextMenu`） | 喜欢、转到、菜单作用范围都用 `MusicAppHooks` 挂在 `showContextMenu` 上 |
 | 歌词显示/滚动/点击跳转 | `music-lyrics.js` | 读词/抓词 IPC 在 `modules/ipc/musicLyricsHandlers.js`，抓词实现在 `modules/lyrics/` |
 | 首页（档案阵列、封面墙、目录表、检索） | `music-archive/` | 见 [music-archive/AGENTS.md](music-archive/AGENTS.md) |
 | 底栏、面板、命令面板、toast、对话框、下拉 | `music-dock/` | 见 [music-dock/AGENTS.md](music-dock/AGENTS.md) |
@@ -126,13 +126,28 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 | app 属性不新增写入方 | 调主人提供的方法或发 `music-*` 事件；确需共写，在评审里更新基线 |
 | 舞台模式在登记表、配置、主进程白名单、AI 点歌别名、music.html 里一致 | 按 [music-stage/AGENTS.md](music-stage/AGENTS.md) 的清单补齐 |
 | 音乐测试都登记在某个模块下 | 加到对应模块的 `tests` |
+| 不手写包装 app 方法（`const base = app.x; app.x = (...) => base(...)`） | 用 `MusicAppHooks.before / after / wrap` |
 
 基线（`sizeBaseline`、`appWriterBaseline`）只在评审过的改动里更新：变小随时可以，变大要说明理由。
 
+## 给 app 方法加前后逻辑
+
+要在别人的 app 方法前后做事（右键菜单打开前刷新菜单项、引擎状态回写后看声道……），用 `Musicmodules/music-app-hooks.js`：
+
+```js
+MusicAppHooks.before(app, 'showContextMenu', 'likes', () => paint());
+MusicAppHooks.after(app, 'updateUIWithState', 'channels', (result, state) => { /* ... */ });
+const remove = MusicAppHooks.wrap(app, 'renderPlaylist', 'classic-list', (base) => (filtered) => base(sorted(filtered)));
+```
+
+- 后装的先跑，和 setup 调用顺序一致；`MusicAppHooks.list(app)` 列出每个方法被谁包过。
+- `before` 的错误照常抛，`after` 的错误只警告；要改参数、等异步结果就用 `wrap`。
+- 返回的 `remove()` 用于销毁时拆掉（只在自己还在最外层时生效）。
+- 文件里用 `(global.MusicAppHooks || require('./music-app-hooks.js'))`，这样 node 测试直接 require 也能用；jsdom / vm 里加载脚本的测试要先加载 `music-app-hooks.js`。
+
 ## 已知历史债（按影响排序，治理中）
 
-1. **方法套娃**：`app.showContextMenu`（music.js → music-sidebar → likes → goto 各包一层）、`app.updateUIWithState`（music.js → channels → device-sound）、
-   `app.fetchAndDisplayLyrics`（lyrics → player → lyrics-ai）、`app.renderPlaylist`（music.js / music-ui / 经典列表）。顺序靠 setup 调用顺序维持。
+1. ~~方法套娃~~ 已改成 `MusicAppHooks`（见上面「给 app 方法加前后逻辑」）。原来手写包装的 18 处（13 个文件）都换了，顺序不变。
 2. **共写的列表状态**：`app.currentFilteredTracks`（11 个文件写）、`app.customPlaylists`（7 个）、`app.filteredPlaylistSource`（6 个）、`app.currentTrackIndex`（5 个）。
 3. **装配散落**：`connectWebSocket` 住在 `music-visualizer.js`。
 4. **巨型文件**：21 个超过 64 KB（`music:context` 里标了「别再往里加」），最大的是 diorama-world.js 388 KB、tunnel-manager.js 280 KB、music-dock.js 148 KB。

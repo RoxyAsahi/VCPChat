@@ -1160,9 +1160,7 @@
 
         // 档案页显示时，旧界面的背景声纹不需要画
         const originalCreateAmbient = app.createAmbientPixi;
-        if (typeof originalCreateAmbient === 'function') {
-            app.createAmbientPixi = (...args) => (app.isArchiveActive ? undefined : originalCreateAmbient(...args));
-        }
+        const unwrapAmbient = global.MusicAppHooks.wrap(app, 'createAmbientPixi', 'archive', (base) => (...args) => (app.isArchiveActive ? undefined : base(...args)));
 
         // ---------- 场景与渲染循环 ----------
         const readTheme = () => {
@@ -1931,7 +1929,7 @@
             reducedQuery?.removeEventListener?.('change', onMotion);
             state.scene?.dispose();
             state.scene = null;
-            if (originalCreateAmbient) app.createAmbientPixi = originalCreateAmbient;
+            if (unwrapAmbient) unwrapAmbient();
         };
         // 关窗、刷新、离开页面时都彻底停掉：取消渲染循环和计时器，释放 WebGL 上下文（forceContextLoss），
         // 不让已经关掉的页面还在占用显卡或软件渲染。beforeunload 不一定触发（比如直接关进程），pagehide 兜底

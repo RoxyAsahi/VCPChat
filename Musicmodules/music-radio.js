@@ -315,24 +315,19 @@
                 }
             });
         };
-        const loadTrack = app.loadTrack;
-        if (typeof loadTrack === 'function') {
-            app.loadTrack = async function (...args) {
-                const result = await loadTrack.apply(this, args);
-                try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
-                return result;
-            };
-        }
+        const hooks = (global.MusicAppHooks || require('./music-app-hooks.js'));
+        hooks.wrap(app, 'loadTrack', 'radio', (loadTrack) => async function (...args) {
+            const result = await loadTrack.apply(this, args);
+            try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
+            return result;
+        });
 
         // 无缝切歌时引擎自己进了下一首，播放器走的是 syncTrackIndexByPath，不经过 loadTrack
-        const syncByPath = app.syncTrackIndexByPath;
-        if (typeof syncByPath === 'function') {
-            app.syncTrackIndexByPath = function (...args) {
-                const result = syncByPath.apply(this, args);
-                try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
-                return result;
-            };
-        }
+        hooks.wrap(app, 'syncTrackIndexByPath', 'radio', (syncByPath) => function (...args) {
+            const result = syncByPath.apply(this, args);
+            try { onTrack(); } catch (e) { console.warn('[MusicRadio] continue failed:', e?.message || e); }
+            return result;
+        });
 
         // 抽屉「声音」页里的开关
         const sw = doc?.getElementById?.('autoplay-switch');

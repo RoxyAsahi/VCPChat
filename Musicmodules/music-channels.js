@@ -65,18 +65,13 @@
             return inflight;
         };
 
-        const originalUpdate = app.updateUIWithState;
-        app.updateUIWithState = function (state, ...rest) {
-            const result = originalUpdate.call(this, state, ...rest);
-            try {
-                if (state && state.channels && typeof state.channels === 'object') {
-                    engine = normalize(state.channels);
-                    // 引擎重启过（回到默认）：把存的设置再发过去；隔 5 秒以上才重发，免得来回拉锯
-                    if (!same(engine, wanted) && !sending && failures < 3 && Date.now() - lastPush > 5000) { lastPush = Date.now(); send(); }
-                }
-            } catch (e) { /* 只是附加功能 */ }
-            return result;
-        };
+        (global.MusicAppHooks || require('./music-app-hooks.js')).after(app, 'updateUIWithState', 'channels', (result, state) => {
+            if (state && state.channels && typeof state.channels === 'object') {
+                engine = normalize(state.channels);
+                // 引擎重启过（回到默认）：把存的设置再发过去；隔 5 秒以上才重发，免得来回拉锯
+                if (!same(engine, wanted) && !sending && failures < 3 && Date.now() - lastPush > 5000) { lastPush = Date.now(); send(); }
+            }
+        });
 
         const set = (patch) => {
             wanted = normalize({ ...wanted, ...patch });

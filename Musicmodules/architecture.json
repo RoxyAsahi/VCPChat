@@ -23,6 +23,7 @@
       "purpose": "建 app 对象、按顺序调用各 setupX(app)、引擎状态回写界面、设置存取；以及窗口级小工具（弹窗焦点、菜单顺序、窗口标题、新旧版切换、报错文案）。",
       "paths": [
         "Musicmodules/music.js",
+        "Musicmodules/music-app-hooks.js",
         "Musicmodules/music-utils.js",
         "Musicmodules/music-error-text.js",
         "Musicmodules/music-window-title.js",
@@ -34,6 +35,7 @@
         "Musicmodules/AGENTS.md"
       ],
       "tests": [
+        "tests/music-app-hooks.test.js",
         "tests/music-error-text.test.js",
         "tests/music-modal-focus.test.cjs",
         "tests/music-menu-order.test.js",
@@ -416,10 +418,10 @@
   "sizeBaseline": {
     "Musicmodules/music-archive/archive-list.js": 116571,
     "Musicmodules/music-archive/archive-scene.js": 100013,
-    "Musicmodules/music-archive/archive-view.js": 132517,
+    "Musicmodules/music-archive/archive-view.js": 132461,
     "Musicmodules/music-archive/archive-wall.js": 69010,
-    "Musicmodules/music-dock/music-dock.js": 151283,
-    "Musicmodules/music-player.js": 75562,
+    "Musicmodules/music-dock/music-dock.js": 151137,
+    "Musicmodules/music-player.js": 75554,
     "Musicmodules/music-stage/modes/diorama-world.js": 397621,
     "Musicmodules/music-stage/modes/fogpane-manager.js": 80444,
     "Musicmodules/music-stage/modes/hanabi-manager.js": 92423,
@@ -431,8 +433,8 @@
     "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79075,
     "Musicmodules/music-stage/modes/tunnel-manager.js": 286561,
     "Musicmodules/music-stage/music-stage-host.js": 117182,
-    "Musicmodules/music.html": 66140,
-    "Musicmodules/music.js": 87687
+    "Musicmodules/music.html": 66187,
+    "Musicmodules/music.js": 87774
   },
   "appWriterBaseline": {
     "_gaplessSwitchTimer": [
@@ -464,10 +466,6 @@
       "Musicmodules/music-archive/archive-list.js",
       "Musicmodules/music-archive/archive-view.js",
       "Musicmodules/music.js"
-    ],
-    "createAmbientPixi": [
-      "Musicmodules/music-ambient-pixi.js",
-      "Musicmodules/music-archive/archive-view.js"
     ],
     "crossfeedEnabled": [
       "Musicmodules/music-effects.js",
@@ -557,11 +555,6 @@
       "Musicmodules/music-effects.js",
       "Musicmodules/music.js"
     ],
-    "fetchAndDisplayLyrics": [
-      "Musicmodules/music-lyrics-ai.js",
-      "Musicmodules/music-lyrics.js",
-      "Musicmodules/music-player.js"
-    ],
     "filteredPlaylistSource": [
       "Musicmodules/music-archive/archive-view.js",
       "Musicmodules/music-dock/music-dock-palette.js",
@@ -600,10 +593,6 @@
       "Musicmodules/music-stage/music-stage-host.js",
       "Musicmodules/music.js"
     ],
-    "loadTrack": [
-      "Musicmodules/music-player.js",
-      "Musicmodules/music-radio.js"
-    ],
     "loudnessEnabled": [
       "Musicmodules/music-effects.js",
       "Musicmodules/music.js"
@@ -641,19 +630,6 @@
       "Musicmodules/music-folders.js",
       "Musicmodules/music.js"
     ],
-    "populateEqPresets": [
-      "Musicmodules/music-effects.js",
-      "Musicmodules/music-eq-presets.js"
-    ],
-    "queueClear": [
-      "Musicmodules/music-player.js",
-      "Musicmodules/music-queue-undo.js"
-    ],
-    "renderPlaylist": [
-      "Musicmodules/music-theme/music-classic-list.js",
-      "Musicmodules/music-ui.js",
-      "Musicmodules/music.js"
-    ],
     "saturationDrive": [
       "Musicmodules/music-effects.js",
       "Musicmodules/music.js"
@@ -666,20 +642,6 @@
       "Musicmodules/music-effects.js",
       "Musicmodules/music.js"
     ],
-    "sendEqSettings": [
-      "Musicmodules/music-device-sound.js",
-      "Musicmodules/music-effects.js"
-    ],
-    "showContextMenu": [
-      "Musicmodules/music-goto.js",
-      "Musicmodules/music-likes.js",
-      "Musicmodules/music-sidebar.js",
-      "Musicmodules/music.js"
-    ],
-    "showPlaybackNotice": [
-      "Musicmodules/music-dock/music-dock.js",
-      "Musicmodules/music-player.js"
-    ],
     "silentAudioUrl": [
       "Musicmodules/music-ui.js",
       "Musicmodules/music.js"
@@ -688,25 +650,12 @@
       "Musicmodules/music-player.js",
       "Musicmodules/music.js"
     ],
-    "syncEqPresetSelect": [
-      "Musicmodules/music-effects.js",
-      "Musicmodules/music-eq-presets.js"
-    ],
-    "syncTrackIndexByPath": [
-      "Musicmodules/music-player.js",
-      "Musicmodules/music-radio.js"
-    ],
     "targetLufs": [
       "Musicmodules/music-effects.js",
       "Musicmodules/music.js"
     ],
     "targetUpsamplingRate": [
       "Musicmodules/music-output.js",
-      "Musicmodules/music.js"
-    ],
-    "updateUIWithState": [
-      "Musicmodules/music-channels.js",
-      "Musicmodules/music-device-sound.js",
       "Musicmodules/music.js"
     ],
     "useWasapiExclusive": [

@@ -99,20 +99,15 @@
             toast(`换到「${name}」，用这台设备上次的 EQ`);
         };
 
-        const originalUpdate = app.updateUIWithState;
-        app.updateUIWithState = function (state, ...rest) {
-            const result = originalUpdate.call(this, state, ...rest);
-            try { if (state && typeof state.output_device === 'string') onDevice(state.output_device); } catch (e) { /* 只是附加功能 */ }
+        const hooks = (global.MusicAppHooks || require('./music-app-hooks.js'));
+        hooks.after(app, 'updateUIWithState', 'device-sound', (result, state) => {
+            if (state && typeof state.output_device === 'string') onDevice(state.output_device);
+        });
+        hooks.wrap(app, 'sendEqSettings', 'device-sound', (base) => function (...args) {
+            const result = base.apply(this, args);
+            remember();
             return result;
-        };
-        const originalSend = app.sendEqSettings;
-        if (typeof originalSend === 'function') {
-            app.sendEqSettings = function (...args) {
-                const result = originalSend.apply(this, args);
-                remember();
-                return result;
-            };
-        }
+        });
 
         app.deviceSound = {
             get enabled() { return enabled; },

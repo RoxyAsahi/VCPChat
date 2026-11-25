@@ -2352,19 +2352,16 @@
         // 原来这些只写在经典视图的码率字段里，档案页和舞台里看不到；现在同时走全窗口提示层。
         const toast = global.MusicToast;
         if (toast) {
-            const baseNotice = app.showPlaybackNotice;
-            if (typeof baseNotice === 'function') {
-                app.showPlaybackNotice = (message) => {
-                    baseNotice(message);
-                    if (state.destroyed) return;
-                    const text = String(message || '');
-                    // 加载失败由播放器自己出提示（带「跳过」和连续失败的处理），这里不再重复一条。
-                    if (/^加载(失败|超时)/.test(text) && typeof app.cancelFailureSkip === 'function') return;
-                    state.noticeTrackKey = state.trackKey;
-                    toast.show({ id: 'playback', kind: 'error', message: text });
-                };
-                cleanups.push(() => { if (app.showPlaybackNotice !== baseNotice) app.showPlaybackNotice = baseNotice; });
-            }
+            const unwrapNotice = global.MusicAppHooks.wrap(app, 'showPlaybackNotice', 'dock', (baseNotice) => (message) => {
+                baseNotice(message);
+                if (state.destroyed) return;
+                const text = String(message || '');
+                // 加载失败由播放器自己出提示（带「跳过」和连续失败的处理），这里不再重复一条。
+                if (/^加载(失败|超时)/.test(text) && typeof app.cancelFailureSkip === 'function') return;
+                state.noticeTrackKey = state.trackKey;
+                toast.show({ id: 'playback', kind: 'error', message: text });
+            });
+            if (unwrapNotice) cleanups.push(unwrapNotice);
             const bridge = app.api;
             // 扫描结束的那句话。扫描本身失败时以前也说「扫描完成，没有找到音乐文件」，
             // 像是文件夹空了；读不出来的文件也一声不吭地少了。

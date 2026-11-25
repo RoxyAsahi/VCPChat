@@ -105,6 +105,23 @@ function appReads(src) {
     return names;
 }
 
+// 手写的方法包装：const base = app.foo; ... app.foo = (...) => { ... base(...) ... }
+// 应改用 MusicAppHooks（Musicmodules/music-app-hooks.js），这样包装顺序能用 MusicAppHooks.list(app) 查到。
+function handWrappedMethods(src) {
+    const found = [];
+    const re = /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*app\.([A-Za-z_$][\w$]*)\s*;/g;
+    let m;
+    while ((m = re.exec(src))) {
+        const [, local, name] = m;
+        const rest = src.slice(m.index + m[0].length);
+        const assign = new RegExp(`\\bapp\\.${name}\\s*=\\s*(?:async\\s+)?(?:function\\b|\\([^)]*\\)\\s*=>|[A-Za-z_$][\\w$]*\\s*=>)`).exec(rest);
+        if (!assign) continue;
+        const body = rest.slice(assign.index, assign.index + 4000);
+        if (new RegExp(`\\b${local}\\s*(?:\\(|\\.apply\\b|\\.call\\b)`).test(body)) found.push(name);
+    }
+    return found;
+}
+
 function htmlRefs(file) {
     const src = read(file);
     const dir = path.posix.dirname(file);
@@ -132,6 +149,7 @@ function analyse(registry) {
             globals: exportedGlobals(src),
             writes: isRendererCode(f) ? appWrites(src) : new Set(),
             reads: isRendererCode(f) ? appReads(src) : new Set(),
+            wrapped: isRendererCode(f) && !f.endsWith('/music-app-hooks.js') ? handWrappedMethods(src) : [],
             src
         });
     }
@@ -266,6 +284,13 @@ function check() {
         const added = [...set].filter((f) => !allowed.has(f));
         if (added.length) {
             errors.push(`app.${name} 多了写入方：${added.join(', ')}（现有：${[...allowed].join(', ') || '无'}）。改成调用主人提供的方法或用 app 事件，见 AGENTS.md「app 对象」`);
+        }
+    }
+
+    // 5b. app 方法不手写包装，统一走 MusicAppHooks
+    for (const [f, d] of info) {
+        for (const name of d.wrapped) {
+            errors.push(`${f} 手写包装了 app.${name}（先存旧方法再覆盖）。改用 MusicAppHooks.before / after / wrap，见 Musicmodules/music-app-hooks.js`);
         }
     }
 

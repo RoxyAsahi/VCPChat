@@ -1037,9 +1037,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── 右键菜单的作用范围 ──
         // 「从列表中移除」要按右键时所在的视图决定删哪里，而不是按上一次从哪里点播。
         // 经典列表记下它此刻显示的是哪一组；档案页由档案视图告诉我们选中的是哪一列。
-        const renderPlaylistBase = app.renderPlaylist;
+        const appHooks = (globalThis.MusicAppHooks || require('./music-app-hooks.js'));
         app.playlistViewSource = null;
-        app.renderPlaylist = (filtered) => {
+        appHooks.wrap(app, 'renderPlaylist', 'menu-scope', (renderPlaylistBase) => (filtered) => {
             let source = filtered ? (app.filteredPlaylistSource || { type: 'filter' }) : null;
             if (source?.type === 'playlist') {
                 // 语义搜索等别的入口不会清掉旧的歌单来源：显示的歌不全在这个歌单里，就不算歌单视图。
@@ -1052,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 正在放的上下文是从经典列表点出来的：列表换了排序（同一组歌），队列跟着换顺序。
             if (app.contextFrom?.('classic') && app.classicOrder) app.reorderContext(app.classicOrder(), 'classic');
             return result;
-        };
+        });
         let pendingMenuSurface = null;
         document.addEventListener('contextmenu', (e) => {
             pendingMenuSurface = e.target?.closest?.('#playlist') ? 'classic'
@@ -1075,14 +1075,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) { /* 拿不到就按曲库处理，曲库移除会先确认 */ }
             return null;
         };
-        const showContextMenuBase = app.showContextMenu;
-        app.showContextMenu = (x, y) => {
+        appHooks.wrap(app, 'showContextMenu', 'menu-scope', (showContextMenuBase) => (x, y) => {
             const surface = pendingMenuSurface;
             pendingMenuSurface = null;
             app.contextMenuScope = surface === 'classic' ? app.playlistViewSource
                 : surface === 'archive' ? archiveMenuScope() : null;
             return showContextMenuBase(x, y);
-        };
+        });
         const notify = (message, action) => {
             try { window.MusicToast?.show?.({ message, action }); } catch (err) { /* 提示层不在时只是没有撤销 */ }
         };

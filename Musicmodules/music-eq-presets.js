@@ -204,26 +204,21 @@
         }
 
         // 滑块变了、换了预设，「删除」项跟着更新
-        const originalSync = app.syncEqPresetSelect;
-        if (typeof originalSync === 'function') {
-            app.syncEqPresetSelect = function (...args) {
-                const r = originalSync.apply(this, args);
-                syncDelete();
-                return r;
-            };
-        }
+        const hooks = (global.MusicAppHooks || require('./music-app-hooks.js'));
+        hooks.wrap(app, 'syncEqPresetSelect', 'eq-presets', (base) => function (...args) {
+            const r = base.apply(this, args);
+            syncDelete();
+            return r;
+        });
         // 原生预设列表是之后才填的：填完再接上自己的（已经填好就直接接）
         syncPresetsObject();
-        const originalPopulate = app.populateEqPresets;
-        if (typeof originalPopulate === 'function') {
-            app.populateEqPresets = function (...args) {
-                const r = originalPopulate.apply(this, args);
-                group = null;
-                render();
-                app.syncEqPresetSelect?.();
-                return r;
-            };
-        }
+        hooks.wrap(app, 'populateEqPresets', 'eq-presets', (base) => function (...args) {
+            const r = base.apply(this, args);
+            group = null;
+            render();
+            app.syncEqPresetSelect?.();
+            return r;
+        });
         const sel = select();
         if (sel && sel.options.length) { render(); app.syncEqPresetSelect?.(); }
 

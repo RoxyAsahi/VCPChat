@@ -16,8 +16,7 @@
 
     function setupMusicQueueUndo(app) {
         if (!app || app.queueClearUndoable || typeof app.queueClear !== 'function') return;
-        const original = app.queueClear;
-        app.queueClear = function (...args) {
+        (global.MusicAppHooks || require('./music-app-hooks.js')).wrap(app, 'queueClear', 'queue-undo', (original) => function (...args) {
             const before = Array.isArray(app.manualQueue) ? app.manualQueue.slice() : [];
             const result = original.apply(this, args);
             if (before.length < 2) return result;
@@ -38,7 +37,7 @@
                 });
             } catch (e) { /* 没有提示层 */ }
             return result;
-        };
+        });
         app.queueClearUndoable = true;
     }
 

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
 const read = (p) => fs.readFileSync(p, 'utf8');
-const SCRIPTS = ['model', 'scene', 'index', 'list', 'lyrics', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
+const SCRIPTS = [read('Musicmodules/music-app-hooks.js')].concat(['model', 'scene', 'index', 'list', 'lyrics', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`)));
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });

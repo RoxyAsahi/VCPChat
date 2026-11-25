@@ -96,12 +96,12 @@
             }
         };
 
-        const fetchAndDisplay = app.fetchAndDisplayLyrics;
-        app.fetchAndDisplayLyrics = async function (...args) {
-            const result = await fetchAndDisplay.apply(this, args);
+        // 取完歌词再看要不要翻译（取词是异步的，所以用 wrap 等它完成）。
+        (global.MusicAppHooks || require('./music-app-hooks.js')).wrap(app, 'fetchAndDisplayLyrics', 'lyrics-ai', (base) => async function (...args) {
+            const result = await base.apply(this, args);
             run().catch((e) => console.warn('[MusicLyricsAi] translate failed:', e?.message || e));
             return result;
-        };
+        });
 
         app.lyricsAi = {
             get enabled() { return enabled; },
