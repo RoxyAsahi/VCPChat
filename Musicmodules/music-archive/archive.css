@@ -1078,3 +1078,16 @@ html.md-pointer-mode #music-dock-root .md-dockrow button[role="tab"]:focus-visib
 .archive-lyrics-index.hovering .hov { display: block; }
 .archive-lyrics-index.hovering .tip { display: flex; }
 body.music-reduce-motion .archive-lyrics-index .cur { transition: none; }
+/* ===== 目录宽度手动调（Roxy 11-25）=====
+   拖过才有 .user-w，宽度用 --list-w-user；没拖过完全是原来的默认宽度。上下叠放（tiny）时不生效、拖柄也藏起来。 */
+.archive-hud:not(.tiny) .archive-list.user-w.user-w { width: var(--list-w-user); max-width: 45%; }
+.archive-list-grip { position: absolute; z-index: 8; top: 0; bottom: 0; right: -26px; width: 10px; cursor: col-resize; touch-action: none; outline: none; }
+.archive-list-grip::after { content: ""; position: absolute; top: 8%; bottom: 8%; left: 50%; width: 1px; margin-left: -.5px; background: var(--ar-ink); opacity: 0; transition: opacity .16s, width .12s, margin-left .12s; }
+.archive-list-grip:hover::after, .archive-list-grip:focus-visible::after { opacity: .28; }
+.archive-list.resizing .archive-list-grip::after { opacity: .9; width: 2px; margin-left: -1px; background: var(--ar-accent); }
+.archive-list.resizing, .archive-list.resizing * { cursor: col-resize !important; user-select: none; }
+.archive-hud.tiny .archive-list-grip { display: none; }
+/* 目录拖窄（<340px）时分类行收紧：去斜线、缩间距，给右端三个图标留位。 */
+.archive-list.slim .archive-list-kinds { letter-spacing: 0; }
+.archive-list.slim .archive-list-kinds > button + button { margin-left: 9px; }
+.archive-list.slim .archive-list-kinds > button + button::before { display: none; }

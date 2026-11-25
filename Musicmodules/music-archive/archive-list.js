@@ -206,6 +206,85 @@
         el.querySelectorAll('[data-l]').forEach((n) => { r[n.dataset.l] = n; });
 
         /*
+         * 手动调宽度（Roxy 11-25：低分辨率窗口里目录占比太大）。
+         * 右边缘外侧一条看不见的拖柄：悬停出一道细线，拖动改宽，松手记住；双击恢复默认（不存宽度时完全是原来的 CSS 宽度）。
+         * 宽度最小 290、最大 560 且不超过整页的 45%。改宽时发一次 resize，让卡片阵列、封面墙、歌词按新宽度让位。
+         */
+        const WIDTH_KEY = 'musicArchiveListWidth';
+        const W_MIN = 290, W_MAX = 560;
+        const grip = document.createElement('div');
+        grip.className = 'archive-list-grip';
+        grip.tabIndex = 0;
+        grip.setAttribute('role', 'separator');
+        grip.setAttribute('aria-orientation', 'vertical');
+        grip.setAttribute('aria-label', '调整目录宽度');
+        grip.title = '拖动调整目录宽度，双击恢复默认';
+        el.appendChild(grip);
+        const hostWidth = () => (el.offsetParent || el.parentElement)?.clientWidth || global.innerWidth || 1280;
+        const clampW = (w) => Math.round(Math.max(W_MIN, Math.min(W_MAX, hostWidth() * 0.45, w)));
+        let relayoutRaf = 0;
+        const relayout = () => {
+            if (relayoutRaf) return;
+            relayoutRaf = requestAnimationFrame(() => { relayoutRaf = 0; global.dispatchEvent(new Event('resize')); });
+        };
+        const applyWidth = (w, { save = false } = {}) => {
+            if (w == null) {
+                el.classList.remove('user-w');
+                el.style.removeProperty('--list-w-user');
+                if (save) { try { localStorage.removeItem(WIDTH_KEY); } catch (_) { /* 存不了就只管这次 */ } }
+            } else {
+                const v = clampW(w);
+                el.classList.add('user-w');
+                el.style.setProperty('--list-w-user', v + 'px');
+                grip.setAttribute('aria-valuenow', String(v));
+                if (save) { try { localStorage.setItem(WIDTH_KEY, String(v)); } catch (_) { /* 同上 */ } }
+            }
+            relayout();
+        };
+        // 目录被拖窄时，分类那一行收紧间距、去掉斜线，免得和右端的排序/搜索/添加图标挤在一起。
+        const paintSlim = () => el.classList.toggle('slim', el.offsetWidth > 0 && el.offsetWidth < 340);
+        if (typeof global.ResizeObserver === 'function') new global.ResizeObserver(paintSlim).observe(el);
+        try {
+            const saved = Number(localStorage.getItem(WIDTH_KEY));
+            if (saved > 0) applyWidth(saved);
+        } catch (_) { /* 读不到就用默认宽度 */ }
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = el.getBoundingClientRect();
+            const scale = el.offsetWidth ? rect.width / el.offsetWidth : 1; // 首页整体可能被缩放
+            const startX = e.clientX, startW = el.offsetWidth;
+            grip.setPointerCapture?.(e.pointerId);
+            el.classList.add('resizing');
+            const move = (ev) => applyWidth(startW + (ev.clientX - startX) / (scale || 1));
+            const up = () => {
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                grip.removeEventListener('pointercancel', up);
+                el.classList.remove('resizing');
+                applyWidth(el.offsetWidth, { save: true });
+            };
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+            grip.addEventListener('pointercancel', up);
+        });
+        grip.addEventListener('dblclick', (e) => { e.stopPropagation(); applyWidth(null, { save: true }); });
+        grip.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 48 : 16;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                e.stopPropagation(); // 别再被底栏当成切歌/快进
+                applyWidth(el.offsetWidth + (e.key === 'ArrowRight' ? step : -step), { save: true });
+            } else if (e.key === 'Home' || e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                applyWidth(null, { save: true });
+            }
+        });
+        for (const t of ['click', 'contextmenu', 'wheel']) grip.addEventListener(t, (e) => e.stopPropagation());
+
+        /*
          * 最近检索：检索后真的播了结果，才记下这个检索词（和 Spotify 一样，只是打字不算）。
          * 检索框聚焦且为空时在下面列出最近 8 条，点一条就重新检索，叉号删一条，「清除」全删。
          * 只是这台机器上的方便，存在 localStorage 里。
