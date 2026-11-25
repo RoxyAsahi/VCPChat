@@ -74,14 +74,13 @@
         host.innerHTML = `
 <div class="md-dock"><div class="md-dock-in">
   <div class="md-quick" id="music-dock-quick"><div class="md-quick-in"><div class="md-quick-g" role="toolbar" aria-label="快捷操作">
-    <button class="md-slot md-qb" type="button" data-md="mode"></button>
     <button class="md-slot md-qb" type="button" data-q="queue" aria-label="播放列表" title="播放列表">${icon('list-music', 17)}</button>
     <button class="md-slot md-qb md-like" type="button" data-md="like" aria-label="喜欢" aria-pressed="false" title="喜欢（L）" hidden>${icon('heart', 17)}</button>
     <button class="md-slot md-qb" type="button" data-q="fx" aria-label="音效设置" title="音效设置">${icon('sliders-horizontal', 17)}</button>
     <button class="md-slot md-qb md-vslot" type="button" data-md="vol" aria-label="静音"></button>
   </div></div></div>
-  <div class="md-cap" title="点一下进入歌词舞台">
-    <div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div></div>
+  <div class="md-cap">
+    <div class="md-trk" role="slider" aria-label="播放进度" tabindex="0"><div class="md-fill"></div><div class="md-kn-rail"><div class="md-kn"></div></div><span class="md-seek-tip" data-md="seek-tip" aria-hidden="true"></span></div>
     <button class="md-pb" type="button" data-md="play" aria-label="播放"></button>
     <div class="md-ttl"><div class="md-tnav">
       <div class="md-zone md-l"><button class="md-arw" type="button" data-md="prev" aria-label="上一首">${icon('chevron-left', 15, { strokeWidth: 2.4 })}</button></div>
@@ -89,11 +88,12 @@
       <div class="md-txt"><div class="md-cur"><span data-md="title"></span></div><div class="md-pv"><span data-md="preview"></span></div></div>
       <div class="md-sub"><span data-md="artist"></span><span class="md-tms"><span class="md-tm" data-md="t1"></span> / <span class="md-tm" data-md="t2"></span></span></div>
     </div></div>
-    <div class="md-nx"><button class="md-nxb" type="button" data-md="nx1"></button><button class="md-nxb md-nx2" type="button" data-md="nx2"></button></div>
     <div class="md-slots">
       <button class="md-slot md-sleep" type="button" data-md="sleep" hidden>${icon('moon', 14)}<span data-md="sleep-t"></span></button>
-      <button class="md-slot md-stage-slot" type="button" data-md="stage" aria-label="歌词舞台" aria-pressed="false" title="进入歌词舞台">${icon('captions', 18)}</button>
-      <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="循环、播放列表、喜欢、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
+      <button class="md-slot" type="button" data-md="mode"></button>
+      <button class="md-slot md-stage-slot" type="button" data-md="stage" aria-label="歌词舞台" aria-pressed="false" title="进入歌词舞台">${icon('sparkle', 18)}</button>
+      <button class="md-slot md-more" type="button" data-md="more" aria-label="更多操作" title="播放列表、喜欢、音效、音量" aria-expanded="false" aria-controls="music-dock-quick">${icon('ellipsis', 18)}</button>
+      <button class="md-slot md-pnl-slot" type="button" data-md="panel" aria-label="打开面板" aria-expanded="false" aria-controls="music-dock-panel" title="面板：封面、歌词、控制、播放列表、声音">${icon('settings-2', 18)}</button>
     </div>
   </div>
   <div class="md-vrail" role="slider" tabindex="-1" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-hidden="true"><i class="md-vfill"></i></div>
@@ -157,7 +157,9 @@
             title: $('[data-md="title"]'),
             preview: $('[data-md="preview"]'),
             artist: $('[data-md="artist"]'),
-            nx: [$('[data-md="nx1"]'), $('[data-md="nx2"]')],
+            panelSlot: $('[data-md="panel"]'),
+            hdlTip: $('[data-md="hdl-tip"]'),
+            seekTip: $('[data-md="seek-tip"]'),
             vrail: $('.md-vrail'),
             vfill: $('.md-vfill'),
             modeSlot: $('[data-md="mode"]'),
@@ -167,7 +169,6 @@
             t1: $$('[data-md="t1"]'),
             t2: $$('[data-md="t2"]'),
             hdl: $('.md-hdl'),
-            hdlTip: $('[data-md="hdl-tip"]'),
             handle: $('[data-md="handle"]'),
             pnl: $('.md-pnl'),
             pCover: $('.md-hd-cv'),
@@ -255,8 +256,8 @@
 
         // ───────── 流体层 ─────────
         // 播放条是一块会变状态的物质：播放过的部分凝固成实心玻璃，没播的部分是雾，凝固的边界就是进度；
-        // 暂停时整条化成雾，鼠标移上来（关注）又凝固。设置小环停在顶边时播放条凹进去让它，
-        // 打开面板时小环飞到右下角，凹口愈合。音量从播放条里像水滴一样分裂上去。
+        // 暂停时整条化成雾，鼠标移上来（关注）又凝固。面板关着时白环收在播放条右端的面板按钮里，
+        // 打开面板时飞到右下角当关闭键。音量从播放条里像水滴一样分裂上去。
         // 舞台的「性能档位」选节能时不跑流体层，播放条退成不透明的实色。
         // 播放条玻璃里透出的颜色跟着主题走：平时取 VCPChat 当前主题的强调色（--highlight-text），
         // 舞台换了自定义主题就取舞台的；有自己固定色调的舞台（镜台黄昏、隧图深空、町景霓虹）用各自的颜色。
@@ -400,23 +401,20 @@
             // 键盘焦点落在播放头上时和拖着它一样：放大、显示时间，暂停时也露出来，看得见焦点在哪。
             const ringHeld = state.dragging?.fromRing === true || state.ringKbd === true;
             fluid?.setRingFocus?.(state.ringHover === true || ringHeld, ringHeld);
-            const asPlayhead = ringMode === 'playhead' && !state.panelOpen;
+            const asPlayhead = !state.panelOpen;
             el.hdl.classList.toggle('md-tip', asPlayhead && (state.ringHover === true || ringHeld));
             // 读屏：当作播放头时把时间读出来，并说明方向键可以跳转。
             if (asPlayhead) { el.handle.setAttribute('aria-describedby', 'music-dock-playhead-tip'); el.handle.title = '播放头：拖动或按左右方向键跳转，点一下打开面板'; }
-            else { el.handle.removeAttribute('aria-describedby'); el.handle.title = state.panelOpen ? '关闭' : '设置'; }
+            else { el.handle.removeAttribute('aria-describedby'); el.handle.title = '关闭面板（Esc）'; }
         };
         const animateCapsule = () => { fluid?.layout(); };
 
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
-        // 小环默认是播放头；另外三种（fixed / hover / drop）留作备选，存在 localStorage musicDockRingMode 里。
-        const RING_MODES = ['fixed', 'playhead', 'hover', 'drop'];
-        const readRingMode = () => {
-            try { const v = global.localStorage?.getItem('musicDockRingMode'); return RING_MODES.includes(v) ? v : 'playhead'; } catch (e) { return 'playhead'; }
-        };
-        let ringMode = readRingMode();
+        // 白环：面板关着时是播放头（跟着进度走，可拖，点一下开面板）；面板开着时飞到右下角当关闭键。
+        // 以前备选的 fixed / hover / drop 摆法去掉了；旧的 localStorage musicDockRingMode 不再读。
+        const ringMode = 'playhead';
         const syncRing = () => {
             if (!fluid) return;
             if (fluid.ringMode !== ringMode) fluid.setRingMode(ringMode);
@@ -432,16 +430,22 @@
         };
 
         // ───────── 进度 ─────────
-        // 进度不从播放键底下开始：0% 落在曲名正上方，播放头开头不挡播放键。
-        // 曲名位置随悬停展开、紧凑档变化，每次用时量一下（只读两个矩形）。
+        // 进度不从播放键底下开始：0% 落在曲名左缘，100% 在右边那组按钮前面，进度细轨就画在这一段的下沿。
+        // 曲名和按钮位置随悬停展开、紧凑档变化，每次用时量一下（只读三个矩形）。
         const progressRange = () => {
             const cap = el.cap.getBoundingClientRect();
             const txt = el.cap.querySelector('.md-txt')?.getBoundingClientRect();
+            const slots = el.cap.querySelector('.md-slots')?.getBoundingClientRect();
             let a = PROGRESS_INSET;
+            let b = 1 - PROGRESS_INSET;
             if (cap.width > 0 && txt && txt.width > 0) a = Math.min(0.45, Math.max(PROGRESS_INSET, (txt.left - cap.left) / cap.width));
-            const b = 1 - PROGRESS_INSET;
-            const key = `${a.toFixed(4)}:${b}`;
-            if (key !== lastRange) { lastRange = key; fluid?.setProgressRange(a, b); }
+            if (cap.width > 0 && slots && slots.width > 0) b = Math.max(a + 0.2, Math.min(b, (slots.left - 14 - cap.left) / cap.width));
+            const key = `${a.toFixed(4)}:${b.toFixed(4)}`;
+            if (key !== lastRange) {
+                lastRange = key;
+                fluid?.setProgressRange(a, b);
+                for (const trk of el.tracks) { trk.style.setProperty('--md-a', a.toFixed(4)); trk.style.setProperty('--md-b', b.toFixed(4)); }
+            }
             return [a, b];
         };
         // 胶囊里的总时长点一下换成剩余时间（−03:12），再点换回；记在 localStorage musicDockRemain。
@@ -463,13 +467,13 @@
             fluid?.setProgress(fraction);
             const timeText = formatClock(t);
             const totalText = formatClock(d);
+            const tipText = `${timeText} / ${totalText}`;
+            if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             const durText = remainMode && d > 0 ? `−${formatClock(Math.max(0, d - t))}` : totalText;
             if (timeText !== state.lastTimeText) {
                 state.lastTimeText = timeText;
                 for (const node of el.t1) node.textContent = timeText;
             }
-            const tipText = `${timeText} / ${totalText}`;
-            if (el.hdlTip && el.hdlTip.textContent !== tipText) el.hdlTip.textContent = tipText;
             if (durText !== state.lastDurText) {
                 state.lastDurText = durText;
                 for (const node of el.t2) node.textContent = durText;
@@ -501,46 +505,52 @@
             return fraction * d;
         };
         for (const trk of el.tracks) {
-            // 在播放条空白处按下：横向拖动超过 4px 才算拖进度，否则就是一次普通点击（交给播放条）。
-            let pending = null;
-            let swallowClick = false;
+            // 进度条是独立的一条细轨（贴在播放条下沿，从歌名左缘到右边按钮前）：
+            // 按下就跳到那里、按住拖动跟手，松手才真正跳；悬停时轨道变粗，指针上方显示那一点的时间。
+            // 它不和面板开关共用任何东西，面板开着也照样能拖。
+            const paintTip = (clientX) => {
+                const time = seekFromPointer(trk, clientX);
+                if (time === null || !el.seekTip) { trk.classList.remove('md-tipon'); return; }
+                const rect = trk.getBoundingClientRect();
+                el.seekTip.textContent = formatClock(time);
+                el.seekTip.style.left = `${Math.round(clientX - rect.left)}px`;
+                trk.classList.add('md-tipon');
+            };
             listen(trk, 'pointerdown', (event) => {
                 if (event.button !== 0) return;
-                pending = { x: event.clientX, pointerId: event.pointerId };
+                const time = seekFromPointer(trk, event.clientX);
+                if (time === null) return;
+                event.preventDefault();
+                event.stopPropagation();
                 trk.setPointerCapture?.(event.pointerId);
+                state.dragging = { time, trk, pointerId: event.pointerId };
+                trk.classList.add('md-held');
+                paintTip(event.clientX);
+                syncExpanded();
+                renderProgress();
             });
             listen(trk, 'pointermove', (event) => {
-                if (!state.dragging && pending && Math.abs(event.clientX - pending.x) > 4) {
-                    const time = seekFromPointer(trk, event.clientX);
-                    if (time === null) { pending = null; return; }
-                    state.dragging = { time, trk, pointerId: pending.pointerId };
-                    trk.classList.add('md-held');
-                    syncExpanded();
-                }
+                if (event.pointerType !== 'touch' || state.dragging) paintTip(event.clientX);
                 if (!state.dragging || state.dragging.trk !== trk) return;
                 const time = seekFromPointer(trk, event.clientX);
                 if (time === null) return;
                 state.dragging.time = time;
                 renderProgress();
             });
+            listen(trk, 'pointerleave', () => { if (!state.dragging) trk.classList.remove('md-tipon'); });
             const finish = (event, commit) => {
-                pending = null;
                 trk.releasePointerCapture?.(event.pointerId);
                 if (!state.dragging || state.dragging.trk !== trk) return;
                 const { time } = state.dragging;
                 state.dragging = null;
-                swallowClick = true;
                 trk.classList.remove('md-held');
+                if (!trk.matches(':hover')) trk.classList.remove('md-tipon');
                 if (commit) app.seekTo?.(time);
                 kickProgress();
             };
             listen(trk, 'pointerup', (event) => finish(event, true));
             listen(trk, 'pointercancel', (event) => finish(event, false));
-            listen(trk, 'click', (event) => {
-                if (!swallowClick) return;
-                swallowClick = false;
-                event.stopPropagation();
-            });
+            listen(trk, 'click', (event) => event.stopPropagation());
             listen(trk, 'keydown', (event) => {
                 const d = duration();
                 if (!(d > 0)) return;
@@ -715,6 +725,13 @@
             fluid?.pointer(event.clientX);
         });
         listen(el.cap, 'pointerleave', () => fluid?.pointer(null));
+        // 指针在底栏上时，窗口即使没有焦点（比如刚从别的窗口移过来）也让流体层照常播过渡，悬停不会一下跳变。
+        let attendTimer = null;
+        listen(el.dockIn, 'pointerenter', () => { cancel(attendTimer); attendTimer = null; fluid?.setAttended?.(true); });
+        listen(el.dockIn, 'pointerleave', () => {
+            cancel(attendTimer);
+            attendTimer = later(() => { attendTimer = null; fluid?.setAttended?.(false); }, 2500);
+        });
         listen(el.dockIn, 'pointerleave', () => {
             cancel(expandTimer); expandTimer = null;
             cancel(dwellTimer); dwellTimer = null;
@@ -747,11 +764,7 @@
             event.stopPropagation();
             view.locatePlaying();
         });
-        listen(el.cap, 'click', (event) => {
-            if (event.target.closest('button')) return;
-            // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
-            if (!stageActive()) app.stageHost?.enter?.();
-        });
+        // 点播放条空白处不再进舞台（不直观，容易误触）；进舞台走右边的舞台按钮。
 
         const quickActions = { queue: () => openPanel('播放列表'), fx: () => openSheet() };
         const renderQuick = () => {};
@@ -778,66 +791,18 @@
             else app.playTrack?.();
         });
 
-        // 悬停标题区左右两边时预览上一首 / 下一首：下一首取播放器的真实队列（手动层优先，随机时也是洗好的那首），
-        // 上一首按播放历史。播放器没提供这两个接口时退回按列表前后数。
-        const neighbour = (dir) => {
-            if (dir > 0 && typeof app.getUpNext === 'function') {
-                const up = app.getUpNext(1);
-                return up.manual[0] || up.context[0] || null;
-            }
-            if (dir < 0 && typeof app.peekPrevious === 'function') return app.peekPrevious();
-            const list = activeList();
-            if (!list.length) return null;
-            if (playMode() === 'shuffle' && dir > 0) return null;
-            const pos = list.indexOf(currentTrack());
-            return list[((Math.max(pos, 0) + dir) % list.length + list.length) % list.length] || null;
-        };
+        // 歌名那一行只在调音量时借位显示「音量 55%」；以前悬停左右两边会换成上一首 / 下一首的名字（「回到开头」），
+        // 读起来像歌名变了，去掉了。
         const showPreview = (track, label) => {
             el.tnav.classList.toggle('md-previewing', Boolean(track || label));
             if (label) el.preview.textContent = label;
             else if (track) el.preview.textContent = trackTitle(track);
         };
-        // 放了 3 秒以上时「上一首」先回到本曲开头（播放器的规则），预览也照实说。
+        // 放了 3 秒以上时「上一首」先回到本曲开头（播放器的规则），按钮提示照实说。
         const prevRestarts = () => app.prevRestarts?.() === true;
-        listen($('.md-zone.md-l'), 'pointerenter', () => (prevRestarts() ? showPreview(null, '回到开头') : showPreview(neighbour(-1))));
-        listen($('.md-zone.md-r'), 'pointerenter', () => showPreview(neighbour(1)));
-        listen($('.md-zone.md-l'), 'pointerleave', () => showPreview(null));
-        listen($('.md-zone.md-r'), 'pointerleave', () => showPreview(null));
-        // 条上的「下一首、再下一首」：越往后越糊，悬停变清楚，点它就切过去。
-        // 手动队列里的歌点了就从队列里拿掉；上下文里的直接跳到那一首。
-        const upNext = () => {
-            if (typeof app.getUpNext === 'function') {
-                const up = app.getUpNext(2);
-                return [...up.manual.map((track, i) => ({ track, manual: i })), ...up.context.map((track) => ({ track, manual: -1 }))].slice(0, 2);
-            }
-            const one = neighbour(1);
-            return one ? [{ track: one, manual: -1 }] : [];
-        };
-        let nextRows = [];
-        function renderNext() {
-            nextRows = upNext();
-            el.nx.forEach((button, i) => {
-                const row = nextRows[i];
-                button.hidden = !row;
-                if (!row) return;
-                const name = trackTitle(row.track);
-                if (button.textContent !== name) button.textContent = name;
-                button.setAttribute('aria-label', `切到 ${name}`);
-                button.title = i === 0 ? `下一首：${name}` : `再下一首：${name}`;
-            });
-        }
-        el.nx.forEach((button, i) => listen(button, 'click', (event) => {
-            event.stopPropagation();
-            const row = nextRows[i];
-            if (!row) return;
-            showPreview(null);
-            if (i === 0) { app.nextTrack?.(); return; }
-            const index = (app.playlist || []).indexOf(row.track);
-            if (index < 0) return;
-            if (row.manual >= 0) app.queueRemove?.(row.manual);
-            app.loadTrack?.(index);
-        }));
-        listen(document, 'music-queue-change', () => renderNext());
+        listen(el.prev, 'pointerenter', () => { el.prev.title = prevRestarts() ? '回到本曲开头（再按一次是上一首）' : '上一首'; });
+        el.prev.title = '上一首';
+        el.next.title = '下一首';
 
         const slideTitle = (dir) => {
             if (reducedMotion?.matches) return;
@@ -863,7 +828,6 @@
             el.modeSlot.classList.toggle('md-on', mode !== 'repeat');
             el.modeSlot.setAttribute('aria-label', MODE_LABELS[mode] || '播放模式');
             el.modeSlot.title = MODE_LABELS[mode] || '播放模式';
-            renderNext();
         };
         listen(el.modeSlot, 'click', (event) => { event.stopPropagation(); cycleMode(); });
 
@@ -978,7 +942,6 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '进入歌词舞台';
-            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度，右键在档案页里找到这首';
             syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
@@ -1005,7 +968,6 @@
                 // 换歌：上一首像一滴水从右边分裂出去蒸发掉（第一次渲染不算）。
                 if (state.trackKey) { fluid?.split(); fluid?.dropRing(); }
                 state.trackKey = key;
-                renderNext();
                 // 换了歌，上一首的加载失败提示就不用再留着了。
                 if (state.noticeTrackKey && state.noticeTrackKey !== key) { global.MusicToast?.dismiss('playback'); state.noticeTrackKey = ''; }
                 state.lyricIndex = -2;
@@ -1153,7 +1115,7 @@
                 const tileCount = 1 + Number(inStage) + Number(sleepOn);
                 html += `<div class="md-tiles md-tiles-${tileCount}">`
                     + `<button class="md-tile${mode !== 'repeat' ? ' md-lit' : ''}" type="button" data-act="mode"><span class="md-ti">${icon(MODE_ICONS[mode] || 'repeat', 18)}</span><span>${MODE_LABELS[mode] || '播放模式'}</span></button>`
-                    + (inStage ? `<button class="md-tile md-lit" type="button" data-act="stage" aria-pressed="true"><span class="md-ti">${icon('captions', 18)}</span><span>歌词舞台</span></button>` : '')
+                    + (inStage ? `<button class="md-tile md-lit" type="button" data-act="stage" aria-pressed="true"><span class="md-ti">${icon('sparkle', 18)}</span><span>歌词舞台</span></button>` : '')
                     + (sleepOn ? sleepTileHtml() : '')
                     + '</div>' + (sleepOn && state.sleepOpen ? sleepChipsHtml() : '');
                 if (scene) {
@@ -1174,7 +1136,11 @@
             } else if (tab === '播放列表') {
                 const rows = buildQueueRows();
                 const upcoming = rows.filter((r) => r.type === 'manual' || r.type === 'ctx').length;
-                html += `<div class="md-qh"><b>播放队列</b><span>${upcoming}</span><span class="md-g"></span>`
+                // 队列来自哪一组（全部曲目 / 某个歌单 / 某位歌手…），原来写在首页页脚，挪到这里
+                const source = String((typeof app.playbackSourceName === 'function' && app.playbackSourceName()) || app.queueSourceName || (upcoming ? '全部曲目' : '')).trim();
+                html += `<div class="md-qh"><b>播放队列</b><span>${upcoming}</span>`
+                    + (source ? `<span class="md-qsrc" title="这个队列来自：${escapeHtml(source)}">来自 ${escapeHtml(source)}</span>` : '')
+                    + '<span class="md-g"></span>'
                     + (rows.length > 1 ? `<button class="md-ib" type="button" data-act="q-save" aria-label="把队列存为歌单" title="把队列存为歌单">${icon('list-plus', 15)}</button>` : '')
                     + `<button class="md-ib md-s${playMode() === 'shuffle' ? ' md-lit' : ''}" type="button" data-act="shuffle" aria-label="随机播放" title="随机播放">${icon('shuffle', 15)}</button></div>`
                     + (rows.length ? `<div class="md-ql" role="list"><div class="md-ql-sizer" style="height:${rows.total}px"></div></div>` : '<p class="md-empty">队列是空的。在首页添加音乐文件夹，点一首歌就会排进来。</p>');
@@ -1787,6 +1753,9 @@
                 el.hdl.classList.add('md-open');
                 el.handle.setAttribute('aria-expanded', 'true');
                 el.handle.setAttribute('aria-label', '关闭面板');
+                el.panelSlot.setAttribute('aria-expanded', 'true');
+                el.panelSlot.classList.add('md-on');
+                host.classList.add('md-panel-open');
                 fluid?.setRingDocked(false);
                 syncShift();
                 // 焦点进抽屉（落在当前页签上）；记住是从哪里打开的，关的时候还回去。
@@ -1816,18 +1785,24 @@
             el.hdl.classList.remove('md-open');
             el.handle.setAttribute('aria-expanded', 'false');
             el.handle.setAttribute('aria-label', '打开面板');
+            el.panelSlot.setAttribute('aria-expanded', 'false');
+            el.panelSlot.classList.remove('md-on');
+            host.classList.remove('md-panel-open');
             fluid?.setRingDocked(true);
             syncShift();
             // 焦点原来在抽屉里（或在关闭钮上）才还回去，不去抢别处的焦点。
             const active = document.activeElement;
             if (active && (el.pnl.contains(active) || active === el.handle)) {
-                const back = panelReturn && panelReturn.isConnected ? panelReturn : el.handle;
+                const back = panelReturn && panelReturn.isConnected ? panelReturn : el.panelSlot;
                 back.focus?.({ preventScroll: true, focusVisible: lastKeyboard });
             }
             panelReturn = null;
             syncSolid();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
+        // 面板关着：白环是播放头（下面这段）；面板开着：白环飞到右下角当关闭键，进度改由条下沿的细轨拖。
+        // 播放条右端还有一个面板按钮，暂停时播放头沉下去也能打开面板。
+        listen(el.panelSlot, 'click', (event) => { event.stopPropagation(); togglePanel(); });
         // 播放头模式下白环就是播放头：按住横向拖动超过 4px 就是拖进度，松手跳过去；不拖就是普通点击（开关面板）。
         {
             let pending = null;
@@ -1913,6 +1888,7 @@
             });
         }
 
+
         // ───────── 舞台设置：直接排在控制页里 ─────────
         // 原来舞台控制舱里的三块（当前舞台的专属设置、全局输出、演出阵列）和「恢复出厂编排」各自搬到控制页对应的位置
         // （appendChild，不重建），舞台宿主绑在上面的事件和引用都还在；原来的抽屉外壳和舞台右上角的入口按钮由 CSS 隐藏。
@@ -1940,6 +1916,15 @@
             diorama: ['rain', 'lyricCarrier', 'showTranslation', 'letterbox', 'cameraCuts', 'fireworks'],
             tunnel: ['cameraSpeed', 'showTranslation', 'fontScale', 'starfield', 'showPlanets', 'showShips'],
             kowloon: ['rain', 'cameraMode', 'lightning', 'reflections', 'showTranslation', 'fog'],
+            orbit: ['tilt', 'roll', 'axisLine', 'showTranslation'],
+            signal: ['panel', 'showSpectrum', 'pulseRate', 'showTranslation'],
+            groupchat: ['echoes', 'voiceNotes', 'fontScale', 'showTranslation'],
+            impression: ['timeOfDay', 'flecks', 'frame', 'showTranslation'],
+            clockwork: ['secondHand', 'fontScale', 'waitingOpacity', 'showTranslation'],
+            hanabi: ['density', 'trails', 'reflection', 'showTranslation'],
+            lumiere: ['smoke', 'dust', 'fontScale', 'showTranslation'],
+            fogpane: ['fog', 'rain', 'drops', 'drips', 'cameraSpeed', 'showTranslation'],
+            inkdraft: ['cameraCuts', 'figures', 'collisions', 'halftone', 'inkFlip', 'showTranslation'],
             luminous: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
             partita: ['fontScale', 'layoutStyle', 'showTranslation', 'showUpcoming', 'glow'],
             cadenza: ['fontScale', 'showTranslation', 'showUpcoming', 'heroEmphasis', 'glow'],
@@ -2195,6 +2180,7 @@
         });
         // 手动队列增删、排序后跟着重画。
         listen(document, 'music-queue-change', rerenderQueue);
+        listen(document, 'music-queue-source-change', () => { prebuilt = null; if (state.panelOpen && state.tab === '播放列表') renderBody(); });
         listen(global, 'music-motion-change', () => { if (state.panelOpen && state.tab === '控制') renderBody(); });
         observe(app.playlistEl, { subtree: true, attributes: true, attributeFilter: ['class'] }, () => {
             if (!state.panelOpen || state.tab !== '播放列表') return;
@@ -2461,11 +2447,6 @@
             get roomRight() { return roomRight; },
             get glowColors() { return currentGlow(); },
             get ringMode() { return ringMode; },
-            setRingMode(mode) {
-                ringMode = RING_MODES.includes(mode) ? mode : 'playhead';
-                try { global.localStorage?.setItem('musicDockRingMode', ringMode); } catch (e) { /* 只是记住选择 */ }
-                syncRing();
-            },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
