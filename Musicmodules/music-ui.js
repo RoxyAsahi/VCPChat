@@ -278,6 +278,8 @@ function setupUI(app) {
     app.applyTheme = (theme) => {
         const light = theme === 'light';
         app.currentTheme = theme;
+        // 舞台用着自定义主题时，它的明/暗也跟着这次切换走（不然舞台和面板还停在原来那一版）
+        app.stageHost?.followGlobalTheme?.(theme);
         document.body.classList.toggle('light-theme', light);
         if (themeButton) {
             const label = light ? '切换到深色' : '切换到浅色';

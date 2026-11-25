@@ -1542,6 +1542,18 @@
             if (state.active) updateFrame(performance.now());
         };
 
+        // 舞台选了自定义主题时，舞台和它上面的底栏、面板、标题栏按这份主题自己的明/暗取色，
+        // 全局的「外观」亮暗切换原来对它不起作用（切了只有部分画面变）。在舞台里切亮暗时，
+        // 自定义主题也换到同名主题的明/暗那一版；这份主题没有那一版就照旧。
+        const followGlobalTheme = (theme) => {
+            if (!state.active || state.destroyed || state.config.themeMode !== 'custom') return;
+            const variant = theme === 'light' ? 'light' : 'dark';
+            if (state.config.themeVariant === variant) return;
+            const selected = state.themeCatalog.find(item => item.fileName === state.config.themeFile);
+            if (!selected?.variables?.[variant] || !Object.keys(selected.variables[variant]).length) return;
+            Config.update({ themeVariant: variant });
+        };
+
         const enter = () => {
             if (state.active || state.destroyed) return;
             state.active = true;
@@ -1940,6 +1952,7 @@
             updateFrame: paceFrame,
             updateTrack,
             updateTheme,
+            followGlobalTheme,
             get active() { return state.active; },
             get modeId() { return state.modeId; },
             getDebugSnapshot() {
