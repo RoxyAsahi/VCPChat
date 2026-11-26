@@ -518,7 +518,7 @@ test('lyric stages draw at most 60 frames a second unless the ultimate tier is c
         for (const file of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js',
             'modes/stage-lyric-layout.js', 'modes/stage-lyric-performance.js', 'modes/luminous-manager.js',
             'modes/partita-manager.js', 'modes/cadenza-manager.js', 'modes/diorama-manager.js',
-            'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-host.js']) {
+            'music-stage-advanced-modes.js', 'music-stage-modes.js', 'music-stage-edge.js', 'music-stage-host.js']) {
             runScript(dom, `Musicmodules/music-stage/${file}`);
         }
         dom.window.localStorage.setItem('musicStageMode', 'luminous');
