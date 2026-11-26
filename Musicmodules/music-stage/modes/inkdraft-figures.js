@@ -1095,7 +1095,7 @@
             pen.circle(-0.35, 0, 0.3);
             pen.line([[-0.62, -0.07], [-0.08, -0.07]]); pen.line([[-0.62, 0.07], [-0.08, 0.07]]);
             pen.note(`${2000 + Math.floor(random() * 26)}.${1 + Math.floor(random() * 12)}.${1 + Math.floor(random() * 28)}`, -0.35, 0, 0.075);
-            pen.note(pick(random, ['港前', 'KAMAKURA', '海滨', 'LISBOA', '旧城']), -0.35, -0.18, 0.065);
+            pen.note(pick(random, ['港前', 'SEASIDE', '海滨', 'HARBOUR', '旧城']), -0.35, -0.18, 0.065);
             for (let i = 0; i < 4; i += 1) pen.wave([0.1, -0.22 + i * 0.15], [1.0, -0.22 + i * 0.15], 3, 0.035);
         },
         // 横格信纸：几道横线，一道竖的页边线，横线上手写的一串波浪（看不清的字），末尾署名

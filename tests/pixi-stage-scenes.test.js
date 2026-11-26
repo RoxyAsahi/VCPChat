@@ -55,6 +55,7 @@ class Graphics extends Container {
     constructor() { super(); this.commands = []; }
     clear() { this.commands = []; return this; }
 }
+Graphics.prototype.clear = function () { this.commands = []; return this; };
 for (const name of ['rect', 'roundRect', 'poly', 'fill', 'stroke', 'moveTo', 'lineTo', 'circle', 'ellipse', 'arc', 'quadraticCurveTo']) {
     Graphics.prototype[name] = function (...args) {
         this.commands.push([name, ...args]);
