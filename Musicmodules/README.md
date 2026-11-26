@@ -41,8 +41,6 @@ VMusic 的主界面、状态组织、控制逻辑和桌面交互由 VCP 自主�
 - 普通歌词的逐字高亮、弹性阻尼滚动、点击跳转和手动滚动接管；
 - Electron 窗口环境下的播放控制、状态同步和资源生命周期管理。
 
-主界面不是 Folia 的移植。播放器的 GUI 架构、页面组织、交互逻辑、状态接入和视觉实现均为 VMusic 自有实现。
-
 主要前端入口为 [`music.html`](music.html)、[`music.js`](music.js) 和 [`music.css`](music.css)；各领域逻辑拆分在同目录的 `music-*` 模块中。
 
 ## 鲁棒歌词获取
@@ -58,7 +56,7 @@ VMusic 优先读取本地缓存；未命中时由后端执行多来源搜索、�
 - 网络失败或高精度歌词缺失时的渐进降级；
 - 旧版文本歌词与结构化 `LyricData` 的兼容。
 
-这套歌词获取链路的鲁棒性设计借鉴了 Folia 后端在多来源匹配和高精度歌词优先策略上的经验，并结合 VCP 的 IPC、缓存结构、数据格式与播放器需求重新实现。前端解析与呈现位于 [`music-lyrics.js`](music-lyrics.js)，聚合后端位于 [`lyricFetcherUnified.js`](../modules/lyrics/lyricFetcherUnified.js)。
+前端解析与呈现位于 [`music-lyrics.js`](music-lyrics.js)，聚合后端位于 [`lyricFetcherUnified.js`](../modules/lyrics/lyricFetcherUnified.js)。
 
 ## 沉浸式歌词舞台
 
@@ -90,7 +88,7 @@ VMusic 优先读取本地缓存；未命中时由后端执行多来源搜索、�
 | **心象 Cadenza** | 空间化词片构图 | Pretext 断行、英雄词强调、非对称布局与镜头漂移 |
 | **星诞 Starborn** | 自动演出导演 | 根据歌词密度、标点、段落边界和音频特征选择子舞台并转场 |
 
-凝彩、商籁、镜台以及舞台中的大量矢量伴奏、场景装饰、参数系统、质量策略和交互动画包含 VCP 自有的原创视觉与工程设计。后续演进也不以复刻某个既有视觉器为目标，而是围绕歌曲、文字和实时音频继续建立 VMusic 自己的演出语言。
+凝彩、商籁、镜台以及舞台中的矢量伴奏、场景装饰、参数系统、质量策略和交互动画都围绕歌曲、文字和实时音频设计。
 
 ## 舞台运行时与资源边界
 
@@ -108,22 +106,19 @@ VMusic 优先读取本地缓存；未命中时由后端执行多来源搜索、�
 - [`modes`](music-stage/modes/)：各模式管理器、共享歌词演出、Pixi 特效与原创装饰；
 - [`music-stage.css`](music-stage/music-stage.css) 与 [`stage-lyric-performance.css`](music-stage/modes/stage-lyric-performance.css)：宿主及歌词演出样式。
 
-## Folia 灵感、适配与许可证说明
+## 第三方许可证
 
-Folia / folia-major 为 VMusic 歌词舞台的早期探索提供了重要灵感。VMusic 借鉴了它将歌词视为“舞台演出”而非普通滚动字幕的交互理念，也参考了其部分模式的视觉语言、字素时序、语义布局、镜头追焦和光学处理思路。
+- 部分歌词舞台组件（Classic / Partita / Cadenza / Fume 相关的歌词布局与演出组件、部分 Sonnet 光学与镜头能力）以及 `modules/lyrics/` 下的部分歌词解析代码改写自 [folia-major](https://github.com/chthollyphile/folia-major)（作者 chthollyphile 及 Folia Contributors），以 GNU Affero General Public License v3.0 发布；相关源码文件顶部保留了归属与许可证注释。
+- 首页 3D 档案阵列（[`music-archive/archive-scene.js`](music-archive/archive-scene.js)）的部分着色与几何改写自 [Rhine-Music-Database](https://github.com/MikeQu223/Rhine-Music-Database)，以 MIT 许可证发布：
 
-需要明确区分以下边界：
+  > MIT License
+  >
+  > Copyright (c) 2026 LBEILC
+  >
+  > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-- **VMusic 自有实现**：音频引擎、播放器主 GUI、舞台宿主、模式注册与调度、星诞导演、播放状态接入、配置系统、资源生命周期、质量策略，以及大量新增场景、装饰、动画与交互设计。
-- **受 Folia 启发后原创实现的部分**：整体舞台交互风格、多种新演出组合和围绕 VCP 数据管线重新设计的视觉行为。
-- **包含 Folia 代码适配或明确派生实现的部分**：Classic / Partita / Cadenza / Fume 相关歌词布局与演出组件，以及部分 Sonnet 光学、镜头和字素时序能力。相关源码文件保留了上游归属与 AGPL-3.0 注释。
-- **歌词后端借鉴**：多来源搜索、高精度歌词优先和降级策略借鉴 Folia 后端的鲁棒性经验，VCP 侧按自身服务架构重新实现。
-
-上游信息：
-
-- 项目：<https://github.com/chthollyphile/folia-major>
-- 作者：chthollyphile 及 Folia Contributors
-- 许可证：GNU Affero General Public License v3.0
-- 本地参考源码：`开发文档/folia-major-main`
-
-Folia 的版权和许可证文本以其上游仓库及本地参考源码中的 `LICENSE` 为准。上述归属不涵盖 VCP 自研 Rust 音频引擎、播放器主界面和其他明确标注为 VCP 原创的实现。
+- 舞台贴图素材来源见 [`music-stage/assets/CREDITS.md`](music-stage/assets/CREDITS.md)。
