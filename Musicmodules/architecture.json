@@ -29,7 +29,8 @@
         "Musicmodules/music-window-title.js",
         "Musicmodules/music-modal-focus.js",
         "Musicmodules/music-menu-order.js",
-        "Musicmodules/music-legacy-switch.js"
+        "Musicmodules/music-legacy-switch.js",
+        "Musicmodules/music-window-visibility.js"
       ],
       "docs": [
         "Musicmodules/AGENTS.md"
@@ -44,7 +45,8 @@
         "tests/music-markup-escape.test.cjs",
         "tests/music-ime-keys.test.cjs",
         "tests/music-save-failure.test.cjs",
-        "tests/music-share-error-text.test.cjs"
+        "tests/music-share-error-text.test.cjs",
+        "tests/music-window-visibility.test.cjs"
       ],
       "tools": [
         "tests/music-window-bench/surface.cjs",
