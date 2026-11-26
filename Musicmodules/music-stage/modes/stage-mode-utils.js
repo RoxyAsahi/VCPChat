@@ -803,9 +803,8 @@ float vnoise(vec2 p) {
 }`;
     const noiseTextures = new WeakMap();
     let noiseData = null;
-    const noiseTexture = (gl) => {
-        const cached = noiseTextures.get(gl);
-        if (cached && gl.isTexture(cached)) return cached;
+    // 噪声表的原始数值（不走 gl 自己建纹理的渲染器用）
+    const noisePixels = () => {
         if (!noiseData) {
             const f = Math.fround;
             const fract = x => x - Math.floor(x);
@@ -820,6 +819,12 @@ float vnoise(vec2 p) {
                 }
             }
         }
+        return { size: NOISE_SIZE, data: noiseData };
+    };
+    const noiseTexture = (gl) => {
+        const cached = noiseTextures.get(gl);
+        if (cached && gl.isTexture(cached)) return cached;
+        noisePixels();
         const t = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, t);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
@@ -1454,7 +1459,7 @@ void main() {
     };
 
     global.MusicStageModeUtils = Object.freeze({
-        NOISE_GLSL, noiseTexture, bindNoise,
+        NOISE_GLSL, noiseTexture, noisePixels, bindNoise,
         SPLIT_OUT_GLSL, compileProgram, createSharpText, sharpSizes,
         createTarget, createBloom,
         GLYPH_FLOATS, createGlyphLayer, GLYPH_ENTER, GLYPH_SING, GLYPH_EXIT, glyphPose, glyphExit,

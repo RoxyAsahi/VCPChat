@@ -68,6 +68,6 @@ modes/<id>.css                               各模式自己的样式（tunnel�
 | fume | 浮名 | `fume-manager.js` |
 | tunnel | 隧图 | `tunnel-manager.js` |
 | kowloon | 町景（暂停开发） | `kowloon-*.js` |
-| inkdraft | 墨痕 | `inkdraft-manager.js` + `inkdraft-figures.js` |
+| inkdraft | 墨痕 | `inkdraft-manager.js`（分镜、排字、着色器）+ `inkdraft-figures.js`（线稿）+ `inkdraft-pixi.js`（PixiJS 渲染器：三遍怎么画） |
 | fogpane / lumiere / hanabi / clockwork / orbit / signal / groupchat / impression | 雾笺 / 绘光 / 花火 / 时计 / 回环 / 信号 / 群唱 / 印象 | 各自 `*-manager.js` |
 | starborn | 星诞 | `music-stage-modes.js`，在流光/云阶/心象/浮名/凝彩/商籁之间自动切换 |
