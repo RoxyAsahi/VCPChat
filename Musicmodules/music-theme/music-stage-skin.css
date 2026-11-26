@@ -110,8 +110,9 @@
 }
 
 /* ---------- 舞台档案卡：替换原 NOW PERFORMING，移到左上，封面交给底栏药丸 ---------- */
+/* 字标和舞台下拉已经挪进标题栏，卡片上面不再留那一行的位置：贴着标题栏下面一点 */
 .music-stage-id3 {
-    top: 104px;
+    top: 60px;
     bottom: auto;
     left: 32px;
     align-items: flex-start;
@@ -540,7 +541,7 @@ body.music-dock-on .music-stage .music-stage-chrome {
     }
 
     .music-stage-id3 {
-        top: 96px;
+        top: 56px;
         left: 16px;
         max-width: calc(100vw - 32px);
     }

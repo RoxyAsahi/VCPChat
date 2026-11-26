@@ -82,8 +82,7 @@
                 item.querySelector('.like-on').style.display = on ? '' : 'none';
                 item.querySelector('.like-off').style.display = on ? 'none' : '';
             };
-            const show = app.showContextMenu;
-            if (typeof show === 'function') app.showContextMenu = (...args) => { paint(); return show(...args); };
+            (global.MusicAppHooks || require('./music-app-hooks.js')).before(app, 'showContextMenu', 'likes', () => paint());
         }
     }
 

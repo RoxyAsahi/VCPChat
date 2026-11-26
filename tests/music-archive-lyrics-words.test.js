@@ -10,7 +10,7 @@ function setup({ playing = true } = {}) {
     const dom = new JSDOM('<div id="h"></div>', { pretendToBeVisual: true });
     const { window } = dom;
     const timers = [];
-    const context = vm.createContext({ ResizeObserver: class { observe() {} unobserve() {} disconnect() {} }, window, document: window.document, console, setInterval: () => 1, clearInterval() {}, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, Date });
+    const context = vm.createContext({ ResizeObserver: class { observe() {} unobserve() {} disconnect() {} }, window, document: window.document, console, setInterval: () => 1, clearInterval() {}, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, requestAnimationFrame: () => 0, cancelAnimationFrame() {}, Date });
     context.globalThis = context;
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-archive/archive-lyrics.js'), 'utf8'), context);
     const calls = [];

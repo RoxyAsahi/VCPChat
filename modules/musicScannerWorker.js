@@ -61,6 +61,12 @@ async function parseTrack(filePath) {
         title: metadata.common.title || path.basename(filePath),
         artist: metadata.common.artist,
         album: metadata.common.album,
+        // 专辑里按碟号、曲号排；歌曲信息里显示年份、流派、专辑歌手
+        trackNo: metadata.common.track && metadata.common.track.no || undefined,
+        discNo: metadata.common.disk && metadata.common.disk.no || undefined,
+        year: metadata.common.year || undefined,
+        genre: Array.isArray(metadata.common.genre) && metadata.common.genre[0] || undefined,
+        albumArtist: metadata.common.albumartist || undefined,
         albumArt: coverPath, // a file path, not raw data
         bitrate: metadata.format.bitrate,
         // 曲目档案卡显示的规格；旧歌单没有这些字段时界面按扩展名降级

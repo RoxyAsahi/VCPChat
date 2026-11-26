@@ -7,6 +7,8 @@
     if (!Runtime || !Modes || !Config) throw new Error('Music stage runtime, config and modes must load before music-stage-host.js');
 
     const { clamp, DisposableScope } = Runtime;
+    // 模式外观特性（3D / 铺满 / 夜色）只在登记表里写一份，见 music-stage-advanced-modes.js
+    const modeTraits = (id) => Modes.traits?.(id) || { scene3d: false, opaque: false, night: false };
 
     // 和 music-utils 的 app.fileUrl 一样：路径里的空格、#、?、'、% 都要编码，否则封面断图
     const fileUrl = (path) => {
@@ -103,39 +105,6 @@
             emptyNotice: root.querySelector('.music-stage-empty-notice')
         };
 
-        // The spectrum lives in the outer band of the window, so each side has a
-        // strip canvas of its own instead of one canvas the size of the window.
-        const EDGE_SIDES = ['top', 'right', 'bottom', 'left'];
-        const edgeStrips = {};
-        EDGE_SIDES.forEach((side, index) => {
-            const canvas = index === 0 ? elements.edgeCanvas : elements.edgeCanvas?.cloneNode(false);
-            const context = canvas?.getContext?.('2d', { alpha: true });
-            if (!canvas || !context) return;
-            if (index > 0) elements.edgeCanvas.after(canvas);
-            edgeStrips[side] = { canvas, context, x: 0, y: 0, width: 0, height: 0 };
-        });
-        const edgeContext = edgeStrips.left ? edgeStrips.top.context : null;
-        // The orbiting light of the edge ring: its gradient is drawn once and
-        // turned by the compositor, instead of the ring being restyled and its
-        // masked gradient painted again at every step of the orbit.
-        const edgeFlow = elements.edgeSpectrum?.querySelector('.music-stage-edge-flow');
-        if (edgeFlow && !edgeFlow.querySelector('.music-stage-edge-flow-light')) {
-            const light = document.createElement('div');
-            light.className = 'music-stage-edge-flow-light';
-            edgeFlow.prepend(light);
-        }
-        const prefersReducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
-        const edgeCanvasState = {
-            width: 0,
-            height: 0,
-            dpr: 1,
-            drawnAt: 0,
-            blank: false,
-            top: new Float32Array(0),
-            right: new Float32Array(0),
-            bottom: new Float32Array(0),
-            left: new Float32Array(0)
-        };
 
         const scope = new DisposableScope();
         let editingSettings = false;
@@ -284,7 +253,8 @@
             ],
             inkdraft: [
                 { key: 'cameraCuts', label: '踩词硬切（多机位分镜）', type: 'toggle' },
-                { key: 'figures', label: '演算纸线稿', type: 'toggle' },
+                { key: 'figures', label: '线稿', type: 'toggle' },
+                { key: 'inkScene', label: '意象场景', type: 'select', options: [['auto', '自动（每首歌一套）'], ['notebook', '演算纸'], ['rail', '铁道'], ['sea', '海'], ['night', '星夜'], ['city', '城市'], ['flora', '植物'], ['letters', '信笺'], ['weather', '天气'], ['score', '乐谱']] },
                 { key: 'collisions', label: '墨团对撞', type: 'toggle' },
                 { key: 'keywords', label: '关键词套色（反复出现的意象词用强调色）', type: 'toggle' },
                 { key: 'halftone', label: '半调网点', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -460,6 +430,8 @@
                 modeSwitches: 0
             }
         };
+        // 边框频谱在 music-stage-edge.js
+        const edge = global.MusicStageEdge.create({ app, root, elements, state, scope, clamp });
 
         // A mode on its way out of a soft-focus switch; see setMode.
         const dropLeaving = () => {
@@ -493,13 +465,14 @@
             state.stats.modeCreates += 1;
             localStorage.setItem('musicStageMode', state.modeId);
             // The 3D modes paint every pixel themselves; see .stage-scene-3d.
-            const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel' || state.modeId === 'kowloon';
+            const traits = modeTraits(state.modeId);
+            const scene3d = traits.scene3d;
             state.scene3d = scene3d;
             root.classList.toggle('stage-scene-3d', scene3d);
             // 自己铺满整张纸的舞台：底下的模糊封面画了也看不见。
-            root.classList.toggle('stage-opaque', scene3d || (state.modeId === 'inkdraft' || state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi' || state.modeId === 'clockwork' || state.modeId === 'orbit' || state.modeId === 'signal' || state.modeId === 'groupchat' || state.modeId === 'impression'));
+            root.classList.toggle('stage-opaque', scene3d || traits.opaque);
             // 雾笺、绘光的画面在浅色主题下也是夜色，左上角字标要换成浅色才看得见。
-            root.classList.toggle('stage-night', state.modeId === 'fogpane' || state.modeId === 'lumiere' || state.modeId === 'hanabi');
+            root.classList.toggle('stage-night', traits.night);
             document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
@@ -1060,203 +1033,6 @@
             elements.play.title = isPlaying ? '暂停' : '播放';
         };
 
-        // Thickness of the band a side can draw into: the line, its swing and its glow.
-        const edgeMetrics = (width, height) => {
-            const inset = clamp(Math.min(width, height) * 0.012, 7, 14);
-            const horizontalAmplitude = clamp(height * 0.052, 18, 48);
-            const verticalAmplitude = clamp(width * 0.038, 15, 42);
-            return { inset, horizontalAmplitude, verticalAmplitude,
-                horizontalBand: Math.ceil(inset + horizontalAmplitude + 24),
-                verticalBand: Math.ceil(inset + verticalAmplitude + 24) };
-        };
-
-        // Reading the stage's size every frame forces a layout every frame;
-        // keep it from the resize observer and read it only when unknown.
-        let rootSize = null;
-        if (global.ResizeObserver) {
-            const observer = new global.ResizeObserver(() => { rootSize = null; });
-            observer.observe(root);
-            scope.add(() => observer.disconnect());
-        }
-        const stageSize = () => {
-            if (!rootSize || !global.ResizeObserver) rootSize = { width: root.clientWidth, height: root.clientHeight };
-            return rootSize;
-        };
-        const resizeEdgeCanvas = (frame) => {
-            if (!edgeContext) return false;
-            const size = stageSize();
-            const width = Math.max(1, size.width);
-            const height = Math.max(1, size.height);
-            // A glowing line gains nothing from more than this.
-            const dpr = Math.min(1.5, frame.viewport?.dpr || global.devicePixelRatio || 1);
-            if (
-                edgeCanvasState.width !== width
-                || edgeCanvasState.height !== height
-                || edgeCanvasState.dpr !== dpr
-            ) {
-                const { horizontalBand, verticalBand } = edgeMetrics(width, height);
-                const boxes = {
-                    top: [0, 0, width, horizontalBand],
-                    bottom: [0, height - horizontalBand, width, horizontalBand],
-                    left: [0, 0, verticalBand, height],
-                    right: [width - verticalBand, 0, verticalBand, height]
-                };
-                EDGE_SIDES.forEach((side) => {
-                    const strip = edgeStrips[side];
-                    [strip.x, strip.y, strip.width, strip.height] = boxes[side];
-                    strip.canvas.width = Math.round(strip.width * dpr);
-                    strip.canvas.height = Math.round(strip.height * dpr);
-                    Object.assign(strip.canvas.style, {
-                        left: `${strip.x}px`, top: `${strip.y}px`,
-                        width: `${strip.width}px`, height: `${strip.height}px`
-                    });
-                    // Draw in window coordinates, whichever strip it is.
-                    strip.context.setTransform(dpr, 0, 0, dpr, -strip.x * dpr, -strip.y * dpr);
-                });
-                edgeCanvasState.width = width;
-                edgeCanvasState.height = height;
-                edgeCanvasState.dpr = dpr;
-                edgeCanvasState.drawnAt = 0;
-                edgeCanvasState.pausedAt = 0;
-                edgeCanvasState.blank = false;
-            }
-            return true;
-        };
-
-        const clearEdgeStrips = () => EDGE_SIDES.forEach((side) => {
-            const strip = edgeStrips[side];
-            strip.context.clearRect(strip.x, strip.y, strip.width, strip.height);
-        });
-
-        const getSpectrumSample = (spectrum, ratio, offset = 0) => {
-            if (!spectrum?.length) return 0;
-            const wrappedRatio = (clamp(ratio) * 0.86 + offset) % 1;
-            const center = Math.floor(Math.pow(wrappedRatio, 1.55) * (spectrum.length - 1));
-            const radius = Math.max(1, Math.floor(spectrum.length / 180));
-            let total = 0;
-            let count = 0;
-            for (let index = Math.max(0, center - radius); index <= Math.min(spectrum.length - 1, center + radius); index += 1) {
-                total += Number(spectrum[index]) || 0;
-                count += 1;
-            }
-            const value = total / Math.max(1, count);
-            return clamp(Math.pow(Math.max(0, value - 0.025), 0.78));
-        };
-
-        const ensureEdgeBuffer = (side, pointCount) => {
-            const coordinateCount = pointCount * 2;
-            if (edgeCanvasState[side].length !== coordinateCount) {
-                edgeCanvasState[side] = new Float32Array(coordinateCount);
-            }
-            return edgeCanvasState[side];
-        };
-
-        const fillEdgePoints = (
-            points,
-            side,
-            spectrum,
-            offset,
-            inset,
-            width,
-            height,
-            amplitude,
-            idleScale
-        ) => {
-            const count = points.length / 2;
-            const span = side === 'top' || side === 'bottom'
-                ? width - inset * 2
-                : height - inset * 2;
-            for (let index = 0; index < count; index += 1) {
-                const ratio = index / Math.max(1, count - 1);
-                const edgeFade = Math.pow(Math.sin(ratio * Math.PI), 0.42);
-                const energy = getSpectrumSample(spectrum, ratio, offset) * edgeFade * idleScale;
-                const coordinateIndex = index * 2;
-                if (side === 'top') {
-                    points[coordinateIndex] = inset + ratio * span;
-                    points[coordinateIndex + 1] = inset + energy * amplitude;
-                } else if (side === 'bottom') {
-                    points[coordinateIndex] = width - inset - ratio * span;
-                    points[coordinateIndex + 1] = height - inset - energy * amplitude;
-                } else if (side === 'left') {
-                    points[coordinateIndex] = inset + energy * amplitude;
-                    points[coordinateIndex + 1] = height - inset - ratio * span;
-                } else {
-                    points[coordinateIndex] = width - inset - energy * amplitude;
-                    points[coordinateIndex + 1] = inset + ratio * span;
-                }
-            }
-        };
-
-        const strokeEdgePath = (edgeContext, points, color, alpha, blur) => {
-            if (!edgeContext || points.length < 4) return;
-            edgeContext.save();
-            edgeContext.beginPath();
-            edgeContext.moveTo(points[0], points[1]);
-            for (let index = 2; index < points.length - 2; index += 2) {
-                edgeContext.quadraticCurveTo(
-                    points[index],
-                    points[index + 1],
-                    (points[index] + points[index + 2]) / 2,
-                    (points[index + 1] + points[index + 3]) / 2
-                );
-            }
-            edgeContext.lineTo(points[points.length - 2], points[points.length - 1]);
-            edgeContext.lineCap = 'round';
-            edgeContext.lineJoin = 'round';
-            edgeContext.lineWidth = blur > 0 ? 2.8 : 1.05;
-            edgeContext.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
-            edgeContext.shadowColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${Math.min(0.9, alpha * 1.45)})`;
-            edgeContext.shadowBlur = blur;
-            edgeContext.stroke();
-            edgeContext.restore();
-        };
-
-        const drawEdgeSpectrum = (frame) => {
-            if (state.config.edgeSpectrum === false) return;
-            if (!resizeEdgeCanvas(frame) || !edgeContext) return;
-            const { width, height } = edgeCanvasState;
-            if (prefersReducedMotion?.matches || !frame.audio.spectrum?.length) {
-                if (!edgeCanvasState.blank) clearEdgeStrips();
-                edgeCanvasState.blank = true;
-                return;
-            }
-            // A paused stage holds a faint, still line: let it settle for a
-            // moment after the pause, then leave the canvases alone.
-            const now = performance.now();
-            if (frame.isPlaying) edgeCanvasState.pausedAt = 0;
-            else {
-                edgeCanvasState.pausedAt ||= now;
-                if (now - edgeCanvasState.pausedAt > 1500 && !edgeCanvasState.blank) return;
-                if (now - edgeCanvasState.drawnAt < 250) return;
-            }
-            edgeCanvasState.drawnAt = now;
-            edgeCanvasState.blank = false;
-            clearEdgeStrips();
-
-            const spectrum = frame.audio.spectrum;
-            const color = global.MusicStageModeUtils.resolveAccent(app);
-            const { inset, horizontalAmplitude, verticalAmplitude } = edgeMetrics(width, height);
-            const horizontalCount = clamp(Math.round(width / 15), 44, 104);
-            const verticalCount = clamp(Math.round(height / 15), 28, 72);
-            const idleScale = frame.isPlaying ? 1 : 0.12;
-
-            const top = ensureEdgeBuffer('top', horizontalCount);
-            const right = ensureEdgeBuffer('right', verticalCount);
-            const bottom = ensureEdgeBuffer('bottom', horizontalCount);
-            const left = ensureEdgeBuffer('left', verticalCount);
-            fillEdgePoints(top, 'top', spectrum, 0, inset, width, height, horizontalAmplitude, idleScale);
-            fillEdgePoints(right, 'right', spectrum, 0.11, inset, width, height, verticalAmplitude, idleScale);
-            fillEdgePoints(bottom, 'bottom', spectrum, 0.21, inset, width, height, horizontalAmplitude, idleScale);
-            fillEdgePoints(left, 'left', spectrum, 0.34, inset, width, height, verticalAmplitude, idleScale);
-
-            const alpha = 0.28 + frame.audio.power * 0.62;
-            // The wide soft pass stands in for the glow filters the canvas used to have.
-            [['top', top], ['right', right], ['bottom', bottom], ['left', left]].forEach(([side, points]) => {
-                const context = edgeStrips[side].context;
-                strokeEdgePath(context, points, color, alpha * 0.5, 18);
-                strokeEdgePath(context, points, color, alpha, 3.5);
-            });
-        };
 
         const getPlayModePresentation = () => {
             const mode = app.playModes[app.currentPlayMode] || 'repeat';
@@ -1310,7 +1086,6 @@
         // Long enough for an in-world handover to have turned away from the old song.
         const SONG_TILT_MS = 900;
         const LYRICS_WAIT_MS = 2000;
-        const SCENE_MODES = new Set(['diorama', 'tunnel', 'kowloon']);
         const linesIds = new WeakMap();
         let nextLinesId = 1;
         const songKey = (frame) => {
@@ -1326,7 +1101,7 @@
             const instance = state.modeInstance;
             const { identity, key } = songKey(frame);
             const handover = state.handover;
-            if (!instance || !SCENE_MODES.has(state.modeId) || reducedMotion() || state.arriving
+            if (!instance || !modeTraits(state.modeId).scene3d || reducedMotion() || state.arriving
                 || state.committedSong === null || state.committedInstance !== instance) {
                 if (handover) instance?.root.classList.remove('is-song-leaving');
                 state.handover = null;
@@ -1447,7 +1222,7 @@
             updatePlaybackState(frame.isPlaying);
             updateTransportControls();
             writeAudioLevels(frame.audio);
-            drawEdgeSpectrum(frame);
+            edge.draw(frame);
             if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
             updateDegradeNote(timestamp);
             if (state.leaving || state.arriving) {
@@ -1539,6 +1314,18 @@
             state.modeInstance?.updateTheme?.(palette);
             state.trackSignature = '';
             if (state.active) updateFrame(performance.now());
+        };
+
+        // 舞台选了自定义主题时，舞台和它上面的底栏、面板、标题栏按这份主题自己的明/暗取色，
+        // 全局的「外观」亮暗切换原来对它不起作用（切了只有部分画面变）。在舞台里切亮暗时，
+        // 自定义主题也换到同名主题的明/暗那一版；这份主题没有那一版就照旧。
+        const followGlobalTheme = (theme) => {
+            if (!state.active || state.destroyed || state.config.themeMode !== 'custom') return;
+            const variant = theme === 'light' ? 'light' : 'dark';
+            if (state.config.themeVariant === variant) return;
+            const selected = state.themeCatalog.find(item => item.fileName === state.config.themeFile);
+            if (!selected?.variables?.[variant] || !Object.keys(selected.variables[variant]).length) return;
+            Config.update({ themeVariant: variant });
         };
 
         const enter = () => {
@@ -1877,9 +1664,7 @@
         let resizeFrame = 0;
         scope.add(() => global.cancelAnimationFrame?.(resizeFrame));
         scope.listen(global, 'resize', () => {
-            rootSize = null;
-            edgeCanvasState.width = 0;
-            edgeCanvasState.height = 0;
+            edge.invalidate();
             if (resizeFrame) return;
             resizeFrame = global.requestAnimationFrame(() => {
                 resizeFrame = 0;
@@ -1939,6 +1724,7 @@
             updateFrame: paceFrame,
             updateTrack,
             updateTheme,
+            followGlobalTheme,
             get active() { return state.active; },
             get modeId() { return state.modeId; },
             getDebugSnapshot() {
@@ -1965,12 +1751,7 @@
                 state.generation += 1;
                 if (state.backgroundTimer) clearTimeout(state.backgroundTimer);
                 destroyMode();
-                EDGE_SIDES.forEach((side) => {
-                    const strip = edgeStrips[side];
-                    if (!strip) return;
-                    strip.canvas.width = 1;
-                    strip.canvas.height = 1;
-                });
+                edge.release();
                 scope.destroy();
                 document.body.classList.remove('music-stage-active', 'music-stage-scene-3d');
                 root.remove();

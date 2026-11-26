@@ -13,7 +13,7 @@ function deferred() {
 
 function setup(api = {}) {
     const context = vm.createContext({ console, setTimeout, clearTimeout });
-    for (const name of ['music-lyrics.js', 'music-player.js']) {
+    for (const name of ['music-app-hooks.js', 'music-lyrics.js', 'music-player.js']) {
         vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules', name), 'utf8'), context);
     }
     const app = {

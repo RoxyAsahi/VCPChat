@@ -15,11 +15,60 @@ const musicGrooveBus = require('../services/musicGrooveBus');
 const { findTrack } = require('../musicTrackMatch');
 const windowBounds = require('../musicWindowBounds');
 const { createDesktopLyrics } = require('./musicDesktopLyrics');
+const { createMusicThumbar } = require('../musicThumbar');
+const { createLyricsTranslator } = require('../musicLyricsTranslate');
+const { createLibraryWatch } = require('../musicLibraryWatch');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
+const m3u = require('./musicM3u');
+const { registerMusicEngineHandlers } = require('./musicEngineHandlers');
+const { registerMusicWebdavHandlers } = require('./musicWebdavHandlers');
+const { registerMusicLyricsHandlers } = require('./musicLyricsHandlers');
 const { randomUUID } = require('crypto');
 let fetch;
 
 let musicWindow = null;
+// 任务栏缩略图上的上一首/播放暂停/下一首（只在 Windows 上）
+// （主进程单测会把这几个辅助模块换成空对象，下面三个都留了什么都不做的退路）
+const musicThumbar = typeof createMusicThumbar === 'function'
+    ? createMusicThumbar({ nativeImage: electron.nativeImage })
+    : { update() { return false; }, reset() {} };
+// 曲库文件夹自动同步：记住加过的文件夹，音乐窗口开着时后台对磁盘、监听变化（modules/musicLibraryWatch.js）
+const musicFoldersFile = () => (MUSIC_PLAYLIST_FILE ? path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_folders.json') : null);
+const libraryWatch = typeof createLibraryWatch !== 'function'
+    ? { start() {}, stop() {}, rememberFolder: async () => {}, noteLibrarySaved: async () => {}, folders: async () => [], forgetFolder: async () => false }
+    : createLibraryWatch({
+    // 用户自己在加文件夹时先等它扫完：两边的结果同时回到窗口会互相打乱「正在扫描」和排序
+    scan: async (folderPath, signal) => {
+        while (activeUserScans > 0 && !signal.aborted) await new Promise((r) => setTimeout(r, 2000));
+        return scanFolder({
+        folderPath,
+        coverCachePath: MUSIC_COVER_CACHE_DIR,
+        knownTracks: await readPlaylistFile(),
+        signal
+        });
+    },
+    readKnown: () => readPlaylistFile(),
+    readFolders: async () => {
+        const file = musicFoldersFile();
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeFolders: async (list) => { const file = musicFoldersFile(); if (file) await writeJsonAtomic(file, list, { spaces: 2 }); },
+    readExcluded: async () => {
+        const file = musicFoldersFile() && path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json');
+        if (!file) return [];
+        try { const list = await fs.readJson(file); return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : []; } catch (e) { return []; }
+    },
+    writeExcluded: async (list) => { if (MUSIC_PLAYLIST_FILE) await writeJsonAtomic(path.join(path.dirname(MUSIC_PLAYLIST_FILE), 'music_excluded.json'), list); },
+    send: (channel, payload) => { if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send(channel, payload); }
+});
+// 外语歌词没有翻译时，用 VCP 上的模型翻成中文（缓存在歌词目录 translations/）
+const lyricsTranslator = typeof createLyricsTranslator !== 'function'
+    ? { translate: async () => ({ status: 'unavailable', message: '歌词翻译模块没有加载' }) }
+    : createLyricsTranslator({
+        getSettings: async () => (settingsManager ? settingsManager.readSettings() : {}),
+        getCacheDir: () => (LYRIC_DIR ? path.join(LYRIC_DIR, 'translations') : null)
+    });
 let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
 let musicInfoInjectionEnabled = true;
 let settingsManager = null;
@@ -171,6 +220,11 @@ function createOrFocusMusicWindow() {
             musicWindow.show();
             musicCapsuleState = { ...musicCapsuleState, open: true };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
+        });
+        // 窗口藏起来再显示时 Windows 会丢掉缩略图按钮，重新设一遍
+        musicWindow.on('show', () => {
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
         });
 
         // Wait for the renderer to signal that it's ready
@@ -178,6 +232,7 @@ function createOrFocusMusicWindow() {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
                 desktopLyrics?.musicReady();
+                libraryWatch.start();
                 // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
@@ -224,6 +279,8 @@ function createOrFocusMusicWindow() {
             currentSongInfo = null; // 清理歌曲信息
             musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
             publishMusicCapsule();
+            musicThumbar.reset();
+            libraryWatch.stop();
             musicGrooveBus.publish({ playing: false });
             pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
@@ -251,6 +308,7 @@ function createOrFocusMusicWindow() {
             audioEngineApi('/pause', 'POST').catch(() => {});
             musicCapsuleState = { ...musicCapsuleState, playing: false };
             publishMusicCapsule();
+            musicThumbar.update(crashedWindow, { playing: false });
             musicGrooveBus.publish({ playing: false });
             const now = Date.now();
             crashTimes = crashTimes.filter((at) => now - at < MUSIC_CRASH_WINDOW_MS).concat(now);
@@ -302,7 +360,12 @@ function runLibraryScan(event, options = {}) {
     return scan;
 }
 
-async function scanLibrary(event, { folderPath = null, filePaths } = {}) {
+let activeUserScans = 0;
+async function scanLibrary(event, options = {}) {
+    activeUserScans++;
+    try { return await scanLibraryNow(event, options); } finally { activeUserScans--; }
+}
+async function scanLibraryNow(event, { folderPath = null, filePaths } = {}) {
     const sendToRequester = (channel, payload) => {
         if (event.sender && !event.sender.isDestroyed()) {
             event.sender.send(channel, payload);
@@ -700,6 +763,7 @@ function initialize(options) {
                 playing: state?.playing === true
             };
             publishMusicCapsule();
+            musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing });
             if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
             followTrackChange(state).catch(() => {});
         });
@@ -710,6 +774,133 @@ function initialize(options) {
         });
 
         ipcMain.handle('music-get-audio-engine-endpoint', () => audioEngineEndpoint.getEndpoint());
+        ipcMain.handle('music-translate-lyrics', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { status: 'error', message: '只有音乐窗口可以翻译歌词' };
+            }
+            return lyricsTranslator.translate(payload || {});
+        });
+
+        // 频谱检查（真假无损）：把本机音频文件的原始字节交给音乐窗口去解码分析。只认音频扩展名、只给音乐窗口。
+        ipcMain.handle('music-read-audio-file', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) {
+                return { ok: false, message: '只有音乐窗口可以读' };
+            }
+            const file = payload && typeof payload.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file) || !/\.(flac|mp3|wav|m4a|aac|ogg|opus|wv|aiff?|alac|ape|dsf|dff|wma)$/i.test(file)) {
+                return { ok: false, message: '只能分析本机的音频文件' };
+            }
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile()) return { ok: false, message: '文件不在了' };
+                if (stat.size > 400 * 1024 * 1024) return { ok: false, message: '文件太大（超过 400 MB），没法在窗口里分析' };
+                const data = await fs.readFile(file);
+                return { ok: true, data, size: stat.size };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
+
+        // 右键「在文件夹中显示」：只接受曲库里那种本机绝对路径，文件得还在
+        ipcMain.handle('music-show-in-folder', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file || !path.isAbsolute(file)) return { ok: false, message: '这首没有本机文件' };
+            const stat = await fs.stat(file).catch(() => null);
+            if (!stat || !stat.isFile()) return { ok: false, message: '文件已经不在原来的位置了' };
+            electron.shell.showItemInFolder(file);
+            return { ok: true };
+        });
+
+        // 曲库文件夹管理：列出加过的文件夹、打开、移出（曲目由音乐窗口先从曲库拿掉并存盘，这里只忘掉文件夹、重建监听）、立即重扫
+        ipcMain.handle('music-library-folders', async (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return { ok: false, message: '只有音乐窗口可以用' };
+            const op = payload?.op || 'list';
+            const dir = typeof payload?.path === 'string' ? payload.path : '';
+            try {
+                if (op === 'list') {
+                    const folders = typeof libraryWatch.folders === 'function' ? await libraryWatch.folders() : [];
+                    const withState = [];
+                    for (const d of folders) withState.push({ path: d, exists: Boolean((await fs.stat(d).catch(() => null))?.isDirectory()) });
+                    return { ok: true, folders: withState };
+                }
+                if (!dir || !path.isAbsolute(dir)) return { ok: false, message: '不是本机文件夹' };
+                if (op === 'open') {
+                    const stat = await fs.stat(dir).catch(() => null);
+                    if (!stat || !stat.isDirectory()) return { ok: false, message: '这个文件夹已经不在了' };
+                    const err = await electron.shell.openPath(dir);
+                    return err ? { ok: false, message: err } : { ok: true };
+                }
+                if (op === 'forget') {
+                    if (typeof libraryWatch.forgetFolder === 'function') await libraryWatch.forgetFolder(dir);
+                    libraryWatch.start();
+                    return { ok: true };
+                }
+                if (op === 'rescan') {
+                    await libraryWatch.rescanNow?.();
+                    return { ok: true };
+                }
+                return { ok: false, message: '不认识的操作' };
+            } catch (err) {
+                return { ok: false, message: String(err && err.message || err) };
+            }
+        });
+
+        // 歌单导出 / 导入 .m3u8（和别的播放器互通）。只给音乐窗口；导出走保存对话框，导入走打开对话框或拖进来的文件。
+        const fromMusicWindow = (event) => musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents;
+        ipcMain.handle('music-m3u-export', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导出' };
+            const name = String(payload?.name || '');
+            const tracks = Array.isArray(payload?.tracks) ? payload.tracks.slice(0, 50000) : [];
+            if (!tracks.length) return { ok: false, message: '这个歌单是空的' };
+            const result = await dialog.showSaveDialog(musicWindow, {
+                title: '导出歌单',
+                defaultPath: m3u.safeFileName(name) + '.m3u8',
+                filters: [{ name: 'M3U8 歌单', extensions: ['m3u8'] }, { name: 'M3U 歌单', extensions: ['m3u'] }]
+            });
+            if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+            try {
+                const text = m3u.buildM3u(name, tracks);
+                // .m3u 给老播放器用：带 BOM 让它们认出是 UTF-8
+                await fs.writeFile(result.filePath, /\.m3u$/i.test(result.filePath) ? '\uFEFF' + text : text, 'utf8');
+                return { ok: true, file: result.filePath, count: tracks.length };
+            } catch (err) {
+                return { ok: false, message: '写不进去：' + (err && err.message || err) };
+            }
+        });
+        ipcMain.handle('music-m3u-import', async (event, payload) => {
+            if (!fromMusicWindow(event)) return { ok: false, message: '只有音乐窗口可以导入' };
+            let file = typeof payload?.path === 'string' ? payload.path : '';
+            if (!file) {
+                const result = await dialog.showOpenDialog(musicWindow, {
+                    title: '导入歌单',
+                    filters: [{ name: '歌单', extensions: ['m3u8', 'm3u'] }],
+                    properties: ['openFile']
+                });
+                if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true };
+                file = result.filePaths[0];
+            }
+            if (!path.isAbsolute(file) || !/\.m3u8?$/i.test(file)) return { ok: false, message: '只认 .m3u / .m3u8 歌单' };
+            try {
+                const stat = await fs.stat(file);
+                if (!stat.isFile() || stat.size > 20 * 1024 * 1024) return { ok: false, message: '这个文件不像歌单' };
+                const parsed = m3u.parseM3u(m3u.decodeM3u(await fs.readFile(file), file), { baseDir: path.dirname(file) });
+                // 几千行的歌单逐个查文件太慢（网络盘、拔掉的盘每次都要等）：同一文件夹只查一次在不在，再 32 个一批并行查文件
+                const list = parsed.entries.slice(0, 50000);
+                const dirs = new Map();
+                const dirOk = (d) => { if (!dirs.has(d)) dirs.set(d, fs.stat(d).then((s) => s.isDirectory(), () => false)); return dirs.get(d); };
+                const entries = new Array(list.length);
+                for (let at = 0; at < list.length; at += 32) {
+                    await Promise.all(list.slice(at, at + 32).map(async (entry, k) => {
+                        const s = (await dirOk(path.dirname(entry.path))) ? await fs.stat(entry.path).catch(() => null) : null;
+                        entries[at + k] = { ...entry, exists: Boolean(s && s.isFile()) };
+                    }));
+                }
+                return { ok: true, file, name: parsed.name || path.basename(file).replace(/\.m3u8?$/i, ''), entries, skipped: parsed.skipped };
+            } catch (err) {
+                return { ok: false, message: err && err.code === 'ENOENT' ? '文件不在了' : '读取失败：' + (err && err.message || err) };
+            }
+        });
 
         audioEngineEndpoint.onStatus((endpoint) => {
             if (musicWindow && !musicWindow.isDestroyed()) {
@@ -787,184 +978,10 @@ function initialize(options) {
             return audioEngineApi('/volume', 'POST', { volume });
         });
 
-        // --- New handlers for WASAPI and device selection ---
-        ipcMain.handle('music-get-devices', async (event, options = {}) => {
-            const refresh = options.refresh ? '?refresh=true' : '';
-            return await audioEngineApi(`/devices${refresh}`, 'GET');
-        });
-
-        ipcMain.handle('music-configure-output', (event, { device_id, exclusive }) => {
-            return audioEngineApi('/configure_output', 'POST', { device_id, exclusive });
-        });
-
-        // --- New handler for EQ ---
-        ipcMain.handle('music-set-eq', (event, { bands, enabled }) => {
-            return audioEngineApi('/set_eq', 'POST', { bands, enabled });
-        });
-
-        // --- New handler for Upsampling ---
-        ipcMain.handle('music-configure-upsampling', (event, { target_samplerate }) => {
-            return audioEngineApi('/configure_upsampling', 'POST', { target_samplerate });
-        });
-
-        // --- Resampling Settings Handler ---
-        ipcMain.handle('music-configure-resampling', (event, { quality, use_cache, preemptive_resample }) => {
-            return audioEngineApi('/configure_resampling', 'POST', { quality, use_cache, preemptive_resample });
-        });
-
-        ipcMain.handle('music-set-eq-type', (event, { type, fir_taps }) => {
-            return audioEngineApi('/set_eq_type', 'POST', { type, fir_taps });
-        });
-
-        ipcMain.handle('music-configure-optimizations', (event, data) => {
-            return audioEngineApi('/configure_optimizations', 'POST', data);
-        });
-
-        // --- Loudness Normalization Handlers ---
-        ipcMain.handle('music-configure-normalization', async (event, data) => {
-            console.log('[Music] configure_normalization request:', JSON.stringify(data));
-            const result = await audioEngineApi('/configure_normalization', 'POST', data);
-            console.log('[Music] configure_normalization response:', JSON.stringify(result));
-            return result;
-        });
-
-        ipcMain.handle('music-get-loudness-info', async () => {
-            return await audioEngineApi('/loudness_info', 'GET');
-        });
-
-        ipcMain.handle('music-scan-loudness', (event, { path }) => {
-            return audioEngineApi('/scan_loudness', 'POST', { path });
-        });
-
-        ipcMain.handle('music-scan-loudness-background', (event, { path, store }) => {
-            return audioEngineApi('/scan_loudness_background', 'POST', { path, store });
-        });
-
-        // --- Saturation Effect Handlers ---
-        ipcMain.handle('music-get-saturation', async () => {
-            return await audioEngineApi('/saturation', 'GET');
-        });
-
-        ipcMain.handle('music-set-saturation', (event, data) => {
-            return audioEngineApi('/set_saturation', 'POST', data);
-        });
-
-        // --- Crossfeed Handlers ---
-        ipcMain.handle('music-get-crossfeed', async () => {
-            return await audioEngineApi('/crossfeed', 'GET');
-        });
-
-        ipcMain.handle('music-set-crossfeed', (event, data) => {
-            return audioEngineApi('/set_crossfeed', 'POST', data);
-        });
-
-        // --- Dynamic Loudness Handlers ---
-        ipcMain.handle('music-get-dynamic-loudness', async () => {
-            return await audioEngineApi('/dynamic_loudness', 'GET');
-        });
-
-        ipcMain.handle('music-set-dynamic-loudness', (event, data) => {
-            return audioEngineApi('/set_dynamic_loudness', 'POST', data);
-        });
-
-        // --- Noise Shaper Handlers ---
-        ipcMain.handle('music-get-noise-shaper-curve', async () => {
-            return await audioEngineApi('/noise_shaper_curve', 'GET');
-        });
-
-        ipcMain.handle('music-set-noise-shaper-curve', (event, { curve }) => {
-            return audioEngineApi('/set_noise_shaper_curve', 'POST', { curve });
-        });
-
-        ipcMain.handle('music-configure-output-bits', (event, { bits }) => {
-            return audioEngineApi('/configure_output_bits', 'POST', { bits });
-        });
-
-        // --- IR Status Handler ---
-        ipcMain.handle('music-get-ir-status', async () => {
-            return await audioEngineApi('/ir_status', 'GET');
-        });
-        
-        // --- Settings Persistence ---
-        ipcMain.handle('music-get-settings', async () => {
-            return await audioEngineApi('/settings', 'GET');
-        });
-
-        ipcMain.handle('music-save-settings', (event, data) => {
-            return audioEngineApi('/save_settings', 'POST', data);
-        });
-
-        // --- Gapless Playback Handlers ---
-        ipcMain.handle('music-queue-next', (event, { path, username, password, serverId }) => {
-            // 远程曲目预载要带上它所在服务器的账号；不然引擎用的是上一次配置的那台，换台就预载失败。
-            if (!username && !password) {
-                const creds = webdavManager.credentialsForTrack?.({ serverId, path });
-                if (creds?.username && creds?.password) ({ username, password } = creds);
-            }
-            return audioEngineApi('/queue_next', 'POST', { path, username, password });
-        });
-
-        ipcMain.handle('music-cancel-preload', () => {
-            return audioEngineApi('/cancel_preload', 'POST');
-        });
-
-        // --- FIR IR Convolver Handlers ---
-        ipcMain.handle('music-load-ir', (event, { path }) => {
-            return audioEngineApi('/load_ir', 'POST', { path });
-        });
-
-        ipcMain.handle('music-unload-ir', () => {
-            return audioEngineApi('/unload_ir', 'POST');
-        });
-
-        // --- IR Presets Handling ---
-        ipcMain.handle('music-list-ir-presets', async () => {
-            const irPresetDir = path.join(__dirname, '..', '..', 'audio_engine', 'IRPreset');
-            if (!(await fs.pathExists(irPresetDir))) return [];
-            try {
-                const files = await fs.readdir(irPresetDir);
-                const audioExtensions = new Set(['.wav', '.flac', '.mp3', '.ogg', '.m4a', '.ape']);
-                return files
-                    .filter(file => audioExtensions.has(path.extname(file).toLowerCase()))
-                    .map(file => path.parse(file).name);
-            } catch (err) {
-                console.error('[Music] Failed to list IR presets:', err);
-                return [];
-            }
-        });
-
-        ipcMain.handle('music-get-ir-preset-path', async (event, presetName) => {
-            const irPresetDir = path.join(__dirname, '..', '..', 'audio_engine', 'IRPreset');
-            if (!(await fs.pathExists(irPresetDir))) return null;
-            try {
-                const files = await fs.readdir(irPresetDir);
-                const audioExtensions = new Set(['.wav', '.flac', '.mp3', '.ogg', '.m4a', '.ape']);
-                const match = files.find(file => {
-                    const p = path.parse(file);
-                    return p.name === presetName && audioExtensions.has(p.ext.toLowerCase());
-                });
-                return match ? path.join(irPresetDir, match) : null;
-            } catch (err) {
-                console.error('[Music] Failed to get IR preset path:', err);
-                return null;
-            }
-        });
-
-        // --- IR File Selection Dialog ---
-        ipcMain.handle('select-ir-file', async () => {
-            const result = await dialog.showOpenDialog(musicWindow || mainWindow, {
-                title: '选择脉冲响应文件 (IR)',
-                filters: [
-                    { name: '音频文件', extensions: ['wav', 'flac', 'mp3', 'ogg', 'm4a', 'ape'] },
-                    { name: 'WAV', extensions: ['wav'] },
-                    { name: 'FLAC', extensions: ['flac'] },
-                    { name: '所有文件', extensions: ['*'] }
-                ],
-                properties: ['openFile']
-            });
-            if (result.canceled || result.filePaths.length === 0) return null;
-            return result.filePaths[0];
-        });
+        // 引擎设置（设备、EQ、DSP、预载、IR……）的 IPC 在 musicEngineHandlers.js
+        if (typeof registerMusicEngineHandlers === 'function') {
+            registerMusicEngineHandlers({ ipcMain, dialog, audioEngineApi, webdavManager, getDialogWindow: () => musicWindow || mainWindow });
+        }
 
         ipcMain.handle('music-add-folder', async (event) => {
             const result = await dialog.showOpenDialog(mainWindow, {
@@ -976,6 +993,7 @@ function initialize(options) {
             }
 
             await runLibraryScan(event, { folderPath: result.filePaths[0] });
+            await libraryWatch.rememberFolder(result.filePaths[0]);
         });
 
         // 拖进窗口的文件和文件夹：文件夹整个扫，单曲只读这几首。路径来自渲染端，逐个确认是本地的目录或音频文件。
@@ -989,7 +1007,10 @@ function initialize(options) {
                 if (stat?.isDirectory()) folders.push(raw);
                 else if (stat?.isFile() && SUPPORTED_FORMATS.has(path.extname(raw).toLowerCase())) files.push(raw);
             }
-            for (const folderPath of folders) await runLibraryScan(event, { folderPath });
+            for (const folderPath of folders) {
+                await runLibraryScan(event, { folderPath });
+                await libraryWatch.rememberFolder(folderPath);
+            }
             if (files.length) await runLibraryScan(event, { filePaths: files });
             return { folders: folders.length, files: files.length };
         });
@@ -1002,7 +1023,10 @@ function initialize(options) {
                 if (!Array.isArray(playlist)) throw new TypeError('playlist must be an array');
                 // 一份非空曲库被清空时先留个备份：曲库读取失败后界面以空列表存盘，整个曲库就没了。
                 if (playlist.length === 0) await backupBeforeEmptying(MUSIC_PLAYLIST_FILE);
+                // 用户移出曲库的歌记下来，后台同步文件夹时不再加回来（空列表多半是读取失败，不算）
+                const previous = playlist.length ? await readPlaylistFile() : null;
                 await writeJsonAtomic(MUSIC_PLAYLIST_FILE, playlist);
+                if (previous) libraryWatch.noteLibrarySaved(previous, playlist);
                 return { success: true };
             } catch (error) {
                 console.error('Error saving music playlist:', error);
@@ -1092,200 +1116,20 @@ function initialize(options) {
             return { success: false, message: '主窗口没有打开' };
         });
 
-        ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject }) => {
-            if (!title) return null;
+        // 歌词（本地读取、抓词、候选）的 IPC 在 musicLyricsHandlers.js
+        if (typeof registerMusicLyricsHandlers === 'function') {
+            registerMusicLyricsHandlers({ ipcMain, lyricFetcher, getLyricDir: () => LYRIC_DIR });
+        }
 
-            const sanitize = (str) => (str || '').replace(/[\\/:"*?<>|]/g, '_').trim();
-            const sanitizedTitle = sanitize(title);
-            const sanitizedArtist = artist ? sanitize(artist) : '';
-
-            // Check JSON first if rawObject requested or available
-            const possibleJsonPaths = [];
-            if (sanitizedArtist) {
-                possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.json`));
-            } else {
-                possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.json`));
-            }
-
-            for (const jsonPath of possibleJsonPaths) {
-                try {
-                    if (await fs.pathExists(jsonPath)) {
-                        const data = await fs.readJson(jsonPath);
-                        return data;
-                    }
-                } catch (err) {
-                    console.warn(`[Music] Error reading JSON lyric cache ${jsonPath}:`, err.message);
-                }
-            }
-
-            // Fallback to LRC text cache
-            const possibleLrcPaths = [];
-            if (sanitizedArtist) {
-                possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.lrc`));
-            } else {
-                possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.lrc`));
-            }
-
-            for (const lrcPath of possibleLrcPaths) {
-                try {
-                    if (await fs.pathExists(lrcPath)) {
-                        // 自己放进歌词目录的 .lrc 常是 GBK 或带 BOM 的 UTF-8/UTF-16
-                        return require('../lyrics/decodeLyricText').decodeLyricText(await fs.readFile(lrcPath));
-                    }
-                } catch (error) {
-                    console.error(`[Music] Error reading lyric file ${lrcPath}:`, error);
-                }
-            }
-
-            return null;
-        });
-
-        ipcMain.handle('music-fetch-lyrics', async (event, { artist, title, duration, durationMs, album, rawObject }) => {
-            if (!title) return null;
-            console.log(`[Music] IPC: Received request to fetch lyrics for "${title}" by "${artist}"`);
-            try {
-                await fs.ensureDir(LYRIC_DIR);
-                const result = await lyricFetcher.fetchAndSaveLyrics(artist, title, LYRIC_DIR, {
-                    duration,
-                    durationMs,
-                    album,
-                    rawObject: rawObject !== undefined ? rawObject : true
-                });
-                return result;
-            } catch (error) {
-                console.error(`[Music] Error fetching lyrics via IPC for "${title}":`, error);
-                return null;
-            }
-        });
-
-        ipcMain.handle('music-search-lyrics-candidates', async (event, options = {}) => {
-            const title = typeof options.title === 'string' ? options.title.trim() : '';
-            if (!title) return { success: false, message: '缺少歌曲标题', candidates: [] };
-
-            try {
-                const candidates = await lyricFetcher.searchLyricsCandidates({
-                    title,
-                    artist: typeof options.artist === 'string' ? options.artist.trim() : '',
-                    album: typeof options.album === 'string' ? options.album.trim() : '',
-                    durationMs: Number.isFinite(Number(options.durationMs))
-                        ? Math.max(0, Number(options.durationMs))
-                        : 0
-                });
-                return { success: true, candidates };
-            } catch (error) {
-                console.error(`[Music] Error searching lyric candidates for "${title}":`, error);
-                return { success: false, message: error.message || '搜索歌词失败', candidates: [] };
-            }
-        });
-
-        ipcMain.handle('music-apply-lyrics-candidate', async (event, options = {}) => {
-            const title = typeof options.title === 'string' ? options.title.trim() : '';
-            const candidateKey = typeof options.candidateKey === 'string' ? options.candidateKey : '';
-            if (!title || !candidateKey) {
-                return { success: false, message: '缺少歌曲或歌词候选信息' };
-            }
-
-            try {
-                return await lyricFetcher.saveSelectedLyrics({
-                    candidateKey,
-                    title,
-                    artist: typeof options.artist === 'string' ? options.artist.trim() : '',
-                    lyricDir: LYRIC_DIR
-                });
-            } catch (error) {
-                console.error(`[Music] Error applying lyric candidate for "${title}":`, error);
-                return { success: false, message: error.message || '覆盖歌词失败' };
-            }
-        });
-
-        // ============ WebDAV IPC Handlers ============
-        // 前端直接传递完整凭据 {url, username, password, path}
-
-        ipcMain.handle('webdav-add-server', (event, config) => {
-            return webdavManager.addServer(config);
-        });
-
-        ipcMain.handle('webdav-remove-server', (event, { id }) => {
-            webdavManager.removeServer(id);
-            return { ok: true };
-        });
-
-        ipcMain.handle('webdav-list-servers', () => {
-            return webdavManager.listServers();
-        });
-
-        // 前端传递: { url, username, password }
-        ipcMain.handle('webdav-test-connection', async (event, config) => {
-            return await webdavManager.testConnection(config);
-        });
-
-        // 前端传递: { serverId?, url, username?, password?, path }
-        ipcMain.handle('webdav-list-directory', async (event, config) => {
-            // 如果提供了 serverId，从后端获取完整凭据
-            if (config.serverId) {
-                const serverCreds = webdavManager.getServerCredentials(config.serverId);
-                if (serverCreds) {
-                    config.url = serverCreds.url;
-                    config.username = serverCreds.username;
-                    config.password = serverCreds.password;
-                }
-            }
-            return await webdavManager.listDirectory(config);
-        });
-
-        // 前端传递: { serverId?, url, username?, password?, path? }
-        ipcMain.handle('webdav-scan-audio', async (event, config) => {
-            console.log('[Music] webdav-scan-audio called with config:', { serverId: config.serverId, url: config.url });
-            // 如果提供了 serverId，从后端获取完整凭据
-            if (config.serverId) {
-                const serverCreds = webdavManager.getServerCredentials(config.serverId);
-                console.log('[Music] serverCreds found:', !!serverCreds, 'hasPassword:', !!(serverCreds?.password));
-                if (serverCreds) {
-                    config.url = serverCreds.url;
-                    config.username = serverCreds.username;
-                    config.password = serverCreds.password;
-                }
-            }
-            const results = await webdavManager.scanAudioFiles(config, (count) => {
-                if (musicWindow && !musicWindow.isDestroyed()) {
-                    musicWindow.webContents.send('webdav-scan-progress', { count });
-                }
+        // WebDAV 的 IPC 在 musicWebdavHandlers.js
+        if (typeof registerMusicWebdavHandlers === 'function') {
+            registerMusicWebdavHandlers({
+                ipcMain,
+                webdavManager,
+                getMusicWindow: () => musicWindow,
+                setCurrentSongInfo: (info) => { currentSongInfo = info; }
             });
-            console.log('[Music] scanAudioFiles returned:', results?.status, 'tracks:', results?.tracks?.length);
-            return results;
-        });
-
-        // 前端传递: { url, serverId?, remotePath? }
-        ipcMain.handle('webdav-get-file-url', (event, config) => {
-            return webdavManager.getFileUrl(config);
-        });
-
-        // 获取服务器完整凭据（包含密码）
-        ipcMain.handle('webdav-get-server-credentials', (event, { serverId }) => {
-            return webdavManager.getServerCredentials(serverId);
-        });
-
-        // Load a WebDAV file: 前端传递 { url, serverId?, username?, password?, trackMeta? }
-        // 如果提供 serverId，则从后端获取完整凭据（包含密码）
-        ipcMain.handle('webdav-load-track', async (event, config) => {
-            if (!config.url) return { status: 'error', message: 'No URL provided' };
-            
-            // 如果提供了 serverId，从后端获取完整凭据
-            if (config.serverId && !config.password) {
-                const serverCreds = webdavManager.getServerCredentials(config.serverId);
-                if (serverCreds) {
-                    config.username = serverCreds.username;
-                    config.password = serverCreds.password;
-                }
-            }
-            
-            currentSongInfo = {
-                title: config.trackMeta?.title || config.url.split('/').pop().split('?')[0],
-                artist: config.trackMeta?.artist || '未知艺术家',
-                album: config.trackMeta?.album || '未知专辑',
-            };
-            return await webdavManager.configureAndLoad(config);
-        });
+        }
     };
 
     // 使用动态导入，并在成功后注册所有IPC处理器

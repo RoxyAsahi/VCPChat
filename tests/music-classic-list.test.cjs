@@ -41,6 +41,7 @@ function setup({ count = 500, archive = false, layout = true } = {}) {
             }));
         }
     };
+    window.eval(fs.readFileSync(path.join(__dirname, '..', 'Musicmodules/music-app-hooks.js'), 'utf8'));
     window.eval(source);
     window.setupMusicClassicList(app);
     app.renderPlaylist();

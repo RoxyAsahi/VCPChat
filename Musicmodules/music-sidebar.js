@@ -42,6 +42,9 @@ function setupSidebar(app) {
             if (!albums[name]) albums[name] = { name, art: t.albumArt, tracks: [] };
             albums[name].tracks.push(t);
         });
+        // 专辑里按碟号、曲号排，和「目录」一致
+        const order = globalThis.MusicTrackOrder;
+        if (order) for (const g of Object.values(albums)) { const cmp = order.albumCompare(g.tracks, (a, b) => a - b); g.tracks = g.tracks.map((t, i) => i).sort(cmp).map((i) => g.tracks[i]); }
         return Object.values(albums).sort((a,b) => b.tracks.length - a.tracks.length);
     };
 

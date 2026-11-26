@@ -15,6 +15,7 @@ function setup({ mode = 'repeat', count = 6 } = {}) {
         navigator: {},
         localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })()
     });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-app-hooks.js'), 'utf8'), context);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-player.js'), 'utf8'), context);
     const make = (i) => ({ path: `C:/m/${i}.flac`, title: `t${i}` });
     const playlist = Array.from({ length: count }, (_, i) => make(i));

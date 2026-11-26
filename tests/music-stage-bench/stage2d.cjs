@@ -33,8 +33,30 @@ const KINDS = {
 };
 const KIND_OF = new Map(Object.entries(KINDS).flatMap(([k, ns]) => ns.map(n => [n, k])));
 
-const run = async (browser, origin, mode, config) => {
+// 真实歌词：LRC=路径 --lyrics=custom。同一时刻的两行当作原文 + 翻译
+const customLyrics = () => {
+    if (!process.env.LRC) return null;
+    const rows = new Map();
+    fs.readFileSync(process.env.LRC, 'utf8').split(/\r?\n/).forEach((line) => {
+        const m = line.match(/^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/);
+        if (!m) return;
+        const time = +(Number(m[1]) * 60 + Number(m[2])).toFixed(3);
+        const text = m[3].trim();
+        if (!rows.has(time)) rows.set(time, []);
+        if (text) rows.get(time).push(text);
+    });
+    return [...rows].filter(([, t]) => t.length).sort((a, b) => a[0] - b[0])
+        .map(([time, [original, translation = '']]) => ({ time, original, translation }));
+};
+const newPage = async (browser) => {
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: Number(process.env.DPR || 1) });
+    const lyrics = customLyrics();
+    if (lyrics) await page.addInitScript(l => { window.__customLyrics = l; }, lyrics);
+    return page;
+};
+
+const run = async (browser, origin, mode, config) => {
+    const page = await newPage(browser);
     await page.goto(`${origin}/blank.html`);
     await page.evaluate(([m, c]) => {
         localStorage.clear();
@@ -84,7 +106,7 @@ const run = async (browser, origin, mode, config) => {
 
 const shots = async (browser, origin, mode, dir, times, config) => {
     fs.mkdirSync(dir, { recursive: true });
-    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: Number(process.env.DPR || 1) });
+    const page = await newPage(browser);
     if (process.env.STAGE_LOG) { page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.error('[page]', m.text().slice(0, 1500)); }); page.on('pageerror', e => console.error('[pageerror]', String(e).slice(0, 1500))); }
     await page.goto(`${origin}/blank.html`);
     await page.evaluate(([m, c]) => { localStorage.clear(); localStorage.setItem('musicStageMode', m); if (c) localStorage.setItem('musicStageConfig', JSON.stringify(c)); }, [mode, config || null]);

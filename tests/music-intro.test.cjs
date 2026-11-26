@@ -11,7 +11,6 @@ const source = fs.readFileSync(path.join(ROOT, 'Musicmodules/music-intro/music-i
 
 function setup({ reduced = false, startInStage = false } = {}) {
     const dom = new JSDOM(`<!doctype html><body>
-        <button id="stage-toggle-btn"></button>
         <main class="music-stage" hidden><div class="music-stage-mode-root"></div></main>
     </body>`, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/?intro=off' });
     const { window } = dom;
@@ -144,11 +143,11 @@ test('进到一半（已经进去、还没揭开）再退：最后回到常规',
     t.close();
 });
 
-test('切换按钮连按：每按一次去向反一次', async () => {
+test('连着切换舞台（stageHost.toggle，底栏和快捷键都走它）：每切一次去向反一次', async () => {
     for (const [presses, expected] of [[1, true], [2, false], [3, true], [4, false]]) {
         const t = setup();
         for (let i = 0; i < presses; i += 1) {
-            t.doc.getElementById('stage-toggle-btn').dispatchEvent(new t.window.MouseEvent('click', { bubbles: true }));
+            t.host.toggle();
             await t.advance(100);
         }
         await t.advance(4000);

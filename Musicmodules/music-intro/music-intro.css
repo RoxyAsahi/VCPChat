@@ -101,6 +101,17 @@ body.light-theme {
     opacity: 0;
 }
 
+.music-intro .mi-wipe {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: var(--ar-accent, var(--mi-ink));
+    opacity: 0;
+    pointer-events: none;
+}
+
 .music-intro .mi-skip {
     position: absolute;
     right: 28px;
@@ -111,10 +122,11 @@ body.light-theme {
     opacity: .8;
 }
 
-/* 页面一打开就有的底色层，脚本接手后移除。脚本万一没跑起来，几秒后自己淡掉，不会把界面挡死。 */
+/* 页面一打开就有的底色层，开场接手时移除。冷启动可能超过 4 秒，保底不能太早（早了会先露出首页再盖上开场）；
+ * 启动出错时 music.js 会直接撤掉它，这里的保底只防脚本根本没跑起来，不会把界面挡死。 */
 .music-intro-cover {
     pointer-events: none;
-    animation: music-intro-cover-out .3s ease-out 4s forwards;
+    animation: music-intro-cover-out .3s ease-out 12s forwards;
 }
 
 @keyframes music-intro-cover-out {
