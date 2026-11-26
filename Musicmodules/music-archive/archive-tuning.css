@@ -352,7 +352,7 @@ body.music-reduce-motion .archive-lyrics.searching .archive-lyrics-none span { a
 .archive-lyrics.browsing:not(.plain):not(.none) .archive-lyrics-back { animation: archive-lyrics-back-in .18s ease both; }
 @keyframes archive-lyrics-back-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
-/* 检索框收小（Roxy 11-24：太大、和栏名/表头衔接突兀）：
+/* 检索框收小（太大、和栏名/表头衔接突兀）：
    字号、图标、+ 按钮都降到和分类标签同一档，底线改成和表格同一种细线，聚焦时才变强调色 */
 .archive-list-toolbar { gap: 10px; border-bottom-color: color-mix(in srgb, var(--ar-ink) 24%, transparent); }
 .archive-list-search { gap: 9px; padding-bottom: 6px; }
@@ -363,7 +363,7 @@ body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
 .archive-list-import-toggle { width: 20px; height: 20px; border-color: transparent; font-size: 16px; }
 .archive-list-clear { width: 20px; height: 20px; }
 .archive-hud:not(.narrow):not(.squeeze) .archive-list-brand { bottom: calc(100% + 14px); }
-/* ===== 顶部减层级（Roxy 11-24：「这里层级太多了」）=====
+/* ===== 顶部减层级（「这里层级太多了」）=====
    原来：检索行（带底线）→ 分类行（带排序）→ 表头（带底线），三层。
    现在：检索收成分类行右端一个放大镜，点开/输入时铺满这一行盖住分类；排序并进表头（点列名排序）；只留表头一条线。 */
 .archive-list-kinds { margin-top: 18px; margin-bottom: 12px; padding-right: 56px; }
@@ -392,7 +392,7 @@ body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
 .archive-list[data-sort="artist"] .archive-list-cols > button:nth-child(2) { color: var(--ar-ink); font-weight: 600; }
 .archive-list-cols > button[aria-pressed="true"] { color: var(--ar-ink); font-weight: 600; }
 .archive-list:is([data-kind="playlist"], [data-kind="recent"], [data-kind="search"]) .archive-list-cols > button[aria-pressed] { color: color-mix(in srgb, var(--ar-ink) 60%, transparent); font-weight: inherit; }
-/* ===== 表头去掉、排序回到分类行（Roxy 11-24：「这一行没啥存在的必要」）=====
+/* ===== 表头去掉、排序回到分类行（「这一行没啥存在的必要」）=====
    分类行右端三个同样大小的小图标按钮：排序、检索、导入。悬停统一成一块 6px 圆角的浅底 + 图标变实，
    分类项悬停在字下面浮一条细线（选中的是琥珀粗线），点下去有轻微按压。 */
 .archive-list-cols { display: none; }
@@ -427,7 +427,7 @@ body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
 .archive-list-row.on::after, .archive-list-row.current.on::after { right: var(--text-end-inset); }
 .archive-list-sort-menu button:focus-visible { outline: none; box-shadow: none; }
 .archive-list-sort::before { display: none; }
-/* ===== 间距统一（Roxy 11-24：「边距什么的细节再微调打磨」）=====
+/* ===== 间距统一（「边距什么的细节再微调打磨」）=====
    竖向按 4 的倍数走：栏名 → 小字 10，小字 → 分类行 28，分类行 → 第一组 8，组头 → 行 0，行高 48；
    序号列和标题列之间 12；分组头导轨对准字的中线；滚动条离表格右缘 4px，不再贴窗边；底部计数和列表空一拍。 */
 .archive-list-row { height: 48px; column-gap: 12px; }
@@ -439,7 +439,7 @@ body.music-reduce-motion .archive-lyrics-back { animation: none !important; }
 .archive-list-thumb { right: -11px; }
 .archive-list-foot { padding-top: 16px; }
 .archive-hud.list-open .archive-list-foot { padding-top: 12px; }
-/* ===== 检索展开态重做（Roxy 11-24：「搜索的 hover 还是烂」）=====
+/* ===== 检索展开态重做（「搜索的 hover 还是烂」）=====
    不要共用套件那块圆角玻璃胶囊（和目录的扁平细线不搭）：展开后就是一行字 + 一条 1px 细线，
    细线只在检索框底下、不伸到「+」下面；平时淡（24%），悬停 40%，聚焦 70% 墨色；放大镜跟着变深，不再是亮白。 */
 .archive-list-search::after { content: none; }
@@ -479,7 +479,7 @@ html.md-pointer-mode #music-dock-root .md-dockrow button[role="tab"]:focus-visib
 .archive-lyrics-index.hovering .hov { display: block; }
 .archive-lyrics-index.hovering .tip { display: flex; }
 body.music-reduce-motion .archive-lyrics-index .cur { transition: none; }
-/* ===== 目录宽度手动调（Roxy 11-25）=====
+/* ===== 目录宽度手动调=====
    拖过才有 .user-w，宽度用 --list-w-user；没拖过完全是原来的默认宽度。上下叠放（tiny）时不生效、拖柄也藏起来。 */
 .archive-hud:not(.tiny) .archive-list.user-w.user-w { width: var(--list-w-user); max-width: 45%; }
 .archive-list-grip { position: absolute; z-index: 8; top: 0; bottom: 0; right: -26px; width: 10px; cursor: col-resize; touch-action: none; outline: none; }

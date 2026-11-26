@@ -4,6 +4,9 @@
  * 重新摆到哪里（阵列在两个方向循环），所以曲库有几千首也只有这 288 张卡。
  *
  * 依赖全局 THREE（vendor/three.min.js）。不读播放器状态，由 archive-view.js 驱动。
+ *
+ * 着色与几何按 Rhine-Music-Database（MIT，Copyright (c) 2026 LBEILC）的源码改写，
+ * 许可证全文和逐项对照见 Musicmodules/README.md「其他第三方参考与许可证」。
  */
 (function (global) {
     'use strict';

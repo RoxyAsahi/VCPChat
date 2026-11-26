@@ -965,9 +965,9 @@
                 bx, -2, bz, bx, elevation(b), bz, ax, elevation(a), az);
         }
         /*
-         * The far shore is the Shonan coast. Off it lies Enoshima: a wooded
-         * table of an island, its lighthouse tower standing on top, joined to
-         * the land by a long bridge. Beyond and to the right, Mount Fuji. They
+         * The far shore is a low coastline. Off it lies a small island: a wooded
+         * table of land, a lighthouse tower standing on top, joined to the
+         * shore by a long bridge. Beyond and to the right, a snow-capped peak. They
          * are part of the same silhouette as the ridge, a tone apart: the
          * island nearer and darker, the mountain hazed and capped with snow.
          */
@@ -1000,7 +1000,7 @@
                 };
                 split(wide0, wide1);
             });
-        const fujiCrest = u => {
+        const peakCrest = u => {
             const flank = Math.pow(Math.max(0, 1 - Math.abs(u)), 1.75);
             return PEAK.height * Math.min(flank, 0.93 + 0.02 * Math.sin(u * 90)) / 0.93;
         };
@@ -1008,7 +1008,7 @@
         for (let i = 0; i < 64; i++) {
             const u0 = i / 32 - 1, u1 = (i + 1) / 32 - 1;
             const a0 = PEAK.bearing + u0 * PEAK.reach, a1 = PEAK.bearing + u1 * PEAK.reach;
-            const h0 = fujiCrest(u0), h1 = fujiCrest(u1), s0 = Math.min(h0, snowLine(u0)), s1 = Math.min(h1, snowLine(u1));
+            const h0 = peakCrest(u0), h1 = peakCrest(u1), s0 = Math.min(h0, snowLine(u0)), s1 = Math.min(h1, snowLine(u1));
             facet(a0, a1, PEAK.radius, -2, s0, -2, s1, 1.22);
             if (h0 > s0 || h1 > s1) facet(a0, a1, PEAK.radius, s0, h0, s1, h1, 2.3);
         }
@@ -1043,7 +1043,7 @@
         const headlight = new T.PointLight('#ffe9c4', 0, 16, 2);
         root.add(headlight);
         /*
-         * The train is drawn after the Enoshima Electric Railway's 300 series:
+         * The train is drawn after a small coastal tram-train:
          * short two-car articulated sets in a two-tone livery, a folded front
          * of three panes with a lamp on the roof, deep sash windows, one
          * lozenge pantograph to a set. From the cab it is all around the camera
@@ -2412,7 +2412,7 @@
         const trainParts = [cars, glass, kits, trainEnds];
         /*
          * The saloon of the leading car, for the breaks in the song when the
-         * camera rides inside. It is laid out as the 300 series is: long benches
+         * camera rides inside. It is laid out as such cars are: long benches
          * under the windows, a rack and a row of hand straps over each, twin
          * rows of ceiling lights, and a glazed bulkhead through which
          * the cab, the driver and the line ahead can be seen. The windows are

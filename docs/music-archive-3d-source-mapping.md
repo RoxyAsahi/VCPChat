@@ -78,12 +78,12 @@
 | 镜头快速移动、卡飞出前半段按 0.67 倍分辨率画 | `render/RenderModePolicy.h` 渲染比例 50–200% 加放大 | 思路照搬；原版是固定比例，我们只在运动时降，停稳全清晰 |
 | 实例从近到远画 | `NativeSceneUpdate.cpp` 按相机距离前到后重排 | 照搬（按行倒序） |
 | （未搬）机位、注视点、视角再按 `1-exp(-5·dt)` 跟随 | `NativeSceneCamera.cpp` 的 `blend` | 试过后撤回：鼠标每动一下镜头要多追约 0.8 秒、按满帧画，和「降负载」冲突；我们的卡片移动已经各自有弹簧 |
-| （未搬）不操作 0.75 秒即停掉待机起伏 | `Engine.cpp` `energyIdle` | 会改变放歌时的观感，等 Roxy 决定 |
+| （未搬）不操作 0.75 秒即停掉待机起伏 | `Engine.cpp` `energyIdle` | 会改变放歌时的观感，待定 |
 | 卡取出后背景的选中波纹按 `1-exp(-8·dt)` 淡到 0，淡完清空 | `NativeSceneUpdate.cpp` `m_pulseGain` | 照搬 |
 | 重选刚换下的卡：从它当时的高度和角度接着抬 | `NativeScene::select` 的 `m_returning` 取回 | 照搬 |
 | 低帧率（待机 12 帧、省电 30 帧）时两帧之间用定时器睡，快到点才要显示帧 | `Engine.cpp` tick：只转唱片时 `intervalMs = 33`，场景停稳就停掉定时器 | 思路照搬；画的帧数不变，页面被叫醒的次数约为原来五分之一 |
 | 只在能浏览时指针才带动镜头视差；放回过渡里视差缓缓跟上 | `NativeSceneUpdate.cpp` `m_pendingHover` 只在 `canBrowse()` 时更新 `m_pointer` | 照搬；卡取出端详时晃鼠标不再整帧重画 |
-| （未搬）指针视差的范围 | 原版 `m_pointer = x/宽 − 0.5`（±0.5）×0.12；我们是 ±1×0.12 | 我们晃动幅度是原版两倍；改了观感会变，等 Roxy 决定 |
+| （未搬）指针视差的范围 | 原版 `m_pointer = x/宽 − 0.5`（±0.5）×0.12；我们是 ±1×0.12 | 我们晃动幅度是原版两倍；改了观感会变，待定 |
 | （未搬）滚轮一格只走一行、不带惯性 | `Engine::wheel` 的 `m_wheelSteps` | 本机版的滚轮惯性是她要的手感，保留 |
 | 起伏场（肩部隆起、列聚焦强度、待机两组正弦、选中波纹）与主题翻色（每张 0.58 秒、最远晚 0.6 秒、整体 0.85 秒、smoothstep） | `SceneMotion.cpp` `ArchiveField::sample`、`ThemeWave` | 逐项核对过，常数和曲线一致 |
 | （未搬）浏览时投影矩阵横向偏 0.16（`m_projection.values[8] += 0.16 * archiveOffset`） | `NativeSceneCamera.cpp` 浏览构图 | 原版把阵列整体往一侧挪；我们按本机版左目录、右抽屉的让位构图，不叠加这个偏移 |
