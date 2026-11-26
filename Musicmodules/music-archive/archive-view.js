@@ -37,11 +37,10 @@
             <nav class="archive-nav" data-ref="nav">
                 <button type="button" data-act="list" data-ref="listBtn" title="显示或收起左侧目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> 目录</button>
                 <button type="button" data-act="search" title="检索曲目（/，或直接打字）"><span class="archive-glyph-search" aria-hidden="true"></span> 检索 <span class="archive-key" aria-hidden="true">/</span></button>
-                <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ 加入歌单</button>
+                <button type="button" data-act="save" title="选中曲目的操作：播放、下一首、加入歌单、转到歌手……（Shift+F10）" aria-haspopup="menu"><svg class="archive-glyph-stage" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="18.5" cy="12" r="1.9" fill="currentColor"/></svg> 操作</button>
                 <button type="button" data-act="lyrics" data-ref="lyricsBtn" title="显示或收起右侧歌词" aria-pressed="false">歌词</button>
                 <span class="archive-layouts" data-ref="layouts"><span class="archive-glyph-layout" aria-hidden="true"><i></i><i></i><i></i></span><select class="archive-layout-select" aria-label="视图" title="换一种看法"><option value="array">阵列</option><option value="wall">封面墙</option><option value="table">平放</option><option value="grid">网格</option><option value="classic">经典列表</option></select></span>
                 <button type="button" data-act="controls" title="音效、舞台与播放设置">设置 <span aria-hidden="true">↗</span></button>
-                <button type="button" data-act="pick" data-ref="pickBtn" title="随机抽一首：选择框在列间跑一段，停在哪首就取出来播放（Shift+R）。按 ? 看全部快捷键"><span class="archive-glyph-pick" aria-hidden="true"></span> 随机抽取</button>
                 <button type="button" data-act="stage" title="进入歌词舞台（Shift+Enter 播放选中并进舞台；回到正在播放用 Ctrl+L）"><svg class="archive-glyph-stage" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6c.55 4.9 4.5 8.85 9.4 9.4-4.9.55-8.85 4.5-9.4 9.4-.55-4.9-4.5-8.85-9.4-9.4 4.9-.55 8.85-4.5 9.4-9.4Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg> 进入舞台</button>
             </nav>
             <div class="archive-empty" role="status">
@@ -914,6 +913,7 @@
         };
 
         let list = null;
+        let playlistsChanged = () => {};
         let lyrics = null;
         let wall = null;            // 封面墙（archive-wall.js），没有那个文件时只有档案阵列
         let grid = null;            // 分节网格（archive-grid.js）
@@ -1138,6 +1138,9 @@
             document.body.classList.toggle('music-archive-on', on);
             document.body.classList.toggle('music-archive-off', !on);
             app.isArchiveActive = on;
+            // 标题栏的视图菜单：经典列表里显示「经典列表」，首页里显示当前布局
+            const sel = refs.layouts?.querySelector('.archive-layout-select');
+            if (sel) { const want = on ? state.layout : 'classic'; if (sel.value !== want) sel.value = want; }
             if (persist) { try { localStorage.setItem(VIEW_KEY, state.mode); } catch (e) { /* 只是记住上次的视图 */ } schedulePlace(); }
             if (on) {
                 app.destroyAmbientPixi?.();
@@ -1643,6 +1646,13 @@
         };
         root.addEventListener('wheel', onHudWheel, { passive: false });
 
+        // 记下按下「设置」那一刻抽屉开着没有（抽屉自己在 document 捕获阶段按「点到外面」收起，这里挂在 window 捕获阶段，抢在它前面）
+        let controlsDownOpen = null;
+        const onControlsDown = (e) => {
+            const hit = e.target && e.target.closest && e.target.closest('[data-act="controls"]');
+            controlsDownOpen = hit && root.contains(hit) ? !!app.musicDock?.panelOpen : null;
+        };
+        global.addEventListener('pointerdown', onControlsDown, true);
         root.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
             if (btn) {
@@ -1658,7 +1668,15 @@
                     case 'now': locatePlaying(); break;
                     case 'stage': if (app.stageHost && !app.stageHost.active) { try { app.stageHost.enter(); } catch (e) { /* 舞台没准备好就留在这里 */ } } break;
                     case 'lyrics': wantLyrics(!state.lyricsOn); break;
-                    case 'controls': openControls(); break;
+                    case 'controls': {
+                        // 再点一次是收起：抽屉在按下时就被「点到外面」收掉了，这里不再重新打开（不然永远关不掉，还来回重排）
+                        const dock = app.musicDock;
+                        const wasOpen = controlsDownOpen != null ? controlsDownOpen : !!dock?.panelOpen;
+                        controlsDownOpen = null;
+                        if (wasOpen) { if (dock?.panelOpen) dock.closePanel?.(); break; }
+                        openControls();
+                        break;
+                    }
                     case 'classic': setMode('classic'); break;
                     case 'layout': setLayout(btn.dataset.layout); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
@@ -1666,10 +1684,17 @@
                     case 'save': {
                         const index = selectedIndex();
                         if (index < 0) break;
+                        // 菜单开着时再点按钮就是收起（不然会先被点外面关掉、又马上重新长一次）
+                        const menu = app.contextMenu || document.getElementById('track-context-menu');
+                        if (menu && menu.classList.contains('visible') && btn.getAttribute('aria-expanded') === 'true') {
+                            menu.classList.remove('visible');
+                            break;
+                        }
                         const r = btn.getBoundingClientRect();
                         app.contextMenuTrackIndex = index;
+                        if (menu) menu.__mfAnchor = btn;
                         app.showContextMenu?.(r.left, r.bottom + 8);
-                        ListLib?.menuKeyboard?.(app, { restore: btn, playlist: true });
+                        ListLib?.menuKeyboard?.(app, { restore: btn });
                         break;
                     }
                     default: break;
@@ -1678,6 +1703,27 @@
                 return;
             }
         });
+        // 「随机抽取」放在顶栏「操作」菜单里（只在从那个按钮打开时出现，右键单曲时不出现），Shift+R 照旧
+        const ctxMenu = app.contextMenu || document.getElementById('track-context-menu');
+        let pickItem = null, unhookPick = null;
+        if (ctxMenu && global.MusicAppHooks) {
+            pickItem = document.createElement('div');
+            pickItem.className = 'context-menu-item';
+            pickItem.dataset.action = 'archive-pick';
+            pickItem.title = '选择框在列间跑一段，停在哪首就取出来播放（Shift+R）';
+            pickItem.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/><circle cx="15" cy="15" r="1.6" fill="currentColor"/><circle cx="15" cy="9" r="1.6" fill="currentColor"/><circle cx="9" cy="15" r="1.6" fill="currentColor"/></svg><span>随机抽取</span>';
+            pickItem.style.display = 'none';
+            pickItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                ctxMenu.classList.remove('visible');
+                randomPick();
+            });
+            ctxMenu.insertBefore(pickItem, ctxMenu.firstChild);
+            unhookPick = global.MusicAppHooks.before(app, 'showContextMenu', 'archive-pick', () => {
+                const fromNav = !!ctxMenu.__mfAnchor && refs.nav?.contains(ctxMenu.__mfAnchor);
+                pickItem.style.display = fromNav ? '' : 'none';
+            });
+        }
         // 别让档案页的点击把右键菜单立刻关掉
         root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
@@ -1907,6 +1953,7 @@
             scanOff.forEach((off) => { if (typeof off === 'function') off(); });
             stopInertia();
             lyrics?.destroy();
+            if (refs.layouts && !root.contains(refs.layouts)) refs.layouts.remove(); // 挪到标题栏里的视图菜单跟着拆掉
             list?.closeBatchMenu?.();
             list?.endPress?.();
             list?.destroyDrop?.();
@@ -1931,6 +1978,9 @@
             state.scene?.dispose();
             state.scene = null;
             if (unwrapAmbient) unwrapAmbient();
+            global.removeEventListener('pointerdown', onControlsDown, true);
+            if (typeof unhookPick === 'function') unhookPick();
+            pickItem?.remove();
         };
         // 关窗、刷新、离开页面时都彻底停掉：取消渲染循环和计时器，释放 WebGL 上下文（forceContextLoss），
         // 不让已经关掉的页面还在占用显卡或软件渲染。beforeunload 不一定触发（比如直接关进程），pagehide 兜底
@@ -1954,6 +2004,12 @@
             if (target < 0) return;
             stepLane(target - Model.wrap(state.lane, n));
         };
+        // 歌单改过（加歌、改名、新建）：目录和阵列重排；正在放的歌单改了名，底栏「正在播放」后面的名字跟着改
+        playlistsChanged = () => {
+            warming = null; rebuild({ steady: true });
+            const playing = app.filteredPlaylistSource;
+            if (playing && playing.type === 'playlist' && app.playbackSourceName) setQueueName(app.playbackSourceName(playing));
+        };
         if (ListLib && IndexLib) {
             list = ListLib.create({
                 host: refs.hud,
@@ -1967,12 +2023,7 @@
                 getRecent: recentIndices, durationOf,
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
-                onPlaylistsChanged: () => {
-                    warming = null; rebuild({ steady: true });
-                    // 正在放的歌单改了名：底栏「正在播放」后面的名字跟着改
-                    const playing = app.filteredPlaylistSource;
-                    if (playing && playing.type === 'playlist' && app.playbackSourceName) setQueueName(app.playbackSourceName(playing));
-                },
+                onPlaylistsChanged: () => playlistsChanged(),
                 onLibraryChanged: () => { warming = null; rebuild({ steady: true }); },
                 onResults: (q, _count, first) => {
                     // 有结果时阵列跟到第一条结果，免得还停在检索前那首
@@ -2114,11 +2165,85 @@
         let layoutSweepEl = null;
         /* 视图切换是一个下拉框（音乐窗口里的 <select> 会被 music-fluid-select 换成主程序同款的选项卡片），这里只同步它的值 */
         const layoutSelect = refs.layouts.querySelector('.archive-layout-select');
-        const markLayoutButtons = (layout) => { if (layoutSelect && layoutSelect.value !== layout) layoutSelect.value = layout; };
+        const markLayoutButtons = (layout) => { if (layoutSelect && state.mode !== 'classic' && layoutSelect.value !== layout) layoutSelect.value = layout; };
         // 「经典列表」也在这个菜单里（原来是页脚单独一个按钮）：选它就切到经典视图，菜单里仍然记着当前的首页布局。
+        // 「旧版界面」也是这个菜单的最后一项（原来是标题栏单独一个图标按钮）：选了就把整个音乐窗口换成上游原版界面。
+        // 只有主进程支持切换时才放进来；选它不改菜单的值，切换由 music-legacy-switch.js 去做。
+        const legacyApi = global.utilityAPI || global.electronAPI;
+        if (layoutSelect && legacyApi?.setMusicLegacyUI) {
+            const opt = document.createElement('option');
+            opt.value = 'legacy';
+            opt.textContent = '旧版界面';
+            opt.dataset.sep = '';
+            layoutSelect.append(opt);
+        }
+        // 标题栏里的视图菜单只露一个图标（和标题栏其他按钮一个样子），鼠标移上去就展开，移开一会儿收起；点一下也能开关。
+        const LAYOUT_ICON = '<svg class="archive-layouts-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 8h18M9 8v12"></path></svg>';
+        const iconLayoutTrigger = () => {
+            const Select = global.MusicFluidSelect;
+            if (!layoutSelect || !Select) return;
+            Select.dress(layoutSelect);
+            const trigger = layoutSelect.nextElementSibling;
+            if (!trigger || !trigger.classList.contains('mfs-trigger') || trigger.querySelector('.archive-layouts-icon')) return;
+            trigger.classList.add('archive-layouts-iconic');
+            trigger.insertAdjacentHTML('afterbegin', LAYOUT_ICON);
+            const label = () => `视图：${layoutSelect.options[layoutSelect.selectedIndex]?.textContent?.trim() || ''}`;
+            // 下拉按钮每次同步都会把原 <select> 的 title 抄过来，所以提示写在 select 上
+            const relabel = () => { layoutSelect.title = label(); trigger.title = label(); trigger.setAttribute('aria-label', label()); };
+            relabel();
+            layoutSelect.addEventListener('change', relabel);
+            const isOpen = () => trigger.classList.contains('mfs-open');
+            const menuEl = () => { const id = trigger.getAttribute('aria-controls'); return id ? document.getElementById(id) : null; };
+            let hoverAt = 0, leaveTimer = 0;
+            const stay = () => { clearTimeout(leaveTimer); leaveTimer = 0; };
+            const leaveSoon = () => {
+                stay();
+                leaveTimer = setTimeout(() => {
+                    leaveTimer = 0;
+                    const m = menuEl();
+                    if (!isOpen() || trigger.matches(':hover') || (m && m.matches(':hover'))) return;
+                    Select.close();
+                }, 280);
+            };
+            trigger.addEventListener('pointerenter', (e) => {
+                if (e.pointerType && e.pointerType !== 'mouse') return;
+                stay();
+                if (isOpen()) return;
+                hoverAt = Date.now();
+                trigger.click();
+                const m = menuEl();
+                if (m) {
+                    m.addEventListener('pointerenter', stay);
+                    m.addEventListener('pointerleave', leaveSoon);
+                    // 鼠标悬停打开的不画键盘焦点框（当前项照样有勾）
+                    const cur = m.querySelector('.mfs-on') || m.querySelector('.mfs-item');
+                    if (cur && m.contains(document.activeElement)) { cur.blur(); cur.focus({ preventScroll: true, focusVisible: false }); }
+                }
+            });
+            trigger.addEventListener('pointerleave', (e) => { if (!e.pointerType || e.pointerType === 'mouse') leaveSoon(); });
+            // 刚被悬停打开时紧接着的一下点击不要又把它关掉
+            trigger.addEventListener('click', (e) => {
+                if (isOpen() && Date.now() - hoverAt < 700 && e.isTrusted) { e.stopImmediatePropagation(); e.preventDefault(); }
+            }, true);
+        };
+        // 菜单本身挪到窗口最顶上的标题栏右边（窗口按钮左侧），和舞台里的舞台下拉同一个位置；舞台打开时它让给舞台下拉。
+        // 测试页没有标题栏时留在首页顶栏里。
+        const titleSlot = document.querySelector('#custom-title-bar .titlebar-actions');
+        if (titleSlot && refs.layouts) {
+            titleSlot.insertBefore(refs.layouts, titleSlot.firstChild);
+            iconLayoutTrigger();
+        }
         layoutSelect?.addEventListener('change', () => {
-            if (layoutSelect.value === 'classic') { layoutSelect.value = state.layout; setMode('classic'); return; }
-            setLayout(layoutSelect.value);
+            const value = layoutSelect.value;
+            if (value === 'legacy') {
+                layoutSelect.value = state.mode === 'classic' ? 'classic' : state.layout;
+                global.MusicLegacySwitch?.switchToLegacy?.();
+                return;
+            }
+            if (value === 'classic') { setMode('classic'); return; }
+            // 在经典列表里选了某个首页布局：先回首页再换布局（直接换，不走纸面过场）
+            if (state.mode === 'classic') { setMode('archive'); applyLayout(value, true); return; }
+            setLayout(value);
         });
         const revealSweep = (el, w) => {
             el.classList.remove('is-covering');
