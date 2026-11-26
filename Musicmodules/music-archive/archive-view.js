@@ -1736,7 +1736,8 @@
             }
             if (e.code === 'Space' && tag !== 'BUTTON') {
                 e.preventDefault();
-                app.isPlaying ? app.pauseTrack?.() : app.playTrack?.();
+                if (app.toggleTransport) app.toggleTransport();
+                else app.isPlaying ? app.pauseTrack?.() : app.playTrack?.();
             }
         };
         document.addEventListener('keydown', onKeyDown);
@@ -2054,7 +2055,7 @@
             },
             seek: (t) => app.seekTo?.(t),
             transport: (act) => {
-                if (act === 'toggle') { if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
+                if (act === 'toggle') { if (app.toggleTransport) app.toggleTransport(); else if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.(); }
                 else if (act === 'prev') app.prevTrack?.();
                 else if (act === 'next') app.nextTrack?.();
             },

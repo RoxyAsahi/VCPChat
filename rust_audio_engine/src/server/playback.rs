@@ -208,10 +208,14 @@ async fn load(
     match player.load_with_credentials(&path, credentials.as_ref()) {
         Ok(()) => {
             player.mark_applied();
-            HttpResponse::Ok().json(ApiResponse::success_with_state(
-                "Track loaded",
-                get_player_state(&player),
-            ))
+            // accepted_path: the path the engine is actually loading, so the
+            // window can match readiness against it rather than its own spelling.
+            HttpResponse::Ok().json(serde_json::json!({
+                "status": "success",
+                "message": "Track load accepted",
+                "accepted_path": path,
+                "state": get_player_state(&player),
+            }))
         }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::error(&format!("Failed to load: {}", e))),

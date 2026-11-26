@@ -199,6 +199,9 @@ function createOrFocusMusicWindow() {
             ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
             modal: false,
             webPreferences: {
+                // Rust keeps playing when this window is occluded; keep its lyric/spectrum frame clock running too.
+                // 关了节流以后页面总报「可见」，最小化 / 隐藏由下面的 music-window-visibility 补报给新版页面。
+                backgroundThrottling: false,
                 preload: resolveProjectPreload(path.join(__dirname, '..', '..'), PRELOAD_ROLES.UTILITY),
                 sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
@@ -222,6 +225,13 @@ function createOrFocusMusicWindow() {
             publishMusicCapsule();
             musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });
         });
+        // 页面关了后台节流，最小化 / 隐藏时 document.hidden 不会变；告诉新版页面，让舞台和 3D 首页停画
+        const reportVisibility = () => {
+            if (!musicWindow || musicWindow.isDestroyed()) return;
+            const hidden = musicWindow.isMinimized() || !musicWindow.isVisible();
+            musicWindow.webContents.send('music-window-visibility', { hidden });
+        };
+        for (const eventName of ['minimize', 'restore', 'hide', 'show']) musicWindow.on(eventName, reportVisibility);
         // 窗口藏起来再显示时 Windows 会丢掉缩略图按钮，重新设一遍
         musicWindow.on('show', () => {
             musicThumbar.update(musicWindow, { playing: musicCapsuleState.playing, force: true });

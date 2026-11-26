@@ -11,7 +11,7 @@ npm run music:context -- <模块|文件>   # 打印阅读包：该模块的文�
 npm run test:music                   # 全部音乐测试，和已知失败清单比对，只有「新失败」才算挂
 ```
 
-`npm run music:context -- music-dock.js` 也可以直接给文件名。这三个命令要在 git 检出（RoxyAsahi/VCPChat）里跑，需要仓库里的 tests/ 和 scripts/；Roxy 本机运行目录只装了文档和登记表。先读阅读包，再打开大文件；不要把 100 KB 的文件整份塞进上下文。
+`npm run music:context -- music-dock.js` 也可以直接给文件名。这三个命令要在 git 检出里跑，需要仓库里的 tests/ 和 scripts/。先读阅读包，再打开大文件；不要把 100 KB 的文件整份塞进上下文。
 
 模块登记表是 [architecture.json](architecture.json)：每个音乐相关文件只属于一个模块，模块写明用途、文档、测试和调试脚本。
 **新增文件先在登记表里给它找模块**，否则 `check:music` 不过。
@@ -96,23 +96,19 @@ setupUtils → setupAmbientPixi → setupVisualizer → setupLyrics → setupPla
 - 装配或舞台外观的重构：重构前后各跑一次 `node tests/music-window-bench/surface.cjs --out=a.json`（`--root=` 可指向另一份检出），diff 两份指纹（app 上每个属性的类型、每个舞台的类、页面报错）应当相同。
 - 云端没有声卡：引擎能起，但 `is_playing` 不会变 true；播放态的帧率数据不可信。
 
-## 装到本机（Roxy 的 FlowX13）
+## 装到运行中的 VCPChat
 
-本机运行目录：`C:\Users\CHENXI\Documents\Codex\2026-09-25\vcpchat-ui-zcode-zcode-clone-vcpchatui\work\VCPChat-zcode-ui`。
-**本机现状是标准**：她会让别的工具直接改本机文件，本机常常比任何分支都新。
-
-1. 先比对：本机文件的哈希和你分支的基线不同，就先三方合并，不要覆盖。
-2. 备份：`Codex\backup-<主题>-<日期>\rN\` 放覆盖前的原文件和哈希。
-3. 写入用 git 里的原始字节（那台机器 `core.autocrlf=true`，不要在那边 checkout 或 sed）。
-4. 生效：渲染端文件重开音乐窗口即可；`modules/`、`preloads/`、`main.js` 要完整重启 VCPChat；引擎要她托盘退出后再换 exe。
-5. 她在用电脑时不要跑会抢焦点的自动化。
+1. 先比对：运行目录里的文件可能被别的工具改过，哈希和你分支的基线不同就先三方合并，不要覆盖。
+2. 覆盖前备份原文件和哈希。
+3. 写入用 git 里的原始字节（Windows 上常开 `core.autocrlf=true`，不要在运行目录里 checkout 或 sed）。
+4. 生效：渲染端文件重开音乐窗口即可；`modules/`、`preloads/`、`main.js` 要完整重启 VCPChat；引擎要托盘退出后再换 exe。
 
 ## 红线
 
-- `Musicmodules-legacy/` 冻结：除 `legacy-bridge.js` 外一个字节都不能改；`tests/music-legacy.test.js` 按 `UPSTREAM.sha256` 核对。
-- 不在代码注释、测试名、提交信息、PR 描述里写参考项目的名字（ZCode、DSH）或具体地名（江之岛、江之电、湘南、富士山），用中性说法。
+- `Musicmodules-legacy/` 冻结：除 `legacy-bridge.js` 外一个字节都不能改（跟进上游时整份重新拷贝并重新生成哈希）；`tests/music-legacy.test.js` 按 `UPSTREAM.sha256` 核对。
+- 不在代码注释、测试名、提交信息、PR 描述里写其他参考项目的名字或舞台取材的真实地名，用中性说法。
 - 带 Folia 派生代码的文件保留顶部 AGPL-3.0 归属注释。
-- 不提交用户数据、模型、Cubism Core、本机路径下的东西。
+- 不提交用户数据、模型、Cubism Core、个人机器上的路径。
 - 不改界面外观和行为的重构，要能证明等价（同一组测试、拆 CSS 时拼接结果逐字节相同）。
 
 ## 守卫规则（`npm run check:music`）

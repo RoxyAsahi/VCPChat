@@ -15,7 +15,7 @@ const FRAMES = [['full', 1.0], ['full', 4.4], ['full', 5.0], ['full', 5.9], ['fu
     <link rel="stylesheet" href="/Musicmodules/music-theme/music-tokens.css">
     <link rel="stylesheet" href="/Musicmodules/music-intro/music-intro.css"></head>
     <body class="${'light' in args ? 'light-theme' : ''}" style="margin:0;background:var(--ar-paper,#11181b)">
-    <script>window.electronAPI = { loadSettings: async () => ({ userName: 'Roxy' }) };</script>
+    <script>window.electronAPI = { loadSettings: async () => ({ userName: '测试用户' }) };</script>
     <script src="/Musicmodules/music-intro/music-intro.js"></script></body></html>`;
   fs.writeFileSync(path.join(ROOT, 'tests/music-intro/harness.html'), html);
   const server = await require('../music-stage-bench/serve.cjs')(ROOT);

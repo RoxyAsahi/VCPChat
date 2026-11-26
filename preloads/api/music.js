@@ -11,6 +11,8 @@ module.exports = {
     api: {
         openMusicWindow: send('open-music-window').roles('chat', 'utility'),
         musicRendererReady: send('music-renderer-ready'),
+        // 窗口最小化 / 藏起来（页面关了后台节流，自己报不出来；Musicmodules/music-window-visibility.js）
+        onMusicWindowVisibility: on('music-window-visibility'),
         getMusicCapsuleState: invoke('music-capsule-get-state').roles('chat'),
         onMusicCapsuleState: on('music-capsule-state').roles('chat'),
         toggleMusicInfoInjection: invoke('music-info-injection-toggle').roles('chat'),

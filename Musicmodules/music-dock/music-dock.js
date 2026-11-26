@@ -787,7 +787,9 @@
         };
         listen(el.play, 'click', (event) => {
             event.stopPropagation();
-            if (app.isPlaying) app.pauseTrack?.();
+            // 加载中按「想不想播」切换，和主按钮、舞台空格一致。
+            if (app.toggleTransport) app.toggleTransport();
+            else if (app.isPlaying) app.pauseTrack?.();
             else app.playTrack?.();
         });
 
@@ -1940,7 +1942,8 @@
                 take();
                 if (event.repeat || spaceHeld) return; // 按住不连发
                 spaceHeld = true;
-                if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.();
+                if (app.toggleTransport) app.toggleTransport();
+                else if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.();
                 return;
             }
             if (event.altKey) return;

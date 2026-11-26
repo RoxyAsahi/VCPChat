@@ -31,10 +31,16 @@
     const MAX_CLOUDS = 6;
     const MAX_GLYPHS = 255;
     const TAU = Math.PI * 2;
-    const FPS = Object.freeze({ 'energy-saving': 24, standard: 30, ultimate: 60 });
-    const PIXELS = Object.freeze({ 'energy-saving': 0.9e6, standard: 1.6e6, ultimate: 3.0e6 });
-    const NATIVE = Object.freeze({ 'energy-saving': 1.6e6, standard: 3.4e6, ultimate: 5.2e6 });
-    const RATIO = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
+    // 画质三档，一档一档拉开（极致是满血）：
+    //   ratio   画面按每个 CSS 像素几个缓冲像素画（上限 native 个像素；不到 1 就是画小了再放大，字边、网点会软）
+    //   smooth  平滑场（墨团、冲击环、灰墨团、云、流场）的分辨率是画面的几分之一（上限 pixels 个像素）
+    //   detail  纸纹压印、线稿细节层、墨点飞溅、颗粒每秒跳 6 格；节能档都不要，颗粒和纸纹不动
+    const TIERS = Object.freeze({
+        ultimate: Object.freeze({ fps: 60, ratio: 2, native: 5.2e6, smooth: 1, pixels: 3.0e6, detail: true }),
+        standard: Object.freeze({ fps: 30, ratio: 1, native: 2.4e6, smooth: 0.5, pixels: 0.8e6, detail: true }),
+        'energy-saving': Object.freeze({ fps: 24, ratio: 0.7, native: 1.2e6, smooth: 0.34, pixels: 0.3e6, detail: false })
+    });
+    const tierOf = quality => TIERS[quality] || TIERS.standard;
     const REST_PART = 20;
     const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
     const V_ROTATE = /[ー～〜—―…‥\-–_()（）「」『』【】〈〉《》［］\[\]]/;
@@ -968,19 +974,21 @@
                 const order1 = pen.order;
                 // 细节层（Folia 没有）：很细的辅助线——一段虚线构造圆、一个对位十字。
                 // 线细到远景里被图的 mip 平均掉、切不过阈值，自己就淡没了；推近才看得清（不用另算远近）
-                if (settings.figureDetail !== false) {
-                    pen.setWidth(Math.max(1, penWidth * 0.32));
-                    pen.place(fx, fy, r, frot);
+                // 节能档不画这一层，但随机数照样取，构图和别的档一样
+                {
+                    const drawDetail = settings.figureDetail !== false;
+                    if (drawDetail) pen.setWidth(Math.max(1, penWidth * 0.32));
+                    if (drawDetail) pen.place(fx, fy, r, frot);
                     const a0 = random() * TAU, span = 1.2 + random() * 1.6;
                     const arc = [];
                     for (let k = 0; k < 18; k += 2) {
                         const t0 = a0 + span * k / 18, t1 = a0 + span * (k + 1) / 18;
                         arc.push([[Math.cos(t0) * 1.14, Math.sin(t0) * 1.14], [Math.cos(t1) * 1.14, Math.sin(t1) * 1.14]]);
                     }
-                    pen.segments(arc);
+                    if (drawDetail) pen.segments(arc);
                     // 对位十字：只两道细线（带小圈、排线的版本在远景里会糊成白点，不要）
                     const cxr = (random() < 0.5 ? -1 : 1) * 1.05, cyr = (random() < 0.5 ? -1 : 1) * 0.95;
-                    pen.segments([[[cxr - 0.18, cyr], [cxr + 0.18, cyr]], [[cxr, cyr - 0.18], [cxr, cyr + 0.18]]]);
+                    if (drawDetail) pen.segments([[[cxr - 0.18, cyr], [cxr + 0.18, cyr]], [[cxr, cyr - 0.18], [cxr, cyr + 0.18]]]);
                 }
                 figures.push({ x: fx, y: fy, r, o0: order0, o1: order1 });
             });
@@ -2057,10 +2065,12 @@ void main() {
                 cloud: clamp(tuning.cloud ?? 0.75, 0, 1),
                 keywords: tuning.keywords !== false,
                 bleed: tuning.inkBleed !== false,
-                spatter: tuning.inkSpatter !== false,
+                spatter: tuning.inkSpatter !== false && tierOf(mode.config.quality).detail,
+                figureDetail: tierOf(mode.config.quality).detail,
                 wobble: tuning.inkWobble === false ? 0 : 1,
                 scene: typeof tuning.inkScene === 'string' ? tuning.inkScene : 'auto',
                 paper: tuning.paperTexture === false ? 0 : 1,
+                detail: tierOf(mode.config.quality).detail,
                 fontScale: clamp(tuning.fontScale ?? 1, 0.65, 1.5),
                 waitingOpacity: clamp(tuning.waitingOpacity ?? 0.35, 0, 1),
                 showTranslation: tuning.showTranslation !== false,
@@ -2099,12 +2109,13 @@ void main() {
             const w = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             const h = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             const quality = mode.config.quality || 'standard';
-            const dpr = Math.min(RATIO[quality] || 1.5, global.devicePixelRatio || 1);
-            // 画面（字边、网点、颗粒）按原生像素画，上限 NATIVE；平滑的场按 PIXELS 的预算
-            const scale = Math.min(dpr, Math.sqrt((NATIVE[quality] || NATIVE.standard) / (w * h)));
+            const tier = tierOf(quality);
+            const dpr = Math.min(tier.ratio, global.devicePixelRatio || 1);
+            // 画面（字边、网点、颗粒）按这一档的像素密度画，上限 tier.native；平滑的场再按 tier.smooth 缩、上限 tier.pixels
+            const scale = Math.min(dpr, Math.sqrt(tier.native / (w * h)));
             const bw = Math.max(1, Math.round(w * scale));
             const bh = Math.max(1, Math.round(h * scale));
-            const smoothScale = Math.min(scale, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
+            const smoothScale = Math.min(scale * tier.smooth, Math.sqrt(tier.pixels / (w * h)));
             smoothSize = [Math.max(1, Math.round(w * smoothScale)), Math.max(1, Math.round(h * smoothScale))];
             if (glState) {
                 // 渲染器按「CSS 大小 × 每个 CSS 像素几个缓冲像素」算画布
@@ -2137,7 +2148,7 @@ void main() {
         // 只有会改变纹理和分镜的设置进键；网点、颗粒、配色这些只是着色器参数。
         const slotKey = (index) => {
             const s = settings();
-            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}|${s.spatter}|${s.scene}`;
+            return `${cuesFor?.key}|${index}|${world.W}x${world.H}|${s.fontScale}|${s.figures}|${s.collisions}|${s.cameraCuts}|${s.negativeShots}|${s.figureScale}|${s.reducedMotion}|${s.spatter}|${s.figureDetail}|${s.scene}`;
         };
         const slotFor = (index, build = true) => {
             if (!glState || index < 0 || index >= cues.length) return null;
@@ -2268,7 +2279,7 @@ void main() {
             const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
             u.uFlow = flowStep * 0.13;
             u.uFlowT = flowStep / 8;
-            u.uGrainStep = s.reducedMotion ? 0 : Math.floor(t * 6) % 64;
+            u.uGrainStep = s.reducedMotion || !s.detail ? 0 : Math.floor(t * 6) % 64;
             u.uPaper.set(palette.paper);
             u.uInk.set(palette.ink);
             u.uAccentCol.set(palette.accent);
@@ -2278,7 +2289,7 @@ void main() {
             u.uHalftone = s.halftone;
             u.uGrain = s.grain;
             u.uPaperGrain = s.paper;
-            u.uPress = s.paper ? (palette.paperLight ? 1 : 0.5) : 0;
+            u.uPress = s.paper && s.detail ? (palette.paperLight ? 1 : 0.5) : 0;
             const burstKick = data.transition === 'burst' && since >= 0 && since < 0.9 ? Math.sin(Math.PI * since / 0.9) : 0;
             u.uBeat = s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0) + burstKick);
             // 三遍：逐字层进墨场、低分辨率的平滑场、原生像素的主遍
@@ -2305,7 +2316,7 @@ void main() {
             updateOverlay(frame);
             if (!glState) return;
             const quality = mode.config.quality || 'standard';
-            const aim = 1000 / (FPS[quality] || 30);
+            const aim = 1000 / tierOf(quality).fps;
             const now = frame.now ?? performance.now();
             if (now < lastDraw) lastDraw = -Infinity;
             if (frame.isPlaying && now - lastDraw < aim - 3) return;

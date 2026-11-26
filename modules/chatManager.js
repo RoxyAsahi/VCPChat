@@ -5,7 +5,7 @@ import {
     updateFirstTextPart,
 } from './chat/singleChatRequestOrchestrator.js';
 import { publishConversationSelection } from './ui-system/sources/conversation-current.js';
-import { createContextCompactionService, shouldCompactContext, estimateContextTokens } from './chat/contextCompactionService.js';
+import { createContextCompactionService, shouldCompactContext, contextExceedsCompactableBudget, preflightContextSend, assertContextWithinLimit, providerUsageAnchor } from './chat/contextCompactionService.js';
 import { effectiveContextHistory, isContextCheckpoint, summarizeCompactionInput } from './chat/contextCompactionState.js';
 
 // 上游接受中止后等它自己收尾的上限；过了仍没有终态就在本地停止，保留已收到的部分
@@ -104,7 +104,7 @@ export const chatManager = (() => {
             const limit = Number(config?.contextTokenLimit);
             if (Array.isArray(history) && Number.isFinite(limit) && limit > 0) {
                 const effective = effectiveContextHistory(history.filter(message => message.id !== messageId));
-                needed = estimateContextTokens([...effective, { role: 'assistant', content: text }], config.systemPrompt || '') >= limit;
+                needed = contextExceedsCompactableBudget([...effective, { role: 'assistant', content: text }], config.systemPrompt || '', limit);
             }
         }
         if (isStreamActive() && !streamCompactionRequests.has(messageId)) {
@@ -153,7 +153,7 @@ export const chatManager = (() => {
                     const effective = effectiveContextHistory(history.filter(message => message.id !== messageId));
                     const limit = Number(config?.contextTokenLimit);
                     needsCompression = Number.isFinite(limit) && limit > 0
-                        && estimateContextTokens([...effective, { role: 'assistant', content: text }], config.systemPrompt || '') >= limit;
+                        && contextExceedsCompactableBudget([...effective, { role: 'assistant', content: text }], config.systemPrompt || '', limit);
                 }
             }
             if (!isStreamActive() || boundaryCheck.cancelled || streamCompactionRequests.has(messageId)
@@ -341,8 +341,10 @@ export const chatManager = (() => {
                     }
                 },
             });
+            assertContextWithinLimit(result.history, agentConfig, prompt);
             return effectiveContextHistory(result.history);
         }
+        if (globalSettingsRef.get().enableContextCompaction === true) assertContextWithinLimit(history, agentConfig, prompt);
         return effectiveContextHistory(history);
     }
 
@@ -845,18 +847,10 @@ export const chatManager = (() => {
     function _saveLastOpenState() {
         const currentSelectedItem = currentSelectedItemRef.get();
         const currentTopicId = currentTopicIdRef.get();
-        const globalSettings = globalSettingsRef.get();
-
         if (currentSelectedItem && currentSelectedItem.id) {
-            const settingsToSave = {
-                ...globalSettings, // Preserve existing settings
-                lastOpenItemId: currentSelectedItem.id,
-                lastOpenItemType: currentSelectedItem.type,
-                lastOpenTopicId: currentTopicId,
-            };
             const operation = lastOpenSaveQueue
                 .catch(() => {})
-                .then(() => electronAPI.saveSettings({ __vcpSettingsOps: [
+                .then(() => electronAPI.saveSettings({ __vcpSessionOnly: true, __vcpSettingsOps: [
                     { op: 'set', path: ['lastOpenItemId'], value: currentSelectedItem.id },
                     { op: 'set', path: ['lastOpenItemType'], value: currentSelectedItem.type },
                     { op: 'set', path: ['lastOpenTopicId'], value: currentTopicId },
@@ -1957,25 +1951,6 @@ export const chatManager = (() => {
         }
         pendingSendContexts.add(sendSignature);
         try {
-        if (!request?.checkpointMessageId && globalSettings.enableContextCompaction === true
-            && shouldCompactContext(sendHistoryRef.get(), currentSelectedItem.config || currentSelectedItem, content)) {
-            try {
-                const preview = summarizeCompactionInput(sendHistoryRef.get());
-                const previewDetail = `${preview.sourceCount} 条历史 · ${preview.anchors} 个标识符锚点`
-                    + (preview.openWindows ? ` · ${preview.openWindows} 个未决窗口` : '');
-                uiHelper.showToastNotification(`上下文接近容量，自动压缩中：${previewDetail}`, 'warning');
-                await compactContext({
-                    scope: { itemId: sendContext.agentId, itemType: sendContext.itemType, topicId: sendContext.topicId },
-                    historyRef: sendHistoryRef, selectedRef: sendSelectedItemRef, topicRef: sendTopicIdRef,
-                    renderTarget, allowPendingSend: true,
-                });
-                if (!isSendContextCurrent()) return;
-            } catch (error) {
-                uiHelper.showToastNotification(`自动压缩失败，草稿已保留：${error.message}`, 'error');
-                if (request?.propagateError) throw error;
-                return;
-            }
-        }
         const uiAttachments = [];
         if (attachedFiles.length > 0) {
             for (const af of attachedFiles) {
@@ -2006,6 +1981,44 @@ export const chatManager = (() => {
             attachments: uiAttachments
         };
 
+        const agentConfig = currentSelectedItem.config || currentSelectedItem;
+        const getExtraContextHistory = () => typeof request?.conversation?.getContextHistory === 'function'
+            ? (request.conversation.getContextHistory() || [])
+            : (Array.isArray(request?.contextHistory) ? request.contextHistory : []);
+        if (!existingCheckpoint && globalSettings.enableContextCompaction === true) {
+            const preflight = afterCompaction => preflightContextSend({
+                electronAPI, agentConfig, context: sendContext, createRequestTextOptions, afterCompaction,
+                history: sendHistoryRef.get(), pendingMessage: userMessage,
+                extraContextHistory: getExtraContextHistory(),
+            });
+            try {
+                const { shouldCompact } = await preflight(false);
+                if (!isSendContextCurrent() || request?.signal?.aborted) return;
+                if (shouldCompact) {
+                    const preview = summarizeCompactionInput(sendHistoryRef.get());
+                    const previewDetail = `${preview.sourceCount} 条历史 · ${preview.anchors} 个标识符锚点`
+                        + (preview.openWindows ? ` · ${preview.openWindows} 个未决窗口` : '');
+                    uiHelper.showToastNotification(`上下文接近容量，自动压缩中：${previewDetail}`, 'warning');
+                    try {
+                        await compactContext({
+                            scope: { itemId: sendContext.agentId, itemType: sendContext.itemType, topicId: sendContext.topicId },
+                            historyRef: sendHistoryRef, selectedRef: sendSelectedItemRef, topicRef: sendTopicIdRef,
+                            renderTarget, allowPendingSend: true,
+                        });
+                    } catch (error) {
+                        throw new Error(`自动压缩失败：${error.message}`, { cause: error });
+                    }
+                    if (!isSendContextCurrent() || request?.signal?.aborted) return;
+                    await preflight(true);
+                    if (!isSendContextCurrent() || request?.signal?.aborted) return;
+                }
+            } catch (error) {
+                if (!isSendContextCurrent() || request?.signal?.aborted) return;
+                uiHelper.showToastNotification(`发送失败，草稿已保留：${error.message}`, 'error');
+                if (request?.propagateError) throw error;
+                return;
+            }
+        }
         if (!request?.conversation && !request?.checkpointMessageId
             && typeof electronAPI.topicAdmissionSubmit === 'function') {
             try {
@@ -2227,12 +2240,8 @@ export const chatManager = (() => {
         try {
             // 独立 Surface 可在历史落盘或请求准备期间取消，尚未发出的请求不再交给上游。
             if (request?.signal?.aborted) return await cancelPreparedSend();
-            const agentConfig = currentSelectedItem.config || currentSelectedItem;
-            const extraContextHistory = typeof request?.conversation?.getContextHistory === 'function'
-                ? (request.conversation.getContextHistory() || [])
-                : (Array.isArray(request?.contextHistory) ? request.contextHistory : []);
             const historySnapshotForVCP = [
-                ...extraContextHistory,
+                ...getExtraContextHistory(),
                 ...sendHistory.filter(msg => !msg.isThinking)
             ];
             const requestTextOptions = createRequestTextOptions(agentConfig, historySnapshotForVCP, userMessage.id);
@@ -2376,7 +2385,7 @@ export const chatManager = (() => {
                         renderTarget.renderMessage({ role: 'system', notice: 'error', content: `VCP错误: ${response.error}`, timestamp: Date.now() });
                     }
                     console.error(`[ChatManager] VCP Error for background message:`, response.error);
-                    if (request?.propagateError) throw Object.assign(new Error(String(response.error)), { shownInChat: true });
+                    if (request?.propagateError) throw Object.assign(new Error(response.error), { shownInChat: true });
                 } else if (response.choices && response.choices.length > 0) {
                     const assistantMessageContent = response.choices[0].message.content;
                     const assistantMessage = {
@@ -2396,6 +2405,9 @@ export const chatManager = (() => {
                         // Remove any lingering 'thinking' message and add the new one
                         const finalHistory = historyForSave.filter(msg => msg.id !== thinkingMessage.id);
                         finalHistory.push(assistantMessage);
+                        // Same anchor the streaming path records, so agents with streaming off are measured by provider usage too.
+                        const contextUsage = providerUsageAnchor(response.usage, finalHistory, finalHistory.length - 1);
+                        if (contextUsage) assistantMessage.contextUsage = contextUsage;
 
                         // Save the final, complete history to the correct file
                         const finalSave = await saveHistory(responseContext.agentId, responseContext.itemType || 'agent', responseContext.topicId, finalHistory);
@@ -2427,7 +2439,7 @@ export const chatManager = (() => {
                 }
             } else {
                 if (vcpResponse && vcpResponse.streamError) {
-                    console.error("Streaming setup failed in main process:", vcpResponse.errorDetail || vcpResponse.error);
+                    console.error("Streaming setup failed in main process:", vcpResponse.error);
                     await removeThinkingFromSource();
                     settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: vcpResponse.error } } } });
                     if (isSendContextCurrent() && renderTarget) {

@@ -31,7 +31,7 @@ const agentFields = Object.freeze([
     field('agentNameInput', 'text', 'Agent 名称', { name: 'name', placeholder: 'Agent 名称', required: true, tooltip: '列表和聊天中显示的助手名称。', validation: { required: true } }),
     field('agentModel', 'text', 'Agent 模型', { name: 'model', placeholder: '例如 gemini-2.5-flash-preview-05-20', tooltip: '留空时使用服务端默认模型。' }),
     field('agentTemperature', 'number', 'Temperature (0-2)', { name: 'temperature', min: 0, max: 2, step: 0.1, validation: { min: 0, max: 2 } }),
-    field('agentContextTokenLimit', 'number', '上下文Token上限', { name: 'contextTokenLimit', min: 0, step: 100, validation: { min: 0 } }),
+    field('agentContextTokenLimit', 'number', '上下文Token上限', { name: 'contextTokenLimit', min: 0, step: 100, tooltip: '留空表示不限制。开启全局设置里的「上下文智能压缩」后，接近这个上限时会自动压缩历史，超过时不发送并提示原因；服务端开启上下文预算检查时，也按它处理超限的请求。建议填所用模型的上下文窗口减去为回复预留的部分。', validation: { min: 0 } }),
     field('agentMaxOutputTokens', 'number', '最大输出Token上限', { name: 'maxOutputTokens', min: 0, step: 50, validation: { min: 0 } }),
     field('agentTopP', 'number', 'Top P (0-2)', { name: 'top_p', min: 0, max: 2, step: 0.05, validation: { min: 0, max: 2 } }),
     field('agentTopK', 'number', 'Top K (0-64)', { name: 'top_k', min: 0, max: 64, step: 1, validation: { min: 0, max: 64 } }),
@@ -44,6 +44,11 @@ const agentFields = Object.freeze([
     field('agentCardCss', 'textarea', '名片样式CSS', { name: 'cardCss', rows: 3, tooltip: '此CSS将应用于【设置】页面中Agent的名片区域（头像和名称）。' }),
     field('agentChatCss', 'textarea', '会话样式CSS', { name: 'chatCss', rows: 4, tooltip: '此CSS将应用于【聊天会话】中Agent的头像和名称。可使用 .message-avatar 控制头像，.sender-name 控制名称。' }),
     ...toolStyleFields('agent'),
+    field('agentContextMessageWindowSize', 'number', '单聊上下文楼层上限', {
+        name: 'contextMessageWindowSize', min: 1, max: 10000, step: 1, placeholder: '留空不限',
+        tooltip: '每次模型请求最多携带最近 N 楼单聊历史。不影响聊天记录的保存、显示和 TopicMemo 回读。',
+        validation: { min: 1, max: 10000 },
+    }),
 ]);
 
 const groupFields = Object.freeze([
@@ -340,7 +345,7 @@ function renderAgentIdentity(doc) {
     const customCss = renderField(doc, agentFields[12]);
     const cardCss = renderField(doc, agentFields[13]);
     const chatCss = renderField(doc, agentFields[14]);
-    controls.append(...agentFields.slice(15).map(spec => renderField(doc, spec, 'style-control-item full-width')));
+    controls.append(...agentFields.slice(15, -1).map(spec => renderField(doc, spec, 'style-control-item full-width')));
     controls.append(customCss, cardCss, chatCss);
     style.append(styleHeader, controls);
     return el(doc, 'div', { class: 'agent-identity-container' }, identityMain, style);
@@ -412,6 +417,7 @@ function renderAgentPortrait(doc) {
 function renderAgentParams(doc) {
     const content = el(doc, 'div', { class: 'params-content', id: 'paramsContent' });
     agentFields.slice(2, 7).forEach(spec => content.append(renderField(doc, spec)));
+    content.append(renderField(doc, agentFields.at(-1)));
     const stream = el(doc, 'div', { class: 'form-group-inline agent-stream-mode-group' },
         el(doc, 'span', { class: 'agent-stream-mode-title' }, '输出模式:'),
         el(doc, 'div', { class: 'agent-stream-mode-segmented' },

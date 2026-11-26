@@ -37,6 +37,9 @@ pub fn save_cache_with_header(
     sample_rate: u32,
     channels: u32,
 ) -> std::io::Result<()> {
+    if channels == 0 || buffer.ready_frames() == 0 {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid cache frame dimensions"));
+    }
     let frame_count = buffer.ready_frames();
     let mut hasher = crc32fast::Hasher::new();
     buffer.for_each_chunk(|chunk| {
@@ -47,7 +50,7 @@ pub fn save_cache_with_header(
     let checksum = hasher.finalize();
 
     if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent)?;
     }
 
     // Write to a temporary name first so a crash never leaves a truncated
@@ -101,9 +104,9 @@ pub fn load_cache_with_header(
     let file = fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
     let mut file = std::io::BufReader::with_capacity(1 << 20, file);
-    let file_size = metadata.len() as usize;
+    let file_size = metadata.len();
 
-    if file_size < CACHE_HEADER_SIZE + 8 {
+    if file_size < CACHE_HEADER_SIZE as u64 + 8 {
         log::warn!("Cache file too small: {} bytes", file_size);
         return None;
     }
@@ -138,17 +141,19 @@ pub fn load_cache_with_header(
         return None;
     }
 
-    let expected_data_size = frame_count as usize * channels as usize * 8;
-    if file_size != CACHE_HEADER_SIZE + expected_data_size {
-        log::warn!("Cache file size mismatch: expected {}, got {}",
-            CACHE_HEADER_SIZE + expected_data_size, file_size);
+    // Checked arithmetic: a corrupt header must not overflow into a size
+    // that happens to match, or ask for an impossible allocation.
+    let count = frame_count.checked_mul(u64::from(channels))?;
+    let expected_size = count.checked_mul(8)?.checked_add(CACHE_HEADER_SIZE as u64)?;
+    if channels == 0 || file_size != expected_size {
+        log::warn!("Cache file size mismatch: expected {}, got {}", expected_size, file_size);
         return None;
     }
 
     // FIX for Defect 6: Stream CRC32 computation while reading samples
     // in a single pass, straight into the chunked track buffer (no second
     // full-size copy).
-    let sample_count = frame_count as usize * channels as usize;
+    let sample_count = usize::try_from(count).ok()?;
     let (buffer, mut writer) = TrackBuffer::new(channels as usize, Some(frame_count));
     let mut hasher = crc32fast::Hasher::new();
     let mut bytes = vec![0u8; 8 * 8192];
@@ -545,4 +550,58 @@ pub struct AudioDeviceInfo {
     pub name: String,
     pub is_default: bool,
     pub sample_rate: Option<u32>,
+}
+
+#[cfg(test)]
+mod cache_io_tests {
+    use super::*;
+
+    struct Scratch(std::path::PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) { let _ = fs::remove_file(&self.0); }
+    }
+    fn scratch() -> Scratch {
+        Scratch(std::env::temp_dir().join(format!("vcp-cache-test-{}-{}.bin", std::process::id(), rand::random::<u64>())))
+    }
+
+    fn legacy_bytes(samples: &[f64]) -> Vec<u8> {
+        let mut h = b"VCP1".to_vec();
+        for v in [1u32, 48000, 2] { h.extend(v.to_le_bytes()); }
+        h.extend(((samples.len() / 2) as u64).to_le_bytes());
+        let mut crc = crc32fast::Hasher::new();
+        for s in samples { crc.update(&s.to_le_bytes()); }
+        h.extend(crc.finalize().to_le_bytes());
+        h.extend([0; 4]);
+        for s in samples { h.extend(s.to_le_bytes()); }
+        h
+    }
+
+    #[test]
+    fn legacy_bytes_roundtrip_and_reject_corruption() {
+        let path = scratch();
+        // The track buffer holds f32 samples, so use values f32 represents exactly
+        // (including -0.0); the on-disk format stays little-endian f64.
+        let data: Vec<f64> = (0..8194u32).map(|i| if i % 3 == 0 { -0.0 } else { f64::from(i as f32 * 0.25 - 1000.0) }).collect();
+        let mut legacy = legacy_bytes(&data);
+        fs::write(&path.0, &legacy).unwrap();
+        let got = load_cache_with_header(&path.0, 48000, 2).unwrap().to_vec();
+        assert!(got.iter().map(|v| v.to_bits()).eq(data.iter().map(|v| v.to_bits())));
+        save_cache_with_header(&path.0, &TrackBuffer::from_samples(data.clone(), 2), 48000, 2).unwrap();
+        assert_eq!(fs::read(&path.0).unwrap(), legacy);
+        *legacy.last_mut().unwrap() ^= 1;
+        fs::write(&path.0, &legacy).unwrap();
+        assert!(load_cache_with_header(&path.0, 48000, 2).is_none());
+        legacy.pop();
+        fs::write(&path.0, &legacy).unwrap();
+        assert!(load_cache_with_header(&path.0, 48000, 2).is_none());
+    }
+
+    #[test]
+    fn header_with_overflowing_frame_count_is_rejected() {
+        let path = scratch();
+        let mut bytes = legacy_bytes(&[0.0; 4]);
+        bytes[16..24].copy_from_slice(&u64::MAX.to_le_bytes());
+        fs::write(&path.0, &bytes).unwrap();
+        assert!(load_cache_with_header(&path.0, 48000, 2).is_none());
+    }
 }
