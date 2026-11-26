@@ -287,10 +287,13 @@
         "tests/stage-starbloom.test.js",
         "tests/diorama-director.test.js",
         "tests/diorama-events.test.js",
-        "tests/kowloon-signs-placement.test.js"
+        "tests/kowloon-signs-placement.test.js",
+        "tests/music-stage-folia-modes.test.js",
+        "tests/music-stage-inkdraft-pixi.test.js"
       ],
       "tools": [
         "tests/music-stage-bench/harness.js",
+        "tests/music-stage-bench/stage2d.cjs",
         "tests/music-stage-bench/kowloon-shots.cjs",
         "tests/diorama-stations-smoke.cjs"
       ]
@@ -427,15 +430,15 @@
     "Musicmodules/music-stage/modes/fogpane-manager.js": 80444,
     "Musicmodules/music-stage/modes/hanabi-manager.js": 92423,
     "Musicmodules/music-stage/modes/inkdraft-figures.js": 84766,
-    "Musicmodules/music-stage/modes/inkdraft-manager.js": 144988,
+    "Musicmodules/music-stage/modes/inkdraft-manager.js": 136721,
     "Musicmodules/music-stage/modes/kowloon-alley.js": 132265,
     "Musicmodules/music-stage/modes/kowloon-signs.js": 127405,
-    "Musicmodules/music-stage/modes/stage-mode-utils.js": 76914,
-    "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79075,
+    "Musicmodules/music-stage/modes/stage-mode-utils.js": 77121,
+    "Musicmodules/music-stage/modes/stage-pixi-effects.js": 79277,
     "Musicmodules/music-stage/modes/tunnel-manager.js": 286561,
     "Musicmodules/music-stage/music-stage-host.js": 105320,
-    "Musicmodules/music.html": 66374,
-    "Musicmodules/music.js": 87774
+    "Musicmodules/music.html": 66437,
+    "Musicmodules/music.js": 87932
   },
   "appWriterBaseline": {
     "_gaplessSwitchTimer": [
