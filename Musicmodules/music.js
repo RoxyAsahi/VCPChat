@@ -778,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        app.playPauseBtn.onclick = () => app.isPlaying ? app.pauseTrack() : app.playTrack();
+        app.playPauseBtn.onclick = () => app.toggleTransport();
         app.prevBtn.onclick = () => app.prevTrack();
         app.nextBtn.onclick = () => app.nextTrack();
         app.modeBtn.onclick = () => {
@@ -1360,6 +1360,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // 换歌时清掉上一首的进度样本，免得新歌第一次状态被当成「在往前走」。
+    app.resetEngineProgress = () => { app.lastEngineProgress = null; };
     app.updateUIWithState = (state, options = {}) => {
         if (!state) return;
         app.syncOutputFallback?.(state);

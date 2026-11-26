@@ -66,6 +66,14 @@ pf_trace(projectId, target, scope?, glob?)
 
 `pf_trace.target` 支持 `ipc:通道`、`api:preloadAPI`、`global:名称`、`page:页面.html`、`file:相对路径`。结果包括相应处理端 / 调用端 / 声明、加载顺序与依赖检查。它是静态链路分析，不代表 11 种语言都支持同等链路追踪；动态通道可能只计数，未找到静态边不能证明没有运行时调用。
 
+## 组合只读查询
+
+```text
+pf_query(projectId, code, timeoutMs?)
+```
+
+- 使用 `q.files`、`q.search`、`q.read`、`q.outline`、`q.symbols` 和 `q.graph` 组合工程内的只读调查。`code` 是可 `await` 的 JS 函数体，显式返回可 JSON 序列化的结果，优先只返回需要的字段。
+- 超时默认 10 秒，上限 30 秒；输出默认限 16 KiB，留意截断标记。结果可从 `structuredContent.value` 读取。
 ## 编辑
 
 ```text
@@ -152,6 +160,39 @@ pf_eval_symbol(projectId, path, args?, kwargs?, setup?, timeoutMs?, symbol?, pic
 - Rust 仅运行已有标准 `#[test]`，可用 `package` / `features` 限定构建、`target` / `testPick` 消歧；不支持 Rust `setup` 或临时 harness。零命中或 ignored 不算通过。
 - `timeoutMs`：JS / Python 默认 5000，Rust 默认 100000，上限 110000。工程根 `.projectforge-eval.json` 可指定 node / python / cargo；Python 按配置 → `.venv` → PATH 选择，失败不换环境。
 - `returned` 仅表示函数返回，`passed` 才表示实际测试通过；查看阶段错误、typed-v1 值、源码 hash 与有界日志。不支持 TS、局部闭包或自动构造实例；11 种语言的符号能力不等于都支持试跑。
+
+## 可选 Bash
+
+```text
+pf_bash(projectId, script, workdir?, timeoutMs?, maxBytes?)
+```
+
+- 默认不暴露也不允许调用；仅在桥的本地配置启用后可用，且需要可写工程。用于构建、测试和诊断，不用于绕过 ProjectForge 的文件编辑流程。
+- 脚本以非交互方式运行；`workdir` 省略时为工程根。它只是起始目录，不是沙箱；脚本可写盘或联网，写入没有 Forge 回滚快照。
+- 分别查看 stdout、stderr、退出码、超时和截断。非零退出或超时不代表没有副作用；先检查状态再决定是否重跑。
+## 可选话题协作（TopicSponsor / TopicMemo）
+
+```text
+ts_list_agents()
+ts_list_groups()
+ts_list_recent_topics(query, targetType?)
+ts_check_new_topics(maid, days?)
+ts_check_unread_messages(maid)
+ts_check_topic_ownership(topicId, callerName, maid?)
+ts_create_topic(maid, topicName, initialMessage)
+ts_create_flowlock_topic(maid, topicName, initialMessage, flowlockHeartbeat?, flowlockPrompt?)
+ts_reply_to_topic(message, senderId?|senderName?, topicId, sourceTopicId?, riverTopicId?, riverLast?, contextItems?)
+ts_reply_to_topic(message, senderId?|senderName?, mode="new_topic", sourceTopicId, targetAgent, topicName?, flowlock?, riverLast?, contextItems?)
+tm_list_topics(maid, query?, unreadOnly?, limit?, offset?)
+tm_outline_topic(topicId, maid?, startSeq?, endSeq?, limit?)
+tm_search_topic(topicId, query, maid?, isRegex?, caseSensitive?, includeTools?, maxResults?)
+tm_get_topic_content(topicId, maid?, tail?, startSeq?, endSeq?, maxCharsPerTurn?, includeTools?)
+```
+
+- 默认不暴露也不允许调用；仅在桥本地配置 `enableTopic=true` 时可用（本机同仓部署下 `tm_*` 支持只读直连本地 `AppData`，`ts_*` 写入及远程查询需 VCPToolBox 与 VChat 客户端在线）。
+- 渐进阅读流程：先用 `ts_list_agents` / `ts_list_groups` 确认注册名称与 ID，再用 `ts_list_recent_topics` 或 `tm_list_topics`（支持 `query`、`unreadOnly`、`limit`/`offset` 分页）定位真实 `topicId`；面对长话题优先以 `tm_outline_topic` 查看楼层序号 `#seq` 与首行摘要、用 `tm_search_topic` 检索目标楼层，再调用 `tm_get_topic_content` 按 `tail` 或 `startSeq`–`endSeq` 有界切片读取（超长话题未指定区间时默认自动截取尾部窗口并保留代码块缩进与泛型尖括号）。
+- `ts_reply_to_topic` 必须提供注册 Agent 的 `senderId` 或 `senderName`：回复已有话题传目的 `topicId` 并省略 `mode`；派工新建任务话题传 `mode="new_topic"`、`sourceTopicId` 与 `targetAgent`（可选 `flowlock=true`），不传目的 `topicId`；独立创建自主接力话题用 `ts_create_flowlock_topic`。
+- 结构化上下文传递：可通过可选 `riverLast`（配合 `sourceTopicId` 或 `riverTopicId` 自动抽取本地源话题最近 N 轮干净对话）及 `contextItems`（`[{ kind?, name?, content }]` 携带代码切片、日志或诊断摘要），由桥自动编码为前端原生折叠卡片 `[VCP_TOPIC_RIVER_V2]`。
 
 ## 长期施工与交付
 

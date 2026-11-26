@@ -4,14 +4,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { tools, validateArguments } = require('./tools.cjs');
 const { searchTool, createSearcher } = require('./search.cjs');
+const { DEFAULT_VCP_URL, topicTools, normalizeVcpUrl, createTopicClient } = require('./topic.cjs');
 
-const INSTRUCTIONS = 'Use ProjectForge tools for source investigation and edits instead of raw file writes. First reuse an existing projectId in the configured workspace; paths are relative to its root. Use pf_search for workspace content search via native CodeSearcher (no project required), Outline/FindSymbol for definitions and bounded ReadCode; batch same-file changes in EditCode.edits against one original snapshot. Supply reason for changes. Resolve ambiguous edits using returned tickets; never guess candidates or blindly retry uncertain writes. Read projectforge_development prompt (or projectforge://instructions) for full workflow. Keep terminal, Git and LSP diagnostics for builds, tests and validation. No VCPToolCall, ink or valet fields are used.';
+const INSTRUCTIONS = 'Use ProjectForge tools for source investigation and edits instead of raw file writes. First reuse an existing projectId in the configured workspace; paths are relative to its root. Use pf_search for workspace content search via native CodeSearcher (no project required), Outline/FindSymbol for definitions and bounded ReadCode; batch same-file changes in EditCode.edits against one original snapshot. Supply reason for changes. Resolve ambiguous edits using returned tickets; never guess candidates or blindly retry uncertain writes. When topic tools are enabled, read topics progressively via tm_list_topics -> tm_outline_topic / tm_search_topic -> bounded tm_get_topic_content, and pass structured contextItems or riverLast on ts_reply_to_topic. Read projectforge_development prompt (or projectforge://instructions) for full workflow. Keep terminal, Git and LSP diagnostics for builds, tests and validation. No VCPToolCall, ink or valet fields are used.';
 const PROMPT_URI = 'projectforge://instructions';
 
 function loadConfig(filename) {
     if (!filename || !path.isAbsolute(filename)) throw new Error('--config requires an absolute JSON file path');
     const raw = JSON.parse(fs.readFileSync(filename, 'utf8').replace(/^\uFEFF/, ''));
-    const allowed = new Set(['workspaces', 'activeWorkspaceId', 'dbPath', 'binaryPath', 'maid', 'enableEval', 'enablePurge']);
+    const allowed = new Set([
+        'workspaces', 'activeWorkspaceId', 'dbPath', 'binaryPath', 'maid',
+        'enableEval', 'enablePurge', 'enableBash', 'enableTopic', 'vcpUrl', 'vcpKey',
+        'vcpAppDataPath', 'topicReadMode',
+    ]);
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Config must be an object');
     for (const key of Object.keys(raw)) if (!allowed.has(key)) throw new Error(`Unknown config field: ${key}`);
     if (!Array.isArray(raw.workspaces) || !raw.workspaces.length) throw new Error('Configure at least one explicit workspace');
@@ -31,17 +36,32 @@ function loadConfig(filename) {
     });
     if (!workspaces.some(ws => ws.enabled)) throw new Error('At least one workspace must be enabled');
     if (raw.activeWorkspaceId !== undefined && !workspaces.some(ws => ws.id === raw.activeWorkspaceId && ws.enabled)) throw new Error('activeWorkspaceId must name an enabled workspace');
-    for (const key of ['dbPath', 'binaryPath']) {
+    for (const key of ['dbPath', 'binaryPath', 'vcpAppDataPath']) {
         if (raw[key] !== undefined && (typeof raw[key] !== 'string' || !path.isAbsolute(raw[key]))) throw new Error(`${key} must be absolute`);
     }
-    for (const key of ['enableEval', 'enablePurge']) if (raw[key] !== undefined && typeof raw[key] !== 'boolean') throw new Error(`${key} must be boolean`);
+    if (raw.topicReadMode !== undefined && !['auto', 'local', 'http'].includes(raw.topicReadMode)) {
+        throw new Error('topicReadMode must be auto, local or http');
+    }
+    for (const key of ['enableEval', 'enablePurge', 'enableBash', 'enableTopic']) {
+        if (raw[key] !== undefined && typeof raw[key] !== 'boolean') throw new Error(`${key} must be boolean`);
+    }
     if (raw.maid !== undefined && (typeof raw.maid !== 'string' || !raw.maid.trim() || raw.maid.length > 100)) throw new Error('maid must be 1–100 characters');
+    const vcpUrl = raw.vcpUrl !== undefined ? normalizeVcpUrl(raw.vcpUrl) : DEFAULT_VCP_URL;
+    if (raw.vcpKey !== undefined && (typeof raw.vcpKey !== 'string' || !raw.vcpKey.trim() || /[\r\n\0]/.test(raw.vcpKey))) {
+        throw new Error('vcpKey must be a single-line non-empty string');
+    }
+    const envKey = typeof process.env.VCP_API_KEY === 'string' ? process.env.VCP_API_KEY.trim() : '';
+    if (envKey && /[\r\n\0]/.test(envKey)) throw new Error('VCP_API_KEY must not contain newlines or NUL');
+    const enableTopic = raw.enableTopic === true;
+    const vcpKey = raw.vcpKey !== undefined ? raw.vcpKey.trim() : envKey;
+    if (enableTopic && !vcpKey) throw new Error('enableTopic requires vcpKey or VCP_API_KEY');
     return {
         ...raw, workspaces,
         activeWorkspaceId: raw.activeWorkspaceId || workspaces.find(ws => ws.enabled).id,
         dbPath: raw.dbPath || path.resolve(__dirname, '../../../../AppData/ProjectForge/mcp-projectforge.db'),
         maid: raw.maid || 'MCP',
-        enableEval: raw.enableEval === true, enablePurge: raw.enablePurge === true,
+        enableEval: raw.enableEval === true, enablePurge: raw.enablePurge === true, enableBash: raw.enableBash === true,
+        enableTopic, vcpUrl, ...(vcpKey ? { vcpKey } : {}),
     };
 }
 
@@ -61,28 +81,39 @@ function convertResult(result) {
         }
         throw new Error(`Unsupported ProjectForge content type: ${part.type}`);
     });
-    // Avoid duplicating source/snapshots, but retain execution evidence unavailable in previews.
+    // Keep structured query results and execution evidence, not whole source/edit snapshots.
     const details = result.details || {};
-    const status = details.status;
-    const failed = details.command === 'EvalSymbol'
+    const { command, status } = details;
+    const failed = command === 'EvalSymbol'
         ? !['returned', 'passed', 'ambiguous'].includes(status)
-        : ['error', 'failed', 'conflict', 'rejected', 'unknown', 'planningRejected', 'syntaxRejected'].includes(status);
+        : command === 'Bash'
+            ? details.ok !== true
+            : ['error', 'failed', 'conflict', 'rejected', 'unknown', 'planningRejected', 'syntaxRejected'].includes(status);
     return {
         content,
-        ...(details.command === 'EvalSymbol' ? { structuredContent: details } : {}),
+        ...(['EvalSymbol', 'Query', 'Bash'].includes(command) ? { structuredContent: details } : {}),
         ...(result.isError === true || failed ? { isError: true } : {}),
     };
 }
 
 function createBridge(config, service) {
     const searcher = createSearcher(config);
-    const available = [...tools, searchTool].filter(tool => (tool.command !== 'EvalSymbol' || config.enableEval) && (tool.command !== 'PurgeProjects' || config.enablePurge));
+    const topicClient = config.enableTopic === true ? createTopicClient(config) : null;
+    const available = [
+        ...tools,
+        searchTool,
+        ...(topicClient ? topicTools : []),
+    ].filter(tool =>
+        (tool.command !== 'EvalSymbol' || config.enableEval) &&
+        (tool.command !== 'PurgeProjects' || config.enablePurge) &&
+        (tool.command !== 'Bash' || config.enableBash === true));
     const byName = new Map(available.map(tool => [tool.name, tool]));
     let pending = 0;
     let closing = false;
-    const prompt = () => fs.readFileSync(path.join(__dirname, 'MCPPrompt.md'), 'utf8');
+    const promptFile = ['myMCPPrompt.md', 'MCPPrompt.md'].map(f => path.join(__dirname, f)).find(p => fs.existsSync(p));
+    const prompt = () => fs.readFileSync(promptFile, 'utf8');
     service.initialize({
-        config: { PROJECTFORGE_DB_PATH: config.dbPath },
+        config: { PROJECTFORGE_DB_PATH: config.dbPath, BASH_ENABLED: config.enableBash === true },
         ...(config.binaryPath ? { serviceBinaryPath: config.binaryPath, indexerBinaryPath: config.binaryPath } : {}),
         workspaceService: {
             list: () => config.workspaces.map(ws => ({ ...ws })),
@@ -91,7 +122,7 @@ function createBridge(config, service) {
         logger: console,
     });
     return {
-        listTools: () => available.map(({ command, ...tool }) => tool),
+        listTools: () => available.map(({ command, plugin, toArgs, ...tool }) => tool),
         prompt,
         async call(name, args = {}) {
             const tool = byName.get(name);
@@ -101,6 +132,7 @@ function createBridge(config, service) {
             try {
                 validateArguments(tool, args);
                 if (name === searchTool.name) return await searcher.search(args);
+                if (tool.plugin) return await topicClient.call(tool, args);
                 const result = await service.processToolCall({ ...args, command: tool.command, maid: args.maid || config.maid });
                 return convertResult(result);
             } catch (error) {
@@ -109,7 +141,11 @@ function createBridge(config, service) {
         },
         async close() {
             closing = true;
-            const results = await Promise.allSettled([searcher.close(), service.cleanup()]);
+            const results = await Promise.allSettled([
+                searcher.close(),
+                ...(topicClient ? [topicClient.close()] : []),
+                service.cleanup(),
+            ]);
             const failed = results.find(result => result.status === 'rejected');
             if (failed) throw failed.reason;
         },

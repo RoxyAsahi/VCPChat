@@ -154,6 +154,7 @@
       ],
       "tests": [
         "tests/music-lyrics-click.test.js",
+        "tests/music-lyrics-scrolling-spacing.test.js",
         "tests/music-lyrics-interlude.test.js",
         "tests/music-lyrics-race-regression.test.js",
         "tests/music-lyrics-auto-candidate.test.js",
