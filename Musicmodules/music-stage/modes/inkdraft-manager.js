@@ -7,7 +7,7 @@
  *
  * 画面只由播放时间决定（不积分），拖进度、暂停都对。每段（一句歌词或一段间奏）准备一次：
  * 两张 2D 画布（主图：R 字形、G 线稿、B 半调层；编号图：R 字的编号、G 线稿笔序）传成纹理，
- * 之后每帧只画一个全屏三角形。
+ * 之后每帧画三遍（逐字层、平滑场、主遍），由 PixiJS 的渲染器画，见 inkdraft-pixi.js。
  *
  * 负载：默认每秒 30 帧（节能 24、极致 60），绘制缓冲按像素预算，暂停且输入不变时不画。
  */
@@ -18,6 +18,8 @@
     const Runtime = global.MusicStageRuntime;
     const Figures = global.MusicStageInkFigures;
     if (!Utils || !Runtime || !Figures) throw new Error('MusicStageModeUtils, MusicStageRuntime and MusicStageInkFigures must load before inkdraft-manager.js');
+    // 渲染器和 Pixi 到建舞台时才取（纯函数的测试不需要它们）
+    const pixiParts = () => ({ PIXI: global.PIXI, Effects: global.MusicStagePixiEffects, InkPixi: global.MusicStageInkPixi });
 
     const { clamp, seededRandom, splitGraphemes, createElement } = Utils;
     const { resolveSupplementalText, buildGlyphTimeline, readableText } = Runtime;
@@ -1496,10 +1498,11 @@
 
     /* ───────────────────────── GL ───────────────────────── */
 
+    // 一个盖住全屏的三角形：顶点 (-1,-1)、(3,-1)、(-1,3)
     const VERT = `#version 300 es
+in vec2 aPosition;
 void main() {
-    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4(aPosition, 0.0, 1.0);
 }`;
     // 逐字层：每个字一个四边形，按镜头投到屏幕上，画进墨场（半浮点离屏图，加法混合）。
     // 墨场 R 是字的墨、G 是网点的浓淡、B 是关键词的墨。
@@ -1508,6 +1511,7 @@ precision highp float;
 layout(location = 0) in vec4 iA;  // 那一格的中心 x, y（世界像素），边长，转角
 layout(location = 1) in vec4 iB;  // 开唱、唱完、关键词、是不是注记
 layout(location = 2) in vec4 iR;  // 图集 uv 框：左、上、右、下
+layout(location = 3) in vec2 aPosition;  // 四边形的角：±1
 uniform vec4 uView;
 uniform float uAspect;
 uniform float uTime;
@@ -1515,7 +1519,7 @@ uniform float uPop;
 out vec2 vUv;
 out vec4 vT;
 void main() {
-    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+    vec2 corner = aPosition * 0.5 + 0.5;
     float dt = uTime - iB.x;
     float on = step(0.0, dt);
     // 开唱的一下鼓起来、慢慢收回；还没唱到的略小一点
@@ -1945,18 +1949,6 @@ void main() {
     outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
-    const compile = (gl, type, source) => {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const log = gl.getShaderInfoLog(shader);
-            gl.deleteShader(shader);
-            throw new Error(`[inkdraft] shader: ${log}`);
-        }
-        return shader;
-    };
-
     // 纸纹（Folia 没有）：一块 256 见方、四边接得上的纸——几百根长短不一的纤维（多数比纸亮，少数暗）、
     // 一层很淡的绒（低频的起伏）、横的帘纹和竖的链纹（抄纸帘子留下的），按 CSS 像素平铺、不随时间跳。
     // 只算一次（一张 64KB 的图），画面里只多取一次图。
@@ -2003,85 +1995,10 @@ void main() {
         return out;
     };
 
-    const createGl = (canvas) => {
-        const gl = canvas.getContext('webgl2', {
-            alpha: false, antialias: false, depth: false, stencil: false,
-            premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'default'
-        });
-        if (!gl) return null;
-        const link = (vs, fs) => {
-            const prog = gl.createProgram();
-            gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vs));
-            gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fs));
-            gl.linkProgram(prog);
-            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`[inkdraft] link: ${gl.getProgramInfoLog(prog)}`);
-            const uni = {};
-            const count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
-            for (let i = 0; i < count; i += 1) {
-                const info = gl.getActiveUniform(prog, i);
-                uni[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(prog, info.name);
-            }
-            return { prog, uni };
-        };
-        const { prog: program, uni: uniforms } = link(VERT, FRAG);
-        const { prog: glyphProgram, uni: glyphUniforms } = link(GLYPH_VERT, GLYPH_FRAG);
-        const { prog: smoothProgram, uni: smoothUniforms } = link(VERT, SMOOTH_FRAG);
-        const vao = gl.createVertexArray();
-        // 墨场：和画布一样大；能渲染半浮点就用半浮点（几个字的墨叠起来能超过 1）
-        const halfFloat = Boolean(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
-        const makeTarget = () => {
-            const target = { tex: gl.createTexture(), fbo: gl.createFramebuffer(), w: 0, h: 0, half: halfFloat };
-            gl.bindTexture(gl.TEXTURE_2D, target.tex);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            return target;
-        };
-        const field = makeTarget();
-        // 平滑的场（墨团、冲击环、强调色墨团、网点云）：按像素预算的低分辨率
-        const smooth = makeTarget();
-        smooth.warp = makeTarget();
-        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        const makeTexture = (filter, mip = false) => {
-            const texture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : filter);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            return texture;
-        };
-        const slots = Array.from({ length: 3 }, () => {
-            const glyphVao = gl.createVertexArray();
-            const glyphBuf = gl.createBuffer();
-            gl.bindVertexArray(glyphVao);
-            gl.bindBuffer(gl.ARRAY_BUFFER, glyphBuf);
-            for (let a = 0; a < 3; a += 1) {
-                gl.enableVertexAttribArray(a);
-                gl.vertexAttribPointer(a, 4, gl.FLOAT, false, GLYPH_FLOATS * 4, a * 16);
-                gl.vertexAttribDivisor(a, 1);
-            }
-            gl.bindVertexArray(null);
-            return { main: makeTexture(gl.LINEAR, true), ids: makeTexture(gl.NEAREST), atlas: makeTexture(gl.LINEAR, true), glyphVao, glyphBuf, key: null, data: null, used: 0 };
-        });
-        const paper = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, paper);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, PAPER_TILE, PAPER_TILE, 0, gl.RED, gl.UNSIGNED_BYTE, makePaperTile());
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        return { gl, program, uniforms, glyphProgram, glyphUniforms, smoothProgram, smoothUniforms, field, smooth, vao, slots, paper };
-    };
-
     /* ───────────────────────── 舞台 ───────────────────────── */
 
     const createManager = (container, services) => {
         const mode = Utils.makeModeBase('inkdraft', '墨痕', container, services);
-        const canvas = createElement('canvas', 'inkdraft-canvas');
         const crop = createElement('div', 'inkdraft-crop');
         crop.setAttribute('aria-hidden', 'true');
         for (let i = 0; i < 4; i += 1) crop.append(createElement('i'));
@@ -2090,16 +2007,18 @@ void main() {
         const translation = createElement('div', 'stage-translation inkdraft-translation');
         const notice = createElement('div', 'inkdraft-notice');
         notice.hidden = true;
-        mode.root.append(canvas, crop, kicker, timecode, translation, notice);
+        mode.root.append(crop, kicker, timecode, translation, notice);
 
         const mainCanvas = document.createElement('canvas');
         const idsCanvas = document.createElement('canvas');
+        // 渲染器（inkdraft-pixi.js）：Pixi 的应用备好之后才有，见下面的 boot
         let glState = null;
-        try { glState = createGl(canvas); } catch (error) { console.error(error); glState = null; }
-        if (!glState) {
+        let pixiApp = null;
+        const buffer = { w: 1, h: 1 };
+        const fail = () => {
             notice.hidden = false;
             notice.textContent = '这台电脑的显卡不支持 WebGL2，墨痕画不出来，请换一个舞台';
-        }
+        };
 
         const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)');
         const still = Utils.createStillGate();
@@ -2187,7 +2106,11 @@ void main() {
             const bh = Math.max(1, Math.round(h * scale));
             const smoothScale = Math.min(scale, Math.sqrt((PIXELS[quality] || PIXELS.standard) / (w * h)));
             smoothSize = [Math.max(1, Math.round(w * smoothScale)), Math.max(1, Math.round(h * smoothScale))];
-            if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; still.invalidate(); }
+            if (glState) {
+                // 渲染器按「CSS 大小 × 每个 CSS 像素几个缓冲像素」算画布
+                if (glState.resize(w, h, bw / w)) still.invalidate();
+                buffer.w = glState.width; buffer.h = glState.height;
+            } else { buffer.w = bw; buffer.h = bh; }
             size = { w, h };
             const aspect = w / h;
             if (!world.aspect || Math.abs(aspect / world.aspect - 1) > 0.04) {
@@ -2196,7 +2119,7 @@ void main() {
                 world = { W, H, aspect: W / H };
                 mainCanvas.width = W; mainCanvas.height = H;
                 idsCanvas.width = Math.ceil(W * ID_SCALE); idsCanvas.height = Math.ceil(H * ID_SCALE);
-                glState?.slots.forEach((slot) => { slot.key = null; slot.data = null; });
+                glState?.resetCanvases();
             }
         };
 
@@ -2231,21 +2154,10 @@ void main() {
                 scene: sceneFor(trackKey(current || {}), settings().scene),
                 mainCanvas, idsCanvas
             });
-            const { gl } = glState;
             // 最久没用的槽，但不动正在画的这一段和上一段
             const busy = new Set([stats.cue, stats.cue - 1].map(i => (i >= 0 ? slotKey(i) : '')));
             const slot = glState.slots.filter(s => !busy.has(s.key)).sort((a, b) => a.used - b.used)[0] || glState.slots[0];
-            gl.bindTexture(gl.TEXTURE_2D, slot.main);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mainCanvas);
-            gl.generateMipmap(gl.TEXTURE_2D);
-            gl.bindTexture(gl.TEXTURE_2D, slot.ids);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, idsCanvas);
-            gl.bindTexture(gl.TEXTURE_2D, slot.atlas);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, data.atlas.width, data.atlas.height, 0, gl.RG, gl.UNSIGNED_BYTE, data.atlas.data);
-            // 注记和远景里的小字会缩得比图集小很多：要 mip，不然闪烁、断笔
-            gl.generateMipmap(gl.TEXTURE_2D);
-            gl.bindBuffer(gl.ARRAY_BUFFER, slot.glyphBuf);
-            gl.bufferData(gl.ARRAY_BUFFER, data.glyphInst, gl.STATIC_DRAW);
+            glState.fill(slot, mainCanvas, idsCanvas, data);
             data.atlas = { width: data.atlas.width, height: data.atlas.height };
             slot.key = key;
             slot.data = data;
@@ -2267,7 +2179,7 @@ void main() {
 
         const draw = (frame) => {
             if (!glState || lostContext) return;
-            const { gl, program, uniforms: u, vao } = glState;
+            const width = buffer.w, height = buffer.h;
             const t = frame.playbackTime;
             const index = findCue(cues, t);
             const slot = slotFor(index, true);
@@ -2285,7 +2197,7 @@ void main() {
             }
             const beatAge = t >= beatTime ? t - beatTime : Infinity;
             const counts = blobsAt(data, t, blobBuffer, ringBuffer, accentBuffer, bass, s.reducedMotion ? Infinity : beatAge, cloudBuffer);
-            counts.blobs = cullBlobs(blobBuffer, counts.blobs, view, canvas.width / canvas.height);
+            counts.blobs = cullBlobs(blobBuffer, counts.blobs, view, width / height);
 
             let prevFade = 0;
             let prevSlot = null;
@@ -2307,132 +2219,70 @@ void main() {
             const flooding = (data.transition === 'flood' || data.transition === 'burst') && since >= 0 && since < floodLen && !s.reducedMotion;
             const floodR = flooding ? 1.9 * (1 - Math.pow(1 - since / floodLen, 2.4)) : 0;
 
-            // 逐字层画进墨场
-            const fieldTarget = glState.field;
-            if (fieldTarget.w !== canvas.width || fieldTarget.h !== canvas.height) {
-                fieldTarget.w = canvas.width; fieldTarget.h = canvas.height;
-                gl.bindTexture(gl.TEXTURE_2D, fieldTarget.tex);
-                if (fieldTarget.half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, fieldTarget.w, fieldTarget.h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-                else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, fieldTarget.w, fieldTarget.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                gl.bindFramebuffer(gl.FRAMEBUFFER, fieldTarget.fbo);
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fieldTarget.tex, 0);
-            }
-            gl.bindFramebuffer(gl.FRAMEBUFFER, fieldTarget.fbo);
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            const put = (target, ...values) => { for (let i = 0; i < values.length; i += 1) target[i] = values[i]; };
+            // 逐字层的参数
             if (data.glyphCount) {
                 const gu = glState.glyphUniforms;
-                gl.useProgram(glState.glyphProgram);
-                gl.enable(gl.BLEND);
-                gl.blendFunc(gl.ONE, gl.ONE);
-                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.atlas); gl.uniform1i(gu.uAtlas, 0);
-                gl.uniform4f(gu.uView, view.c[0], view.c[1], view.h, view.roll);
-                gl.uniform1f(gu.uAspect, canvas.width / canvas.height);
-                gl.uniform1f(gu.uTime, t);
-                gl.uniform1f(gu.uPop, s.reducedMotion ? 0 : 1);
+                put(gu.uView, view.c[0], view.c[1], view.h, view.roll);
+                gu.uAspect = width / height;
+                gu.uTime = t;
+                gu.uPop = s.reducedMotion ? 0 : 1;
                 const local0 = t - data.cue.start;
-                gl.uniform1f(gu.uReveal, Math.min(1, s.waitingOpacity / 0.35) * smooth(0, 0.35, local0));
-                gl.uniform1f(gu.uCss, canvas.height / Math.max(1, size.h));
-                gl.uniform1f(gu.uBleed, s.bleed ? 1 : 0);
-                gl.uniform1f(gu.uWobble, s.wobble);
-                gl.bindVertexArray(slot.glyphVao);
-                gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.glyphCount);
-                gl.disable(gl.BLEND);
+                gu.uReveal = Math.min(1, s.waitingOpacity / 0.35) * smooth(0, 0.35, local0);
+                gu.uCss = height / Math.max(1, size.h);
+                gu.uBleed = s.bleed ? 1 : 0;
+                gu.uWobble = s.wobble;
             }
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.useProgram(program);
-            gl.bindVertexArray(vao);
-            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, slot.main); gl.uniform1i(u.uMain, 0);
-            gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, slot.ids); gl.uniform1i(u.uIds, 1);
-            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, fieldTarget.tex); gl.uniform1i(u.uGlyphF, 2);
-            gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, (prevSlot || slot).main); gl.uniform1i(u.uPrev, 3);
-            Utils.bindNoise(gl, u.uNoise, 4);
-            const applyUniforms = (u, rw, rh) => {
-                gl.uniform2f(u.uRes, rw, rh);
-                gl.uniform2f(u.uWorld, world.W, world.H);
-                gl.uniform2f(u.uIdSize, idsCanvas.width, idsCanvas.height);
-                gl.uniform4f(u.uView, view.c[0], view.c[1], view.h, view.roll);
-                if (prevView) gl.uniform4f(u.uPrevView, prevView.c[0], prevView.c[1], prevView.h, prevView.roll);
-                gl.uniform1f(u.uPrevFade, prevSlot ? prevFade : 0);
-                gl.uniform1f(u.uAspect, rw / rh);
-                gl.uniform1f(u.uTime, t);
-                gl.uniform2f(u.uStroke, data.strokeStart, data.strokeStep);
-                const local = t - data.cue.start;
-                gl.uniform1f(u.uTone, smooth(0.05, 0.9, local));
-                gl.uniform4fv(u.uBlobs, blobBuffer);
-                gl.uniform1i(u.uBlobCount, counts.blobs);
-                gl.uniform4fv(u.uAccent, accentBuffer);
-                gl.uniform1i(u.uAccentCount, counts.accents);
-                gl.uniform4fv(u.uRings, ringBuffer);
-                gl.uniform4fv(u.uClouds, cloudBuffer);
-                gl.uniform3fv(u.uBlobCol, palette.blob);
-                gl.uniform1f(u.uDotPx, canvas.height / Math.max(1, size.h));
-                gl.uniform1f(u.uDotAngle, view.angle ?? 0.26);
-                gl.uniform4f(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
-                gl.uniform1f(u.uSmash, smash);
-                // 扫笔跨在换句上：换句前 0.2 秒笔头进画，换句后 0.4 秒飞白裂开
-                let sweepU = -1, sweepP = null;
-                const nextData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
-                if (!s.reducedMotion) {
-                    if (data.transition === 'sweep' && since >= 0 && since < SWEEP_AFTER) { sweepU = (SWEEP_BEFORE + since) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = data.sweep; }
-                    else if (nextData?.transition === 'sweep' && t > nextData.cue.start - SWEEP_BEFORE) {
-                        sweepU = (t - nextData.cue.start + SWEEP_BEFORE) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = nextData.sweep;
-                    }
+            // 平滑场和主遍共用的参数（uRes、uAspect 每遍不同，渲染器自己填；墨团那几个数组就是 blobBuffer 它们本身）
+            const u = glState.uniforms;
+            put(u.uWorld, world.W, world.H);
+            put(u.uIdSize, idsCanvas.width, idsCanvas.height);
+            put(u.uView, view.c[0], view.c[1], view.h, view.roll);
+            if (prevView) put(u.uPrevView, prevView.c[0], prevView.c[1], prevView.h, prevView.roll);
+            u.uPrevFade = prevSlot ? prevFade : 0;
+            u.uTime = t;
+            put(u.uStroke, data.strokeStart, data.strokeStep);
+            const local = t - data.cue.start;
+            u.uTone = smooth(0.05, 0.9, local);
+            u.uBlobCount = counts.blobs;
+            u.uAccentCount = counts.accents;
+            u.uBlobCol.set(palette.blob);
+            u.uDotPx = height / Math.max(1, size.h);
+            u.uDotAngle = view.angle ?? 0.26;
+            put(u.uFlood, data.flood[0], data.flood[1], floodR, flooding ? 1 : 0);
+            u.uSmash = smash;
+            // 扫笔跨在换句上：换句前 0.2 秒笔头进画，换句后 0.4 秒飞白裂开
+            let sweepU = -1, sweepP = null;
+            const nextData = cues[index + 1] ? slotFor(index + 1, false)?.data : null;
+            if (!s.reducedMotion) {
+                if (data.transition === 'sweep' && since >= 0 && since < SWEEP_AFTER) { sweepU = (SWEEP_BEFORE + since) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = data.sweep; }
+                else if (nextData?.transition === 'sweep' && t > nextData.cue.start - SWEEP_BEFORE) {
+                    sweepU = (t - nextData.cue.start + SWEEP_BEFORE) / (SWEEP_BEFORE + SWEEP_AFTER); sweepP = nextData.sweep;
                 }
-                gl.uniform4f(u.uSweep, sweepU, sweepP ? sweepP[0] : 0, sweepP ? sweepP[1] : 0, sweepP ? 1 : 0);
-                gl.uniform1f(u.uCloud, s.cloud);
-                const exiting = !s.reducedMotion && (!nextData || nextData.transition === 'cut') && data.cue.kind === 'line';
-                gl.uniform1f(u.uExit, exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0);
-                // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
-                const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
-                gl.uniform1f(u.uFlow, flowStep * 0.13);
-                gl.uniform1f(u.uFlowT, flowStep / 8);
-                gl.uniform1f(u.uGrainStep, s.reducedMotion ? 0 : Math.floor(t * 6) % 64);
-                gl.uniform3fv(u.uPaper, palette.paper);
-                gl.uniform3fv(u.uInk, palette.ink);
-                gl.uniform3fv(u.uAccentCol, palette.accent);
-                gl.uniform1f(u.uKeywords, s.keywords ? 1 : 0);
-                gl.uniform3fv(u.uDot, palette.dot);
-                gl.uniform1f(u.uNeg, view.neg ? 1 : 0);
-                gl.uniform1f(u.uHalftone, s.halftone);
-                gl.uniform1f(u.uGrain, s.grain);
-            };
-            // 低分辨率那一遍：平滑的场
-            const smoothT = glState.smooth;
-            const [sw, sh] = smoothSize;
-            if (smoothT.w !== sw || smoothT.h !== sh) {
-                smoothT.w = sw; smoothT.h = sh;
-                gl.bindTexture(gl.TEXTURE_2D, smoothT.tex);
-                if (smoothT.half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, sh, 0, gl.RGBA, gl.HALF_FLOAT, null);
-                else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                gl.bindFramebuffer(gl.FRAMEBUFFER, smoothT.fbo);
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, smoothT.tex, 0);
-                gl.bindTexture(gl.TEXTURE_2D, smoothT.warp.tex);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, smoothT.warp.tex, 0);
             }
-            gl.bindFramebuffer(gl.FRAMEBUFFER, smoothT.fbo);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.viewport(0, 0, sw, sh);
-            gl.useProgram(glState.smoothProgram);
-            Utils.bindNoise(gl, glState.smoothUniforms.uNoise, 4);
-            applyUniforms(glState.smoothUniforms, sw, sh);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.useProgram(program);
-            applyUniforms(u, canvas.width, canvas.height);
-            gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.tex); gl.uniform1i(u.uSmooth, 5);
-            gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, glState.smooth.warp.tex); gl.uniform1i(u.uWarp, 6);
-            gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, glState.paper); gl.uniform1i(u.uPaperTex, 7);
-            gl.uniform1f(u.uPaperGrain, s.paper);
-            gl.uniform1f(u.uPress, s.paper ? (palette.paperLight ? 1 : 0.5) : 0);
+            put(u.uSweep, sweepU, sweepP ? sweepP[0] : 0, sweepP ? sweepP[1] : 0, sweepP ? 1 : 0);
+            u.uCloud = s.cloud;
+            const exiting = !s.reducedMotion && (!nextData || nextData.transition === 'cut') && data.cue.kind === 'line';
+            u.uExit = exiting ? smooth(data.cue.end - 0.45, data.cue.end, t) : 0;
+            // 流场每秒跳 8 格、颗粒每秒 6 格：手绘动画那种「沸腾」，不是连续流动
+            const flowStep = s.reducedMotion ? 0 : Math.floor(t * 8);
+            u.uFlow = flowStep * 0.13;
+            u.uFlowT = flowStep / 8;
+            u.uGrainStep = s.reducedMotion ? 0 : Math.floor(t * 6) % 64;
+            u.uPaper.set(palette.paper);
+            u.uInk.set(palette.ink);
+            u.uAccentCol.set(palette.accent);
+            u.uKeywords = s.keywords ? 1 : 0;
+            u.uDot.set(palette.dot);
+            u.uNeg = view.neg ? 1 : 0;
+            u.uHalftone = s.halftone;
+            u.uGrain = s.grain;
+            u.uPaperGrain = s.paper;
+            u.uPress = s.paper ? (palette.paperLight ? 1 : 0.5) : 0;
             const burstKick = data.transition === 'burst' && since >= 0 && since < 0.9 ? Math.sin(Math.PI * since / 0.9) : 0;
-            gl.uniform1f(u.uBeat, s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0) + burstKick));
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            u.uBeat = s.reducedMotion ? 0 : Math.min(1, bass * 0.6 + (beatAge < 0.25 ? (1 - beatAge / 0.25) * 0.5 : 0) + burstKick);
+            // 三遍：逐字层进墨场、低分辨率的平滑场、原生像素的主遍
+            glState.render(slot, prevSlot, smoothSize);
             stats.draws += 1;
             scheduleNext(index);
         };
@@ -2459,7 +2309,7 @@ void main() {
             const now = frame.now ?? performance.now();
             if (now < lastDraw) lastDraw = -Infinity;
             if (frame.isPlaying && now - lastDraw < aim - 3) return;
-            if (still.same(frame, `${canvas.width}x${canvas.height}|${stats.builds}`)) return;
+            if (still.same(frame, `${buffer.w}x${buffer.h}|${stats.builds}`)) return;
             lastDraw = aim && now - lastDraw < aim * 2 ? lastDraw + aim : now;
             draw(frame);
         };
@@ -2484,33 +2334,68 @@ void main() {
         mode.getDebugSnapshot = () => ({
             initialized: Boolean(glState), cues: cues.length, cue: stats.cue, shot: stats.lastShot,
             builds: stats.builds, buildMs: stats.buildMs, draws: stats.draws,
-            buffer: `${canvas.width}x${canvas.height}`, world: `${world.W}x${world.H}`,
+            buffer: `${buffer.w}x${buffer.h}`, renderer: 'pixi', world: `${world.W}x${world.H}`,
             style: glState?.slots.find(s => s.data?.index === stats.cue)?.data?.style
         });
 
-        const onLost = (event) => { event.preventDefault(); lostContext = true; };
-        const onRestored = () => {
-            try { glState = createGl(canvas); lostContext = false; redraw(); } catch (error) { console.error(error); }
+        // 上下文丢了由 Pixi 自己恢复；两张画布是各段共用的，恢复后每段都得重画重传
+        const onLost = () => { lostContext = true; };
+        const onRestored = () => { lostContext = false; glState?.resetCanvases(); redraw(); };
+        const boot = async () => {
+            const { PIXI, Effects, InkPixi } = pixiParts();
+            if (!PIXI || !Effects || !InkPixi) { fail(); return; }
+            let app = null;
+            try {
+                // 画布不透明（整张纸都是自己画的，合成时不用和底下混）。舞台关掉后渲染器停放一会儿，
+                // 很快又进墨痕时上下文和编译好的着色器直接接着用（见 createApplication）
+                app = await Effects.createApplication(PIXI, {
+                    backgroundAlpha: 1,
+                    backgroundColor: 0x000000,
+                    preference: 'webgl',
+                    autoStart: false,
+                    antialias: false,
+                    resolution: Math.min(2, global.devicePixelRatio || 1),
+                    autoDensity: true
+                });
+                if (mode.destroyed) { Effects.releaseApplication(app); return; }
+                app.stop();
+                const made = InkPixi.create(PIXI, app, {
+                    vertex: VERT, fragment: FRAG, smoothFragment: SMOOTH_FRAG, glyphVertex: GLYPH_VERT, glyphFragment: GLYPH_FRAG,
+                    glyphFloats: GLYPH_FLOATS,
+                    limits: { blobs: MAX_BLOBS, rings: MAX_RINGS, accents: MAX_ACCENT, clouds: MAX_CLOUDS },
+                    buffers: { blobs: blobBuffer, rings: ringBuffer, accents: accentBuffer, clouds: cloudBuffer },
+                    paperTile: { size: PAPER_TILE, data: makePaperTile() }
+                });
+                if (!made) { Effects.releaseApplication(app); fail(); return; }
+                pixiApp = app;
+                glState = made;
+                made.canvas.className = 'inkdraft-canvas';
+                made.canvas.addEventListener('webglcontextlost', onLost);
+                made.canvas.addEventListener('webglcontextrestored', onRestored);
+                mode.root.prepend(made.canvas);
+                resize();
+                redraw();
+            } catch (error) {
+                console.error(error);
+                if (app && !pixiApp) Effects.releaseApplication(app);
+                fail();
+            }
         };
-        canvas.addEventListener('webglcontextlost', onLost);
-        canvas.addEventListener('webglcontextrestored', onRestored);
         mode.scope.add(() => {
-            canvas.removeEventListener('webglcontextlost', onLost);
-            canvas.removeEventListener('webglcontextrestored', onRestored);
             if (idleHandle) (global.cancelIdleCallback || global.clearTimeout)(idleHandle);
             if (glState) {
-                const { gl } = glState;
-                glState.slots.forEach((slot) => { gl.deleteTexture(slot.main); gl.deleteTexture(slot.ids); gl.deleteTexture(slot.atlas); gl.deleteBuffer(slot.glyphBuf); gl.deleteVertexArray(slot.glyphVao); });
-                gl.deleteTexture(glState.paper);
-                gl.deleteTexture(glState.field.tex); gl.deleteFramebuffer(glState.field.fbo); gl.deleteProgram(glState.glyphProgram);
-                gl.deleteTexture(glState.smooth.tex); gl.deleteTexture(glState.smooth.warp.tex); gl.deleteFramebuffer(glState.smooth.fbo); gl.deleteProgram(glState.smoothProgram);
-                gl.deleteProgram(glState.program);
-                gl.getExtension('WEBGL_lose_context')?.loseContext();
+                glState.canvas.removeEventListener('webglcontextlost', onLost);
+                glState.canvas.removeEventListener('webglcontextrestored', onRestored);
+                glState.canvas.removeAttribute('class');
+                try { glState.destroy(); } catch (error) { console.warn('[inkdraft] cleanup failed:', error); }
             }
             glState = null;
+            if (pixiApp) pixiParts().Effects.releaseApplication(pixiApp);
+            pixiApp = null;
         });
 
         resize();
+        boot();
         return mode;
     };
 

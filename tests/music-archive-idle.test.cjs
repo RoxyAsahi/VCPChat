@@ -63,6 +63,7 @@ function setup({ playing = false, lyrics = false, fluid = false } = {}) {
         },
         PMREMGenerator: class { fromScene() { return { texture: null, dispose() {} }; } compileEquirectangularShader() {} dispose() {} }
     });
+    w.eval(read('Musicmodules/music-app-hooks.js'));
     for (const n of ['model', 'scene', 'index', 'list', 'lyrics']) w.eval(read(`Musicmodules/music-archive/archive-${n}.js`));
     if (fluid) w.eval(read(fluid));
     w.eval(read('Musicmodules/music-archive/archive-view.js'));
@@ -98,8 +99,24 @@ test('暂停、没有输入：选中的涟漪走完后，一次 rAF 都不排，
     f.close();
 });
 
+// 卡放回阵列（浏览）时才起伏；取出端详时照参考播放器不起伏，见下一条
+const browse = (f) => { const sc = f.view.scene; const set = sc.setDetail; sc.setDetail = () => set(false); set(false); };
+
+test('取出端详时背景不起伏、不跳：卡停稳后不再画，放回后又起伏', () => {
+    const f = setup({ playing: true, lyrics: true });
+    f.key('ArrowDown');
+    f.advance(6000);
+    assert.equal(f.count(2000), 0, JSON.stringify(f.clock.bySource));
+    browse(f);
+    f.view.refresh();
+    f.advance(6000);
+    assert.ok(f.count(1000) > 0, '放回后又起伏');
+    f.close();
+});
+
 test('播放中才有静止后的缓慢起伏（12 帧）；一暂停就收住，之后归零；再播放又醒', () => {
     const f = setup({ playing: true, lyrics: true });
+    browse(f);
     f.key('ArrowDown');
     f.advance(6000);
     const before = f.w.__renderer.draws;

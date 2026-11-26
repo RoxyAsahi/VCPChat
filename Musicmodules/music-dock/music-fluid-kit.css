@@ -44,15 +44,22 @@ body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch
 }
 
 /* 菜单里的行：圆角、留边，悬停是一层很淡的亮，危险项只换字色 */
-.context-menu, .archive-batch-menu, .archive-list-sort-menu { padding: 6px; }
-.context-submenu { padding: 6px; border-radius: 14px; }
-:is(.context-menu-item, .submenu-item) { border-radius: 11px; color: var(--mf-ink); }
+.context-menu, .archive-batch-menu, .archive-list-sort-menu { padding: 4px; border-radius: 12px; }
+.context-submenu { padding: 4px; border-radius: 12px; }
+:is(.context-menu-item, .submenu-item) { border-radius: 7px; color: var(--mf-ink); }
+/* 行收紧到和主程序设置页下拉差不多：一行约 28px、小圆角、字号 12.5 */
+.context-menu-item, .submenu-item { box-sizing: border-box; min-height: 28px; padding: 5px 10px; gap: 8px; font-size: 12.5px; line-height: 18px; }
+.context-menu { min-width: 168px; }
 :is(.context-menu-item, .submenu-item):hover { background: var(--mf-hover); color: var(--mf-ink); }
 .context-menu-item svg { opacity: .62; }
 .context-menu-divider { background: var(--mf-rule); margin-left: 10px; margin-right: 10px; }
-.archive-batch-menu header { padding: 8px 12px 6px; color: var(--mf-ink2); font-weight: 500; }
-.archive-batch-menu hr { margin: 5px 10px; border-top-color: var(--mf-rule); opacity: 1; }
-:is(.archive-batch-menu, .archive-list-sort-menu) button { border-radius: 11px; color: var(--mf-ink); }
+.archive-batch-menu header { padding: 6px 10px 4px; color: var(--mf-ink2); font-weight: 500; }
+.archive-batch-menu hr { margin: 4px 8px; border-top-color: var(--mf-rule); opacity: 1; }
+:is(.archive-batch-menu, .archive-list-sort-menu) button { border-radius: 7px; color: var(--mf-ink); }
+.archive-batch-menu button { box-sizing: border-box; min-height: 28px; align-items: center; padding: 5px 10px; gap: 12px; font-size: 12.5px; line-height: 18px; }
+.archive-list-sort-menu button { box-sizing: border-box; min-height: 28px; align-items: center; padding: 5px 10px 5px 22px; gap: 12px; font-size: 12.5px; line-height: 18px; }
+.archive-list-sort-menu button[aria-checked="true"]::before { left: 10px; }
+.archive-list-sort-menu { min-width: 150px; }
 :is(.archive-batch-menu, .archive-list-sort-menu) button:is(:hover, :focus-visible) { background: var(--mf-hover); }
 :is(.archive-batch-menu, .archive-list-sort-menu) button i { color: var(--mf-ink2); }
 .archive-list-sort-menu { top: calc(100% + 10px); }
@@ -906,23 +913,25 @@ button.mfs-trigger:not(#mfs-0):disabled { opacity: .45; cursor: not-allowed; }
   position: fixed;
   z-index: 1300;
   box-sizing: border-box;
-  max-width: min(360px, calc(100vw - 20px));
-  padding: 5px;
+  max-width: min(320px, calc(100vw - 20px));
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  font-size: 13px;
-  line-height: 20px;
-  border-radius: 14px;
+  font-size: 12.5px;
+  line-height: 18px;
+  /* 尺寸对齐主程序设置页的下拉：外框留 4、行高 28、小圆角 */
+  padding: 4px;
+  border-radius: 12px;
 }
-.mfs-group { padding: 8px 10px 4px; color: var(--mf-ink2); font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+.mfs-group { padding: 6px 8px 2px; color: var(--mf-ink2); font-size: 11px; font-weight: 600; letter-spacing: .3px; }
 .mfs-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 6px 10px;
-  border-radius: 10px;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 7px;
   color: var(--mf-ink);
   cursor: pointer;
   outline: none;

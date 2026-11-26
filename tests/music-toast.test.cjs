@@ -108,7 +108,8 @@ test('the dock routes playback failures and scan progress through the toast laye
         <ul id="playlist"></ul><div id="music-dock-root"></div></body>`, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const { window } = dom;
     const clock = fakeClock(window);
-    for (const f of ['music-dock-icons.js', 'music-toast.js', 'music-dock-palette.js', 'music-dock.js']) window.eval(read(`Musicmodules/music-dock/${f}`));
+    window.eval(read('Musicmodules/music-app-hooks.js'));
+    for (const f of ['music-dock-icons.js', 'music-toast.js', 'music-dock-palette.js', 'music-dock-queue.js', 'music-dock-stage-settings.js', 'music-dock.js']) window.eval(read(`Musicmodules/music-dock/${f}`));
     const doc = window.document;
     const scan = {};
     const calls = [];

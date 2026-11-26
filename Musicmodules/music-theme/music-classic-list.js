@@ -147,15 +147,14 @@
             watch.observe(list, { attributes: true, attributeFilter: ['style'] });
         }
 
-        const base = app.renderPlaylist;
         let lastFiltered = null;
-        app.renderPlaylist = (filtered) => {
+        global.MusicAppHooks.wrap(app, 'renderPlaylist', 'classic-list', (base) => (filtered) => {
             lastFiltered = filtered || null;
             const songs = filtered || app.playlist;
             const result = base(sorted(songs) || filtered);
             decorate();
             return result;
-        };
+        });
 
         // 表头
         const head = document.createElement('div');

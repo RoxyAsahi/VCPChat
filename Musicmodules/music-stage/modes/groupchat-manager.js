@@ -578,6 +578,8 @@
                 while (shownUpTo < index) {
                     shownUpTo += 1;
                     const m = messages[shownUpTo];
+                    // 刚建好对话、第一条还没到（index = -1）时 shownUpTo 会走到 -1：没有这条消息，跳过
+                    if (!m) continue;
                     const prevActive = rows.filter(r => r.glyphs && !r.done);
                     prevActive.forEach((r) => {
                         r.text.textContent = r.message.line.fullText;

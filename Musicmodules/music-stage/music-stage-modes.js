@@ -9,10 +9,11 @@
         { id: 'partita', label: '云阶', manager: global.MusicStagePartitaManager },
         { id: 'cadenza', label: '心象', manager: global.MusicStageCadenzaManager }
     ];
+    const NO_TRAITS = Object.freeze({ scene3d: false, opaque: false, night: false });
     const registry = new Map();
     core.forEach(({ id, label, manager }) => {
         if (!manager?.create) throw new Error(`Music stage manager missing: ${id}`);
-        registry.set(id, { id, label, create: (container, services) => manager.create(container, services) });
+        registry.set(id, { id, label, traits: NO_TRAITS, create: (container, services) => manager.create(container, services) });
     });
     global.MusicStageAdvancedModes?.entries?.forEach(entry => registry.set(entry.id, entry));
 
@@ -228,6 +229,8 @@
         ids: Object.freeze(Array.from(registry.keys())),
         entries: Object.freeze(Array.from(registry.values())),
         get(id) { return registry.get(id) || registry.get('luminous'); },
+        // 模式的外观特性（见 music-stage-advanced-modes.js）；不认识的 id 一律当普通 2D 模式
+        traits(id) { return registry.get(id)?.traits || NO_TRAITS; },
         create(id, container, services) { return this.get(id).create(container, services); }
     });
 })(window);

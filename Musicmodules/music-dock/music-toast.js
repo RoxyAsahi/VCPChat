@@ -116,7 +116,7 @@
             if (!entry.remaining) return; // 0 = 一直留着，直到 close
             entry.startedAt = Date.now();
             entry.timer = setTimeout(close, entry.remaining);
-            // 停留时间就是从实心慢慢蒸发成雾的过程（样式在 music-dock.css 的 .mtst-evap）。
+            // 停留时间就是从实心慢慢蒸发成雾的过程（样式在 music-dock-drawer.css 的 .mtst-evap）。
             entry.el.style.setProperty('--mtst-ms', `${entry.remaining}ms`);
             entry.el.classList.remove('mtst-evap');
             void entry.el.offsetWidth;

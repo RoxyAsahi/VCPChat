@@ -115,6 +115,10 @@
         n.flash = document.createElement('div');
         n.flash.className = 'mi-flash';
         root.appendChild(n.flash);
+        // 收尾揭开时的扫描头：整层不再半透明淡出（那样会透出底下还在搭的首页），改成从左往右一刀切开
+        n.wipe = document.createElement('div');
+        n.wipe.className = 'mi-wipe';
+        root.appendChild(n.wipe);
         return n;
     };
 
@@ -281,10 +285,11 @@
             n.welcome.style.opacity = String(1 - Math.pow(exit, 3));
             n.welcome.style.filter = exit > 0 ? `blur(${(8 * exit).toFixed(2)}px)` : '';
         }
-        // 白场，然后整层淡出露出主界面
+        // 白场，然后从左往右揭开露出主界面（没揭到的部分始终不透明）
         const white = smooth(progress(t, FULL.exit - 0.05, FULL.exit + 0.35));
         n.flash.style.opacity = String(white * ctx.flashPeak);
-        return 1 - smooth(progress(t, FULL.exit + 0.35, FULL.end));
+        ctx.wipe = smooth(progress(t, FULL.exit + 0.35, FULL.end));
+        return 1;
     };
 
     const renderShort = (n, t, ctx) => {
@@ -296,7 +301,8 @@
         });
         const white = smooth(progress(t, 1.35, 1.8));
         n.flash.style.opacity = String(white * ctx.flashPeak);
-        return 1 - smooth(progress(t, 1.8, SHORT.end));
+        ctx.wipe = smooth(progress(t, 1.8, SHORT.end));
+        return 1;
     };
 
     // ---------- 进出舞台、舞台里换模式 ----------
@@ -373,6 +379,14 @@
 
     // 降低动态：不放过场，但加载中的画面也不能露出来。直接盖一层纸色底，加载好了直接撤，没有任何动画；
     // 等得久（超过 0.4 秒）才在中间写一行 LOADING STAGE。
+    // 揭开：裁掉左边已经扫过的部分，扫描头停在切口上；0 和 1 都不画扫描头
+    const applyWipe = (root, n, wipe = 0) => {
+        const on = wipe > 0 && wipe < 1;
+        root.style.clipPath = wipe > 0 ? `inset(0 0 0 ${(wipe * 100).toFixed(3)}%)` : '';
+        n.wipe.style.opacity = on ? '1' : '0';
+        if (on) n.wipe.style.left = `${(wipe * 100).toFixed(3)}%`;
+    };
+
     const renderStill = (n, t, ctx) => {
         const releaseAt = ctx.direction === 'enter' ? 0.001 : 0;
         if (!ctx.released && t >= releaseAt) { ctx.released = true; ctx.release?.(); }
@@ -525,6 +539,7 @@
                 root.toggleAttribute('data-waiting', Boolean(ctx.waiting));
                 const opacity = render(nodes, t, ctx);
                 root.style.opacity = String(opacity);
+                applyWipe(root, nodes, ctx.wipe);
                 if (fixed == null && t >= length) { current = null; run.flush(); releaseStage(); run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
                 run.raf = requestAnimationFrame(tick);
             };
@@ -551,7 +566,9 @@
         };
 
         // ---------- 进出舞台：只看 body 上的类和舞台宿主公开的状态，不碰舞台代码 ----------
-        const SCENE_3D = ['diorama', 'tunnel', 'kowloon'];
+        // 3D 模式名单以舞台登记表为准（music-stage-advanced-modes.js 的 traits）；舞台脚本没加载时（测试）用这份
+        const SCENE_3D_FALLBACK = ['diorama', 'tunnel', 'kowloon'];
+        const isScene3d = (id) => (global.MusicStageModes?.traits ? global.MusicStageModes.traits(id).scene3d : SCENE_3D_FALLBACK.includes(id));
         const stageRoot = () => document.querySelector('.music-stage');
         const modeRoot = () => document.querySelector('.music-stage-mode-root');
         const modeLabel = (id) => global.MusicStageModes?.get?.(id)?.label
@@ -601,7 +618,7 @@
                 const run = start('enter', {
                     file: still ? '' : file,
                     still,
-                    loadingLabel: SCENE_3D.includes(app?.stageHost?.modeId),
+                    loadingLabel: isScene3d(app?.stageHost?.modeId),
                     gate: {
                         at: still ? 0 : TRANSIT.enterGate,
                         ready: stageModeReady,
@@ -737,7 +754,7 @@
             lastMode = next;
             if (!node.classList.contains('is-switching') || !host.active || next === previous) return;
             if (current) return; // 进出舞台的过场还在放，它自己会等加载
-            if (!SCENE_3D.includes(next) && !SCENE_3D.includes(previous)) return;
+            if (!isScene3d(next) && !isScene3d(previous)) return;
             transit('switch', { label: modeLabel(next) });
         };
         let modeObserver = null;
@@ -781,5 +798,6 @@
         return api;
     };
 
-    global.MusicIntroLib = { init };
+    // dropCover：启动中途出错时由 music.js 撤掉开窗底色层，免得界面被挡住
+    global.MusicIntroLib = { init, dropCover };
 })(window);

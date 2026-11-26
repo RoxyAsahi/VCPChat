@@ -1371,7 +1371,9 @@ void main() {
     const PARK_LIMIT = 2;
     const PARK_MS = 45000;
     const parked = [];
-    const applicationKey = options => `${options.antialias ? 1 : 0}:${options.resolution}:${options.preference || ''}`;
+    // An opaque canvas (backgroundAlpha 1) is a different WebGL context from a
+    // transparent one, so the two are never handed to each other.
+    const applicationKey = options => `${options.antialias ? 1 : 0}:${options.resolution}:${options.preference || ''}${(options.backgroundAlpha ?? 1) >= 1 ? ':opaque' : ''}`;
     const takeApplication = (PIXI, options) => {
         const key = applicationKey(options);
         const index = parked.findIndex(entry => entry.PIXI === PIXI && entry.key === key);

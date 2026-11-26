@@ -6,8 +6,27 @@
     <title>音乐播放器</title>
     <link rel="stylesheet" href="music.css">
     <link rel="stylesheet" href="music-theme/music-tokens.css">
+    <!-- 首页样式按段拆开，顺序即层叠顺序 -->
     <link rel="stylesheet" href="music-archive/archive.css">
+    <link rel="stylesheet" href="music-archive/archive-list.css">
+    <link rel="stylesheet" href="music-archive/archive-lyrics.css">
+    <link rel="stylesheet" href="music-archive/archive-tuning.css">
+    <link rel="stylesheet" href="music-archive/archive-wall.css">
+    <!-- 舞台样式按段拆成多个文件，顺序就是原来 music-stage.css 里的顺序，不能调换（后面的覆盖前面的） -->
     <link rel="stylesheet" href="music-stage/music-stage.css">
+    <link rel="stylesheet" href="music-stage/music-stage-core-modes.css">
+    <link rel="stylesheet" href="music-stage/modes/tunnel.css">
+    <link rel="stylesheet" href="music-stage/music-stage-settings.css">
+    <link rel="stylesheet" href="music-stage/music-stage-pixi-3d.css">
+    <link rel="stylesheet" href="music-stage/modes/inkdraft.css">
+    <link rel="stylesheet" href="music-stage/modes/fogpane.css">
+    <link rel="stylesheet" href="music-stage/modes/lumiere.css">
+    <link rel="stylesheet" href="music-stage/modes/hanabi.css">
+    <link rel="stylesheet" href="music-stage/modes/clockwork.css">
+    <link rel="stylesheet" href="music-stage/modes/orbit.css">
+    <link rel="stylesheet" href="music-stage/modes/signal.css">
+    <link rel="stylesheet" href="music-stage/modes/groupchat.css">
+    <link rel="stylesheet" href="music-stage/modes/impression.css">
     <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
     <link rel="stylesheet" href="../styles/themes.css">
@@ -989,6 +1008,7 @@
     <script src="music-stage/modes/kowloon-sandbox.js" onerror="this.remove()"></script>
     <script src="music-stage/modes/kowloon-manager.js"></script>
     <script src="music-stage/modes/inkdraft-figures.js"></script>
+    <script src="music-stage/modes/inkdraft-pixi.js"></script>
     <script src="music-stage/modes/inkdraft-manager.js"></script>
     <script src="music-stage/modes/fogpane-manager.js"></script>
     <script src="music-stage/modes/lumiere-manager.js"></script>
@@ -1000,7 +1020,9 @@
     <script src="music-stage/modes/impression-manager.js"></script>
     <script src="music-stage/music-stage-advanced-modes.js"></script>
     <script src="music-stage/music-stage-modes.js"></script>
+    <script src="music-stage/music-stage-edge.js"></script>
     <script src="music-stage/music-stage-host.js"></script>
+    <script src="music-app-hooks.js"></script>
     <script src="music-utils.js"></script>
     <script src="music-ambient-pixi.js"></script>
     <script src="music-visualizer.js"></script>
@@ -1016,6 +1038,19 @@
     <script src="music-sleep.js"></script>
     <script src="music-stats.js"></script>
     <script src="music-radio.js"></script>
+    <script src="music-stats-view.js"></script>
+    <script src="music-lyrics-ai.js"></script>
+    <script src="music-dupes.js"></script>
+    <script src="music-spectrum.js"></script>
+    <script src="music-device-sound.js"></script>
+    <script src="music-m3u.js"></script>
+    <script src="music-track-file.js"></script>
+    <script src="music-folders.js"></script>
+    <script src="music-eq-presets.js"></script>
+    <script src="music-channels.js"></script>
+    <script src="music-track-order.js"></script>
+    <script src="music-window-title.js"></script>
+    <script src="music-queue-undo.js"></script>
     <script src="music-smart.js"></script>
     <script src="music-legacy-switch.js"></script>
     <script src="music-desktop-lyrics.js"></script>
@@ -1031,12 +1066,17 @@
     <script src="music-archive/archive-index.js"></script>
     <script src="music-archive/archive-list.js"></script>
     <script src="music-archive/archive-lyrics.js"></script>
+    <script src="music-archive/archive-wall.js"></script>
+    <script src="music-archive/archive-grid.js"></script>
     <script src="music-archive/archive-view.js"></script>
     <!-- /music-archive -->
     <script src="music.js"></script>
 
     <!-- music-dock -->
     <link rel="stylesheet" href="music-dock/music-dock.css">
+    <link rel="stylesheet" href="music-dock/music-dock-panel.css">
+    <link rel="stylesheet" href="music-dock/music-dock-drawer.css">
+    <link rel="stylesheet" href="music-stats-view.css">
     <link rel="stylesheet" href="music-dock/music-fluid-kit.css">
     <div id="music-dock-root"></div>
     <script src="music-dock/music-dock-icons.js"></script>
@@ -1044,6 +1084,8 @@
     <script src="music-dock/music-dialog.js"></script>
     <script src="music-dock/music-dock-palette.js"></script>
     <script src="music-dock/music-dock-fluid.js"></script>
+    <script src="music-dock/music-dock-queue.js"></script>
+    <script src="music-dock/music-dock-stage-settings.js"></script>
     <script src="music-dock/music-dock.js"></script>
     <script src="music-dock/music-fluid-select.js"></script>
     <script src="music-modal-focus.js"></script>

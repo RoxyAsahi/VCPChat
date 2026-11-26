@@ -62,7 +62,9 @@ function setupLyrics(app) {
             cached = await app.api.getMusicLyrics({
                 artist,
                 title: rawTitle,
-                rawObject: true
+                rawObject: true,
+                // 歌曲文件旁边同名的 .ttml / .lrc 优先
+                path: typeof options.path === 'string' ? options.path : undefined
             });
             if (requestToken !== app.lyricsRequestToken) return;
             if (!cached && normalizedTitle && normalizedTitle !== rawTitle) {
@@ -89,6 +91,7 @@ function setupLyrics(app) {
                 app.currentLyrics = app.parseLrc(cached);
             }
             if (!app.currentLyrics.length) {
+                app.currentLyricsPlain = plainLyricCount(cached);
                 // 有歌词文件，但里面一句带时间的都没有（纯文本歌词、乱码、只有标题信息）：以前歌词区一片空白
                 app.lyricsList.innerHTML = '<li class="no-lyrics">这份歌词没有时间轴，没法跟着歌走；可以点「获取歌词」换一份</li>';
                 return;
@@ -172,7 +175,10 @@ function setupLyrics(app) {
                         app.currentLyrics = app.parseLrc(fetched);
                     }
                     if (app.currentLyrics.length) app.renderLyrics();
-                    else app.lyricsList.innerHTML = '<li class="no-lyrics">暂无歌词</li>';
+                    else {
+                        app.currentLyricsPlain = plainLyricCount(fetched);
+                        app.lyricsList.innerHTML = app.currentLyricsPlain ? '<li class="no-lyrics">这份歌词没有时间轴，没法跟着歌走；可以点「获取歌词」换一份</li>' : '<li class="no-lyrics">暂无歌词</li>';
+                    }
                 } else if (failed) {
                     app.lyricsList.innerHTML = '<li class="no-lyrics">歌词获取失败，检查网络后重新播放这首</li>';
                 } else {
@@ -704,10 +710,21 @@ function setupLyrics(app) {
         requestAnimationFrame(step);
     };
 
+    // 歌词文件里有字、但一句带时间的都没有（纯文本歌词）：记下有几行，首页歌词栏据此说明「没有时间轴」而不是「没有歌词」
+    const plainLyricLines = (raw) => (typeof raw === 'string'
+        ? raw.split(/\r?\n/).map((s) => s.replace(/\[[^\]]*\]/g, '').trim()).filter(Boolean).slice(0, 400) : []);
+    // 纯文本行也留着（app.currentLyricsPlainLines），首页歌词栏照 RhinE 把它们静静摆出来、能用滚轮翻
+    const plainLyricCount = (raw) => {
+        app.currentLyricsPlainLines = plainLyricLines(raw);
+        return app.currentLyricsPlainLines.length;
+    };
+
     app.resetLyrics = () => {
         app.lyricsRequestToken = (app.lyricsRequestToken || 0) + 1;
         app.currentLyricsData = null;
         app.currentLyrics = [];
+        app.currentLyricsPlain = 0;
+        app.currentLyricsPlainLines = [];
         app.currentLyricIndex = -1;
         app.currentScrollY = 0;
         app.targetScrollY = 0;
