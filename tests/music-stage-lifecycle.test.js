@@ -856,7 +856,7 @@ test('fume skips redundant clearRect when background disabled and groupchat uses
         }
         return ctx;
     };
-    for (const dep of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js', 'modes/fume-manager.js', 'modes/groupchat-manager.js']) {
+    for (const dep of ['music-stage-runtime.js', 'music-stage-config.js', 'modes/stage-mode-utils.js', 'modes/fume-manager.js', 'modes/groupchat-faces.js', 'modes/groupchat-manager.js']) {
         runScript(dom, `Musicmodules/music-stage/${dep}`);
     }
     const { app } = createApp();

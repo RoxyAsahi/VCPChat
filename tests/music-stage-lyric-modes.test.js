@@ -184,6 +184,7 @@ test('signal: the figure-eight centreline is one closed, unbroken loop through t
     }
 });
 
+require(path.join(stage, 'modes', 'groupchat-faces.js'));
 require(path.join(stage, 'modes', 'groupchat-manager.js'));
 test('groupchat: a deterministic thread with typing lead, voice notes in long breaks, and choruses sung by several', () => {
     const G = window.MusicStageGroupchatManager._test;
