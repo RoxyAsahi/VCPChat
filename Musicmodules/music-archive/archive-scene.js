@@ -239,7 +239,7 @@ void main() {
     vec4 nr = normalResponse(n, dark);
     // 深色里暖光只留三分之一（和浅色同强度的话，大片琥珀色压在暗底上显脏）
     float glowGain = mix(1.0, 0.32, dark);
-    // 端详时镜头贴得很近：光场放散，免得卡面上一颗颗光斑（参考是低分辨率三维光场三线性采样，本身就是糊的）
+    // 端详时镜头贴得很近：光场放散，免得卡面上一颗颗光斑
     float soft = hero * 0.45;
     vec3 fieldHere = field(vEmit, faceAxis(faceOf(normalize(vEmitN))), soft) * uLightOn * glowGain;
     // opticalSurface.frag 壳体分支：baked * normalResponse + highlight + 光场 + 选中自发光
@@ -257,7 +257,7 @@ void main() {
         vec3 ivory = mix(uCenter[1], uCenter[7], dark) * mix(0.97, 0.8, dark);
         vec3 heroFront = ivory + (innerColor - inner.rgb) * 0.15;
 #else
-        // 端详（方案 A，照参考）：面板走玻璃分支（opticalSurface.frag flags 3 + hero），
+        // 端详：面板走玻璃分支（opticalSurface.frag flags 3 + hero），
         // 几乎全透，看到的是内衬板；玻璃只加掠射角反光、轮廓亮边和一条主光高光
         vec3 heroFront = innerColor;
 #endif
