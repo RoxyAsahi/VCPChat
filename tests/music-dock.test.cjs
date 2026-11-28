@@ -3025,3 +3025,35 @@ test('the settings drawer width follows the window by default, drags within 320.
         assert.equal(window.localStorage.getItem('musicDockDrawerWidth'), null);
     } finally { dock.destroy(); }
 });
+
+test('性能档位、快速切换里的舞台不藏在舞台里：曲库里也在控制页；只管舞台的共用项标成 md-stage-row', () => {
+    const { window, doc, app, dock } = setup();
+    dock.destroy();
+    const stage = doc.createElement('div');
+    stage.id = 'music-stage';
+    const common = '<label class="music-stage-tuning-row"><span class="music-stage-tuning-label">边缘频谱</span><input type="checkbox"></label>'
+        + '<label class="music-stage-tuning-row"><span class="music-stage-tuning-label">性能档位</span><select class="music-stage-common-select"><option value="standard">标准</option></select></label>'
+        + '<label class="music-stage-tuning-row"><span class="music-stage-tuning-label">动画总强度</span><input type="range"></label>';
+    stage.innerHTML = `<aside class="music-stage-settings"><section class="music-stage-settings-card" hidden><div class="music-stage-settings-body">
+        <div class="music-stage-mode-options"><input type="checkbox" data-stage-config-mode="partita"></div>
+        <div class="music-stage-tuning-controls"></div><div class="music-stage-common-controls">${common}</div></div>
+        <div class="music-stage-settings-footer"><button class="music-stage-settings-reset">恢复出厂编排</button></div></section></aside>`;
+    doc.body.appendChild(stage);
+    const again = window.initMusicDock(app);
+    return Promise.resolve().then(async () => {
+        try {
+            app.isStageActive = false;
+            again.openPanel('控制');
+            const slot = doc.querySelector('[data-md="common-slot"]');
+            assert.equal(slot.classList.contains('md-stage-only'), false, 'common slot shows outside the stage');
+            const rows = [...slot.querySelectorAll('.music-stage-tuning-row')];
+            assert.deepEqual(rows.map((r) => r.classList.contains('md-stage-row')), [true, false, true]);
+            assert.equal(doc.querySelector('[data-md="array-slot"]').classList.contains('md-stage-only'), false);
+            assert.equal(doc.querySelector('.md-adv').hidden, false, '「更多」 is there in the library too');
+            // 宿主重画共用选项后照样标
+            slot.firstElementChild.insertAdjacentHTML('beforeend', '<label class="music-stage-tuning-row"><input type="checkbox"></label>');
+            await new Promise((r) => setTimeout(r, 0));
+            assert.equal(slot.querySelector('.music-stage-tuning-row:last-child').classList.contains('md-stage-row'), true);
+        } finally { again.destroy(); }
+    });
+});

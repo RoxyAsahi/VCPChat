@@ -130,12 +130,12 @@
       </section>
       <div class="md-tab md-tab2" data-md="body2"></div>
       <div class="md-fx-sc md-moved" data-md="disp-slot"></div>
-      <div class="md-stage-in md-stage-only" data-md="common-slot"></div>
+      <div class="md-stage-in md-common" data-md="common-slot"></div>
       <section class="md-grp md-adv">
         <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
         <div class="md-adv-in" id="music-dock-adv" data-md="adv-body" hidden>
-          <div class="md-grp-k md-stage-only">出现在快速切换里的舞台</div>
-          <div class="md-stage-in md-stage-only" data-md="array-slot"></div>
+          <div class="md-grp-k">出现在快速切换里的舞台</div>
+          <div class="md-stage-in" data-md="array-slot"></div>
           <div class="md-adv-acts" data-md="adv-acts"></div>
         </div>
       </section>
