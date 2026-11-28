@@ -165,7 +165,24 @@
         const advWrap = el.advToggle?.closest('.md-adv') || null;
         let lastExtKey = '';
         let introBtn = null;
-        // 「显示」和开场回放在曲库、舞台都可用；当前舞台和共用舞台选项只在演出时可见。
+        // 共用舞台选项里「性能档位」也管首页（3D 阵列帧率、阴影，底栏流体），曲库里也给看；
+        // 边缘频谱、动画总强度只管舞台，标上 md-stage-row，不在舞台时由 CSS 藏起来。
+        function tagStageRows() {
+            const common = el.commonSlot?.firstElementChild;
+            if (!common) return;
+            for (const row of common.children) {
+                if (row.classList.contains('music-stage-tuning-row')) row.classList.toggle('md-stage-row', !row.querySelector('select'));
+            }
+        }
+        const commonNode = el.commonSlot?.firstElementChild;
+        if (commonNode) {
+            // 宿主改了设置会整块重画共用选项，重画后再标一次
+            const commonObserver = new MutationObserver(() => { tagStageRows(); commonObserver.takeRecords(); });
+            commonObserver.observe(commonNode, { childList: true });
+            cleanups.push(() => commonObserver.disconnect());
+            tagStageRows();
+        }
+        // 「显示」、性能档位、快速切换里的舞台和开场回放在曲库、舞台都可用；当前舞台的专属设置只在演出时可见。
         function renderExt(show) {
             const hideExt = !show;
             if (el.ext.hidden !== hideExt) el.ext.hidden = hideExt;
@@ -201,7 +218,7 @@
                 if (themeSel) global.MusicFluidSelect?.dress?.(themeSel);
             }
             const hasIntro = typeof global.MusicIntro?.replay === 'function';
-            const hideAdv = !hasIntro && !stageActive();
+            const hideAdv = !hasIntro && !stageActive() && !el.arraySlot?.firstElementChild;
             if (advWrap && advWrap.hidden !== hideAdv) advWrap.hidden = hideAdv;
             if (!introBtn || !introBtn.isConnected) introBtn = el.advActs.querySelector('[data-act="intro"]');
             if (hasIntro && !introBtn) {

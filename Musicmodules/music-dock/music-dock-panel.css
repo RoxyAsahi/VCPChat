@@ -348,7 +348,9 @@ body.music-lyrics-hide-translation #lyrics-list .lyric-translation { display: no
 .md-tab2 { padding: 0; }
 .md-tiles.md-tiles-1 { grid-template-columns: 1fr; }
 .md-tiles.md-tiles-2 { grid-template-columns: repeat(2, 1fr); }
-#music-dock-root:not(.md-in-stage) :is(.md-stage-only, .md-adv-acts .music-stage-settings-footer) { display: none; }
+/* 不在舞台时只藏真正只管舞台的：当前舞台的专属设置、边缘频谱、动画总强度。
+   性能档位（首页阵列也按它）、快速切换里的舞台、恢复出厂编排在首页也能改。 */
+#music-dock-root:not(.md-in-stage) :is(.md-stage-only, .md-stage-in .md-stage-row.md-stage-row) { display: none; }
 .md-grp { margin-top: 4px; }
 .md-grp-h { display: flex; align-items: baseline; gap: 8px; min-height: 32px; padding: 12px 4px 4px; margin-top: 4px; border-top: 1px solid var(--md-line); }
 .md-grp-h b { flex-shrink: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--md-t1); }

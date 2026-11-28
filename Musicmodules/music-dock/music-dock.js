@@ -130,12 +130,12 @@
       </section>
       <div class="md-tab md-tab2" data-md="body2"></div>
       <div class="md-fx-sc md-moved" data-md="disp-slot"></div>
-      <div class="md-stage-in md-stage-only" data-md="common-slot"></div>
+      <div class="md-stage-in md-common" data-md="common-slot"></div>
       <section class="md-grp md-adv">
         <button class="md-fold md-fold-h" type="button" data-md="adv-toggle" aria-expanded="false" aria-controls="music-dock-adv"><span>更多</span>${icon('chevron-down', 14)}</button>
         <div class="md-adv-in" id="music-dock-adv" data-md="adv-body" hidden>
-          <div class="md-grp-k md-stage-only">出现在快速切换里的舞台</div>
-          <div class="md-stage-in md-stage-only" data-md="array-slot"></div>
+          <div class="md-grp-k">出现在快速切换里的舞台</div>
+          <div class="md-stage-in" data-md="array-slot"></div>
           <div class="md-adv-acts" data-md="adv-acts"></div>
         </div>
       </section>
@@ -1900,11 +1900,12 @@
             if (inDrawer) el.fxScroll.appendChild(dspCard);
             else if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
         }
-        // 音效卡里有三个开关和声音无关：「放完接着放相似的歌」归到控制页新开的「播放」组，「桌面歌词」「旧版界面（原版）」
-        // 归到「显示」组。控制页开着时把这三行原样搬进来（appendChild，id、事件、设置键都不变），离开控制页或关面板就放回原处，
+        // 音效卡里有三个开关和声音无关：「放完接着放相似的歌」归到控制页新开的「播放」组，「桌面歌词」归到「显示」组。
+        // 控制页开着时把这两行原样搬进来（appendChild，id、事件、设置键都不变），离开控制页或关面板就放回原处，
         // 所以经典视图里的音效卡照旧完整；抽屉声音页里由 CSS 不再显示这三行。
+        // 「旧版界面（原版）」不搬：右上角视图菜单最后一项就是它，控制页里不再重复。
         // var：renderBody 可能在这里之前就被调用（预画），那时还没收集到这三行，直接跳过即可。
-        var movedRows = [['autoplay-switch', 'play'], ['desktop-lyrics-switch', 'disp'], ['legacy-ui-switch', 'disp']]
+        var movedRows = [['autoplay-switch', 'play'], ['desktop-lyrics-switch', 'disp']]
             .map(([id, where]) => {
                 const item = document.getElementById(id)?.closest('.setting-item');
                 return item ? { item, where, parent: item.parentNode, next: item.nextSibling } : null;
