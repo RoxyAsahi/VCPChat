@@ -217,6 +217,7 @@
         "tests/music-archive-view.test.cjs",
         "tests/music-archive-index.test.cjs",
         "tests/music-archive-idle.test.cjs",
+        "tests/music-archive-caption.test.cjs",
         "tests/music-archive-lyrics-words.test.js"
       ],
       "tools": [

@@ -829,11 +829,17 @@ vec3 archiveUntone(vec3 y) {
         const coverMat = (extra) => keepColors(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, ...extra }));
         const frameMat = coverMat({ color: '#ffffff' });
         const artMat = coverMat({ polygonOffset: false });   // 浏览时也会隐约露出，深度偏移在掠射角下会透过前排卡
-        const captionGeo = new THREE.PlaneGeometry(1.54, 2.32);
-        captionGeo.translate(-1.54, 1.36, FRONT + 0.009);
+        /*
+         * 曲名区收进刻线里面的一栏：左边对齐左上标签纸（x −1.855），右边离封面白框留 0.12，
+         * 上面让开标签纸、下面让开左下十字。竖排字、内圈刻线、十字都在这栏外面，不再和字叠在一起。
+         */
+        const CAPTION = { left: -1.855, right: -0.855, top: 2.7, bottom: 0.74 };
+        const CAPTION_PX = 256;   // 每单位像素
+        const captionGeo = new THREE.PlaneGeometry(CAPTION.right - CAPTION.left, CAPTION.top - CAPTION.bottom);
+        captionGeo.translate((CAPTION.left + CAPTION.right) / 2, (CAPTION.top + CAPTION.bottom) / 2, FRONT + 0.009);
         const captionCanvas = document.createElement('canvas');
-        captionCanvas.width = 256;
-        captionCanvas.height = 386;
+        captionCanvas.width = Math.round((CAPTION.right - CAPTION.left) * CAPTION_PX);
+        captionCanvas.height = Math.round((CAPTION.top - CAPTION.bottom) * CAPTION_PX);
         const captionMap = new THREE.CanvasTexture(captionCanvas);
         captionMap.colorSpace = THREE.SRGBColorSpace;
         const captionMat = coverMat({ map: captionMap });
@@ -1034,36 +1040,9 @@ vec3 archiveUntone(vec3 y) {
             artMat.map?.dispose();
             artMat.map = null;
         };
-        const drawCaption = ({ title = '', artist = '', format = '', bitrate = '' }, showTitle) => {
-            const ctx = captionCanvas.getContext('2d');
-            ctx.clearRect(0, 0, captionCanvas.width, captionCanvas.height);
-            ctx.fillStyle = lighting.tagInk;
-            const fields = [['格式', format], ['码率', bitrate]].filter(([, value]) => value);
-            fields.forEach(([label, value], i) => {
-                const x = 6 + i * 126;
-                ctx.font = `400 20px ${fontStack}`;
-                ctx.globalAlpha = 0.78;
-                ctx.fillText(label, x, 46);
-                ctx.globalAlpha = 1;
-                ctx.font = `600 23px ${fontStack}`;
-                ctx.fillText(value, x, 79, fields.length === 1 ? 244 : 116);
-            });
-            if (showTitle) {
-                ctx.font = `700 33px ${fontStack}`;
-                const letters = Array.from(title.trim());
-                for (let y = 166; y <= 250 && letters.length; y += 42) {
-                    let end = 1;
-                    while (end < letters.length && ctx.measureText(letters.slice(0, end + 1).join('')).width <= 236) end++;
-                    if (end < letters.length && y < 250) {
-                        const space = letters.slice(0, end).lastIndexOf(' ');
-                        if (space > 0) end = space + 1;
-                    }
-                    const line = letters.splice(0, end).join('').trim();
-                    ctx.fillText(line + (y === 250 && letters.length ? '…' : ''), 6, y, 244);
-                }
-                ctx.font = `500 22px ${fontStack}`;
-                ctx.fillText(artist, 6, 306, 244);
-            }
+        // 排字在 archive-caption.js
+        const drawCaption = (info, showTitle) => {
+            global.ArchiveCaption?.draw(captionCanvas, info, { ink: lighting.tagInk, fontStack, showTitle });
             captionMap.needsUpdate = true;
         };
         // 还没有可用的封面时，用写有曲名和歌手的卡面（复用同一块 512×512 离屏画布，避免切歌重复分配）。
