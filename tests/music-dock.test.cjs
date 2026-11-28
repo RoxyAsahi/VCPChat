@@ -1116,7 +1116,7 @@ test('without a sleep timer the control page has no sleep tile (one tile, two in
     }
 });
 
-test('non-sound switches live on the control page: autoplay in 播放, desktop lyrics and the old-UI switch in 显示; they go back to the sound card when the page closes', () => {
+test('non-sound switches live on the control page: autoplay in 播放, desktop lyrics in 显示; the old-UI switch stays out (it is in the view menu); they go back to the sound card when the page closes', () => {
     const rows = ['autoplay-switch', 'desktop-lyrics-switch', 'legacy-ui-switch'];
     const { window, doc, dock } = setup((app, win) => {
         const dsp = win.document.getElementById('dsp');
@@ -1125,17 +1125,17 @@ test('non-sound switches live on the control page: autoplay in 播放, desktop l
             + '</div>';
     });
     try {
-        const legacy = doc.getElementById('legacy-ui-switch');
+        const lyricsSw = doc.getElementById('desktop-lyrics-switch');
         let toggled = 0;
-        legacy.addEventListener('change', () => { toggled++; });
+        lyricsSw.addEventListener('change', () => { toggled++; });
         dock.openPanel('控制');
         const ext = doc.querySelector('#music-dock-root [data-md="ext"]');
-        assert.ok(ext.contains(legacy), 'the old-UI switch is on the control page');
-        assert.ok(doc.querySelector('#music-dock-root [data-md="disp-slot"]').contains(legacy));
+        assert.ok(!ext.contains(doc.getElementById('legacy-ui-switch')), 'the old-UI switch is not repeated on the control page');
+        assert.ok(doc.querySelector('#music-dock-root [data-md="disp-slot"]').contains(lyricsSw));
         assert.ok(doc.querySelector('#music-dock-root [data-md="play-slot"]').contains(doc.getElementById('autoplay-switch')));
         assert.equal(doc.querySelector('#music-dock-root [data-md="play-sec"]').hidden, false);
-        legacy.click();
-        assert.equal(legacy.checked, true);
+        lyricsSw.click();
+        assert.equal(lyricsSw.checked, true);
         assert.equal(toggled, 1, 'same node, same listeners');
         dock.openPanel('声音');
         const dsp = doc.getElementById('dsp');
@@ -1144,7 +1144,7 @@ test('non-sound switches live on the control page: autoplay in 播放, desktop l
         dock.openPanel('控制');
         dock.closePanel();
         for (const id of rows) assert.ok(dsp.contains(doc.getElementById(id)), `${id} back after closing`);
-        assert.equal(legacy.checked, true, 'state survives the moves');
+        assert.equal(lyricsSw.checked, true, 'state survives the moves');
     } finally { dock.destroy(); }
 });
 
